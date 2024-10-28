@@ -12786,7 +12786,7 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 
 	point_image_surface_brightness = new double[image_npixels];
 
-	if (source_n_amps <= 0) die("no shapelet amplitudes found");
+	if (source_n_amps <= 0) die("no shapelet or point source amplitude parameters found");
 	source_pixel_vector = new double[source_n_amps];
 	imgpixel_covinv_vector = new double[image_npixels];
 	if ((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_mag_weighted_regularization)) {

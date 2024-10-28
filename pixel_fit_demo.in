@@ -4,7 +4,8 @@ fit method simplex          # downhill simplex method (plus optional simulated a
 data_pixel_size 0.049
 inversion_method umfpack
 sbmap loadimg sim_hst_image.fits
-data_pixel_noise 0.00941285
+bg_pixel_noise 0.00941285
+sbmap generate_uniform_noisemap   # This generates a noise map where each pixel has noise dispersion equal to 'bg_pixel_noise'
 
 #src_npixels 60 60                # This fixes the number of source pixels; otherwise it is set from "pixel_fraction" (see below)
 #srcgrid -.257 0.12 -.37 0.026    # Fixes the source grid; otherwise, source grid is automatically positioned and sized during fit

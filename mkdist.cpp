@@ -15,6 +15,7 @@
 #include <cstring>
 #include <cmath>
 #include <cstdlib>
+#include <iomanip>
 #include "mcmceval.h"
 #include "errors.h"
 #include <sys/stat.h>

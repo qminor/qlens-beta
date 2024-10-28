@@ -3860,15 +3860,16 @@ void QLens::print_pixellated_source_list()
 			if (pixellated_src_redshift_idx[i]==-1) zs = -1;
 			else zs = extended_src_redshifts[pixellated_src_redshift_idx[i]];
 			cout << i << ": zsrc=";
-			if (zs < 0) cout << "undefined, ";
-			else cout << zs << ", ";
+			if (zs < 0) cout << "undefined";
+			else cout << zs;
 			if (source_fit_mode==Delaunay_Source) {
-				if (delaunay_srcgrids[i] == NULL) cout << "Delaunay grid not created yet" << endl;
-				else cout << "Delaunay grid has been created" << endl;
+				if (delaunay_srcgrids[i] == NULL) cout << ", Delaunay grid not created yet";
+				else cout << ", Delaunay grid has been created";
 			} else if (source_fit_mode==Cartesian_Source) {
-				if (cartesian_srcgrids[i] == NULL) cout << "Cartesian grid not created yet" << endl;
-				else cout << "Cartesian grid has been created" << endl;
+				if (cartesian_srcgrids[i] == NULL) cout << ", Cartesian grid not created yet";
+				else cout << ", Cartesian grid has been created";
 			}
+			cout << endl;
 		}
 	}
 	else cout << "No pixellated source objects have been specified" << endl;
@@ -7578,6 +7579,9 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		fitmodel->lens_list[i]->qlens = fitmodel; // point to the fitmodel, since the cosmology may be varied (by varying H0, e.g.)
 	}
 
+	if (source_fit_mode != Point_Source) {
+		if (n_extended_src_redshifts==0) add_pixellated_source(source_redshift); // THIS IS UGLY. There must be a better way to do this
+	}
 	if (n_extended_src_redshifts > 0) {
 		fitmodel->n_extended_src_redshifts = n_extended_src_redshifts;
 		fitmodel->extended_src_redshifts = new double[n_extended_src_redshifts];
@@ -14999,8 +15003,8 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 {
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
 	if (!use_old_pixelgrids) {
-		if ((n_extended_src_redshifts==0) and (source_fit_mode==Delaunay_Source)) {
-			if ((mpi_id==0) and (verbal)) cout << "NOTE: automatically generating Delaunay source object at zsrc=" << source_redshift << endl;
+		if (n_extended_src_redshifts==0) {
+			if ((mpi_id==0) and (verbal)) cout << "NOTE: automatically generating source object at zsrc=" << source_redshift << endl;
 			add_pixellated_source(source_redshift);
 		}
 		for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -15061,6 +15065,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 {
 	// This function is too long, and should be broken into a bunch of inline functions.
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
+	if (n_extended_src_redshifts==0) add_pixellated_source(source_redshift); // THIS IS UGLY. There must be a better way to do this
+	//if (n_pixellated_src==0) add_pixellated_source(source_redshift);
 	if (image_pixel_grids == NULL) { warn("No image surface brightness grid has been loaded"); return -1e30; }
 	int zsrc_i;
 	for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
