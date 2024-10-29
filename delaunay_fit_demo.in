@@ -1,5 +1,5 @@
-fit label sim_pixelfit      # This labels the files that will be produced by the lens fitting
-fit source_mode delaunay       # Tells qlens we'll be using a pixellated source (rather than analytic or point sources)
+fit label delaunay_fit      # This labels the files that will be produced by the lens fitting
+fit source_mode delaunay    # Tells qlens we'll be using a pixellated source using Delaunay triangulation (rather than analytic or point sources)
 fit method simplex          # downhill simplex method (plus optional simulated annealing)
 data_pixel_size 0.049
 split_imgpixels off
@@ -8,43 +8,30 @@ sbmap loadimg sim_hst_image.fits
 bg_pixel_noise 0.00941285         # A uniform pixel noise was used to generate the mock data
 sbmap generate_uniform_noisemap   # This generates a noise map where each pixel has noise dispersion equal to 'bg_pixel_noise'
 
-#src_npixels 60 60                # This fixes the number of source pixels; otherwise it is set from "pixel_fraction" (see below)
-#srcgrid -.257 0.12 -.37 0.026    # Fixes the source grid; otherwise, source grid is automatically positioned and sized during fit
-
-adaptive_subgrid off              # adaptive Cartesian grid is probably not necessary unless you're including a subhalo and the
-                               #     magnification gets high
 fit regularization curvature    # the generic options are "norm", "gradient" and "curvature" (See Suyu et al. 2006 for details)
 
 psf_threshold 1e-2             # This truncates the PSF when it falls below threshold*peak_height, to save computation time
 sbmap loadpsf hst_psf.fits
 sbmap loadmask mask.fits     # Loads a pixel mask
 
-#sbmap unset_all_pixels
-#sbmap set_data_annulus 0 -0.18 0.9 1.76 48 96
-#sbmap set_data_annulus 0 -0.18 0.9 1.76 155 334
+#sbmap set_all_pixels             # The following commands are for creating your own mask
+#sbmap unset_low_sn_pixels 0.015  # This "masks out" pixels that have surface brightness smaller than 0.015
+#sbmap trim_mask_windows 4.0      # Removes mask "windows" (regions of contiguous pixels within mask) that don't have SB greater than 4*noise
+#sbmap set_neighbor_pixels        # Includes neighbor pixels for every pixel in mask (i.e. expands mask by one pixel length in all directions)
 
-sbmap set_all_pixels
-sbmap unset_low_sn_pixels 0.015
-sbmap trim_mask_windows 4.0
-#sbmap set_neighbor_pixels
 pause
 
-#vary_regparam on        # Varies regularization parameter (definitely do this!)
-optimize_regparam on
+optimize_regparam on     # Optimize regularization parameter instead of varying as a free parameter
 regparam_minlog -5
-regparam 20             # initial guess for regularization
-pixel_fraction 1.0      # when the source pixel grid is automatically positioned and sized, the pixel sizes are chosen so that
-                        #    the number of source pixels is approximately equal to pixel_fraction times the number of image pixels
-
-#noise_threshold 10      # used for sizing the source pixel grid; says to include all mapped data pixels whose surface brightness is higher
-                        ## than noise_threshold times the pixel noise
+#vary_regparam on        # Alternatively, one can vary the regularization parameter as a free parameter (this might be faster if the
+                         # (matrix inversions are slow)
+#regparam 20             # initial guess for regularization (if vary_regparam is on)
 
 shear_components on      # Uses gamma_1, gamma_2 as external shear parameters instead of (gamma,theta)
 
 # For reference, the following is the "true" model used to make the simulated data being fit here:
 #fit lens alpha 1.3634 1.17163 0 0.963867 81.9 0.0102892 0.00358392 shear=0.0647257 -0.0575047
 
-#fit lens alpha 1.3634 1.17163 0 0.963867 81.9 0.0102892 0.00358392 shear=0.0647257 -0.0575047
 fit lens alpha 1.35 1.1 0 0.85 90 0 0 shear=0.05 0            # input model
 1 1 0 1 1 1 1 1 1
 
@@ -58,11 +45,6 @@ sbmap invert
 sbmap plotimg -nres3
 
 pause
-
-simplex_temp0 10000    # for simulated annealing; the higher the temperature, the better the odds of finding a global solution
-simplex_nmax_anneal 100
-simplex_tfac 0.5
-                        #    but it takes longer to run. If annealing doesn't work, switch to nested sampling or MCMC (more robust)
 
 fit run
 fit use_bestfit
