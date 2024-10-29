@@ -46,8 +46,7 @@ sbmap plotimg -nres3
 
 pause
 
-fit run
-fit use_bestfit
+fit run -adopt -noerrs
 sbmap invert
 
 # Let's see how the final solution looks...
