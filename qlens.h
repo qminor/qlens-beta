@@ -944,7 +944,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	//bool Cholesky_dcmp(double** a, double &logdet, int n);
 	//bool Cholesky_dcmp_upper(double** a, double &logdet, int n);
-	bool Cholesky_dcmp_packed(double* a, double &logdet, int n);
+	bool Cholesky_dcmp_packed(double* a, int n);
 	//void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_solve_lower_packed(double* a, double* b, double* x, int n);
 	void LU_logdet_stacked(double* a, double &logdet, int n);
@@ -1055,6 +1055,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void Rmatrix_determinant_MKL();
 	void Rmatrix_determinant_MUMPS();
 	void Rmatrix_determinant_UMFPACK();
+	void Rmatrix_determinant_dense();
 	void invert_lens_mapping_CG_method(const int zsrc_i, bool verbal);
 	void update_source_amplitudes(const int zsrc_i, const bool verbal=false);
 	void indexx(int* arr, int* indx, int nn);

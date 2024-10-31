@@ -19,8 +19,6 @@ sbmap loadmask mask.fits     # Loads a pixel mask
 #sbmap trim_mask_windows 4.0      # Removes mask "windows" (regions of contiguous pixels within mask) that don't have SB greater than 4*noise
 #sbmap set_neighbor_pixels        # Includes neighbor pixels for every pixel in mask (i.e. expands mask by one pixel length in all directions)
 
-pause
-
 optimize_regparam on     # Optimize regularization parameter instead of varying as a free parameter
 regparam_minlog -5
 #vary_regparam on        # Alternatively, one can vary the regularization parameter as a free parameter (this might be faster if the
@@ -38,6 +36,7 @@ fit lens alpha 1.35 1.1 0 0.85 90 0 0 shear=0.05 0            # input model
 outside_sb_prior on        # Imposes a penalty if surface brightness is produced outside the pixel mask (type 'help sbmap_settings' for info)
 nimg_prior on              # This imposes a penalty chi-square if too few images are produced (defined by the threshold below)
 nimg_threshold 1.4        	# Specify the minimum number of images you expect to get produced for nimg_prior; should be at least above 1
+pause
 									# to avoid solutions where the source looks exactly like the images and no multiple imaging occurs
 
 # To see how terrible the initial guess looks...

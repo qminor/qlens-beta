@@ -3195,7 +3195,8 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 #else
 	// Doing this without MKL, using the following functions, is MUCH slower (and might be broken right now?)
 	repack_matrix_lower(covmatrix_factored);
-	Cholesky_dcmp_packed(covmatrix_factored.array(),Rmatrix_log_determinant,source_n_amps);
+	Cholesky_dcmp_packed(covmatrix_factored.array(),source_n_amps);
+	Cholesky_logdet_lower_packed(covmatrix_factored.array(),Rmatrix_log_determinant,source_n_amps);
 	Rmatrix_log_determinant = -Rmatrix_log_determinant; // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
 	repack_matrix_upper(covmatrix_factored);
 	//for (int i=0; i < ntot; i++) Rmatrix_packed[i] = covmatrix_factored[i];
@@ -14658,7 +14659,8 @@ bool QLens::create_regularization_matrix(const int zsrc_i, const bool allow_lum_
 #ifdef USE_MKL
 		Rmatrix_determinant_MKL();
 #else
-	die("Currently either compiling with MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
+		warn("Converting Rmatrix to dense, since MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
+		Rmatrix_determinant_dense();
 #endif
 #endif
 #endif
@@ -14699,15 +14701,16 @@ void QLens::create_regularization_matrix_shapelet(const int zsrc_i)
 			die("Regularization method not recognized for dense matrices");
 	}
 #ifdef USE_UMFPACK
-		Rmatrix_determinant_UMFPACK();
+	Rmatrix_determinant_UMFPACK();
 #else
 #ifdef USE_MUMPS
-		Rmatrix_determinant_MUMPS();
+	Rmatrix_determinant_MUMPS();
 #else
 #ifdef USE_MKL
-		Rmatrix_determinant_MKL();
+	Rmatrix_determinant_MKL();
 #else
-	die("Currently either compiling with MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
+	warn("Converting Rmatrix to dense, since MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
+	Rmatrix_determinant_dense();
 #endif
 #endif
 #endif
@@ -15439,7 +15442,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 			if (use_noise_map) {
 				covinvptr = imgpixel_covinv_vector;
 				for (l=0; l < image_npixels; l++) {
-					(*fpmatptr) += (*(lmatptr1++))*(*(lmatptr2++))*(*(imgpixel_covinv_vector++));
+					(*fpmatptr) += (*(lmatptr1++))*(*(lmatptr2++))*(*(covinvptr++));
 				}
 			} else {
 				for (l=0; l < image_npixels; l++) {
@@ -16470,7 +16473,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 		// triangular part, we have to switch Fmatrix to a lower triangular version here. Fix later so it uses the upper triangular Cholesky version!!!
 		repack_matrix_lower(Fmatrix_packed_copy);
 
-		bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
+		bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),source_n_amps);
 		if (!status) die("Cholesky decomposition failed");
 		Cholesky_solve_lower_packed(Fmatrix_packed_copy.array(),Dvector,source_pixel_vector,source_n_amps);
 		Cholesky_logdet_lower_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
@@ -16666,7 +16669,7 @@ double QLens::chisq_regparam_lumreg_dense()
 		// triangular part, we have to switch Fmatrix to a lower triangular version here. Fix later so it uses the upper triangular Cholesky version!!!
 		repack_matrix_lower(Fmatrix_dense);
 
-		bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
+		bool status = Cholesky_dcmp_packed(Fmatrix_packed_copy.array(),source_n_amps);
 		if (!status) die("Cholesky decomposition failed");
 		Cholesky_solve_lower_packed(Fmatrix_packed_copy.array(),Dvector,source_pixel_vector,source_n_amps);
 		Cholesky_logdet_lower_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,source_n_amps);
@@ -16944,7 +16947,7 @@ bool QLens::Cholesky_dcmp_upper_packed(double* a, double &logdet, int n)
 */
 
 // This does a lower triangular Cholesky decomposition
-bool QLens::Cholesky_dcmp_packed(double* a, double &logdet, int n)
+bool QLens::Cholesky_dcmp_packed(double* a, int n)
 {
 	int i,j,k;
 
@@ -17256,7 +17259,7 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 	// we have to switch Fmatrix to a lower triangular version here
 	repack_matrix_lower(Fmatrix_packed);
 
-	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_n_amps);
+	bool status = Cholesky_dcmp_packed(Fmatrix_packed.array(),source_n_amps);
 	if (!status) die("Cholesky decomposition failed");
 	Cholesky_solve_lower_packed(Fmatrix_packed.array(),Dvector,source_pixel_vector,source_n_amps);
 	Cholesky_logdet_lower_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,source_n_amps);
@@ -18048,6 +18051,23 @@ void QLens::Rmatrix_determinant_MKL()
 	Cholesky_logdet_packed(Rmatrix_packed_copy,Rmatrix_log_determinant,source_npixels);
 	delete[] Rmatrix_packed_copy;
 #endif
+}
+
+void QLens::Rmatrix_determinant_dense()
+{
+	if (!dense_Rmatrix) convert_Rmatrix_to_dense();
+	int ntot = Rmatrix_packed.size();
+	if (ntot != (source_npixels*(source_npixels+1)/2)) die("Rmatrix packed does not have correct number of elements");
+	dvector Rmatrix_packed_copy(Rmatrix_packed.size()); 
+	for (int i=0; i < Rmatrix_packed.size(); i++) {
+		Rmatrix_packed_copy[i] = Rmatrix_packed[i];
+	}
+
+	repack_matrix_lower(Rmatrix_packed_copy);
+
+	bool status = Cholesky_dcmp_packed(Rmatrix_packed_copy.array(),source_n_amps);
+	if (!status) die("Cholesky decomposition failed");
+	Cholesky_logdet_lower_packed(Rmatrix_packed_copy.array(),Rmatrix_log_determinant,source_n_amps);
 }
 
 void QLens::convert_Rmatrix_to_dense()
