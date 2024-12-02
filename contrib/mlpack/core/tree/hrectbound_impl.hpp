@@ -679,17 +679,19 @@ inline ElemType HRectBound<MetricType, ElemType>::Diameter() const
 }
 
 //! Serialize the bound object.
+/*
 template<typename MetricType, typename ElemType>
 template<typename Archive>
 void HRectBound<MetricType, ElemType>::serialize(
     Archive& ar,
-    const uint32_t /* version */)
+    const uint32_t )
 {
   // We can't serialize a raw array directly, so wrap it.
   ar(CEREAL_POINTER_ARRAY(bounds, dim));
   ar(CEREAL_NVP(minWidth));
   ar(CEREAL_NVP(metric));
 }
+*/
 
 } // namespace mlpack
 

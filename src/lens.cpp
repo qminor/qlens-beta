@@ -8803,6 +8803,12 @@ bool QLens::setup_fit_parameters(bool include_limits)
 	//} else if (source_fit_mode==Cartesian_Source) {
 		//if (image_pixel_data==NULL) { warn("cannot do fit; image pixel data has not been loaded"); return false; }
 	//}
+	if (source_fit_mode==Point_Source) {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
+	} else {
+		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
+	}
+
 	if (nlens==0) {
 		if ((n_sb==0) and (n_sourcepts_fit==0)) {
 			warn("no lens or source models have been defined");
@@ -10987,19 +10993,19 @@ void QLens::chi_square_twalk()
 	fitmodel = NULL;
 }
 
-bool QLens::adopt_model(dvector &fitparams)
+bool QLens::adopt_model(dvector &fitpars)
 {
 	if ((nlens==0) and (n_sourcepts_fit==0) and ((n_sb==0) or (source_fit_mode != Parameterized_Source))) { if (mpi_id==0) warn(warnings,"No lens/source model has been specified"); return false; }
 	if (n_fit_parameters == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
-	if (fitparams.size() != n_fit_parameters) {
+	if (fitpars.size() != n_fit_parameters) {
 		if (mpi_id==0) {
-			if (fitparams.size()==0) warn(warnings,"fit has not been run; best-fit solution is not available");
+			if (fitpars.size()==0) warn(warnings,"fit has not been run; best-fit solution is not available");
 			else warn(warnings,"Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
 		}
 		return false;
 	}
 	double transformed_params[n_fit_parameters];
-	param_settings->inverse_transform_parameters(fitparams.array(),transformed_params);
+	param_settings->inverse_transform_parameters(fitpars.array(),transformed_params);
 	double log_penalty_prior;
 	log_penalty_prior = update_model(transformed_params); // the model is adopted here
 

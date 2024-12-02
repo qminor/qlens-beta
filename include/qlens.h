@@ -1394,6 +1394,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double fitmodel_loglike_extended_source(double* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
+	double LogLikeVecFunc(vector<double>& params) { return (this->*LogLikePtr)(params.data()); }
 	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);
 	double get_lens_parameter_using_default_pmode(const int lensnum, const int paramnum);
@@ -1402,6 +1403,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double loglike_deriv(const dvector &params, const int index, const double step);
 	void output_bestfit_model();
 	bool adopt_model(dvector &fitparams);
+	void use_bestfit() { adopt_model(bestfitparams); }
 
 	bool include_central_image;
 	bool include_imgpos_chisq, include_flux_chisq, include_time_delay_chisq;
@@ -1488,6 +1490,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 		use_analytic_bestfit_src = setting;
 		update_parameter_list();
 	}
+	void get_analytic_bestfit_src(bool &setting) { setting = use_analytic_bestfit_src; }
 
 	void set_warnings(bool setting) { warnings = setting; }
 	void get_warnings(bool &setting) { setting = warnings; }

@@ -1,17 +1,19 @@
 fit label sim_pixelfit      # This labels the files that will be produced by the lens fitting
-fit source_mode cartesian       # Tells qlens we'll be using a pixellated source (rather than analytic or point sources)
+fit source_mode delaunay       # Tells qlens we'll be using a pixellated source (rather than analytic or point sources)
 fit method simplex          # downhill simplex method (plus optional simulated annealing)
 data_pixel_size 0.049
-inversion_method umfpack
+split_imgpixels off
+inversion_method dense
 sbmap loadimg sim_hst_image.fits
-data_pixel_noise 0.00941285
+bg_pixel_noise 0.00941285         # A uniform pixel noise was used to generate the mock data
+sbmap generate_uniform_noisemap   # This generates a noise map where each pixel has noise dispersion equal to 'bg_pixel_noise'
 
 #src_npixels 60 60                # This fixes the number of source pixels; otherwise it is set from "pixel_fraction" (see below)
 #srcgrid -.257 0.12 -.37 0.026    # Fixes the source grid; otherwise, source grid is automatically positioned and sized during fit
 
 adaptive_subgrid off              # adaptive Cartesian grid is probably not necessary unless you're including a subhalo and the
                                #     magnification gets high
-fit regularization curvature    # the options are "norm", "gradient" and "curvature" (See Suyu et al. 2006 for details)
+fit regularization curvature    # the generic options are "norm", "gradient" and "curvature" (See Suyu et al. 2006 for details)
 
 psf_threshold 1e-2             # This truncates the PSF when it falls below threshold*peak_height, to save computation time
 sbmap loadpsf hst_psf.fits
@@ -27,9 +29,11 @@ sbmap trim_mask_windows 4.0
 #sbmap set_neighbor_pixels
 pause
 
-vary_regparam on        # Varies regularization parameter (definitely do this!)
+#vary_regparam on        # Varies regularization parameter (definitely do this!)
+optimize_regparam on
+regparam_minlog -5
 regparam 20             # initial guess for regularization
-pixel_fraction 0.8      # when the source pixel grid is automatically positioned and sized, the pixel sizes are chosen so that
+pixel_fraction 1.0      # when the source pixel grid is automatically positioned and sized, the pixel sizes are chosen so that
                         #    the number of source pixels is approximately equal to pixel_fraction times the number of image pixels
 
 #noise_threshold 10      # used for sizing the source pixel grid; says to include all mapped data pixels whose surface brightness is higher
@@ -51,11 +55,13 @@ nimg_threshold 1.4        	# Specify the minimum number of images you expect to 
 
 # To see how terrible the initial guess looks...
 sbmap invert
-sbmap plotimg
+sbmap plotimg -nres3
 
 pause
 
-simplex_temp0 1000    # for simulated annealing; the higher the temperature, the better the odds of finding a global solution
+simplex_temp0 10000    # for simulated annealing; the higher the temperature, the better the odds of finding a global solution
+simplex_nmax_anneal 100
+simplex_tfac 0.5
                         #    but it takes longer to run. If annealing doesn't work, switch to nested sampling or MCMC (more robust)
 
 fit run
@@ -64,4 +70,9 @@ sbmap invert
 
 # Let's see how the final solution looks...
 sbmap plotimg
+sbmap plotimg -nres3 # plot (normalized) residuals
+
+sbmap plotsrc # plot the pixellated source
+sbmap plotsrc -interp # plot the pixellated source
+
 

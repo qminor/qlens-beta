@@ -90,14 +90,16 @@ class NeighborSearchStat
   double& LastDistance() { return lastDistance; }
 
   //! Serialize the statistic to/from an archive.
+  /*
   template<typename Archive>
-  void serialize(Archive& ar, const uint32_t /* version */)
+  void serialize(Archive& ar, const uint32_t )
   {
     ar(CEREAL_NVP(firstBound));
     ar(CEREAL_NVP(secondBound));
     ar(CEREAL_NVP(auxBound));
     ar(CEREAL_NVP(lastDistance));
   }
+  */
 };
 
 } // namespace mlpack

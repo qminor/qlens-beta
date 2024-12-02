@@ -106,7 +106,7 @@ typename VecTypeA::elem_type LMetric<INT_MAX, false>::Evaluate(
   return arma::as_scalar(arma::max(arma::abs(a - b)));
 }
 
-*/
 } // namespace mlpack
+*/
 
 #endif

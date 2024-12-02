@@ -10,6 +10,7 @@ COLORBOX=1 # show color bar for pixel map plots
 KEY=0 # plot key within figure (1 = outside, -1 = no key)
 SQUARE_AXES=0
 SHOW_GRID=0
+SHOW_MULTS=0
 TITLE=""
 SETTERM=""
 FILENAME=""
@@ -37,6 +38,11 @@ for VAR in "$@"; do
 	if [[ $VAR == "nocb" ]]; then
 		COLORBOX=0
 	fi
+
+	if [[ $VAR == "showmults" ]]; then
+		SHOW_MULTS=0
+	fi
+
 
 	if [[ $VAR == "cont" ]]; then
 		# contours can only be plotted for a few modes, etc. plotting kappa or potential
@@ -482,16 +488,22 @@ then
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
 	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
 
-	if [[ `head -1 images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
-	if [[ `head -1 images.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
-	if [[ `head -1 images.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
-	if [[ `head -1 images.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
-	if [[ `head -1 images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
+	if [[ $SHOWMULTS == 1 ]]; then
+		if [[ `head -1 images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
+		if [[ `head -1 images.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
+		if [[ `head -1 images.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
+		if [[ `head -1 images.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
+		if [[ `head -1 images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
+	else
+		PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 8 t 'images'"
+		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/imgs.dat' w points pt 5 ps 1.5 lc 8 t 'images'"
+	fi
+
 	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then
 			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
@@ -508,28 +520,33 @@ then
 	KEYPLOT="set title ' '\nplot [][1e12:2e12] "
 	JUSTPLOTTED=0
 
-	if [[ `head -1 images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
-		KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; JUSTPLOTTED=1; fi
-	if [[ `head -1 images.doubles` != "" ]]; then
-		if [[ "$JUSTPLOTTED" == 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
-		PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
-		KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"
-		JUSTPLOTTED=1; fi
-	if [[ `head -1 images.quads` != "" ]]; then
-		if [[ $JUSTPLOTTED -eq 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
-		PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
-		KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"
-		JUSTPLOTTED=1; fi
-	if [[ `head -1 images.cusps` != "" ]]; then
-		if [[ $JUSTPLOTTED -eq 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
-		PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
-		KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"
-		JUSTPLOTTED=1; fi
-	if [[ `head -1 images.weird` != "" ]]; then
-		if [[ $JUSTPLOTTED -eq 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
-		PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
-		KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"
-		JUSTPLOTTED=1; fi
+	if [[ $SHOWMULTS == 1 ]]; then
+		if [[ `head -1 images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+			KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; JUSTPLOTTED=1; fi
+		if [[ `head -1 images.doubles` != "" ]]; then
+			if [[ "$JUSTPLOTTED" == 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
+			PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+			KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"
+			JUSTPLOTTED=1; fi
+		if [[ `head -1 images.quads` != "" ]]; then
+			if [[ $JUSTPLOTTED -eq 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
+			PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+			KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"
+			JUSTPLOTTED=1; fi
+		if [[ `head -1 images.cusps` != "" ]]; then
+			if [[ $JUSTPLOTTED -eq 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
+			PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+			KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"
+			JUSTPLOTTED=1; fi
+		if [[ `head -1 images.weird` != "" ]]; then
+			if [[ $JUSTPLOTTED -eq 1 ]]; then PLOTCOMMAND="$PLOTCOMMAND,"; KEYPLOT="set title ' '; $KEYPLOT,"; fi
+			PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+			KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"
+			JUSTPLOTTED=1; fi
+	else
+		PLOTCOMMAND="$PLOTCOMMAND '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 8 t 'images'"
+		KEYPLOT="set title ' '; $KEYPLOT '$PLOTDIR/imgs.dat' w points pt 5 ps 1.5 lc 8 t 'images'"
+	fi
 	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then
 			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
@@ -545,16 +562,21 @@ then
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
 	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics'"
 
-	if [[ `head -1 sources.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
-	if [[ `head -1 sources.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
-	if [[ `head -1 sources.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
-	if [[ `head -1 sources.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
-	if [[ `head -1 sources.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
+	if [[ $SHOWMULTS == 1 ]]; then
+		if [[ `head -1 sources.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
+		if [[ `head -1 sources.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
+		if [[ `head -1 sources.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
+		if [[ `head -1 sources.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
+		if [[ `head -1 sources.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/sources.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/sources.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
+	else
+		PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/src.dat' w points pt $PTTYPE ps $PTSIZE lc 8 t 'source pts'"
+		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/src.dat' w points pt 5 ps 1.5 lc 8 t 'source pts'"
+	fi
 	if [[ $TERM != "" ]]; then
 		if [[ $KEY != -1 ]]; then
 			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
@@ -626,7 +648,7 @@ then
 	DY=`bc <<< "scale=15; $4-($3)"`
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
-	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/crit0.dat' w lines lw $LINEWIDTH lc 1 lt 2 t 'critical curves (unperturbed)'"
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves', '$PLOTDIR/crit0.dat' w lines lw $LINEWIDTH lc 1 lt 2 t 'critical curves (reference)'"
 
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "srcpixel" ]]
@@ -648,7 +670,23 @@ then
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', '$PLOTDIR/upper_srcpts.dat' w points pt 7 ps 0.3 lc 4 t 'delaunay pixels (y>0.4)', '$PLOTDIR/lower_srcpts.dat' w points pt 7 ps 0.3 lc 8 t 'delaunay pixels (y<0.4)'"
 	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels', 'centkm.dat' w dots pt 1 lc 15 t 'centroids'"
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+elif [[ $COMMAND == "srcpixel_delaunay_srcpts_plural" ]]
+then
+	set -- $(head -2 $PLOTDIR/src_pixel.x && head -2 $PLOTDIR/src_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 11 t 'caustics', '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
+	PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/src.dat' w points pt $PTTYPE ps $PTSIZE lc 8 t 'source pts'"
+
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', '$PLOTDIR/upper_srcpts2.dat' w points pt 7 ps 0.3 lc 4 t 'delaunay pixels (y>0.4)', '$PLOTDIR/lower_srcpts2.dat' w points pt 7 ps 0.3 lc 8 t 'delaunay pixels (y<0.3)'"
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels', 'centkm.dat' w dots pt 1 lc 15 t 'centroids'"
+	#PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/src.dat' w points pt $PTTYPE ps $PTSIZE lc 8 t 'image pts', '$PLOTDIR/upper_srcpts.dat' w points pt 7 ps 0.3 lc 4 t 'delaunay pixels (y>0.4)', '$PLOTDIR/lower_srcpts.dat' w points pt 7 ps 0.3 lc 8 t 'delaunay pixels (y<0.4)'"
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_nocc" ]]
 then
@@ -665,14 +703,16 @@ then
 		STEPSHORT=`bc <<< "scale=3; (($MAX)-($MIN))/$NCONT"`
 		C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 		Cf=`bc <<< "scale=15; $MAX-$STEP"`
+		echo 'crap'
 
-		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100 qnorm 4\nset table 'contour.txt'\nsplot '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt'\nsplot '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nreset\nset palette defined (0 '#000090', 1 '#000fff', 2 '#0090ff', 3 '#0fffee', 4 '#90ff70', 5 '#ffee00', 6 '#ff7000', 7 '#ee0000', 8 '#7f0000')\nset grid"
 		PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\n$CBCOMMAND\n$SQAXES\nplot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image t '', 'contour.txt' w l lc rgb 'black' lw $LINEWIDTH t 'step=$STEPSHORT'"
 		PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 	else
-		PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+		#PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+		PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/img_pixels_upper.dat' w points pt 7 ps 0.3 lc 4 t 'delaunay pixels (y>0.4)', '$PLOTDIR/img_pixels_lower.dat' w points pt 7 ps 0.3 lc 8 t 'delaunay pixels (y<0.3)'"
 		PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 	fi
 elif [[ $COMMAND == "datapixel" ]]
@@ -691,7 +731,7 @@ then
 		C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 		Cf=`bc <<< "scale=15; $MAX-$STEP"`
 
-		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100 qnorm 4\nset table 'contour.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nreset\nset palette defined (0 '#000090', 1 '#000fff', 2 '#0090ff', 3 '#0fffee', 4 '#90ff70', 5 '#ffee00', 6 '#ff7000', 7 '#ee0000', 8 '#7f0000')\nset grid"
 		PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\n$CBCOMMAND\n$SQAXES\nplot $RANGE '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image t '', 'contour.txt' w l lc rgb 'black' lw $LINEWIDTH t 'step=$STEPSHORT'"
@@ -717,7 +757,7 @@ then
 		C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 		Cf=`bc <<< "scale=15; $MAX-$STEP"`
 
-		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100 qnorm 4\nset table 'contour.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt'\nsplot '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nreset\nset palette defined (0 '#000090', 1 '#000fff', 2 '#0090ff', 3 '#0fffee', 4 '#90ff70', 5 '#ffee00', 6 '#ff7000', 7 '#ee0000', 8 '#7f0000')\nset grid"
 		PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\n$CBCOMMAND\n$SQAXES\nplot $RANGE '$PLOTDIR/data_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image t '', 'contour.txt' w l lc rgb 'black' lw $LINEWIDTH t 'step=$STEPSHORT', 'ellfit.dat' w points lc 0 t 'isophote fit'"
@@ -747,6 +787,18 @@ then
 
 	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+elif [[ $COMMAND == "srcpixel_delaunay_srcpts_plural_nocc" ]]
+then
+	set -- $(head -2 $PLOTDIR/src_pixel.x && head -2 $PLOTDIR/src_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels'"
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/src.dat' w points pt $PTTYPE ps $PTSIZE lc 8 t 'source pts'"
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_imgpts" ]]
 then
@@ -779,6 +831,7 @@ then
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/imgs.dat' w points lc 0 pt $PTTYPE ps $PTSIZE t 'images'"
+	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/imgs.dat' w points lc 0 pt $PTTYPE ps $PTSIZE t 'images', '$PLOTDIR/img_pixels_upper.dat' w points pt 7 ps 0.3 lc 4 t 'delaunay pixels (y>0.4)', '$PLOTDIR/img_pixels_lower.dat' w points pt 7 ps 0.3 lc 8 t 'delaunay pixels (y<0.3)'"
 	#PLOTLINE="unset key; $SETTERM; $PLOTCOMMAND"
 
 	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 1 t 'images'"
@@ -800,38 +853,34 @@ then
 	DY=`bc <<< "scale=15; $4-($3)"`
 	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
 
-	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
-	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 11 t 'critical curves'"
+	KEYPLOT="set title ' '\nplot [][1e12:2e12] '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 11 t 'critical curves'"
 
-	if [[ `head -1 $PLOTDIR/images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
-	if [[ `head -1 $PLOTDIR/images.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
-	if [[ `head -1 $PLOTDIR/images.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
-	if [[ `head -1 $PLOTDIR/images.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
-	if [[ `head -1 $PLOTDIR/images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
-	if [[ $TERM != "" ]]; then
-		if [[ $KEY != -1 ]]; then
-			PLOTLINE="$SETTERM; set multiplot; unset key; $PLOTCOMMAND; set key samplen 2; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
-		else
-			PLOTLINE="$SETTERM; set multiplot; unset key; set key off; $PLOTCOMMAND; unset tics; unset border; unset xlabel; unset ylabel; $KEYPLOT"
-		fi
+	if [[ $SHOWMULTS == 1 ]]; then
+		if [[ `head -1 $PLOTDIR/images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
+		if [[ `head -1 $PLOTDIR/images.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
+		if [[ `head -1 $PLOTDIR/images.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
+		if [[ `head -1 $PLOTDIR/images.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
+		if [[ `head -1 $PLOTDIR/images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
 	else
-		PLOTLINE="$SETTERM; $PLOTCOMMAND"
+		PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 8 t 'image pts'"
+		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/imgs.dat' w points pt 5 ps 1.5 lc 8 t 'image pts'"
 	fi
 
-	if [[ $TERM != "" ]]; then
-		if [[ $KEY != -1 ]]; then
-			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
-		else
-			PLOTLINE="$SETTERM\nset multiplot\nunset key\nset key off\n$PLOTCOMMAND\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
-		fi
-	else
+	#if [[ $TERM != "" ]]; then
+		#if [[ $KEY != -1 ]]; then
+			#PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
+		#else
+			#PLOTLINE="$SETTERM\nset multiplot\nunset key\nset key off\n$PLOTCOMMAND\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
+		#fi
+	#else
 		PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
-	fi
+	#fi
 elif [[ $COMMAND == "imgpixel_imgpts_plural_nocc" ]]
 then
 	set -- $(head -2 $PLOTDIR/img_pixel.x && head -2 $PLOTDIR/img_pixel.y)
@@ -843,36 +892,22 @@ then
 	PLOTCOMMAND="plot $RANGE '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
 	KEYPLOT="set title ' '\nplot [][1e12:2e12] "
 
-	if [[ `head -1 $PLOTDIR/images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
-	if [[ `head -1 $PLOTDIR/images.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
-	if [[ `head -1 $PLOTDIR/images.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
-	if [[ `head -1 $PLOTDIR/images.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
-	if [[ `head -1 $PLOTDIR/images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
-		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
-	if [[ $TERM != "" ]]; then
-		if [[ $KEY != -1 ]]; then
-			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
-		else
-			PLOTLINE="$SETTERM\nset multiplot\nunset key\nset key off\n$PLOTCOMMAND\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
-		fi
+	if [[ $SHOWMULTS == 1 ]]; then
+		if [[ `head -1 $PLOTDIR/images.singles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.singles' w points pt $PTTYPE ps $PTSIZE lc 2 t '1 image'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.singles' w points pt 5 ps 1.5 lc 2 t '1 image'"; fi
+		if [[ `head -1 $PLOTDIR/images.doubles` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.doubles' w points pt $PTTYPE ps $PTSIZE lc 3 t '3 images'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.doubles' w points pt 5 ps 1.5 lc 3 t '3 images'"; fi
+		if [[ `head -1 $PLOTDIR/images.quads` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.quads' w points pt $PTTYPE ps $PTSIZE lc 1 t '5 images'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.quads' w points pt 5 ps 1.5 lc 1 t '5 images'"; fi
+		if [[ `head -1 $PLOTDIR/images.cusps` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.cusps' w points pt $PTTYPE ps $PTSIZE lc 5 t 'naked cusp'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.cusps' w points pt 5 ps 1.5 lc 5 t 'naked cusp'"; fi
+		if [[ `head -1 $PLOTDIR/images.weird` != "" ]]; then PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/images.weird' w points pt $PTTYPE ps $PTSIZE lc 4 t 'other'"
+			KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/images.weird' w points pt 5 ps 1.5 lc 4 t 'other'"; fi
 	else
-		PLOTLINE="$SETTERM\n$PLOTCOMMAND"
+		PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/imgs.dat' w points pt $PTTYPE ps $PTSIZE lc 8 t 'image pts'"
+		KEYPLOT="set title ' '; $KEYPLOT, '$PLOTDIR/imgs.dat' w points pt 5 ps 1.5 lc 8 t 'image pts'"
 	fi
-
-	if [[ $TERM != "" ]]; then
-		if [[ $KEY != -1 ]]; then
-			PLOTLINE="$SETTERM\nset multiplot\nunset key\n$PLOTCOMMAND\nset key samplen 2\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
-		else
-			PLOTLINE="$SETTERM\nset multiplot\nunset key\nset key off\n$PLOTCOMMAND\nunset tics\nunset border\nunset xlabel\nunset ylabel\n$KEYPLOT"
-
-		fi
-	else
-		PLOTLINE="$SETTERM\n$PLOTCOMMAND"
-	fi
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_imgdat" ]]
 then
 	grep -v \" $PLOTDIR/imgdat.dat >$PLOTDIR/imgdat_notitles.dat
@@ -917,7 +952,7 @@ then
 		C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 		Cf=`bc <<< "scale=15; $MAX-$STEP"`
 
-		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100 qnorm 4\nset table 'contour.txt'\nsplot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt'\nsplot 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nreset\nset palette defined (0 '#000090', 1 '#000fff', 2 '#0090ff', 3 '#0fffee', 4 '#90ff70', 5 '#ffee00', 6 '#ff7000', 7 '#ee0000', 8 '#7f0000')\nset grid"
 		PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\n$CBCOMMAND\n$SQAXES\nplot $RANGE 'lensmap.kappalog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image t '', 'contour.txt' w l lc rgb 'black' lw $LINEWIDTH t 'step=$STEPSHORT'"
@@ -943,7 +978,7 @@ then
 	C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 	Cf=`bc <<< "scale=15; $MAX-$STEP"`
 
-	PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100,4\nset table 'contour.txt'\nsplot 'lensmap.potlog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
+	PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100 qnorm 4\nset table 'contour.txt'\nsplot 'lensmap.potlog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 	PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt';splot 'lensmap.potlog' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 	PLOTCOMMAND="$PLOTCOMMAND\nreset\nset pm3d map\nunset key\nset palette defined (0 '#352a87', 1 '#0363e1',2 '#1485d4', 3 '#06a7c6', 4 '#38b99e', 5 '#92bf73', 6 '#d9ba56', 7 '#fcce2e', 8 '#f9fb0e')\nset autoscale fix\nset grid"
 	PLOTCOMMAND="$PLOTCOMMAND\nset title '$TITLE'\nset xrange [$X0:$Xf]\nset yrange [$Y0:$Yf]\n set size ratio -1\nsplot 'dgrid.txt' w pm3d, 'contour.txt' w l lc rgb 'black'"

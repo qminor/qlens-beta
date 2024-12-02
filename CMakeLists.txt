@@ -14,43 +14,43 @@ if(CMAKE_VERSION VERSION_LESS "3.7.0")
     set(CMAKE_INCLUDE_CURRENT_DIR ON)
 endif()
 
-if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20.0")
-execute_process(
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5411.cmake FindMUMPS.cmake 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindSCALAPACK_v5411.cmake FindSCALAPACK.cmake 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5411.cmake FindMETIS.cmake 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5411.cmake FindScotch.cmake 
-    RESULT_VARIABLE result)
-    set(MUMPS_OK TRUE)
-    set(MUMPS_VERS_STR "v5.4.1.1")
-    set(SCALAPACK_VERS_STR "v2.1.0.27")
-elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19.0")
-execute_process(
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5407.cmake FindMUMPS.cmake 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindSCALAPACK_v5407.cmake FindSCALAPACK.cmake 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5407.cmake FindMETIS.cmake 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5407.cmake FindScotch.cmake 
-    RESULT_VARIABLE result)
-    set(MUMPS_OK TRUE)
-    set(MUMPS_VERS_STR "v5.4.0.7")
-    set(SCALAPACK_VERS_STR "v2.1.0.25")
-elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.13.0")
-execute_process(
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5400.cmake FindMUMPS.cmake 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindSCALAPACK_v5400.cmake FindSCALAPACK.cmake 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5400.cmake FindMETIS.cmake 
-    COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5400.cmake FindScotch.cmake 
-    RESULT_VARIABLE result)
-    set(MUMPS_OK FALSE)
-    set(MUMPS_VERS_STR "v5.4.0.0")
-    set(SCALAPACK_VERS_STR "v2.1.0.19")
-    message(STATUS "${Red}For cmake versions < 3.19 MUMPS will be excluded from 'make deps'.${ColourReset}")
-else()
-    message(STATUS "MUMPS needs cmake version greater or equal to 3.13")
-endif()
+#if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.20.0")
+#execute_process(
+    #WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5411.cmake FindMUMPS.cmake 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindSCALAPACK_v5411.cmake FindSCALAPACK.cmake 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5411.cmake FindMETIS.cmake 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5411.cmake FindScotch.cmake 
+    #RESULT_VARIABLE result)
+    #set(MUMPS_OK TRUE)
+    #set(MUMPS_VERS_STR "v5.4.1.1")
+    #set(SCALAPACK_VERS_STR "v2.1.0.27")
+#elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.19.0")
+#execute_process(
+    #WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5407.cmake FindMUMPS.cmake 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindSCALAPACK_v5407.cmake FindSCALAPACK.cmake 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5407.cmake FindMETIS.cmake 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5407.cmake FindScotch.cmake 
+    #RESULT_VARIABLE result)
+    #set(MUMPS_OK TRUE)
+    #set(MUMPS_VERS_STR "v5.4.0.7")
+    #set(SCALAPACK_VERS_STR "v2.1.0.25")
+#elseif(CMAKE_VERSION VERSION_GREATER_EQUAL "3.13.0")
+#execute_process(
+    #WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/cmake/modules 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindMUMPS_v5400.cmake FindMUMPS.cmake 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindSCALAPACK_v5400.cmake FindSCALAPACK.cmake 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindMETIS_v5400.cmake FindMETIS.cmake 
+    #COMMAND ${CMAKE_COMMAND} -E create_symlink FindScotch_v5400.cmake FindScotch.cmake 
+    #RESULT_VARIABLE result)
+    #set(MUMPS_OK FALSE)
+    #set(MUMPS_VERS_STR "v5.4.0.0")
+    #set(SCALAPACK_VERS_STR "v2.1.0.19")
+    #message(STATUS "${Red}For cmake versions < 3.19 MUMPS will be excluded from 'make deps'.${ColourReset}")
+#else()
+    #message(STATUS "MUMPS needs cmake version greater or equal to 3.13")
+#endif()
 
 if (NOT ${result} STREQUAL "0")
     message(SEND_ERROR "Cannot make symlink, mesg=${result}")
@@ -66,9 +66,9 @@ set(QLENS_COMPILE_FLAGS
 
 set(QLENS_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
 
-set(QLENS_COMPILE_DEFINITIONS 
-    "USE_FITPACK"
-)
+#set(QLENS_COMPILE_DEFINITIONS 
+    #"USE_FITPACK"
+#)
 
 set(QLENS_INCLUDE_DIRS
     ${CMAKE_INCLUDE_PATH}
@@ -237,19 +237,19 @@ if (USE_MKL AND (CMAKE_CXX_COMPILER_ID STREQUAL "Intel"))
     set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MKL")
 endif(USE_MKL AND (CMAKE_CXX_COMPILER_ID STREQUAL "Intel"))
 
-message("")
-message("*** TCMalloc ***")
-find_library(TCMALLOC_LIBRARY
-    NAMES tcmalloc
-    HINTS ${TCMALLOC_ROOT_DIR}
-    DOC "TCMalloc library"
-)
-if(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
-    message(STATUS "TCMALLOC_LIBRARY = ${TCMALLOC_LIBRARY}")
-    set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${TCMALLOC_LIBRARY})
-else(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
-    message(STATUS "${Red}TCMALLOC not found${ColourReset}")
-endif(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
+#message("")
+#message("*** TCMalloc ***")
+#find_library(TCMALLOC_LIBRARY
+    #NAMES tcmalloc
+    #HINTS ${TCMALLOC_ROOT_DIR}
+    #DOC "TCMalloc library"
+#)
+#if(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
+    #message(STATUS "TCMALLOC_LIBRARY = ${TCMALLOC_LIBRARY}")
+    #set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${TCMALLOC_LIBRARY})
+#else(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
+    #message(STATUS "${Red}TCMALLOC not found${ColourReset}")
+#endif(NOT TCMALLOC_LIBRARY STREQUAL "TCMALLOC_LIBRARY-NOTFOUND")
 
 message("")
 message("*** CFitsio ***")
@@ -310,140 +310,143 @@ else(LAPACK_FOUND)
     message(STATUS "${Red}LAPACK not found${ColourReset}")
 endif(LAPACK_FOUND)
 
-message("")
-message("*** MUMPS ***")
-#unset(MUMPS_ROOT CACHE)
-set(MUMPS_ROOT ${MUMPS_ROOT} ${PROJECT_SOURCE_DIR}/contrib/mumps)
-unset(MUMPS_FOUND CACHE)
-unset(MUMPS_INCLUDE_DIRS CACHE)
-unset(UMPS_LIBRARIES CACHE)
-unset(MUMPS_INCLUDE_DIR CACHE)
-unset(MUMPS_LIBRARY CACHE)
-find_package(MUMPS)
-if(MUMPS_FOUND)
-    message(STATUS "MUMPS_FOUND = ${MUMPS_FOUND}")
-    message(STATUS "MUMPS_INCLUDE_DIRS = ${MUMPS_INCLUDE_DIRS}")
-    message(STATUS "MUMPS_LIBRARIES = ${MUMPS_LIBRARIES}")
-    set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MUMPS")
-    set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${MUMPS_INCLUDE_DIRS})
-    set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${MUMPS_LIBRARIES})
-else(MUMPS_FOUND)
-    message(STATUS "${Red}MUMPS not found${ColourReset}")
-endif(MUMPS_FOUND)
+#message("")
+#message("*** MUMPS ***")
+##unset(MUMPS_ROOT CACHE)
+#set(MUMPS_ROOT ${MUMPS_ROOT} ${PROJECT_SOURCE_DIR}/contrib/mumps)
+#unset(MUMPS_FOUND CACHE)
+#unset(MUMPS_INCLUDE_DIRS CACHE)
+#unset(UMPS_LIBRARIES CACHE)
+#unset(MUMPS_INCLUDE_DIR CACHE)
+#unset(MUMPS_LIBRARY CACHE)
+#find_package(MUMPS)
+#if(MUMPS_FOUND)
+    #message(STATUS "MUMPS_FOUND = ${MUMPS_FOUND}")
+    #message(STATUS "MUMPS_INCLUDE_DIRS = ${MUMPS_INCLUDE_DIRS}")
+    #message(STATUS "MUMPS_LIBRARIES = ${MUMPS_LIBRARIES}")
+    #set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MUMPS")
+    #set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${MUMPS_INCLUDE_DIRS})
+    #set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${MUMPS_LIBRARIES})
+#else(MUMPS_FOUND)
+    #message(STATUS "${Red}MUMPS not found${ColourReset}")
+#endif(MUMPS_FOUND)
 
-message("")
-message("*** SCALAPACK ***")
-#unset(SCALAPACK_ROOT CACHE)
-set(SCALAPACK_ROOT ${SCALAPACK_ROOT} ${PROJECT_SOURCE_DIR}/contrib/scalapack)
-unset(SCALAPACK_FOUND CACHE)
-unset(SCALAPACK_INCLUDE_DIRS CACHE)
-unset(UMPS_LIBRARIES CACHE)
-unset(SCALAPACK_INCLUDE_DIR CACHE)
-unset(SCALAPACK_LIBRARY CACHE)
-find_package(SCALAPACK)
-if(SCALAPACK_FOUND)
-    message(STATUS "SCALAPACK_FOUND = ${SCALAPACK_FOUND}")
-    message(STATUS "SCALAPACK_INCLUDE_DIRS = ${SCALAPACK_INCLUDE_DIRS}")
-    message(STATUS "SCALAPACK_LIBRARIES = ${SCALAPACK_LIBRARIES}")
-    set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_SCALAPACK")
-    set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${SCALAPACK_INCLUDE_DIRS})
-    set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${SCALAPACK_LIBRARIES})
-else(SCALAPACK_FOUND)
-    message(STATUS "${Red}SCALAPACK not found${ColourReset}")
-endif(SCALAPACK_FOUND)
+#message("")
+#message("*** SCALAPACK ***")
+##unset(SCALAPACK_ROOT CACHE)
+#set(SCALAPACK_ROOT ${SCALAPACK_ROOT} ${PROJECT_SOURCE_DIR}/contrib/scalapack)
+#unset(SCALAPACK_FOUND CACHE)
+#unset(SCALAPACK_INCLUDE_DIRS CACHE)
+#unset(UMPS_LIBRARIES CACHE)
+#unset(SCALAPACK_INCLUDE_DIR CACHE)
+#unset(SCALAPACK_LIBRARY CACHE)
+#find_package(SCALAPACK)
+#if(SCALAPACK_FOUND)
+    #message(STATUS "SCALAPACK_FOUND = ${SCALAPACK_FOUND}")
+    #message(STATUS "SCALAPACK_INCLUDE_DIRS = ${SCALAPACK_INCLUDE_DIRS}")
+    #message(STATUS "SCALAPACK_LIBRARIES = ${SCALAPACK_LIBRARIES}")
+    #set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_SCALAPACK")
+    #set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${SCALAPACK_INCLUDE_DIRS})
+    #set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${SCALAPACK_LIBRARIES})
+#else(SCALAPACK_FOUND)
+    #message(STATUS "${Red}SCALAPACK not found${ColourReset}")
+#endif(SCALAPACK_FOUND)
 
-message("")
-message("*** BLACS ***")
-find_library(BLACS_LIBRARY
-    NAMES blacs
-    HINTS ${BLACS_ROOT_DIR} ${PROJECT_SOURCE_DIR}/contrib/scalapack/lib
-    DOC "BLACS library"
-)
-if(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
-    message(STATUS "BLACS_LIBRARY = ${BLACS_LIBRARY}")
-    set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${BLACS_LIBRARY})
-else(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
-    message(STATUS "${Red}BLACS not found${ColourReset}")
-endif(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
+#message("")
+#message("*** BLACS ***")
+#find_library(BLACS_LIBRARY
+    #NAMES blacs
+    #HINTS ${BLACS_ROOT_DIR} ${PROJECT_SOURCE_DIR}/contrib/scalapack/lib
+    #DOC "BLACS library"
+#)
+#if(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
+    #message(STATUS "BLACS_LIBRARY = ${BLACS_LIBRARY}")
+    #set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${BLACS_LIBRARY})
+#else(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
+    #message(STATUS "${Red}BLACS not found${ColourReset}")
+#endif(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
 
-message("")
-message("*** Polychord ***")
-unset(Polychord_FOUND CACHE)
-unset(Polychord_INCLUDE_DIRS CACHE)
-unset(Polychord_INCLUDE_DIR CACHE)
-unset(Polychord_LIBRARIES CACHE)
-unset(Polychord_LIBRARY CACHE)
+#message("")
+#message("*** Polychord ***")
+#unset(Polychord_FOUND CACHE)
+#unset(Polychord_INCLUDE_DIRS CACHE)
+#unset(Polychord_INCLUDE_DIR CACHE)
+#unset(Polychord_LIBRARIES CACHE)
+#unset(Polychord_LIBRARY CACHE)
 #set(Polychord_HINT_DIR ${Polychord_HINT_DIR} ${PROJECT_SOURCE_DIR}/contrib/polychord/1.17.1)
-set(Polychord_HINT_DIR ${Polychord_HINT_DIR} ${PROJECT_SOURCE_DIR}/contrib/PolyChordLite)
-find_package(Polychord)
-if(Polychord_FOUND)
-    message (STATUS "Polychord_FOUND = ${Polychord_FOUND}")
-    message (STATUS "Polychord_INCLUDE_DIRS = ${Polychord_INCLUDE_DIRS}")
-    message (STATUS "Polychord_LIBRARIES = ${Polychord_LIBRARIES}")
-    set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_POLYCHORD")
-    set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${Polychord_INCLUDE_DIRS})
-    set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${Polychord_LIBRARIES})
-else(Polychord_FOUND)
-    message(STATUS "${Red}Polychord not found${ColourReset}")
-endif(Polychord_FOUND)
 
-message("")
-message("*** MultiNest ***")
-set(MULTINEST_HINT ${MULTINEST_HINT} ${PROJECT_SOURCE_DIR}/contrib/MultiNest/MultiNest_v3.12_CMake/multinest)
-unset(_MULTINEST_INCLUDE_DIRS CACHE)
-unset(MULTINEST_FOUND CACHE)
-unset(MULTINEST_INCLUDE_DIRS CACHE)
-unset(MULTINEST_LIBRARIES CACHE)
-unset(MULTINEST_MODULE_DIRS CACHE)
-unset(MULTINEST_INCLUDES CACHE)
-unset(MULTINEST_ROOT_DIR CACHE)
-find_package(MULTINEST)
-if(MULTINEST_FOUND)
-    message(STATUS "MULTINEST_INCLUDE_DIRS = ${MULTINEST_INCLUDE_DIRS}" )
-    message(STATUS "MULTINEST_LIBRARIES = ${MULTINEST_LIBRARIES}" )
-    message(STATUS "MULTINEST_MODULES = ${MULTINEST_MODULE_DIRS}" )
-    if(LAPACK_FOUND OR LAPACK95_FOUND)
-        message(STATUS "BLA_VENDOR = ${BLA_VENDOR}")
-        message(STATUS "LAPACK_LINKER_FLAGS = ${LAPACK_LINKER_FLAGS}")
-    endif(LAPACK_FOUND OR LAPACK95_FOUND)
-    message(STATUS "LAPACK_FOUND = ${LAPACK_FOUND}")
-    if(LAPACK_FOUND)
-        message(STATUS "LAPACK_LIBRARIES = ${LAPACK_LIBRARIES}")
-    endif(LAPACK_FOUND)
-    message(STATUS "LAPACK95_FOUND = ${LAPACK95_FOUND}")
-    if(LAPACK95_FOUND)
-        message(STATUS "LAPACK_95LIBRARIES = ${LAPACK_95LIBRARIES}")
-    endif(LAPACK95_FOUND)
-    set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MULTINEST")
-    set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${MULTINEST_INCLUDE_DIRS})
-    set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${MULTINEST_LIBRARIES})
-else(MULTINEST_FOUND)
-    message(STATUS "${Red}MultiNest not found${ColourReset}")
-endif(MULTINEST_FOUND)
-message("")
+#set(Polychord_HINT_DIR ${Polychord_HINT_DIR} ${PROJECT_SOURCE_DIR}/contrib/PolyChordLite)
+#find_package(Polychord)
+#if(Polychord_FOUND)
+    #message (STATUS "Polychord_FOUND = ${Polychord_FOUND}")
+    #message (STATUS "Polychord_INCLUDE_DIRS = ${Polychord_INCLUDE_DIRS}")
+    #message (STATUS "Polychord_LIBRARIES = ${Polychord_LIBRARIES}")
+    #set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "
+    #set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${Polychord_INCLUDE_DIRS})
+    #set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${Polychord_LIBRARIES})
+#else(Polychord_FOUND)
+    #message(STATUS "${Red}Polychord not found${ColourReset}")
+#endif(Polychord_FOUND)
 
-include(cmake/polychord.cmake)
-include(cmake/multinest.cmake)
-include(cmake/scalapack.cmake)
-include(cmake/mumps.cmake)
+#message("")
+#message("*** MultiNest ***")
+#set(MULTINEST_HINT ${MULTINEST_HINT} ${PROJECT_SOURCE_DIR}/contrib/MultiNest/MultiNest_v3.12_CMake/multinest)
+#unset(_MULTINEST_INCLUDE_DIRS CACHE)
+#unset(MULTINEST_FOUND CACHE)
+#unset(MULTINEST_INCLUDE_DIRS CACHE)
+#unset(MULTINEST_LIBRARIES CACHE)
+#unset(MULTINEST_MODULE_DIRS CACHE)
+#unset(MULTINEST_INCLUDES CACHE)
+#unset(MULTINEST_ROOT_DIR CACHE)
+#find_package(MULTINEST)
+#if(MULTINEST_FOUND)
+    #message(STATUS "MULTINEST_INCLUDE_DIRS = ${MULTINEST_INCLUDE_DIRS}" )
+    #message(STATUS "MULTINEST_LIBRARIES = ${MULTINEST_LIBRARIES}" )
+    #message(STATUS "MULTINEST_MODULES = ${MULTINEST_MODULE_DIRS}" )
+    #if(LAPACK_FOUND OR LAPACK95_FOUND)
+        #message(STATUS "BLA_VENDOR = ${BLA_VENDOR}")
+        #message(STATUS "LAPACK_LINKER_FLAGS = ${LAPACK_LINKER_FLAGS}")
+    #endif(LAPACK_FOUND OR LAPACK95_FOUND)
+    #message(STATUS "LAPACK_FOUND = ${LAPACK_FOUND}")
+    #if(LAPACK_FOUND)
+        #message(STATUS "LAPACK_LIBRARIES = ${LAPACK_LIBRARIES}")
+    #endif(LAPACK_FOUND)
+    #message(STATUS "LAPACK95_FOUND = ${LAPACK95_FOUND}")
+    #if(LAPACK95_FOUND)
+        #message(STATUS "LAPACK_95LIBRARIES = ${LAPACK_95LIBRARIES}")
+    #endif(LAPACK95_FOUND)
+    #set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MULTINEST")
+    #set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${MULTINEST_INCLUDE_DIRS})
+    #set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${MULTINEST_LIBRARIES})
+#else(MULTINEST_FOUND)
+    #message(STATUS "${Red}MultiNest not found${ColourReset}")
+#endif(MULTINEST_FOUND)
+#message("")
+#
+##include(cmake/polychord.cmake)
+#include(cmake/multinest.cmake)
+#include(cmake/scalapack.cmake)
+#include(cmake/mumps.cmake)
 include(cmake/pybind11.cmake)
 include(cmake/python.cmake)
 include(cmake/executables.cmake)
 include(cmake/python_install.cmake)
 
-if(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
-    add_dependencies(mumps scalapack)
-    add_dependencies(mumps-distclean scalapack-distclean)
-endif(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
+#if(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
+    #add_dependencies(mumps scalapack)
+    #add_dependencies(mumps-distclean scalapack-distclean)
+#endif(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
 
 add_custom_target(qlens-all)
 add_dependencies(qlens-all qlens mkdist cosmocalc python)
 
 add_custom_target(deps)
-add_dependencies(deps pybind11 multinest polychord)
+#add_dependencies(deps pybind11 multinest polychord)
+add_dependencies(deps pybind11)
 
 add_custom_target(deps-distclean)
-add_dependencies(deps-distclean pybind11-distclean multinest-distclean polychord-distclean)
+#add_dependencies(deps-distclean pybind11-distclean multinest-distclean polychord-distclean)
+add_dependencies(deps-distclean pybind11-distclean)
 
 if(MUMPS_OK)
     add_dependencies(deps mumps)
