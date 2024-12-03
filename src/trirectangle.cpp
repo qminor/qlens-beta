@@ -17,27 +17,12 @@ TriRectangleOverlap::TriRectangleOverlap()
 	for (int i=0; i < 7; i++) { overlap_pts[i][0] = 0; overlap_pts[i][1] = 0; }
 }
 
-double TriRectangleOverlap::find_overlap_area(lensvector& a, lensvector& b, lensvector& c, double xmin, double xmax, double ymin, double ymax)
+double TriRectangleOverlap::find_overlap_area(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax)
 {
 	// The assignment of the rectangle corner and side indices will be as follows:
 	// 3-2-2
 	// 3   1
 	// 0-0-1
-
-	// this is a bit ugly, but seg faults occur if the rectangle shares any x/y values with the square and this is a quick fix
-	if (a[0]==xmin) xmin -= 1e-10;
-	if (b[0]==xmin) xmin -= 1e-10;
-	if (b[0]==xmin) xmin -= 1e-10;
-	if (a[0]==xmax) xmax += 1e-10;
-	if (b[0]==xmax) xmax += 1e-10;
-	if (b[0]==xmax) xmax += 1e-10;
-
-	if (a[1]==ymin) ymin -= 1e-10;
-	if (b[1]==ymin) ymin -= 1e-10;
-	if (b[1]==ymin) ymin -= 1e-10;
-	if (a[1]==ymax) ymax += 1e-10;
-	if (b[1]==ymax) ymax += 1e-10;
-	if (b[1]==ymax) ymax += 1e-10;
 
 	vertex[0] = &a; vertex[1] = &b; vertex[2] = &c;
 	ab[0] = (*vertex[1])[0] - (*vertex[0])[0];
@@ -320,7 +305,6 @@ bool TriRectangleOverlap::determine_if_in_neighborhood(lensvector& a, lensvector
 	return true;
 }
 
-
 bool TriRectangleOverlap::determine_if_overlap(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax)
 {
 	// The assignment of the rectangle corner and side indices will be as follows:
@@ -405,41 +389,6 @@ bool TriRectangleOverlap::determine_if_overlap(lensvector& a, lensvector& b, len
 		}
 	}
 	return false;
-}
-
-bool TriRectangleOverlap::determine_if_in_neighborhood(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax, bool &inside)
-{
-	inside = false;
-	vertex[0] = &a; vertex[1] = &b; vertex[2] = &c; 
-
-	for (i=0; i < 3; i++) {
-		for (j=0; j < 4; j++) {
-			in_side_region[i][j] = false;
-		}
-	}
-
-	for (i=0; i < 3; i++) {
-		outside_rectangle = false;
-		if ((*vertex[i])[0] < xmin) {
-			in_side_region[i][3] = true;
-			if (outside_rectangle==false) outside_rectangle = true;
-		} else if ((*vertex[i])[0] > xmax) {
-			in_side_region[i][1] = true;
-			if (outside_rectangle==false) outside_rectangle = true;
-		}
-		if ((*vertex[i])[1] < ymin) {
-			in_side_region[i][0] = true;
-			if (outside_rectangle==false) outside_rectangle = true;
-		} else if ((*vertex[i])[1] > ymax) {
-			in_side_region[i][2] = true;
-			if (outside_rectangle==false) outside_rectangle = true;
-		}
-		if (outside_rectangle==false) { inside = true; return true; }
-	}
-	for (j=0; j < 4; j++) {
-		if ((in_side_region[0][j]) and (in_side_region[1][j]) and (in_side_region[2][j])) return false; // all on same side of rectangle, so there's no overlap
-	}
-	return true;
 }
 
 bool TriRectangleOverlap::determine_if_overlap_rough(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax)

@@ -9,7 +9,7 @@
 #include <iomanip>
 using namespace std;
 
-bool SB_Profile::orient_major_axis_north = false;
+bool SB_Profile::orient_major_axis_north = false; // At the moment, this setting cannot be changed; it should probably be removed altogether
 bool SB_Profile::use_sb_ellipticity_components = false;
 int SB_Profile::default_ellipticity_mode = 1;
 bool SB_Profile::use_fmode_scaled_amplitudes = false;
@@ -1439,11 +1439,11 @@ double SB_Profile::surface_brightness(double x, double y)
 		double sbderiv, h = 1e-5;
 
 		if (fourier_use_eccentric_anomaly) {
+			// we evaluate SB at non-elliptical radius because that's what the corresponding lensing multipoles have to do (to get deflections).
 			if (xisq <= h) sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq))/(h);
 			else sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq-h))/(2*h);
 			sb += 2*fourier_factor*sbderiv*xisq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
 		} else {
-			// we evaluate SB at non-elliptical radius because that's what the corresponding lensing multipoles have to do (to get deflections).
 			if (rsq <= h) sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq))/(h);
 			else sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq-h))/(2*h);
 			sb += 2*fourier_factor*sbderiv*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))

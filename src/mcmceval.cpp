@@ -108,7 +108,7 @@ class Fit : private Minimize, private LevenMarq
 		}
 };
 
-void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, double *hiLimit, double& logev, const int mpi_np, const int cut_val, const char flag, const bool silent, const int n_freeparams, const bool transform_params, const char *transform_filename, const bool importance_sampling, const char *prior_weight_filename)
+void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, double *hiLimit, const int mpi_np, const int cut_val, const char flag, const bool silent, const int n_freeparams, const bool transform_params, const char *transform_filename, const bool importance_sampling, const char *prior_weight_filename, const bool include_log_evidence)
 {
 	if (a < 0)
 	{
@@ -132,14 +132,9 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 		string str;
 		do {
 			getline(inlen, str);
-			if (str.find("# lnZ = ") != string::npos) {
-				istringstream iss(str);
-				string dumstring;
-				for (int i=0; i < 3; i++) iss >> dumstring;
-				iss >> logev;
-			}
 			if (str.find("#") != string::npos) chain_header.push_back(str);
 		} while (str.find("#") != string::npos);
+		if (include_log_evidence) getline(inlen, str);
 		istringstream iss(str);
 		a = 0;
 		while(iss >> str) a++;
@@ -235,6 +230,7 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 				name2 += "_" + name1;
 			}
 			ifstream in(name2.c_str());
+			if (include_log_evidence) in.getline(line,n_characters);
 			while ((in.getline(line,n_characters)) && (!in.eof())) {
 				istringstream instream(line);
 				if (instream >> dum) {
@@ -525,13 +521,13 @@ void McmcEval::input_prior_weights(const char *prior_weight_filename, double *mi
 			if (param_num >= numOfParam) die("Parameter number does not exist");
 			if (words[1]=="none") prior_weights[param_num].set_none();
 			else if (words[1]=="log") prior_weights[param_num].set_log(minvals[param_num],maxvals[param_num]);
-			else if (words[1]=="gaussian") {
-				if (nwords != 4) die("gaussian requires two additional arguments (mean,sigma)");
-				double sig, pos;
-				if (!(ws[2] >> pos)) die("Invalid mean value for Gaussian prior weights");
-				if (!(ws[3] >> sig)) die("Invalid dispersion value for Gaussian prior weights");
-				prior_weights[param_num].set_gaussian(pos,sig);
-			}
+			//else if (words[1]=="gaussian") {
+				//if (nwords != 4) die("gaussian requires two additional arguments (mean,sigma)");
+				//double sig, pos;
+				//if (!(ws[2] >> pos)) die("Invalid mean value for Gaussian prior weights");
+				//if (!(ws[3] >> sig)) die("Invalid dispersion value for Gaussian prior weights");
+				//prior_weights[param_num].set_gaussian(pos,sig);
+			//}
 			//else if (words[1]=="inverse_gaussian") {
 				//if (nwords != 4) die("inverse_gaussian requires two additional arguments (mean,sigma)");
 				//double sig, pos;

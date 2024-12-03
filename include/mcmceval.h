@@ -71,16 +71,13 @@ struct ParamPriorWeight
 	ParamPriorWeight() { prior_type = EVAL_NO_WEIGHT; }
 	void set_none() { prior_type = EVAL_NO_WEIGHT; }
 	void set_log(const double xmin, const double xmax) { prior_type = EVAL_LOG_PRIOR; normfac = 1.0/log(xmax/xmin); }
-	void set_gaussian(double &pos_in, double &sig_in) { prior_type = EVAL_GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; normfac = 1.0/gaussian_sig/SQRT2PI; }
+	//void set_gaussian(double &pos_in, double &sig_in) { prior_weight = EVAL_GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; }
 	//void set_inverse_gaussian(double &pos_in, double &sig_in) { prior_weight = INVERSE_EVAL_GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; }
 	double prior_weight(const double param)
 	{
 		if (prior_type==EVAL_NO_WEIGHT) return 1.0;
 		else if (prior_type==EVAL_LOG_PRIOR) return normfac/param;
-		else if (prior_type==EVAL_GAUSS_PRIOR) {
-			double x = (param-gaussian_pos)/gaussian_sig;
-			return normfac*exp(-x*x/2);
-		}
+		//else if (prior_weight==EVAL_GAUSS_PRIOR)
 		//else if (prior_weight==INVERSE_EVAL_GAUSS_PRIOR)
 		else return 1.0;
 	}
@@ -112,7 +109,7 @@ class McmcEval
 		
 	public:
 		McmcEval() { numOfParam = 0; mults = chi2 = NULL; cut = numOfPoints = NULL; points = NULL; minvals = maxvals = derived_param = derived_mults = NULL; param_transforms = NULL; }
-		void input(const char *, int, int, double *, double *, double& logev, const int mpi_np = 1, const int cut_val = 0, const char flag = 0x00, const bool silent = false, const int n_freeparams = -1, const bool transform_params=false, const char *transform_filename = NULL, const bool importance_sampling = false, const char *prior_weight_filename = NULL);
+		void input(const char *, int, int, double *, double *, const int mpi_np = 1, const int cut_val = 0, const char flag = 0x00, const bool silent = false, const int n_freeparams = -1, const bool transform_params=false, const char *transform_filename = NULL, const bool importance_sampling = false, const char *prior_weight_filename = NULL, const bool include_log_evidence = false);
 		void input_parameter_transforms(const char *transform_filename);
 		void input_prior_weights(const char *prior_weight_filename, double *minvals, double* maxvals);
 
