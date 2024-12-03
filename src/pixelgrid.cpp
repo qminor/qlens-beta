@@ -5025,9 +5025,8 @@ void DelaunayGrid::plot_surface_brightness(string root, const double grid_scalef
 		if (status) fits_report_error(stderr, status); // print any error message
 		for (i=0; i < npts_x; i++) delete[] sbvals[i];
 		delete[] sbvals;
-	}
 #endif
-
+	}
 }
 
 void DelaunayGrid::get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals)
