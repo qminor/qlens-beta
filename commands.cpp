@@ -35,7 +35,7 @@ void QLens::process_commands(bool read_file)
 	show_colorbar = true;
 	colorbar_min = -1e30;
 	colorbar_max = 1e30;
-	plot_square_axes = false;
+	plot_square_axes = true;
 	show_imgsrch_grid = false;
 	plot_title = "";
 	post_title = ""; // Title for posterior triangle plots

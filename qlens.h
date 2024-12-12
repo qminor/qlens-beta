@@ -1029,7 +1029,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void assign_Lmatrix(const int zsrc_i, const bool delaunay=true, const bool verbal=false);
 	void assign_Lmatrix_supersampled(const int zsrc_i, const bool delaunay=true, const bool verbal=false);
 	void PSF_convolution_Lmatrix(const int zsrc_i, bool verbal = false);
-	void PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground = false, const bool verbal = false, const bool no_fft = false);
+	void PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground = false, const bool verbal = false, const bool use_fft = false);
 	void average_supersampled_image_surface_brightness(const int zsrc_i=-1);
 	void average_supersampled_dense_Lmatrix(const int zsrc_i=-1);
 	void cleanup_FFT_convolution_arrays();
@@ -1410,6 +1410,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double fitmodel_loglike_extended_source(double* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
+	double LogLikeVecFunc(vector<double>& params) { return (this->*LogLikePtr)(params.data()); }
 	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);
 	double get_lens_parameter_using_pmode(const int lensnum, const int paramnum, const int pmode = -1);
