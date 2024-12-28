@@ -13828,6 +13828,16 @@ void QLens::process_commands(bool read_file)
 				set_switch(delaunay_from_pixel_centers,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="raytrace_pixel_centers")
+		{
+			// this will find surface brightnesses by ray-tracing the pixel centers, even if the Delaunay grid is constructed using k-means
+			if (nwords==1) {
+				if (mpi_id==0) cout << "find surface brightness by ray-tracing pixel centers even if 'split_imgpixels' is turned on: " << display_switch(raytrace_using_pixel_centers) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'raytrace_pixel_centers' command; must specify 'on' or 'off'");
+				set_switch(raytrace_using_pixel_centers,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="imgpixel_nsplit")
 		{
 			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)

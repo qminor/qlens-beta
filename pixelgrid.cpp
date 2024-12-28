@@ -11350,7 +11350,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay)
 #else
 			thread = 0;
 #endif
-			if (lens->split_imgpixels) {
+			if ((lens->split_imgpixels) and (!lens->raytrace_using_pixel_centers)) {
 				int nsubpix,subcell_index;
 				bool maps_to_something;
 				#pragma omp for private(i,j,nsubpix,subcell_index,maps_to_something) schedule(dynamic)
@@ -11472,7 +11472,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 			}
 			delete[] corners;
 		} else { // use interpolation to get surface brightness
-			if (lens->split_imgpixels) {
+			if ((lens->split_imgpixels) and (!lens->raytrace_using_pixel_centers)) {
 				#pragma omp parallel
 				{
 					int thread;
@@ -12973,7 +12973,7 @@ void QLens::assign_Lmatrix(const int zsrc_i, const bool delaunay, const bool ver
 			int nsubpix,subcell_index;
 			lensvector *center_srcpt;
 
-			if (split_imgpixels) {
+			if ((split_imgpixels) and (!raytrace_using_pixel_centers)) {
 				#pragma omp for private(img_index,i,j,nsubpix,index,center_srcpt) schedule(dynamic)
 				for (img_index=0; img_index < image_npixels; img_index++) {
 					index = 0;

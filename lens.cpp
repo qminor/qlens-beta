@@ -1130,6 +1130,7 @@ QLens::QLens() : UCMC()
 	split_imgpixels = true;
 	split_high_mag_imgpixels = false;
 	delaunay_from_pixel_centers = false;
+	raytrace_using_pixel_centers = false;
 	psf_supersampling = false;
 	imgpixel_lomag_threshold = 0;
 	imgpixel_himag_threshold = 0;
@@ -1650,6 +1651,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	split_imgpixels = lens_in->split_imgpixels;
 	split_high_mag_imgpixels = lens_in->split_high_mag_imgpixels;
 	delaunay_from_pixel_centers = lens_in->delaunay_from_pixel_centers;
+	raytrace_using_pixel_centers = lens_in->raytrace_using_pixel_centers;
 	psf_supersampling = lens_in->psf_supersampling;
 	imgpixel_lomag_threshold = lens_in->imgpixel_lomag_threshold;
 	imgpixel_himag_threshold = lens_in->imgpixel_himag_threshold;

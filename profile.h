@@ -496,7 +496,7 @@ struct LensIntegral : public Romberg
 	double PattersonIntegrate(double (LensIntegral::*func)(const double), const double a, const double b, bool &converged);
 	double FejerIntegrate(double (LensIntegral::*func)(double), double a, double b, bool &converged);
 
-	// Functions for doing multiple integrals simulataneously
+	// Functions for doing multiple integrals simultaneously
 	void GaussIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs);
 	void PattersonIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);
 	void FejerIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);

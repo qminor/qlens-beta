@@ -681,6 +681,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool split_imgpixels;
 	bool split_high_mag_imgpixels;
 	bool delaunay_from_pixel_centers;
+	bool raytrace_using_pixel_centers;
 	bool psf_supersampling;
 	int default_imgpixel_nsplit, emask_imgpixel_nsplit;
 	double imgpixel_himag_threshold, imgpixel_lomag_threshold, imgpixel_sb_threshold;
