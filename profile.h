@@ -94,7 +94,6 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	boolvector vary_params;
 	boolvector angle_param; // used to keep track of angle parameters so they can be easily converted to degrees and displayed
 	std::string model_name;
-	std::string special_parameter_command;
 	std::vector<std::string> paramnames;
 	std::vector<std::string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;
@@ -340,9 +339,6 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	std::string mkstring_int(const int i);
 	std::string get_parameters_string();
 	void print_vary_parameters();
-	void output_field_in_sci_notation(double* num, std::ofstream& scriptout, const bool space);
-	virtual void print_lens_command(std::ofstream& scriptout, const bool use_limits);
-	void output_lens_command_nofit(std::string& command);
 	virtual void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
 
 	// the following function MUST be redefined in all derived classes
@@ -1324,7 +1320,6 @@ class Tabulated_Model : public LensProfile
 	double grid_logrlength;
 	double *grid_logrvals, *grid_phivals;
 	double **kappa_vals, **pot_vals, **defx, **defy, **hess_xx, **hess_yy, **hess_xy;
-	std::string original_lens_command; // used for saving commands to reproduce this model
 	double original_kscale, original_rscale;
 	bool loaded_from_file;
 
@@ -1349,7 +1344,6 @@ class Tabulated_Model : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
-	void print_lens_command(std::ofstream& scriptout, const bool use_limits);
 
 	double potential(double, double);
 	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);

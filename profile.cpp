@@ -43,7 +43,6 @@ void LensProfile::setup_lens_properties(const int parameter_mode, const int subc
 {
 	lenstype = KSPLINE;
 	model_name = "kspline";
-	special_parameter_command = "";
 	setup_base_lens_properties(7,2,true); // number of parameters = 7, is_elliptical_lens = true
 }
 
@@ -123,7 +122,6 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	lensprofile_nparams = lens_in->lensprofile_nparams;
 	parameter_mode = lens_in->parameter_mode;
 	lens_subclass = lens_in->lens_subclass;
-	special_parameter_command = lens_in->special_parameter_command;
 	subclass_label = lens_in->subclass_label;
 	ellipticity_mode = lens_in->ellipticity_mode;
 	ellipticity_gradient = lens_in->ellipticity_gradient;
@@ -722,7 +720,7 @@ void LensProfile::update_ellipticity_parameter(const double eparam)
 	set_model_specific_integration_pointers();
 }
 
-// You need to have a function at the model level, called here that reports a "false" status if parameter values are crazy!
+// Perhaps should have a function at the model level, called here that reports a "false" status if parameter values are crazy!
 void LensProfile::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {
@@ -4259,167 +4257,6 @@ void LensProfile::print_vary_parameters()
 		}
 		cout << endl;
 	}
-}
-
-inline void LensProfile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
-{
-	// I thought it would be cool to print scientific notation and omit all the zero's if it's an exact mantissa.
-	// It doesn't work very well (due to binary vs. base 10 storage), so canning it for now, not a big deal
-	//int exp;
-	//double mantissa = frexp10((*num),&exp);
-	//double mantissa;
-   //exp = ((*num) == 0) ? 0 : 1 + (int)std::floor(std::log10(abs((*num))));
-   //mantissa = (*num) * std::pow(10 , -exp);
-	scriptout << setiosflags(ios::scientific);
-	scriptout << (*num);
-	scriptout << resetiosflags(ios::scientific);
-	if (space) scriptout << " ";
-}
-
-void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
-{
-	scriptout << setprecision(16);
-	//scriptout << setiosflags(ios::scientific);
-	scriptout << "fit lens " << model_name << " ";
-	if (ellipticity_mode != default_ellipticity_mode) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
-			scriptout << "emode=" << ellipticity_mode << " ";
-	}
-	if (parameter_mode != 0) scriptout << "pmode=" << parameter_mode << " ";
-	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
-
-	if (center_defined) {
-		for (int i=0; i < n_params-3; i++) {
-			if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
-				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
-			} else {
-				if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
-				else {
-					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
-					else scriptout << *(param[i]);
-				}
-				if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
-				scriptout << " ";
-			}
-		}
-		if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
-		else {
-			if (!lensed_center_coords) scriptout << x_center << " " << y_center << " z=" << zlens << endl;
-			else scriptout << xc_prime << " " << yc_prime << " z=" << zlens << " -lensed_center" << endl;
-		}
-	} else {
-		for (int i=0; i < n_params-1; i++) {
-			if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
-				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
-			} else {
-				if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
-				else {
-					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
-					else scriptout << *(param[i]);
-				}
-				if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
-				scriptout << " ";
-			}
-		}
-		scriptout << " z=" << zlens << endl;
-	}
-	for (int i=0; i < n_params-1; i++) {
-		if (vary_params[i]) scriptout << "1 ";
-		else scriptout << "0 ";
-	}
-	if (vary_params[n_params-1]) scriptout << "varyz=1" << endl; // the last parameter is always the redshift, whose flag can be omitted if not being varied
-	else scriptout << endl;
-	if ((use_limits) and (include_limits)) {
-		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
-		else {
-			for (int i=0; i < n_vary_params; i++) {
-				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i])) {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
-					}
-				} else {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,true);
-						output_field_in_sci_notation(&lower_limits_initial[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits_initial[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
-					}
-
-				}
-			}
-		}
-	}
-}
-
-void LensProfile::output_lens_command_nofit(string& command)
-{
-	command += "lens " + model_name + " ";
-	if (ellipticity_mode != default_ellipticity_mode) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
-		{
-			stringstream emodestr;
-			string emodestring;
-			emodestr << ellipticity_mode;
-			emodestr >> emodestring;
-			command += "emode=" + emodestring + " ";
-		}
-	}
-	if (special_parameter_command != "") command += special_parameter_command += " ";
-
-	string xcstring = "";
-	string ycstring = "";
-	if (center_defined) {
-		for (int i=0; i < n_params-3; i++) {
-				stringstream paramstr;
-				paramstr << setprecision(16);
-				string paramstring;
-			if (angle_param[i]) {
-				paramstr << radians_to_degrees(*(param[i]));
-			}
-			else {
-				paramstr << *(param[i]);
-			}
-			paramstr >> paramstring;
-			command += paramstring + " ";
-		}
-		stringstream xcstr;
-		stringstream ycstr;
-		xcstr << setprecision(16);
-		xcstr << x_center;
-		xcstr >> xcstring;
-		ycstr << setprecision(16);
-		ycstr << y_center;
-		ycstr >> ycstring;
-	} else {
-		for (int i=0; i < n_params-1; i++) {
-				stringstream paramstr;
-				paramstr << setprecision(16);
-				string paramstring;
-			if (angle_param[i]) {
-				paramstr << radians_to_degrees(*(param[i]));
-			}
-			else {
-				paramstr << *(param[i]);
-			}
-			paramstr >> paramstring;
-			command += paramstring + " ";
-		}
-	}
-	stringstream zlstr;
-	string zlstring;
-	zlstr << setprecision(16);
-	zlstr << zlens;
-	zlstr >> zlstring;
-	command += xcstring + " " + ycstring + " z=" + zlstring;
 }
 
 

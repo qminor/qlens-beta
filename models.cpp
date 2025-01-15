@@ -32,7 +32,6 @@ void SPLE_Lens::setup_lens_properties(const int parameter_mode_in, const int sub
 {
 	lenstype = sple_LENS;
 	model_name = "sple";
-	special_parameter_command = "";
 	setup_base_lens_properties(8,3,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -448,7 +447,6 @@ void dPIE_Lens::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = dpie_LENS;
 	model_name = "dpie";
-	special_parameter_command = "";
 	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -799,7 +797,6 @@ void NFW::setup_lens_properties(const int parameter_mode, const int subclass)
 {
 	lenstype = nfw;
 	model_name = "nfw";
-	special_parameter_command = "";
 	setup_base_lens_properties(7,2,true,parameter_mode); // number of parameters = 6, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -1136,7 +1133,6 @@ void Truncated_NFW::setup_lens_properties(const int parameter_mode, const int su
 	string tstring;
 	tstr << subclass;
 	tstr >> tstring;
-	special_parameter_command = "tmode=" + tstring;
 	setup_base_lens_properties(8,3,true,parameter_mode,subclass); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -1511,7 +1507,6 @@ void Cored_NFW::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = CORED_nfw;
 	model_name = "cnfw";
-	special_parameter_command = "";
 	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -1941,7 +1936,6 @@ void Hernquist::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = HERNQUIST;
 	model_name = "hern";
-	special_parameter_command = "";
 	setup_base_lens_properties(7,2,true); // number of parameters = 6, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -2058,7 +2052,6 @@ void ExpDisk::setup_lens_properties(const int parameter_mode, const int subclass
 {
 	lenstype = EXPDISK;
 	model_name = "expdisk";
-	special_parameter_command = "";
 	setup_base_lens_properties(7,2,true); // number of parameters = 6, is_elliptical_lens = true
 }
 
@@ -2162,7 +2155,6 @@ void Shear::setup_lens_properties(const int parameter_mode, const int subclass)
 {
 	lenstype = SHEAR;
 	model_name = "shear";
-	special_parameter_command = "";
 	setup_base_lens_properties(5,-1,false); // number of parameters = 4, is_elliptical_lens = false
 }
 
@@ -2339,12 +2331,6 @@ void Multipole::initialize_parameters(const double &A_m_in, const double n_in, c
 {
 	kappa_multipole = kap; // specifies whether it is a multipole in the potential or in kappa
 	sine_term = sine;
-	string sine_command = (sine_term) ? "sin" : "cos";
-	stringstream mstr;
-	string mstring;
-	mstr << m_in;
-	mstr >> mstring;
-	special_parameter_command = sine_command + " m=" + mstring;
 	model_name = (kap==true) ? "kmpole" : "mpole"; // rename if necessary
 
 	n = n_in;
@@ -2362,13 +2348,6 @@ void Multipole::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = MULTIPOLE;
 	kappa_multipole = false; // default; specifies it is a multipole in the potential
-	string sine_command = "cos";
-	subclass_label = "m";
-	stringstream mstr;
-	string mstring;
-	mstr << subclass;
-	mstr >> mstring;
-	special_parameter_command = sine_command + " m=" + mstring;
 	model_name = "mpole";
 	m = subclass; // m will be used when assigning the amplitude parameter name (A_m or B_m)
 	setup_base_lens_properties(6,-1,false,0,m); // number of parameters = 5, is_elliptical_lens = false
@@ -2723,7 +2702,6 @@ void PointMass::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = PTMASS;
 	model_name = "ptmass";
-	special_parameter_command = "";
 	setup_base_lens_properties(4,-1,false,parameter_mode); // number of parameters = 3, is_elliptical_lens = false
 }
 
@@ -2917,7 +2895,6 @@ void CoreCusp::setup_lens_properties(const int parameter_mode, const int subclas
 {
 	lenstype = CORECUSP;
 	model_name = "corecusp";
-	special_parameter_command = ((parameter_mode==1) ? "re_param" : "");
 	setup_base_lens_properties(10,5,true,parameter_mode); // number of parameters = 9, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -3246,7 +3223,6 @@ void SersicLens::setup_lens_properties(const int parameter_mode, const int subcl
 {
 	lenstype = SERSIC_LENS;
 	model_name = "sersic";
-	special_parameter_command = "";
 	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
@@ -3448,7 +3424,6 @@ void DoubleSersicLens::setup_lens_properties(const int parameter_mode, const int
 {
 	lenstype = DOUBLE_SERSIC_LENS;
 	model_name = "dsersic";
-	special_parameter_command = "";
 	setup_base_lens_properties(11,6,true,parameter_mode); // number of parameters = 10 (not including redshift), is_elliptical_lens = true
 }
 
@@ -3662,7 +3637,6 @@ void Cored_SersicLens::setup_lens_properties(const int parameter_mode, const int
 {
 	lenstype = CORED_SERSIC_LENS;
 	model_name = "csersic";
-	special_parameter_command = "";
 	setup_base_lens_properties(9,4,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
@@ -3859,7 +3833,6 @@ void MassSheet::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = SHEET;
 	model_name = "sheet";
-	special_parameter_command = "";
 	setup_base_lens_properties(4,-1,false); // number of parameters = 3, is_elliptical_lens = false
 }
 
@@ -3992,7 +3965,6 @@ void Deflection::setup_lens_properties(const int parameter_mode, const int subcl
 {
 	lenstype = DEFLECTION;
 	model_name = "deflection";
-	special_parameter_command = "";
 	setup_base_lens_properties(3,-1,false); // number of parameters = 2, is_elliptical_lens = false
 	center_defined = false;
 }
@@ -4083,7 +4055,6 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 {
 	lenstype = TABULATED;
 	model_name = "tab(" + lens_in->get_model_name() + ")";
-	special_parameter_command = "";
 	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kscale = kscale_in;
@@ -4152,7 +4123,6 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 	}
 
 	// the following data are stored so this model can be reproduced later if needed
-	lens_in->output_lens_command_nofit(original_lens_command);
 	original_kscale = kscale;
 	original_rscale = rscale;
 	loaded_from_file = false;
@@ -4209,7 +4179,6 @@ Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 	update_meta_parameters_and_pointers();
 
 	loaded_from_file = lens_in->loaded_from_file;
-	original_lens_command = lens_in->original_lens_command;
 	if (!loaded_from_file) {
 		original_kscale = lens_in->original_kscale;
 		original_rscale = lens_in->original_rscale;
@@ -4219,7 +4188,6 @@ Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename, QLens* cosmo_in)
 {
 	lenstype = TABULATED;
-	special_parameter_command = "";
 	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
@@ -4269,7 +4237,6 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 	}
 	grid_logrlength = grid_logrvals[grid_logr_N-1] - grid_logrvals[0];
 	loaded_from_file = true;
-	original_lens_command = tab_filename;
 }
 
 void Tabulated_Model::output_tables(const string tabfile_root)
@@ -4657,60 +4624,6 @@ void Tabulated_Model::potential_derivatives(double x, double y, lensvector& def,
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
-void Tabulated_Model::print_lens_command(ofstream& scriptout, const bool use_limits)
-{
-	scriptout << setprecision(16);
-	if (loaded_from_file) {
-		scriptout << "fit lens tab " << original_lens_command << " ";
-	}
-	else {
-		scriptout << original_lens_command << endl;
-		scriptout << "fit lens tab lens=" << lens_number << " ";
-	}
-	if (ellipticity_mode != default_ellipticity_mode) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
-			scriptout << "emode=" << ellipticity_mode << " ";
-	}
-	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
-
-	for (int i=0; i < n_params-2; i++) {
-		if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-		else {
-			if (i==0) {
-				if (loaded_from_file) scriptout << kscale;
-				else scriptout << original_kscale;
-			}
-			else if (i==1) {
-				if (loaded_from_file) scriptout << rscale;
-				else scriptout << original_rscale;
-			}
-			else if (i==2) scriptout << radians_to_degrees(*(param[i]));
-			else scriptout << *(param[i]);
-			if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
-			scriptout << " ";
-		}
-	}
-	if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
-	else scriptout << x_center << " " << y_center << endl;
-	for (int i=0; i < n_params; i++) {
-		if (vary_params[i]) scriptout << "1 ";
-		else scriptout << "0 ";
-	}
-	scriptout << endl;
-	if ((use_limits) and (include_limits)) {
-		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
-		else {
-			for (int i=0; i < n_vary_params; i++) {
-				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
-					scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
-				else
-					scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
-			}
-		}
-	}
-	scriptout << "lens update " << lens_number << " " << kscale << " " << rscale << " " << radians_to_degrees(theta) << " " << x_center << " " << y_center << endl;
-}
-
 Tabulated_Model::~Tabulated_Model() {
 	if (grid_logrvals != NULL) {
 		delete[] grid_logrvals;
@@ -4740,7 +4653,6 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 {
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";
-	special_parameter_command = "";
 	setup_base_lens_properties(7,-1,false); // number of parameters = 3, is_elliptical_lens = false
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	ellipticity_mode = -1;
@@ -4912,7 +4824,6 @@ QTabulated_Model::QTabulated_Model(const QTabulated_Model* lens_in)
 QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, QLens* cosmo_in)
 {
 	lenstype = QTABULATED;
-	special_parameter_command = "";
 	setup_base_lens_properties(7,-1,false); // number of parameters = 5, is_elliptical_lens = false
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 
@@ -5448,7 +5359,6 @@ void TopHatLens::setup_lens_properties(const int parameter_mode, const int subcl
 {
 	lenstype = TOPHAT_LENS;
 	model_name = "tophat";
-	special_parameter_command = "";
 	setup_base_lens_properties(7,2,true);
 	analytic_3d_density = false;
 }
@@ -5623,7 +5533,6 @@ double TopHatLens::potential_analytic(const double x, const double y)
 TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
 {
 	setup_lens_properties();
-	special_parameter_command = "";
 	//setup_base_lens_properties(X,false); // number of parameters = X, is_elliptical_lens = false
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	set_integration_pointers();

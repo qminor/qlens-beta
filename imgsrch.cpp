@@ -1787,7 +1787,7 @@ void QLens::output_images_single_source(const double &x_source, const double &y_
 	//cout << Grid::cc_neighbor_splittings << endl;
 	//double *Grid::grid_zfactors;
 	//double **Grid::grid_betafactors;
-	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << ptsrc_zfactors[0][0] << endl;
+	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << specific_ptsrc_zfactors[0][0] << endl;
 
 	// parameters for creating the recursive grid
 	//cout << Grid::rmin << endl;
@@ -1909,7 +1909,7 @@ image* QLens::get_images(const lensvector &source_in, int &n_images, bool verbal
 }
 
 // this is for the Python wrapper, but I would like to replace the above functions with this in qlens anyway (DO LATER)
-bool QLens::get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal)
+bool QLens::get_imageset(const double src_x, const double src_y, PointSource& image_set, bool verbal)
 {
 	if (grid==NULL) {
 		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return false;
@@ -1922,13 +1922,13 @@ bool QLens::get_imageset(const double src_x, const double src_y, ImageSet& image
 	return true;
 }
 
-vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max_dataset, bool verbal)
+vector<PointSource> QLens::get_fit_imagesets(bool &status, int min_dataset, int max_dataset, bool verbal)
 {
 	status = true;
 	if (n_sourcepts_fit==0) status = false;
 	if (max_dataset < 0) max_dataset = n_sourcepts_fit - 1;
 	if ((min_dataset < 0) or (min_dataset > max_dataset)) status = false;
-	vector<ImageSet> image_sets;
+	vector<PointSource> image_sets;
 	image_sets.clear();
 	if (!status) return image_sets;
 	image_sets.resize(n_sourcepts_fit);
@@ -1949,20 +1949,22 @@ vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max
 	}
 
 	for (int i=min_dataset; i <= max_dataset; i++) {
-		if ((i == min_dataset) or (ptsrc_zfactors[i] != ptsrc_zfactors[i-1]))
-			create_grid(false,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
+		if ((i == min_dataset) or (specific_ptsrc_zfactors[i] != specific_ptsrc_zfactors[i-1]))
+			create_grid(false,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
 
 		source[0] = srcpts[i][0];
 		source[1] = srcpts[i][1];
 
+
 		find_images();
-		image_sets[i].copy_imageset(source,ptsrc_redshifts[i],images_found,Grid::nfound,srcflux[i]);
+		image_sets[i].copy_imageset(source,specific_ptsrc_redshifts[i],images_found,Grid::nfound,srcflux[i]);
 	}
 	reset_grid();
 	delete[] srcpts;
 	delete[] srcflux;
 	return image_sets;
 }
+
 bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal)
 {
 	if (plot_critical_curves("crit.dat")==false) warn(warnings,"no critical curves found");

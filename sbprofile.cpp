@@ -2144,6 +2144,11 @@ void SB_Profile::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmat
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
+void SB_Profile::get_regularization_param_ptr(double* regparam_ptr)
+{
+	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
 void SB_Profile::update_amplitudes(double*& ampvec)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
@@ -2365,81 +2370,6 @@ double SB_Profile::window_rmax()
 double SB_Profile::length_scale()
 {
 	return qx_parameter*sb_spline.xmax();
-}
-
-void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits)
-{
-	scriptout << setprecision(16);
-	scriptout << "fit source " << model_name << " ";
-	if (!is_lensed) scriptout << "-unlensed ";
-	if (zoom_subgridding) scriptout << "-zoom ";
-	if (lensed_center_coords) scriptout << "-lensed_center ";
-
-	for (int i=0; i < n_params; i++) {
-		if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
-		else {
-			// If this is an optional parameter, need to specify parameter name before the value
-			if (paramnames[i]=="c0") scriptout << "c0="; // boxiness parameter
-			else if (paramnames[i]=="rt") scriptout << "rt="; // truncation radius
-			else {
-				for (int j=0; j < n_fourier_modes; j++) {
-					if (fourier_mode_paramnum[j]==i) scriptout << "f" << fourier_mode_mvals[j] << "="; // Fourier mode
-				}
-			}
-			if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
-			else scriptout << *(param[i]);
-		}
-		scriptout << " ";
-	}
-	string extra_arg;
-	if (get_special_command_arg(extra_arg)) scriptout << extra_arg << " ";
-	scriptout << endl;
-	for (int i=0; i < n_params; i++) {
-		if (vary_params[i]) scriptout << "1 ";
-		else scriptout << "0 ";
-	}
-	scriptout << endl;
-	if ((use_limits) and (include_limits)) {
-		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
-		else {
-			for (int i=0; i < n_vary_params; i++) {
-				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i])) {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
-					}
-				} else {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,true);
-						output_field_in_sci_notation(&lower_limits_initial[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits_initial[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
-					}
-
-				}
-			}
-		}
-	}
-}
-
-bool SB_Profile::get_special_command_arg(string &arg)
-{
-	return false; // overloaded for certain source objects to givce special command args
-}
-
-
-inline void SB_Profile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
-{
-	scriptout << setiosflags(ios::scientific);
-	scriptout << (*num);
-	scriptout << resetiosflags(ios::scientific);
-	if (space) scriptout << " ";
 }
 
 /********************************* Specific SB_Profile models (derived classes) *********************************/
@@ -3118,15 +3048,11 @@ double NFW_Source::length_scale()
 	return rs;
 }
 
-
-
-
 Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate, const int parameter_mode_in, QLens* qlens_in)
 {
 	model_name = "shapelet";
 	sbtype = SHAPELET;
-	int npar = 5;
-	setup_base_source_properties(npar,1,false,parameter_mode_in);
+	setup_base_source_properties(6,1,false,parameter_mode_in);
 	qlens = qlens_in;
 	if (parameter_mode==0) {
 		sig = scale_in;
@@ -3135,6 +3061,7 @@ Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_
 		sig_factor = scale_in;
 		sig = 1.0; // this will be set automatically using the 'find_shapelet_scaling_parameters' function in lens.cpp
 	}
+	regparam = 100; // default
 	n_shapelets = nn;
 	indxptr = &n_shapelets;
 	amps = new double*[n_shapelets];
@@ -3157,6 +3084,7 @@ Shapelet::Shapelet(const Shapelet* sb_in)
 	indxptr = &n_shapelets;
 	sig = sb_in->sig;
 	sig_factor = sb_in->sig_factor;
+	regparam = sb_in->regparam;
 	amps = new double*[n_shapelets];
 	for (int i=0; i < n_shapelets; i++) amps[i] = new double[n_shapelets];
 	for (int i=0; i < n_shapelets; i++) {
@@ -3182,6 +3110,7 @@ void Shapelet::assign_paramnames()
 	} else {
 		paramnames[indx] = "sigfac"; latex_paramnames[indx] = "f"; latex_param_subscripts[indx] = "\\sigma"; indx++;
 	}
+	paramnames[indx] = "regparam"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = ""; indx++;
 	set_geometric_paramnames(indx);
 }
 
@@ -3193,6 +3122,7 @@ void Shapelet::assign_param_pointers()
 	} else {
 		param[indx++] = &sig_factor;
 	}
+	param[indx++] = &regparam;
 	set_geometric_param_pointers(indx);
 }
 
@@ -3204,12 +3134,14 @@ void Shapelet::set_auto_stepsizes()
 	} else {
 		stepsizes[indx++] = (sig_factor != 0) ? 0.1*sig_factor : 0.1; // arbitrary
 	}
+	stepsizes[indx++] = 0.3*regparam; // arbitrary
 	set_geometric_param_auto_stepsizes(indx);
 }
 
 void Shapelet::set_auto_ranges()
 {
 	int indx=0;
+	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
 	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
 	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
 	set_geometric_param_auto_ranges(indx);
@@ -3355,6 +3287,11 @@ void Shapelet::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatri
 	Rmatrix_index[n] = indx;
 }
 
+void Shapelet::get_regularization_param_ptr(double* regparam_ptr)
+{
+	regparam_ptr = &regparam;
+}
+
 void Shapelet::update_amplitudes(double*& ampvec)
 {
 	int i,j,k=0;
@@ -3423,18 +3360,6 @@ double Shapelet::length_scale()
 	return sig*sqrt(n_shapelets);
 }
 
-bool Shapelet::get_special_command_arg(string &arg)
-{
-	stringstream nstr;
-	string nstring;
-	nstr << n_shapelets;
-	nstr >> nstring;
-	arg = "n=" + nstring;
-	if (truncate_at_3sigma) arg += " -truncate";
-	return true;
-}
-
-
 SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine, QLens* qlens_in)
 {
 	model_name = "sbmpole";
@@ -3443,7 +3368,6 @@ SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m
 	//string mstring;
 	//mstr << m_in;
 	//mstr >> mstring;
-	//special_parameter_command = "m=" + mstring;
 	sine_term = sine;
 	setup_base_source_properties(5,0,false);
 	qlens = qlens_in;

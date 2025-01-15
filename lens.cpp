@@ -1,4 +1,5 @@
 #include "qlens.h"
+#include "params.h"
 #include "pixelgrid.h"
 #include "profile.h"
 #include "sbprofile.h"
@@ -64,516 +65,12 @@ bool QLens::newton_warnings; // newton_warnings: when true, displays warnings wh
 bool QLens::use_scientific_notation;
 bool QLens::use_ansi_output_during_fit;
 double QLens::rmin_frac;
-bool QLens::respline_at_end; // for creating deflection spline
-int QLens::resplinesteps; // for creating deflection spline
 string QLens::fit_output_filename;
 
 int QLens::nthreads = 0;
 lensvector *QLens::defs = NULL, **QLens::defs_subtot = NULL, *QLens::defs_i = NULL, *QLens::xvals_i = NULL;
 lensmatrix *QLens::jacs = NULL, *QLens::hesses = NULL, **QLens::hesses_subtot = NULL, *QLens::hesses_i = NULL, *QLens::Amats_i = NULL;
 int *QLens::indxs = NULL;
-
-// The ParamSettings stuff should go in a separate cpp file!! Doesn't belong in lens.cpp
-void ParamSettings::update_params(const int nparams_in, vector<string>& names, double* stepsizes_in)
-{
-	int i;
-	if (nparams==nparams_in) {
-		// update parameter names just in case
-		for (i=0; i < nparams_in; i++) {
-			param_names[i] = names[i];
-		}
-		return;
-	}
-	int newparams = nparams_in - nparams;
-	int* new_paramnums = new int[nparams]; // this stores the update parameter numbers for parameters that already existed
-	for (i=0; i < nparams; i++) new_paramnums[i] = -1;
-	ParamPrior** newpriors = new ParamPrior*[nparams_in];
-	ParamTransform** newtransforms = new ParamTransform*[nparams_in];
-	double* new_stepsizes = new double[nparams_in];
-	bool* new_auto_stepsize = new bool[nparams_in];
-	bool* new_subplot_param = new bool[nparams_in];
-	bool* new_hist2d_param = new bool[nparams_in];
-	double* new_prior_norms = new double[nparams_in];
-	double* new_penalty_limits_lo = new double[nparams_in];
-	double* new_penalty_limits_hi = new double[nparams_in];
-	bool* new_use_penalty_limits = new bool[nparams_in];
-	double* new_override_limits_lo = new double[nparams_in];
-	double* new_override_limits_hi = new double[nparams_in];
-	bool* new_override_prior_limits = new bool[nparams_in];
-	if (param_names != NULL) delete[] param_names;
-	param_names = new string[nparams_in];
-	string* new_override_names = new string[nparams_in];
-	if (nparams_in > nparams) {
-		for (i=0; i < nparams; i++) {
-			new_paramnums[i] = i;
-			newpriors[i] = new ParamPrior(priors[i]);
-			newtransforms[i] = new ParamTransform(transforms[i]);
-			new_stepsizes[i] = stepsizes[i];
-			new_auto_stepsize[i] = auto_stepsize[i];
-			new_subplot_param[i] = subplot_param[i];
-			new_hist2d_param[i] = hist2d_param[i];
-			new_prior_norms[i] = prior_norms[i];
-			new_penalty_limits_lo[i] = penalty_limits_lo[i];
-			new_penalty_limits_hi[i] = penalty_limits_hi[i];
-			new_use_penalty_limits[i] = use_penalty_limits[i];
-			new_override_limits_lo[i] = override_limits_lo[i];
-			new_override_limits_hi[i] = override_limits_hi[i];
-			new_override_prior_limits[i] = override_prior_limits[i];
-			param_names[i] = names[i];
-			new_override_names[i] = override_names[i];
-		}
-		for (i=nparams; i < nparams_in; i++) {
-			//cout << "New parameter " << i << ", setting plimits to false" << endl;
-			newpriors[i] = new ParamPrior();
-			newtransforms[i] = new ParamTransform();
-			param_names[i] = names[i];
-			new_stepsizes[i] = stepsizes_in[i];
-			new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
-			new_subplot_param[i] = false; 
-			new_hist2d_param[i] = true; 
-			new_prior_norms[i] = 1.0;
-			new_penalty_limits_lo[i] = -1e30;
-			new_penalty_limits_hi[i] = 1e30;
-			new_use_penalty_limits[i] = false;
-			new_override_limits_lo[i] = -1e30;
-			new_override_limits_hi[i] = 1e30;
-			new_override_prior_limits[i] = false;
-			new_override_names[i] = "";
-		}
-	} else {
-		for (i=0; i < nparams_in; i++) {
-			new_paramnums[i] = i;
-			newpriors[i] = new ParamPrior(priors[i]);
-			newtransforms[i] = new ParamTransform(transforms[i]);
-			new_stepsizes[i] = stepsizes[i];
-			new_auto_stepsize[i] = auto_stepsize[i];
-			new_subplot_param[i] = subplot_param[i];
-			new_hist2d_param[i] = hist2d_param[i];
-			new_prior_norms[i] = prior_norms[i];
-			new_penalty_limits_lo[i] = penalty_limits_lo[i];
-			new_penalty_limits_hi[i] = penalty_limits_hi[i];
-			new_use_penalty_limits[i] = use_penalty_limits[i];
-			new_override_limits_lo[i] = override_limits_lo[i];
-			new_override_limits_hi[i] = override_limits_hi[i];
-			new_override_prior_limits[i] = override_prior_limits[i];
-			param_names[i] = names[i];
-			new_override_names[i] = override_names[i];
-		}
-	}
-	if (nparams > 0) {
-		for (i=0; i < nparams; i++) {
-			delete priors[i];
-			delete transforms[i];
-		}
-		delete[] priors;
-		delete[] transforms;
-		delete[] stepsizes;
-		delete[] auto_stepsize;
-		delete[] subplot_param;
-		delete[] hist2d_param;
-		delete[] prior_norms;
-		delete[] penalty_limits_lo;
-		delete[] penalty_limits_hi;
-		delete[] use_penalty_limits;
-		delete[] override_limits_lo;
-		delete[] override_limits_hi;
-		delete[] override_prior_limits;
-		delete[] override_names;
-	}
-	priors = newpriors;
-	transforms = newtransforms;
-	stepsizes = new_stepsizes;
-	auto_stepsize = new_auto_stepsize;
-	subplot_param = new_subplot_param;
-	hist2d_param = new_hist2d_param;
-	prior_norms = new_prior_norms;
-	penalty_limits_lo = new_penalty_limits_lo;
-	penalty_limits_hi = new_penalty_limits_hi;
-	use_penalty_limits = new_use_penalty_limits;
-	override_limits_lo = new_override_limits_lo;
-	override_limits_hi = new_override_limits_hi;
-	override_prior_limits = new_override_prior_limits;
-	override_names = new_override_names;
-	nparams = nparams_in;
-	update_reference_paramnums(new_paramnums);
-	delete[] new_paramnums;
-}
-void ParamSettings::insert_params(const int pi, const int pf, vector<string>& names, double* stepsizes_in)
-{
-	int i, j, np = pf-pi;
-	int new_nparams = nparams + np;
-	int* new_paramnums = new int[nparams]; // this stores the update parameter numbers for parameters that already existed
-	ParamPrior** newpriors = new ParamPrior*[new_nparams];
-	ParamTransform** newtransforms = new ParamTransform*[new_nparams];
-	double* new_stepsizes = new double[new_nparams];
-	bool* new_auto_stepsize = new bool[new_nparams];
-	bool* new_subplot_param = new bool[new_nparams];
-	bool* new_hist2d_param = new bool[new_nparams];
-	double* new_prior_norms = new double[new_nparams];
-	double* new_penalty_limits_lo = new double[new_nparams];
-	double* new_penalty_limits_hi = new double[new_nparams];
-	bool* new_use_penalty_limits = new bool[new_nparams];
-	double* new_override_limits_lo = new double[new_nparams];
-	double* new_override_limits_hi = new double[new_nparams];
-	bool* new_override_prior_limits = new bool[new_nparams];
-	string* new_param_names = new string[new_nparams];
-	string* new_override_names = new string[new_nparams];
-	for (i=0; i < pi; i++) {
-		new_paramnums[i] = i;
-		newpriors[i] = new ParamPrior(priors[i]);
-		newtransforms[i] = new ParamTransform(transforms[i]);
-		new_auto_stepsize[i] = auto_stepsize[i];
-		new_hist2d_param[i] = hist2d_param[i];
-		new_subplot_param[i] = subplot_param[i];
-		new_stepsizes[i] = (auto_stepsize[i]) ? stepsizes_in[i] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
-		new_prior_norms[i] = prior_norms[i];
-		new_penalty_limits_lo[i] = penalty_limits_lo[i];
-		new_penalty_limits_hi[i] = penalty_limits_hi[i];
-		new_use_penalty_limits[i] = use_penalty_limits[i];
-		new_override_limits_lo[i] = override_limits_lo[i];
-		new_override_limits_hi[i] = override_limits_hi[i];
-		new_override_prior_limits[i] = override_prior_limits[i];
-		new_param_names[i] = names[i];
-		new_override_names[i] = override_names[i];
-	}
-	for (i=pi; i < pf; i++) {
-		newpriors[i] = new ParamPrior();
-		newtransforms[i] = new ParamTransform();
-		new_stepsizes[i] = stepsizes_in[i];
-		new_auto_stepsize[i] = true; // stepsizes for newly added parameters are set to 'auto'
-		new_hist2d_param[i] = true; // stepsizes for newly added parameters are set to 'auto'
-		new_subplot_param[i] = false; // stepsizes for newly added parameters are set to 'auto'
-		new_prior_norms[i] = 1.0;
-		new_penalty_limits_lo[i] = -1e30;
-		new_penalty_limits_hi[i] = 1e30;
-		new_use_penalty_limits[i] = false;
-		new_override_limits_lo[i] = -1e30;
-		new_override_limits_hi[i] = 1e30;
-		new_override_prior_limits[i] = false;
-		new_param_names[i] = names[i];
-		new_override_names[i] = "";
-	}
-	for (j=pf,i=pi; i < nparams; i++, j++) {
-		new_paramnums[i] = j;
-		newpriors[j] = new ParamPrior(priors[i]);
-		newtransforms[j] = new ParamTransform(transforms[i]);
-		new_auto_stepsize[j] = auto_stepsize[i];
-		new_hist2d_param[j] = hist2d_param[i];
-		new_subplot_param[j] = subplot_param[i];
-		new_stepsizes[j] = (auto_stepsize[i]) ? stepsizes_in[j] : stepsizes[i]; // if stepsizes are set to 'auto', use new auto stepsizes since they might have changed
-		new_prior_norms[j] = prior_norms[i];
-		new_penalty_limits_lo[j] = penalty_limits_lo[i];
-		new_penalty_limits_hi[j] = penalty_limits_hi[i];
-		new_use_penalty_limits[j] = use_penalty_limits[i];
-		new_override_limits_lo[j] = override_limits_lo[i];
-		new_override_limits_hi[j] = override_limits_hi[i];
-		new_override_prior_limits[j] = override_prior_limits[i];
-		new_param_names[j] = param_names[i];
-		new_override_names[j] = override_names[i];
-		//cout << "Penalty limit " << i << " is now penalty limit " << j << ", which is " << use_penalty_limits[i] << " with range " << penalty_limits_lo[i] << " " << penalty_limits_hi[i] << endl;
-	}
-	if (nparams > 0) {
-		for (i=0; i < nparams; i++) {
-			delete priors[i];
-			delete transforms[i];
-		}
-		delete[] priors;
-		delete[] transforms;
-		delete[] stepsizes;
-		delete[] auto_stepsize;
-		delete[] subplot_param;
-		delete[] hist2d_param;
-		delete[] prior_norms;
-		delete[] penalty_limits_lo;
-		delete[] penalty_limits_hi;
-		delete[] use_penalty_limits;
-		delete[] override_limits_lo;
-		delete[] override_limits_hi;
-		delete[] override_prior_limits;
-		delete[] param_names;
-		delete[] override_names;
-	}
-	priors = newpriors;
-	transforms = newtransforms;
-	stepsizes = new_stepsizes;
-	auto_stepsize = new_auto_stepsize;
-	subplot_param = new_subplot_param;
-	hist2d_param = new_hist2d_param;
-	prior_norms = new_prior_norms;
-	penalty_limits_lo = new_penalty_limits_lo;
-	penalty_limits_hi = new_penalty_limits_hi;
-	use_penalty_limits = new_use_penalty_limits;
-	override_limits_lo = new_override_limits_lo;
-	override_limits_hi = new_override_limits_hi;
-	override_prior_limits = new_override_prior_limits;
-	param_names = new_param_names;
-	override_names = new_override_names;
-	nparams = new_nparams;
-	update_reference_paramnums(new_paramnums);
-	delete[] new_paramnums;
-}
-
-bool ParamSettings::remove_params(const int pi, const int pf)
-{
-	if (pf > nparams) return false;
-	int i, j, np = pf-pi;
-	if (np==nparams) {
-		clear_params();
-		return true;
-	}
-	int new_nparams = nparams - np;
-	int* new_paramnums = new int[nparams]; // this stores the update parameter numbers for parameters that already existed
-	for (i=0; i < nparams; i++) new_paramnums[i] = -1;
-	ParamPrior** newpriors = new ParamPrior*[new_nparams];
-	ParamTransform** newtransforms = new ParamTransform*[new_nparams];
-	double* new_stepsizes = new double[new_nparams];
-	bool* new_auto_stepsize = new bool[new_nparams];
-	bool* new_subplot_param = new bool[new_nparams];
-	bool* new_hist2d_param = new bool[new_nparams];
-	double* new_prior_norms = new double[new_nparams];
-	double* new_penalty_limits_lo = new double[new_nparams];
-	double* new_penalty_limits_hi = new double[new_nparams];
-	bool* new_use_penalty_limits = new bool[new_nparams];
-	double* new_override_limits_lo = new double[new_nparams];
-	double* new_override_limits_hi = new double[new_nparams];
-	bool* new_override_prior_limits = new bool[new_nparams];
-	string* new_param_names = new string[new_nparams];
-	string* new_override_names = new string[new_nparams];
-	for (i=0; i < pi; i++) {
-		new_paramnums[i] = i;
-		newpriors[i] = new ParamPrior(priors[i]);
-		newtransforms[i] = new ParamTransform(transforms[i]);
-		new_stepsizes[i] = stepsizes[i];
-		new_auto_stepsize[i] = auto_stepsize[i];
-		new_subplot_param[i] = subplot_param[i];
-		new_hist2d_param[i] = hist2d_param[i];
-		new_prior_norms[i] = prior_norms[i];
-		new_penalty_limits_lo[i] = penalty_limits_lo[i];
-		new_penalty_limits_hi[i] = penalty_limits_hi[i];
-		new_use_penalty_limits[i] = use_penalty_limits[i];
-		new_override_limits_lo[i] = override_limits_lo[i];
-		new_override_limits_hi[i] = override_limits_hi[i];
-		new_override_prior_limits[i] = override_prior_limits[i];
-		new_param_names[i] = param_names[i];
-		new_override_names[i] = override_names[i];
-	}
-	for (i=pf,j=pi; i < nparams; i++, j++) {
-		new_paramnums[i] = j;
-		newpriors[j] = new ParamPrior(priors[i]);
-		newtransforms[j] = new ParamTransform(transforms[i]);
-		new_stepsizes[j] = stepsizes[i];
-		new_auto_stepsize[j] = auto_stepsize[i];
-		new_subplot_param[j] = subplot_param[i];
-		new_hist2d_param[j] = hist2d_param[i];
-		new_prior_norms[j] = prior_norms[i];
-		new_penalty_limits_lo[j] = penalty_limits_lo[i];
-		new_penalty_limits_hi[j] = penalty_limits_hi[i];
-		new_use_penalty_limits[j] = use_penalty_limits[i];
-		new_override_limits_lo[j] = override_limits_lo[i];
-		new_override_limits_hi[j] = override_limits_hi[i];
-		new_override_prior_limits[j] = override_prior_limits[i];
-		new_param_names[j] = param_names[i];
-		new_override_names[j] = override_names[i];
-	}
-	for (i=0; i < nparams; i++) {
-		delete priors[i];
-		delete transforms[i];
-	}
-	delete[] priors;
-	delete[] transforms;
-	delete[] stepsizes;
-	delete[] auto_stepsize;
-	delete[] subplot_param;
-	delete[] hist2d_param;
-	delete[] prior_norms;
-	delete[] penalty_limits_lo;
-	delete[] penalty_limits_hi;
-	delete[] use_penalty_limits;
-	delete[] override_limits_lo;
-	delete[] override_limits_hi;
-	delete[] override_prior_limits;
-	delete[] param_names;
-	delete[] override_names;
-	priors = newpriors;
-	transforms = newtransforms;
-	stepsizes = new_stepsizes;
-	auto_stepsize = new_auto_stepsize;
-	subplot_param = new_subplot_param;
-	hist2d_param = new_hist2d_param;
-	prior_norms = new_prior_norms;
-	penalty_limits_lo = new_penalty_limits_lo;
-	penalty_limits_hi = new_penalty_limits_hi;
-	use_penalty_limits = new_use_penalty_limits;
-	override_limits_lo = new_override_limits_lo;
-	override_limits_hi = new_override_limits_hi;
-	override_prior_limits = new_override_prior_limits;
-	param_names = new_param_names;
-	override_names = new_override_names;
-	nparams = new_nparams;
-	update_reference_paramnums(new_paramnums);
-	delete[] new_paramnums;
-	return true;
-}
-void ParamSettings::add_dparam(string dparam_name)
-{
-	string* new_dparam_names = new string[n_dparams+1];
-	bool* new_subplot_dparam = new bool[n_dparams+1];
-	bool* new_hist2d_dparam = new bool[n_dparams+1];
-	if (n_dparams > 0) {
-		for (int i=0; i < n_dparams; i++) {
-			new_dparam_names[i] = dparam_names[i];
-			new_subplot_dparam[i] = subplot_dparam[i];
-			new_hist2d_dparam[i] = hist2d_dparam[i];
-		}
-		delete[] dparam_names;
-		delete[] subplot_dparam;
-		delete[] hist2d_dparam;
-	}
-	new_dparam_names[n_dparams] = dparam_name;
-	new_subplot_dparam[n_dparams] = false;
-	new_hist2d_dparam[n_dparams] = true;
-	n_dparams++;
-	dparam_names = new_dparam_names;
-	subplot_dparam = new_subplot_dparam;
-	hist2d_dparam = new_hist2d_dparam;
-}
-void ParamSettings::remove_dparam(int dparam_number)
-{
-	string* new_dparam_names;
-	bool* new_subplot_dparam;
-	bool* new_hist2d_dparam;
-	if (n_dparams > 1) {
-		new_dparam_names = new string[n_dparams-1];
-		new_subplot_dparam = new bool[n_dparams-1];
-		new_hist2d_dparam = new bool[n_dparams-1];
-		int i,j;
-		for (i=0, j=0; i < n_dparams; i++) {
-			if (i != dparam_number) {
-				new_dparam_names[j] = dparam_names[i];
-				new_subplot_dparam[j] = subplot_dparam[i];
-				new_hist2d_dparam[j] = hist2d_dparam[i];
-				j++;
-			}
-		}
-	}
-	delete[] dparam_names;
-	delete[] subplot_dparam;
-	delete[] hist2d_dparam;
-	n_dparams--;
-	if (n_dparams > 0) {
-		dparam_names = new_dparam_names;
-		subplot_dparam = new_subplot_dparam;
-		hist2d_dparam = new_hist2d_dparam;
-	} else {
-		dparam_names = NULL;
-		subplot_dparam = NULL;
-		hist2d_dparam = NULL;
-	}
-}
-
-void ParamSettings::print_priors()
-{
-	if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
-	cout << "Parameter settings:\n";
-	int max_length=0;
-	for (int i=0; i < nparams; i++) {
-		if (param_names[i].length() > max_length) max_length = param_names[i].length();
-	}
-	int extra_length;
-	for (int i=0; i < nparams; i++) {
-		cout << i << ". " << param_names[i] << ": ";
-		extra_length = max_length - param_names[i].length();
-		for (int j=0; j < extra_length; j++) cout << " ";
-		if ((nparams > 10) and (i < 10)) cout << " ";
-		if (!output_prior(i)) die("Prior type unknown");
-		if (transforms[i]->transform==NONE) ;
-		else if (transforms[i]->transform==LOG_TRANSFORM) cout << ", log transformation";
-		else if (transforms[i]->transform==GAUSS_TRANSFORM) cout << ", gaussian transformation (mean=" << transforms[i]->gaussian_pos << ", sigma=" << transforms[i]->gaussian_sig << ")";
-		else if (transforms[i]->transform==LINEAR_TRANSFORM) cout << ", linear transformation A*" << param_names[i] << " + b (A=" << transforms[i]->a << ", b=" << transforms[i]->b << ")";
-		else if (transforms[i]->transform==RATIO) cout << ", ratio transformation " << param_names[i] << "/" << param_names[transforms[i]->ratio_paramnum];
-		if (transforms[i]->include_jacobian==true) cout << " (include Jacobian in likelihood)";
-		cout << endl;
-	}
-}
-
-bool ParamSettings::output_prior(const int i)
-{
-	if (priors[i]->prior==UNIFORM_PRIOR) {
-		cout << "uniform prior";
-		if ((transforms[i]->transform != NONE) and (transforms[i]->include_jacobian)) {
-			cout << " in " << param_names[i];
-		}
-	}
-	else if (priors[i]->prior==LOG_PRIOR) cout << "log prior";
-	else if (priors[i]->prior==GAUSS_PRIOR) {
-		cout << "gaussian prior (mean=" << priors[i]->gaussian_pos << ",sigma=" << priors[i]->gaussian_sig << ")";
-	}
-	else if (priors[i]->prior==GAUSS2_PRIOR) {
-		cout << "multivariate gaussian prior, params=(" << i << "," << priors[i]->gauss_paramnums[1] << "), mean=(" << priors[i]->gauss_meanvals[0] << "," << priors[i]->gauss_meanvals[1] << "), sigs=(" << sqrt(priors[i]->covariance_matrix[0][0]) << "," << (sqrt(priors[i]->covariance_matrix[1][1])) << "), sqrt(sig12) = " << (sqrt(priors[i]->covariance_matrix[0][1]));
-	} else if (priors[i]->prior==GAUSS2_PRIOR_SECONDARY) {
-		cout << "multivariate gaussian prior, params=(" << priors[i]->gauss_paramnums[0] << "," << priors[i]->gauss_paramnums[1] << ")";
-	} else return false;
-	if (transforms[i]->include_jacobian==true) cout << " (including Jacobian in likelihood)";
-	return true;
-}
-
-
-void ParamSettings::print_stepsizes()
-{
-	if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
-	cout << "Parameter initial stepsizes:\n";
-	string *transformed_names = new string[nparams];
-	transform_parameter_names(param_names,transformed_names,NULL,NULL);
-	int max_length=0;
-	for (int i=0; i < nparams; i++) {
-		if (transformed_names[i].length() > max_length) max_length = transformed_names[i].length();
-	}
-	int extra_length;
-	for (int i=0; i < nparams; i++) {
-		cout << i << ". " << transformed_names[i] << ": ";
-		extra_length = max_length - transformed_names[i].length();
-		for (int j=0; j < extra_length; j++) cout << " ";
-		if ((nparams > 10) and (i < 10)) cout << " ";
-		cout << stepsizes[i];
-		if (auto_stepsize[i]) cout << " (auto)";
-		cout << endl;
-	}
-	delete[] transformed_names;
-}
-
-void ParamSettings::print_penalty_limits()
-{
-	//for (int i=0; i < nparams; i++) {
-		//if (use_penalty_limits[i]==true) {
-			//cout << "USE_LIMITS " << i << endl;
-		//}
-	//}
-
-	if (nparams==0) { cout << "No fit parameters have been defined\n"; return; }
-	cout << "Parameter limits imposed on chi-square:\n";
-	int max_length=0;
-	for (int i=0; i < nparams; i++) {
-		if (param_names[i].length() > max_length) max_length = param_names[i].length();
-	}
-	int extra_length;
-	for (int i=0; i < nparams; i++) {
-		cout << i << ". " << param_names[i] << ": ";
-		extra_length = max_length - param_names[i].length();
-		for (int j=0; j < extra_length; j++) cout << " ";
-		if ((nparams > 10) and (i < 10)) cout << " ";
-		if (use_penalty_limits[i]==false) cout << "none" << endl;
-		else {
-			cout << "[";
-			if (penalty_limits_lo[i]==-1e30) cout << "-inf";
-			else cout << penalty_limits_lo[i];
-			cout << ":";
-			if (penalty_limits_hi[i]==1e30) cout << "inf";
-			else cout << penalty_limits_hi[i];
-			cout << "]" << endl;
-		}
-	}
-}
-
 
 void QLens::allocate_multithreaded_variables(const int& threads, const bool reallocate)
 {
@@ -727,9 +224,9 @@ QLens::QLens() : UCMC()
 	reference_source_redshift = 2.0; // this is the source redshift with respect to which the lens models are defined
 	reference_zfactors = NULL;
 	default_zsrc_beta_factors = NULL;
-	ptsrc_redshifts = NULL;
-	ptsrc_zfactors = NULL;
-	ptsrc_beta_factors = NULL;
+	specific_ptsrc_redshifts = NULL;
+	specific_ptsrc_zfactors = NULL;
+	specific_ptsrc_beta_factors = NULL;
 	lens_redshifts = NULL;
 	lens_redshift_idx = NULL;
 	zlens_group_size = NULL;
@@ -844,10 +341,14 @@ QLens::QLens() : UCMC()
 #endif
 	data_pixel_size = -1; // used for setting a pixel scale for FITS images (only if initialized to a positive number)
 	n_fit_parameters = 0;
-	n_sourcepts_fit = 0;
+	n_sourcepts_fit = 0; // DEPRECATED
+	n_ptsrc = 0;
+	ptsrc_list = NULL;
+	n_ptsrc_redshifts = 0;
+	ptsrc_zfactors = NULL;
+	ptsrc_beta_factors = NULL;
 	borrowed_image_data = false;
 	image_data = NULL;
-	defspline = NULL;
 
 	source_fit_mode = Point_Source;
 	use_ansi_characters = false;
@@ -887,11 +388,9 @@ QLens::QLens() : UCMC()
 
 	image_pixel_data = NULL;
 	image_pixel_grids = NULL;
-	image_pixel_grid0 = NULL;
+	srcgrids = NULL;
 	cartesian_srcgrids = NULL;
-	cartesian_srcgrid0 = NULL;
 	delaunay_srcgrids = NULL;
-	delaunay_srcgrid0 = NULL;
 	sourcegrid_xmin = -1;
 	sourcegrid_xmax = 1;
 	sourcegrid_ymin = -1;
@@ -919,10 +418,7 @@ QLens::QLens() : UCMC()
 	show_mumps_info = false;
 
 	regularization_method = Curvature;
-	regularization_parameter = 100;
-	regularization_parameter_lower_limit = 1e30; // These must be specified by user
-	regularization_parameter_upper_limit = 1e30; // These must be specified by user
-	vary_regularization_parameter = false;
+	regparam_ptr = NULL;
 
 	use_lum_weighted_regularization = false;
 	use_distance_weighted_regularization = false;
@@ -933,99 +429,11 @@ QLens::QLens() : UCMC()
 	lensed_lumreg_rc = false;
 	fix_lumreg_sig = false;
 	lumreg_sig = 1.0;
-	lumreg_xcenter = 0.0;
-	lumreg_ycenter = 0.0;
-	vary_lumreg_xcenter = false;
-	vary_lumreg_ycenter = false;
-	lumreg_xcenter_lower_limit = 1e30;
-	lumreg_xcenter_upper_limit = 1e30;
-	lumreg_ycenter_lower_limit = 1e30;
-	lumreg_ycenter_upper_limit = 1e30;
-
-	lumreg_e1 = 0.0;
-	lumreg_e2 = 0.0;
-	vary_lumreg_e1 = false;
-	vary_lumreg_e2 = false;
-	lumreg_e1_lower_limit = 1e30;
-	lumreg_e1_upper_limit = 1e30;
-	lumreg_e2_lower_limit = 1e30;
-	lumreg_e2_upper_limit = 1e30;
 
 	lum_weight_function = 0;
 	use_lum_weighted_srcpixel_clustering = false;
 	use_dist_weighted_srcpixel_clustering = false;
 	get_lumreg_from_sbweights = false;
-	alpha_clus = 0.5;
-	alpha_clus_lower_limit = 1e30; // These must be specified by user
-	alpha_clus_upper_limit = 1e30; // These must be specified by user
-	vary_alpha_clus = false;
-	beta_clus = 1.0;
-	beta_clus_lower_limit = 1e30; // These must be specified by user
-	beta_clus_upper_limit = 1e30; // These must be specified by user
-	vary_beta_clus = false;
-
-	regparam_lsc = 3;
-	regparam_lsc_lower_limit = 1e30; // These must be specified by user
-	regparam_lsc_upper_limit = 1e30; // These must be specified by user
-	vary_regparam_lsc = false;
-	//regparam_lhi = 1000;
-	//regparam_lhi_lower_limit = 1e30; // These must be specified by user
-	//regparam_lhi_upper_limit = 1e30; // These must be specified by user
-	//vary_regparam_lhi = false;
-	regparam_lum_index = 1.5;
-	regparam_lum_index_lower_limit = 1e30; // These must be specified by user
-	regparam_lum_index_upper_limit = 1e30; // These must be specified by user
-	vary_regparam_lum_index = false;
-
-	mag_weight_index = 0.3;
-	mag_weight_index_lower_limit = 1e30;
-	mag_weight_index_upper_limit = 1e30;
-	vary_mag_weight_index = false;
-	mag_weight_sc = 1.0;
-	mag_weight_sc_lower_limit = 1e30;
-	mag_weight_sc_upper_limit = 1e30;
-	vary_mag_weight_sc = false;
-
-	lumreg_rc = 0.0;
-	lumreg_rc_lower_limit = 1e30; // These must be specified by user
-	lumreg_rc_upper_limit = 1e30; // These must be specified by user
-	vary_lumreg_rc = false;
-	//regparam_lsc2 = 3;
-	//regparam_lsc2_lower_limit = 1e30; // These must be specified by user
-	//regparam_lsc2_upper_limit = 1e30; // These must be specified by user
-	//vary_regparam_lsc2 = false;
-	//regparam_lum_index2 = 2;
-	//regparam_lum_index2_lower_limit = 1e30; // These must be specified by user
-	//regparam_lum_index2_upper_limit = 1e30; // These must be specified by user
-	//vary_regparam_lum_index2 = false;
-
-	kernel_correlation_length = 0.1;
-	kernel_correlation_length_lower_limit = 1e30;
-	kernel_correlation_length_upper_limit = 1e30;
-	vary_correlation_length = false;
-
-	matern_index = 0.5;
-	matern_index_lower_limit = 1e30;
-	matern_index_upper_limit = 1e30;
-	vary_matern_index = false;
-
-	/*
-	use_second_covariance_kernel = false;
-	kernel2_correlation_length = 0.1;
-	kernel2_correlation_length_lower_limit = 1e30;
-	kernel2_correlation_length_upper_limit = 1e30;
-	vary_kernel2_correlation_length = false;
-	kernel2_amplitude_ratio = 0.3;
-	kernel2_amplitude_ratio_lower_limit = 1e30;
-	kernel2_amplitude_ratio_upper_limit = 1e30;
-	vary_kernel2_amplitude_ratio = false;
-	*/
-
-	//use_matern_scale_parameter = false;
-	//matern_scale = 0.003;
-	//matern_scale_lower_limit = 1e30;
-	//matern_scale_upper_limit = 1e30;
-	//vary_matern_scale = false;
 
 	optimize_regparam = false;
 	//optimize_regparam_lhi = false;
@@ -1047,10 +455,6 @@ QLens::QLens() : UCMC()
 	srcgrid_npixels_y = 50;
 	auto_srcgrid_npixels = true;
 	auto_srcgrid_set_pixel_size = false; // this feature is not working at the moment, so keep it off
-	pixel_fraction = 0.3; // this should not be used if adaptive grid is being used
-	pixel_fraction_lower_limit = 1e30; // These must be specified by user
-	pixel_fraction_upper_limit = 1e30; // These must be specified by user
-	vary_pixel_fraction = false; // varying the pixel fraction doesn't work if regularization is also varied (with source pixel regularization)
 	srcpt_xshift = 0;
 	srcpt_xshift_lower_limit = 1e30;
 	srcpt_xshift_upper_limit = 1e30;
@@ -1059,10 +463,6 @@ QLens::QLens() : UCMC()
 	srcpt_yshift_lower_limit = 1e30;
 	srcpt_yshift_upper_limit = 1e30;
 	vary_srcpt_yshift = false;
-	srcgrid_size_scale = 0;
-	srcgrid_size_scale_lower_limit = 1e30;
-	srcgrid_size_scale_upper_limit = 1e30;
-	vary_srcgrid_size_scale = false;
 	Fmatrix = NULL;
 	Fmatrix_copy = NULL;
 	Fmatrix_index = NULL;
@@ -1105,18 +505,12 @@ QLens::QLens() : UCMC()
 	supersampled_psf_matrix = NULL;
 	inversion_nthreads = 1;
 	adaptive_subgrid = false;
-	pixel_magnification_threshold = 7;
-	pixel_magnification_threshold_lower_limit = 1e30; // These must be specified by user
-	pixel_magnification_threshold_upper_limit = 1e30; // These must be specified by user
 	base_srcpixel_imgpixel_ratio = 0.8; // for lowest mag source pixel, this sets fraction of image pixel area covered by it (when mapped to image plane)
-	vary_magnification_threshold = false;
 	exclude_source_pixels_beyond_fit_window = true;
 	activate_unmapped_source_pixels = true;
-	delaunay_try_two_grids = false;
 	delaunay_high_sn_mode = false;
 	delaunay_high_sn_sbfrac = 2.0;
 	use_srcpixel_clustering = false;
-	use_old_pixelgrids = false;
 
 	clustering_random_initialization = false;
 	weight_initial_centroids = false;
@@ -1139,11 +533,9 @@ QLens::QLens() : UCMC()
 	cc_rmin = default_autogrid_rmin;
 	cc_rmax = default_autogrid_rmax;
 	cc_thetasteps = 200;
-	//source_plane_rscale = 1; // this will be found by the autogrid (or by ray-tracing pixels to the source grid)
 	autogrid_frac = default_autogrid_frac;
 
 	// parameters for the recursive grid
-	enforce_min_cell_area = true; // this is option is obsolete, and should be removed (we should always enforce a min cell area!!!!)
 	min_cell_area = 1e-4;
 	usplit_initial = 16; // initial number of cell divisions in the r-direction
 	wsplit_initial = 24; // initial number of cell divisions in the theta-direction
@@ -1247,9 +639,9 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	// down the code significantly (check!)  It would make the code less bug-prone. On the other hand, if no one ever has to look at or mess with the code, then who cares?
 	reference_zfactors = NULL; // this is the scaling for lensing quantities if the source redshift is different from the reference value
 	default_zsrc_beta_factors = NULL; // this is the scaling for lensing quantities if the source redshift is different from the reference value
-	ptsrc_redshifts = NULL;
-	ptsrc_zfactors = NULL;
-	ptsrc_beta_factors = NULL;
+	specific_ptsrc_redshifts = NULL;
+	specific_ptsrc_zfactors = NULL;
+	specific_ptsrc_beta_factors = NULL;
 	lens_redshifts = NULL;
 	n_lens_redshifts = lens_in->n_lens_redshifts;
 	lens_redshift_idx = NULL;
@@ -1385,19 +777,21 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	fits_format = lens_in->fits_format;
 	data_pixel_size = lens_in->data_pixel_size;
 	n_fit_parameters = 0;
-	n_sourcepts_fit = 0;
+	n_sourcepts_fit = 0; // DEPRECATED
+	n_ptsrc = 0;
+	ptsrc_list = NULL;
+	n_ptsrc_redshifts = lens_in->n_ptsrc_redshifts;
+	ptsrc_zfactors = NULL;
+	ptsrc_beta_factors = NULL;
 	borrowed_image_data = false;
 	image_data = NULL;
 	weak_lensing_data.input(lens_in->weak_lensing_data);
-	defspline = NULL;
 
 	image_pixel_data = NULL;
 	image_pixel_grids = NULL;
-	image_pixel_grid0 = NULL;
+	srcgrids = NULL;
 	cartesian_srcgrids = NULL;
-	cartesian_srcgrid0 = NULL;
 	delaunay_srcgrids = NULL;
-	delaunay_srcgrid0 = NULL;
 	sourcegrid_xmin = lens_in->sourcegrid_xmin;
 	sourcegrid_xmax = lens_in->sourcegrid_xmax;
 	sourcegrid_ymin = lens_in->sourcegrid_ymin;
@@ -1424,10 +818,7 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	natural_neighbor_interpolation = lens_in->natural_neighbor_interpolation;
 
 	regularization_method = lens_in->regularization_method;
-	regularization_parameter = lens_in->regularization_parameter;
-	regularization_parameter_lower_limit = lens_in->regularization_parameter_lower_limit;
-	regularization_parameter_upper_limit = lens_in->regularization_parameter_upper_limit;
-	vary_regularization_parameter = lens_in->vary_regularization_parameter;
+	regparam_ptr = NULL;
 
 	use_lum_weighted_regularization = lens_in->use_lum_weighted_regularization;
 	use_distance_weighted_regularization = lens_in->use_distance_weighted_regularization;
@@ -1438,95 +829,11 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	lensed_lumreg_rc = lens_in->lensed_lumreg_rc;
 	fix_lumreg_sig = lens_in->fix_lumreg_sig;
 	lumreg_sig = lens_in->lumreg_sig;
-	lumreg_xcenter = lens_in->lumreg_xcenter;
-	lumreg_ycenter = lens_in->lumreg_ycenter;
-	vary_lumreg_xcenter = lens_in->vary_lumreg_xcenter;
-	vary_lumreg_ycenter = lens_in->vary_lumreg_ycenter;
-	lumreg_xcenter_lower_limit = lens_in->lumreg_xcenter_lower_limit;
-	lumreg_xcenter_upper_limit = lens_in->lumreg_xcenter_upper_limit;
-	lumreg_ycenter_lower_limit = lens_in->lumreg_ycenter_lower_limit;
-	lumreg_ycenter_upper_limit = lens_in->lumreg_ycenter_upper_limit;
-
-	lumreg_e1 = lens_in->lumreg_e1;
-	lumreg_e2 = lens_in->lumreg_e2;
-	vary_lumreg_e1 = lens_in->vary_lumreg_e1;
-	vary_lumreg_e2 = lens_in->vary_lumreg_e2;
-	lumreg_e1_lower_limit = lens_in->lumreg_e1_lower_limit;
-	lumreg_e1_upper_limit = lens_in->lumreg_e1_upper_limit;
-	lumreg_e2_lower_limit = lens_in->lumreg_e2_lower_limit;
-	lumreg_e2_upper_limit = lens_in->lumreg_e2_upper_limit;
 
 	lum_weight_function = lens_in->lum_weight_function;
 	use_lum_weighted_srcpixel_clustering = lens_in->use_lum_weighted_srcpixel_clustering;
 	use_dist_weighted_srcpixel_clustering = lens_in->use_dist_weighted_srcpixel_clustering;
 	get_lumreg_from_sbweights = lens_in->get_lumreg_from_sbweights;
-	alpha_clus = lens_in->alpha_clus;
-	alpha_clus_lower_limit = lens_in->alpha_clus_lower_limit;
-	alpha_clus_upper_limit = lens_in->alpha_clus_upper_limit;
-	vary_alpha_clus = lens_in->vary_alpha_clus;
-	beta_clus = lens_in->beta_clus;
-	beta_clus_lower_limit = lens_in->beta_clus_lower_limit;
-	beta_clus_upper_limit = lens_in->beta_clus_upper_limit;
-	vary_beta_clus = lens_in->vary_beta_clus;
-
-	regparam_lsc = lens_in->regparam_lsc;
-	regparam_lsc_lower_limit = lens_in->regparam_lsc_lower_limit; // These must be specified by user
-	regparam_lsc_upper_limit = lens_in->regparam_lsc_upper_limit; // These must be specified by user
-	vary_regparam_lsc = lens_in->vary_regparam_lsc;
-	regparam_lum_index = lens_in->regparam_lum_index;
-	regparam_lum_index_lower_limit = lens_in->regparam_lum_index_lower_limit; // These must be specified by user
-	regparam_lum_index_upper_limit = lens_in->regparam_lum_index_upper_limit; // These must be specified by user
-	vary_regparam_lum_index = lens_in->vary_regparam_lum_index;
-
-	mag_weight_sc = lens_in->mag_weight_sc;
-	mag_weight_sc_lower_limit = lens_in->mag_weight_sc_lower_limit; // These must be specified by user
-	mag_weight_sc_upper_limit = lens_in->mag_weight_sc_upper_limit; // These must be specified by user
-	vary_mag_weight_sc = lens_in->vary_mag_weight_sc;
-	mag_weight_index = lens_in->mag_weight_index;
-	mag_weight_index_lower_limit = lens_in->mag_weight_index_lower_limit; // These must be specified by user
-	mag_weight_index_upper_limit = lens_in->mag_weight_index_upper_limit; // These must be specified by user
-	vary_mag_weight_index = lens_in->vary_mag_weight_index;
-
-	lumreg_rc = lens_in->lumreg_rc;
-	lumreg_rc_lower_limit = lens_in->lumreg_rc_lower_limit; // These must be specified by user
-	lumreg_rc_upper_limit = lens_in->lumreg_rc_upper_limit; // These must be specified by user
-	vary_lumreg_rc = lens_in->vary_lumreg_rc;
-	//regparam_lsc2 = lens_in->regparam_lsc2;
-	//regparam_lsc2_lower_limit = lens_in->regparam_lsc2_lower_limit; // These must be specified by user
-	//regparam_lsc2_upper_limit = lens_in->regparam_lsc2_upper_limit; // These must be specified by user
-	//vary_regparam_lsc2 = lens_in->vary_regparam_lsc2;
-	//regparam_lum_index2 = lens_in->regparam_lum_index2;
-	//regparam_lum_index2_lower_limit = lens_in->regparam_lum_index2_lower_limit; // These must be specified by user
-	//regparam_lum_index2_upper_limit = lens_in->regparam_lum_index2_upper_limit; // These must be specified by user
-	//vary_regparam_lum_index2 = lens_in->vary_regparam_lum_index2;
-
-	kernel_correlation_length = lens_in->kernel_correlation_length;
-	kernel_correlation_length_upper_limit = lens_in->kernel_correlation_length_upper_limit;
-	kernel_correlation_length_lower_limit = lens_in->kernel_correlation_length_lower_limit;
-	vary_correlation_length = lens_in->vary_correlation_length;
-
-	matern_index = lens_in->matern_index;
-	matern_index_upper_limit = lens_in->matern_index_upper_limit;
-	matern_index_lower_limit = lens_in->matern_index_lower_limit;
-	vary_matern_index = lens_in->vary_matern_index;
-
-	/*
-	use_second_covariance_kernel = lens_in->use_second_covariance_kernel;
-	kernel2_correlation_length = lens_in->kernel2_correlation_length;
-	kernel2_correlation_length_lower_limit = lens_in->kernel2_correlation_length_lower_limit;
-	kernel2_correlation_length_upper_limit = lens_in->kernel2_correlation_length_upper_limit;
-	vary_kernel2_correlation_length = lens_in->vary_kernel2_correlation_length;
-	kernel2_amplitude_ratio = lens_in->kernel2_amplitude_ratio;
-	kernel2_amplitude_ratio_lower_limit = lens_in->kernel2_amplitude_ratio_lower_limit;
-	kernel2_amplitude_ratio_upper_limit = lens_in->kernel2_amplitude_ratio_upper_limit;
-	vary_kernel2_amplitude_ratio = lens_in->vary_kernel2_amplitude_ratio;
-	*/
-
-	//use_matern_scale_parameter = lens_in->use_matern_scale_parameter;
-	//matern_scale = lens_in->matern_scale;
-	//matern_scale_lower_limit = lens_in->matern_scale_lower_limit;
-	//matern_scale_upper_limit = lens_in->matern_scale_upper_limit;
-	//vary_matern_scale = lens_in->vary_matern_scale;
 
 	optimize_regparam = lens_in->optimize_regparam;
 	//optimize_regparam_lhi = lens_in->optimize_regparam_lhi;
@@ -1555,14 +862,10 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	auto_srcgrid_npixels = lens_in->auto_srcgrid_npixels;
 	auto_srcgrid_set_pixel_size = lens_in->auto_srcgrid_set_pixel_size;
 
-	pixel_fraction = lens_in->pixel_fraction;
-	vary_pixel_fraction = lens_in->vary_pixel_fraction;
 	srcpt_xshift = lens_in->srcpt_xshift;
 	vary_srcpt_xshift = lens_in->vary_srcpt_xshift;
 	srcpt_yshift = lens_in->srcpt_yshift;
 	vary_srcpt_yshift = lens_in->vary_srcpt_yshift;
-	srcgrid_size_scale = lens_in->srcgrid_size_scale;
-	vary_srcgrid_size_scale = lens_in->vary_srcgrid_size_scale;
 	Dvector = NULL;
 	Fmatrix = NULL;
 	Fmatrix_copy = NULL;
@@ -1626,18 +929,12 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	Lmatrix = NULL;
 	inversion_nthreads = lens_in->inversion_nthreads;
 	adaptive_subgrid = lens_in->adaptive_subgrid;
-	pixel_magnification_threshold = lens_in->pixel_magnification_threshold;
-	pixel_magnification_threshold_lower_limit = lens_in->pixel_magnification_threshold_lower_limit;
-	pixel_magnification_threshold_upper_limit = lens_in->pixel_magnification_threshold_upper_limit;
-	vary_magnification_threshold = lens_in->vary_magnification_threshold;
 	base_srcpixel_imgpixel_ratio = lens_in->base_srcpixel_imgpixel_ratio; // for lowest mag source pixel, this sets fraction of image pixel area covered by it (when mapped to image plane)
 	exclude_source_pixels_beyond_fit_window = lens_in->exclude_source_pixels_beyond_fit_window;
 	activate_unmapped_source_pixels = lens_in->activate_unmapped_source_pixels;
-	delaunay_try_two_grids = lens_in->delaunay_try_two_grids;
 	delaunay_high_sn_mode = lens_in->delaunay_high_sn_mode;
 	delaunay_high_sn_sbfrac = lens_in->delaunay_high_sn_sbfrac;
 	use_srcpixel_clustering = lens_in->use_srcpixel_clustering;
-	use_old_pixelgrids = lens_in->use_old_pixelgrids;
 
 	clustering_random_initialization = lens_in->clustering_random_initialization;
 	weight_initial_centroids = lens_in->weight_initial_centroids;
@@ -1660,11 +957,9 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	cc_rmin = lens_in->cc_rmin;
 	cc_rmax = lens_in->cc_rmax;
 	cc_thetasteps = lens_in->cc_thetasteps;
-	//source_plane_rscale = lens_in->source_plane_rscale;
 	autogrid_frac = lens_in->autogrid_frac;
 
 	// parameters for the recursive grid
-	enforce_min_cell_area = lens_in->enforce_min_cell_area;
 	min_cell_area = lens_in->min_cell_area;
 	usplit_initial = lens_in->usplit_initial; // initial number of cell divisions in the r-direction
 	wsplit_initial = lens_in->wsplit_initial; // initial number of cell divisions in the theta-direction
@@ -1709,399 +1004,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	integral_tolerance = lens_in->integral_tolerance;
 	include_recursive_lensing = lens_in->include_recursive_lensing;
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
-}
-
-void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
-{
-	double x = xvec[0], y = xvec[1];
-	lensmatrix *jac = &jacs[thread];
-	lensvector *def_tot = &defs[thread];
-
-	if (!defspline)
-	{
-		if (n_lens_redshifts > 1) {
-			lensvector *x_i = &xvals_i[thread];
-			lensmatrix *A_i = &Amats_i[thread];
-			lensvector *def = &defs_i[thread];
-			lensvector **def_i = &defs_subtot[thread];
-			lensmatrix *hess = &hesses_i[thread];
-			lensmatrix **hess_i = &hesses_subtot[thread];
-
-			int i,j;
-			(*jac)[0][0] = 0;
-			(*jac)[1][1] = 0;
-			(*jac)[0][1] = 0;
-			(*jac)[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			for (i=0; i < n_lens_redshifts; i++) {
-				(*hess_i)[i][0][0] = 0;
-				(*hess_i)[i][1][1] = 0;
-				(*hess_i)[i][0][1] = 0;
-				(*hess_i)[i][1][0] = 0;
-				(*A_i)[0][0] = 1;
-				(*A_i)[1][1] = 1;
-				(*A_i)[0][1] = 0;
-				(*A_i)[1][0] = 0;
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
-					(*A_i)[1][1] -= (betafacs[i-1][j])*((*hess_i)[j])[1][1];
-					(*A_i)[1][0] -= (betafacs[i-1][j])*((*hess_i)[j])[1][0];
-					(*A_i)[0][1] -= (betafacs[i-1][j])*((*hess_i)[j])[0][1];
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess));
-					(*hess_i)[i][0][0] += (*hess)[0][0];
-					(*hess_i)[i][1][1] += (*hess)[1][1];
-					(*hess_i)[i][0][1] += (*hess)[0][1];
-					(*hess_i)[i][1][0] += (*hess)[1][0];
-					(*def_i)[i][0] += (*def)[0];
-					(*def_i)[i][1] += (*def)[1];
-				}
-				(*def_i)[i][0] *= zfacs[i];
-				(*def_i)[i][1] *= zfacs[i];
-				(*def_tot)[0] += (*def_i)[i][0];
-				(*def_tot)[1] += (*def_i)[i][1];
-
-				(*hess_i)[i][0][0] *= zfacs[i];
-				(*hess_i)[i][1][1] *= zfacs[i];
-				(*hess_i)[i][0][1] *= zfacs[i];
-				(*hess_i)[i][1][0] *= zfacs[i];
-
-				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-
-				(*jac)[0][0] += (*hess_i)[i][0][0];
-				(*jac)[1][1] += (*hess_i)[i][1][1];
-				(*jac)[1][0] += (*hess_i)[i][1][0];
-				(*jac)[0][1] += (*hess_i)[i][0][1];
-			}
-			kap_tot = ((*jac)[0][0] + (*jac)[1][1])/2;
-		} else {
-			(*jac)[0][0] = 0;
-			(*jac)[1][1] = 0;
-			(*jac)[0][1] = 0;
-			(*jac)[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			kap_tot = 0;
-
-			if ((nthreads==1) or (!multithread_perturber_deflections)) {
-				int j;
-				double kap;
-				(*jac)[0][0] = 0;
-				(*jac)[1][1] = 0;
-				(*jac)[0][1] = 0;
-				(*jac)[1][0] = 0;
-				(*def_tot)[0] = 0;
-				(*def_tot)[1] = 0;
-				kap_tot = 0;
-				lensvector *def = &defs_i[0];
-				lensmatrix *hess = &hesses_i[0];
-				for (j=0; j < nlens; j++) {
-					lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
-					(*jac)[0][0] += (*hess)[0][0];
-					(*jac)[1][1] += (*hess)[1][1];
-					(*jac)[0][1] += (*hess)[0][1];
-					(*jac)[1][0] += (*hess)[1][0];
-					(*def_tot)[0] += (*def)[0];
-					(*def_tot)[1] += (*def)[1];
-					kap_tot += kap;
-				}
-			} else {
-				// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-				double *hess00 = new double[nthreads];
-				double *hess11 = new double[nthreads];
-				double *hess01 = new double[nthreads];
-				double *def0 = new double[nthreads];
-				double *def1 = new double[nthreads];
-				double *kapi = new double[nthreads];
-
-				//cout << "Starting new deflection calculation..." << endl << flush;
-				#pragma omp parallel
-				{
-					int thread2;
-#ifdef USE_OPENMP
-					thread2 = omp_get_thread_num();
-#else
-					thread2 = 0;
-#endif
-					lensvector *def = &defs_i[thread2];
-					lensmatrix *hess = &hesses_i[thread2];
-					//double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
-					int j;
-					double kap;
-					hess00[thread2] = 0;
-					hess11[thread2] = 0;
-					hess01[thread2] = 0;
-					def0[thread2] = 0;
-					def1[thread2] = 0;
-					kapi[thread2] = 0;
-
-					#pragma omp for schedule(dynamic)
-					for (j=0; j < nlens; j++) {
-						lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
-						hess00[thread2] += (*hess)[0][0];
-						hess11[thread2] += (*hess)[1][1];
-						hess01[thread2] += (*hess)[0][1];
-						def0[thread2] += (*def)[0];
-						def1[thread2] += (*def)[1];
-						kapi[thread2] += kap;
-					}
-					//#pragma omp critical
-					//{
-						//cout << "Thread " << thread2 << " finished" << endl << flush;
-					//}
-					//#pragma omp critical
-					//{
-						//(*jac)[0][0] += hess00;
-						//(*jac)[1][1] += hess11;
-						//(*jac)[0][1] += hess01;
-						//(*jac)[1][0] += hess01;
-						//(*def_tot)[0] += def0;
-						//(*def_tot)[1] += def1;
-						//kap_tot += kapi;
-					//}
-				}
-				//cout << "Finished parallel part" << endl << flush;
-				for (int j=0; j < nthreads; j++) {
-					(*jac)[0][0] += hess00[j];
-					(*jac)[1][1] += hess11[j];
-					(*jac)[0][1] += hess01[j];
-					(*jac)[1][0] += hess01[j];
-					(*def_tot)[0] += def0[j];
-					(*def_tot)[1] += def1[j];
-					kap_tot += kapi[j];
-				}
-				delete[] hess00;
-				delete[] hess11;
-				delete[] hess01;
-				delete[] def0;
-				delete[] def1;
-				delete[] kapi;
-			}
-			//double defx = (*def_tot)[0];
-			//double defy = (*def_tot)[1];
-			//double jac00 = (*jac)[0][0];
-
-			(*jac)[0][0] *= zfacs[0];
-			(*jac)[1][1] *= zfacs[0];
-			(*jac)[0][1] *= zfacs[0];
-			(*jac)[1][0] *= zfacs[0];
-			(*def_tot)[0] *= zfacs[0];
-			(*def_tot)[1] *= zfacs[0];
-			kap_tot *= zfacs[0];
-			//cout << "Finished def calc" << endl << flush;
-		}
-	}
-	else {
-		(*def_tot) = defspline->deflection(x,y);
-		(*jac) = defspline->hessian(x,y);
-		kap_tot = kappa(x,y,zfacs,betafacs);
-	}
-	srcpt[0] = x - (*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
-	srcpt[1] = y - (*def_tot)[1];
-
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-	invmag = determinant((*jac));
-	//cout << "Finished def calc for real; invmag = " << invmag << ", srcpt0=" << srcpt[0] << " srcpt1=" << srcpt[1] << " kap=" << kap_tot << " " << endl << flush;
-}
-
-void QLens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs)
-{
-	double x = xvec[0], y = xvec[1];
-	lensvector *def_tot = &defs[thread];
-
-	if (!defspline)
-	{
-		if (n_lens_redshifts > 1) {
-			lensvector *x_i = &xvals_i[thread];
-			lensmatrix *A_i = &Amats_i[thread];
-			lensvector *def = &defs_i[thread];
-			lensvector **def_i = &defs_subtot[thread];
-			lensmatrix *hess = &hesses_i[thread];
-			lensmatrix **hess_i = &hesses_subtot[thread];
-
-			int i,j;
-			jac_tot[0][0] = 0;
-			jac_tot[1][1] = 0;
-			jac_tot[0][1] = 0;
-			jac_tot[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			for (i=0; i < n_lens_redshifts; i++) {
-				(*hess_i)[i][0][0] = 0;
-				(*hess_i)[i][1][1] = 0;
-				(*hess_i)[i][0][1] = 0;
-				(*hess_i)[i][1][0] = 0;
-				(*A_i)[0][0] = 1;
-				(*A_i)[1][1] = 1;
-				(*A_i)[0][1] = 0;
-				(*A_i)[1][0] = 0;
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
-					(*A_i)[1][1] -= (betafacs[i-1][j])*((*hess_i)[j])[1][1];
-					(*A_i)[1][0] -= (betafacs[i-1][j])*((*hess_i)[j])[1][0];
-					(*A_i)[0][1] -= (betafacs[i-1][j])*((*hess_i)[j])[0][1];
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess));
-					(*hess_i)[i][0][0] += (*hess)[0][0];
-					(*hess_i)[i][1][1] += (*hess)[1][1];
-					(*hess_i)[i][0][1] += (*hess)[0][1];
-					(*hess_i)[i][1][0] += (*hess)[1][0];
-					(*def_i)[i][0] += (*def)[0];
-					(*def_i)[i][1] += (*def)[1];
-				}
-				(*def_i)[i][0] *= zfacs[i];
-				(*def_i)[i][1] *= zfacs[i];
-				(*def_tot)[0] += (*def_i)[i][0];
-				(*def_tot)[1] += (*def_i)[i][1];
-
-				(*hess_i)[i][0][0] *= zfacs[i];
-				(*hess_i)[i][1][1] *= zfacs[i];
-				(*hess_i)[i][0][1] *= zfacs[i];
-				(*hess_i)[i][1][0] *= zfacs[i];
-
-				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-
-				jac_tot[0][0] += (*hess_i)[i][0][0];
-				jac_tot[1][1] += (*hess_i)[i][1][1];
-				jac_tot[1][0] += (*hess_i)[i][1][0];
-				jac_tot[0][1] += (*hess_i)[i][0][1];
-			}
-		} else {
-			jac_tot[0][0] = 0;
-			jac_tot[1][1] = 0;
-			jac_tot[0][1] = 0;
-			jac_tot[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-
-			if ((nthreads==1) or (!multithread_perturber_deflections)) {
-				lensvector *def = &defs_i[0];
-				lensmatrix *hess = &hesses_i[0];
-				int j;
-				jac_tot[0][0] = 0;
-				jac_tot[1][1] = 0;
-				jac_tot[0][1] = 0;
-				jac_tot[1][0] = 0;
-				(*def_tot)[0] = 0;
-				(*def_tot)[1] = 0;
-				for (j=0; j < nlens; j++) {
-					lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
-					jac_tot[0][0] += (*hess)[0][0];
-					jac_tot[1][1] += (*hess)[1][1];
-					jac_tot[0][1] += (*hess)[0][1];
-					jac_tot[1][0] += (*hess)[1][0];
-					(*def_tot)[0] += (*def)[0];
-					(*def_tot)[1] += (*def)[1];
-				}
-			} else {
-				// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-				double *hess00 = new double[nthreads];
-				double *hess11 = new double[nthreads];
-				double *hess01 = new double[nthreads];
-				double *def0 = new double[nthreads];
-				double *def1 = new double[nthreads];
-
-				#pragma omp parallel
-				{
-					int thread2;
-#ifdef USE_OPENMP
-					thread2 = omp_get_thread_num();
-#else
-					thread2 = 0;
-#endif
-					lensvector *def = &defs_i[thread2];
-					lensmatrix *hess = &hesses_i[thread2];
-					//double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
-					int j;
-					//double kap;
-						hess00[thread2] = 0;
-						hess11[thread2] = 0;
-						hess01[thread2] = 0;
-						def0[thread2] = 0;
-						def1[thread2] = 0;
-
-					#pragma omp for schedule(dynamic)
-					for (j=0; j < nlens; j++) {
-						lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
-						hess00[thread2] += (*hess)[0][0];
-						hess11[thread2] += (*hess)[1][1];
-						hess01[thread2] += (*hess)[0][1];
-						def0[thread2] += (*def)[0];
-						def1[thread2] += (*def)[1];
-					}
-					//#pragma omp critical
-					//{
-						//jac_tot[0][0] += hess00;
-						//jac_tot[1][1] += hess11;
-						//jac_tot[0][1] += hess01;
-						//jac_tot[1][0] += hess01;
-						//(*def_tot)[0] += def0;
-						//(*def_tot)[1] += def1;
-					//}
-				}
-				for (int j=0; j < nthreads; j++) {
-					jac_tot[0][0] += hess00[j];
-					jac_tot[1][1] += hess11[j];
-					jac_tot[0][1] += hess01[j];
-					jac_tot[1][0] += hess01[j];
-					(*def_tot)[0] += def0[j];
-					(*def_tot)[1] += def1[j];
-				}
-				delete[] hess00;
-				delete[] hess11;
-				delete[] hess01;
-				delete[] def0;
-				delete[] def1;
-			}
-			jac_tot[0][0] *= zfacs[0];
-			jac_tot[1][1] *= zfacs[0];
-			jac_tot[0][1] *= zfacs[0];
-			jac_tot[1][0] *= zfacs[0];
-			(*def_tot)[0] *= zfacs[0];
-			(*def_tot)[1] *= zfacs[0];
-		}
-	}
-	else {
-		(*def_tot) = defspline->deflection(x,y);
-		jac_tot = defspline->hessian(x,y);
-	}
-	srcpt[0] = x - (*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
-	srcpt[1] = y - (*def_tot)[1];
-
-	jac_tot[0][0] = 1 - jac_tot[0][0];
-	jac_tot[1][1] = 1 - jac_tot[1][1];
-	jac_tot[0][1] = -jac_tot[0][1];
-	jac_tot[1][0] = -jac_tot[1][0];
 }
 
 void QLens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
@@ -2225,8 +1127,6 @@ bool QLens::spawn_lens_from_source_object(const int src_number, const double zl,
 	add_lens(new_lens,zl,zs);
 	return true;
 }
-
-
 
 /*
 void QLens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
@@ -2592,52 +1492,54 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 			default_zsrc_beta_factors = new_default_zsrc_beta_factors;
 		}
 
-		double **new_zfactors;
-		double ***new_beta_factors;
+		// specific zfactors, beta factors are DEPRECATED (or WILL be by tomorrow!!!) remove!
+		double **new_specific_ptsrc_zfactors;
+		double ***new_specific_ptsrc_beta_factors;
 		if (n_sourcepts_fit > 0) {
-			new_zfactors = new double*[n_sourcepts_fit];
-			new_beta_factors = new double**[n_sourcepts_fit];
+			new_specific_ptsrc_zfactors = new double*[n_sourcepts_fit];
+			new_specific_ptsrc_beta_factors = new double**[n_sourcepts_fit];
 			for (i=0; i < n_sourcepts_fit; i++) {
-				new_zfactors[i] = new double[n_lens_redshifts+1];
+				new_specific_ptsrc_zfactors[i] = new double[n_lens_redshifts+1];
 				for (j=0; j < znum; j++) {
-					new_zfactors[i][j] = ptsrc_zfactors[i][j];
+					new_specific_ptsrc_zfactors[i][j] = specific_ptsrc_zfactors[i][j];
 				}
-				new_zfactors[i][znum] = kappa_ratio(zl,ptsrc_redshifts[i],reference_source_redshift);
+				new_specific_ptsrc_zfactors[i][znum] = kappa_ratio(zl,specific_ptsrc_redshifts[i],reference_source_redshift);
 				for (j=znum; j < n_lens_redshifts; j++) {
-					new_zfactors[i][j+1] = ptsrc_zfactors[i][j];
+					new_specific_ptsrc_zfactors[i][j+1] = specific_ptsrc_zfactors[i][j];
 				}
 
 				if (n_lens_redshifts > 0) {
-					new_beta_factors[i] = new double*[n_lens_redshifts];
+					new_specific_ptsrc_beta_factors[i] = new double*[n_lens_redshifts];
 					for (j=1; j < n_lens_redshifts+1; j++) {
-						new_beta_factors[i][j-1] = new double[j];
+						new_specific_ptsrc_beta_factors[i][j-1] = new double[j];
 						if (include_recursive_lensing) {
-							for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+							for (k=0; k < j; k++) new_specific_ptsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
 						} else {
-							for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
+							for (k=0; k < j; k++) new_specific_ptsrc_beta_factors[i][j-1][k] = 0;
 						}
 					}
-				} else new_beta_factors[i] = NULL;
+				} else new_specific_ptsrc_beta_factors[i] = NULL;
 			}
-			if (ptsrc_zfactors != NULL) {
-				for (i=0; i < n_sourcepts_fit; i++) delete[] ptsrc_zfactors[i];
-				delete[] ptsrc_zfactors;
+			if (specific_ptsrc_zfactors != NULL) {
+				for (i=0; i < n_sourcepts_fit; i++) delete[] specific_ptsrc_zfactors[i];
+				delete[] specific_ptsrc_zfactors;
 			}
-			if (ptsrc_beta_factors != NULL) {
+			if (specific_ptsrc_beta_factors != NULL) {
 				for (i=0; i < n_sourcepts_fit; i++) {
-					if (ptsrc_beta_factors[i] != NULL) {
+					if (specific_ptsrc_beta_factors[i] != NULL) {
 						for (j=0; j < n_lens_redshifts-1; j++) {
-							delete[] ptsrc_beta_factors[i][j];
+							delete[] specific_ptsrc_beta_factors[i][j];
 						}
-						if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+						if (n_lens_redshifts > 1) delete[] specific_ptsrc_beta_factors[i];
 					}
 				}
-				delete[] ptsrc_beta_factors;
+				delete[] specific_ptsrc_beta_factors;
 			}
-			ptsrc_zfactors = new_zfactors;
-			ptsrc_beta_factors = new_beta_factors;
+			specific_ptsrc_zfactors = new_specific_ptsrc_zfactors;
+			specific_ptsrc_beta_factors = new_specific_ptsrc_beta_factors;
 		}
 
+		// update extended source redshift z/beta factors
 		double **new_extsrc_zfactors;
 		double ***new_extsrc_beta_factors;
 		if (n_extended_src_redshifts > 0) {
@@ -2684,6 +1586,53 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 			extended_src_beta_factors = new_extsrc_beta_factors;
 		}
 
+		// update point source redshift z/beta factors
+		double **new_ptsrc_zfactors;
+		double ***new_ptsrc_beta_factors;
+		if (n_ptsrc_redshifts > 0) {
+			new_ptsrc_zfactors = new double*[n_ptsrc_redshifts];
+			new_ptsrc_beta_factors = new double**[n_ptsrc_redshifts];
+			for (i=0; i < n_ptsrc_redshifts; i++) {
+				new_ptsrc_zfactors[i] = new double[n_lens_redshifts+1];
+				for (j=0; j < znum; j++) {
+					new_ptsrc_zfactors[i][j] = ptsrc_zfactors[i][j];
+				}
+				new_ptsrc_zfactors[i][znum] = kappa_ratio(zl,ptsrc_redshifts[i],reference_source_redshift);
+				for (j=znum; j < n_lens_redshifts; j++) {
+					new_ptsrc_zfactors[i][j+1] = ptsrc_zfactors[i][j];
+				}
+
+				if (n_lens_redshifts > 0) {
+					new_ptsrc_beta_factors[i] = new double*[n_lens_redshifts];
+					for (j=1; j < n_lens_redshifts+1; j++) {
+						new_ptsrc_beta_factors[i][j-1] = new double[j];
+						if (include_recursive_lensing) {
+							for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+						} else {
+							for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = 0;
+						}
+					}
+				} else new_ptsrc_beta_factors[i] = NULL;
+			}
+			if (ptsrc_zfactors != NULL) {
+				for (i=0; i < n_ptsrc_redshifts; i++) delete[] ptsrc_zfactors[i];
+				delete[] ptsrc_zfactors;
+			}
+			if (ptsrc_beta_factors != NULL) {
+				for (i=0; i < n_ptsrc_redshifts; i++) {
+					if (ptsrc_beta_factors[i] != NULL) {
+						for (j=0; j < n_lens_redshifts-1; j++) {
+							delete[] ptsrc_beta_factors[i][j];
+						}
+						if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+					}
+				}
+				delete[] ptsrc_beta_factors;
+			}
+			ptsrc_zfactors = new_ptsrc_zfactors;
+			ptsrc_beta_factors = new_ptsrc_beta_factors;
+		}
+
 		n_lens_redshifts++;
 		//for (i=0; i < n_lens_redshifts; i++) {
 			//cout << i << " " << lens_redshifts[i] << " " << reference_zfactors[i] << endl;
@@ -2705,23 +1654,26 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 			if (j==lens_i) continue;
 			if (zlens_idx[j] >= zlens_idx[lens_i]) zlens_idx[j]++;
 		}
+		for (int i=0; i < n_extended_src_redshifts; i++) {
+			image_pixel_grids[i]->update_zfactors_and_beta_factors();
+		}
 	}
 }
 
 void QLens::update_lens_redshift_data()
 {
-	for (int i=0; i < nlens; i++) {
+	int i;
+	for (i=0; i < nlens; i++) {
 		if (lens_redshifts[lens_redshift_idx[i]] != lens_list[i]->zlens) {
-			double old_zlens = lens_redshifts[lens_redshift_idx[i]];
 			double new_zlens = lens_list[i]->zlens;
 			remove_old_lens_redshift(lens_redshift_idx[i],i,false); // this will only remove the redshift if there are no other lenses with the old redshift
 			add_new_lens_redshift(new_zlens,i,lens_redshift_idx); // this will only add a new redshift if there are no other lenses with new redshift
 		}
 	}
-	for (int i=0; i < nlens; i++) {
+	for (i=0; i < nlens; i++) {
 		if (lens_list[i]->lensed_center_coords) lens_list[i]->set_center_if_lensed_coords(); // for LOS perturbers whose lensed center coordinates are used as parameters (updates true center)
 	}
-	for (int i=0; i < n_sb; i++) {
+	for (i=0; i < n_sb; i++) {
 		if (sb_list[i]->lensed_center_coords) sb_list[i]->set_center_if_lensed_coords(); // for source objects whose lensed center coordinates are used as parameters (updates true center)
 	}
 }
@@ -2799,30 +1751,30 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 		double **new_zfactors;
 		if (n_sourcepts_fit > 0) {
 			if (n_lens_redshifts==1) {
-				for (i=0; i < n_sourcepts_fit; i++) delete[] ptsrc_zfactors[i];
-				delete[] ptsrc_zfactors;
-				ptsrc_zfactors = NULL;
+				for (i=0; i < n_sourcepts_fit; i++) delete[] specific_ptsrc_zfactors[i];
+				delete[] specific_ptsrc_zfactors;
+				specific_ptsrc_zfactors = NULL;
 			} else {
 				new_zfactors = new double*[n_sourcepts_fit];
 				for (i=0; i < n_sourcepts_fit; i++) {
 					new_zfactors[i] = new double[n_lens_redshifts-1];
 					for (j=0; j < znum; j++) {
-						new_zfactors[i][j] = ptsrc_zfactors[i][j];
+						new_zfactors[i][j] = specific_ptsrc_zfactors[i][j];
 					}
 					for (j=znum; j < n_lens_redshifts-1; j++) {
-						new_zfactors[i][j] = ptsrc_zfactors[i][j+1];
+						new_zfactors[i][j] = specific_ptsrc_zfactors[i][j+1];
 					}
 				}
-				for (i=0; i < n_sourcepts_fit; i++) delete[] ptsrc_zfactors[i];
-				delete[] ptsrc_zfactors;
-				ptsrc_zfactors = new_zfactors;
+				for (i=0; i < n_sourcepts_fit; i++) delete[] specific_ptsrc_zfactors[i];
+				delete[] specific_ptsrc_zfactors;
+				specific_ptsrc_zfactors = new_zfactors;
 
 				double ***new_beta_factors;
 				if (n_lens_redshifts==2) {
 					for (i=0; i < n_sourcepts_fit; i++) {
-						delete[] ptsrc_beta_factors[i][0];
-						delete[] ptsrc_beta_factors[i];
-						ptsrc_beta_factors[i] = NULL;
+						delete[] specific_ptsrc_beta_factors[i][0];
+						delete[] specific_ptsrc_beta_factors[i];
+						specific_ptsrc_beta_factors[i] = NULL;
 					}
 					default_zsrc_beta_factors = NULL;
 				} else {
@@ -2832,22 +1784,22 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 						for (j=1; j < n_lens_redshifts-1; j++) {
 							new_beta_factors[i][j-1] = new double[j];
 							if (include_recursive_lensing) {
-								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
 							} else {
 								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 							}
 						}
 					}
-					if (ptsrc_beta_factors != NULL) {
+					if (specific_ptsrc_beta_factors != NULL) {
 						for (i=0; i < n_sourcepts_fit; i++) {
 							for (j=0; j < n_lens_redshifts-1; j++) {
-								delete[] ptsrc_beta_factors[i][j];
+								delete[] specific_ptsrc_beta_factors[i][j];
 							}
-							if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+							if (n_lens_redshifts > 1) delete[] specific_ptsrc_beta_factors[i];
 						}
-						delete[] ptsrc_beta_factors;
+						delete[] specific_ptsrc_beta_factors;
 					}
-					ptsrc_beta_factors = new_beta_factors;
+					specific_ptsrc_beta_factors = new_beta_factors;
 				}
 			}
 		}
@@ -3116,12 +2068,223 @@ void QLens::remove_old_extended_src_redshift(const int znum, const bool removing
 		} else {
 			ImagePixelGrid** new_image_pixel_grids = new ImagePixelGrid*[n_extended_src_redshifts];
 			for (i=0; i < znum; i++) new_image_pixel_grids[i] = image_pixel_grids[i];
-			for (i=znum; i < n_extended_src_redshifts; i++) new_image_pixel_grids[i] = image_pixel_grids[i+1];
+			for (i=znum; i < n_extended_src_redshifts; i++) {
+				new_image_pixel_grids[i] = image_pixel_grids[i+1];
+				new_image_pixel_grids[i]->src_redshift_index = i;
+				new_image_pixel_grids[i]->update_zfactors_and_beta_factors();
+			}
 			delete[] image_pixel_grids;
 			image_pixel_grids = new_image_pixel_grids;
 		}
 	}
 }
+
+int QLens::add_new_ptsrc_redshift(const double zs, const int src_i)
+{
+	int i, j, k, znum;
+	bool new_redshift = true;
+	if (zs < 0) {
+		znum = -1;
+		new_redshift = false;
+	} else {
+		for (i=0; i < n_ptsrc_redshifts; i++) {
+			if (ptsrc_redshifts[i]==zs) { znum = i; new_redshift = false; break; }
+		}
+	}
+	if (new_redshift) {
+		znum = n_ptsrc_redshifts;
+		double *new_ptsrc_redshifts = new double[n_ptsrc_redshifts+1];
+		for (i=0; i < n_ptsrc_redshifts; i++) {
+			if (zs < ptsrc_redshifts[i]) {
+				znum = i;
+				break;
+			}
+		}
+		for (i=0; i < znum; i++) {
+			new_ptsrc_redshifts[i] = ptsrc_redshifts[i];
+		}
+		new_ptsrc_redshifts[znum] = zs;
+		for (i=znum; i < n_ptsrc_redshifts; i++) {
+			new_ptsrc_redshifts[i+1] = ptsrc_redshifts[i];
+		}
+		if (n_ptsrc_redshifts > 0) {
+			delete[] ptsrc_redshifts;
+		}
+		ptsrc_redshifts = new_ptsrc_redshifts;
+
+		double **new_zfactors;
+		double ***new_beta_factors;
+		if (n_lens_redshifts > 0) {
+			new_zfactors = new double*[n_ptsrc_redshifts+1];
+			new_beta_factors = new double**[n_ptsrc_redshifts+1];
+			for (i=0; i < znum; i++) {
+				new_zfactors[i] = new double[n_lens_redshifts];
+				for (j=0; j < n_lens_redshifts; j++) {
+					new_zfactors[i][j] = ptsrc_zfactors[i][j];
+				}
+			}
+			new_zfactors[znum] = new double[n_lens_redshifts];
+			for (j=0; j < n_lens_redshifts; j++) {
+				new_zfactors[znum][j] = kappa_ratio(lens_redshifts[j],zs,reference_source_redshift);
+			}
+			for (i=znum; i < n_ptsrc_redshifts; i++) {
+				new_zfactors[i+1] = new double[n_lens_redshifts];
+				for (j=0; j < n_lens_redshifts; j++) {
+					new_zfactors[i+1][j] = ptsrc_zfactors[i][j];
+				}
+			}
+			for (i=0; i < n_ptsrc_redshifts+1; i++) {
+				new_beta_factors[i] = new double*[n_lens_redshifts-1];
+				for (j=1; j < n_lens_redshifts; j++) {
+					new_beta_factors[i][j-1] = new double[j];
+					if (include_recursive_lensing) {
+						// calculating all beta factors again, just to get it working quickly...fix it up later so it doesn't recalculate all of them over again
+						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+					} else {
+						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
+					}
+				}
+			}
+			if (ptsrc_zfactors != NULL) {
+				for (i=0; i < n_ptsrc_redshifts; i++) delete[] ptsrc_zfactors[i];
+				delete[] ptsrc_zfactors;
+			}
+			if (ptsrc_beta_factors != NULL) {
+				for (i=0; i < n_ptsrc_redshifts; i++) {
+					if (ptsrc_beta_factors[i] != NULL) {
+						for (j=0; j < n_lens_redshifts-1; j++) {
+							delete[] ptsrc_beta_factors[i][j];
+						}
+						if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+					}
+				}
+				delete[] ptsrc_beta_factors;
+			}
+			ptsrc_zfactors = new_zfactors;
+			ptsrc_beta_factors = new_beta_factors;
+		}
+		n_ptsrc_redshifts++;
+		//for (i=0; i < n_lens_redshifts; i++) {
+			//cout << i << " " << lens_redshifts[i] << " " << reference_zfactors[i] << endl;
+		//}
+	}
+	// Now you need to update sbprofile_redshift_indx and ptsrc_redshift_indx
+
+	ptsrc_redshift_idx[src_i] = znum;
+
+	if (new_redshift) {
+		 //we inserted a new redshift, so higher redshifts get bumped up an index
+		for (j=0; j < n_ptsrc; j++) {
+			if (j==src_i) continue;
+			if (ptsrc_redshift_idx[j] >= znum) ptsrc_redshift_idx[j]++;
+		}
+		if (n_ptsrc_redshifts==1) {
+			image_pixel_grids = new ImagePixelGrid*[1];
+			image_pixel_grids[0] = NULL;
+		}
+	}
+	return znum;
+}
+
+void QLens::remove_old_ptsrc_redshift(const int znum)
+{
+	int i, j, k, n_ptsrc_with_znum=0;
+	bool remove_redshift = false;
+	for (i=0; i < n_ptsrc; i++) {
+		if (ptsrc_redshift_idx[i]==znum) {
+			n_ptsrc_with_znum++;
+			if (n_ptsrc_with_znum > 1) break;
+		}
+	}
+	if (n_ptsrc_with_znum <= 1) {
+		remove_redshift = true; // the particular source in question might not have been removed yet, but if there's only one, that redshift will be removed
+	}
+
+	if (remove_redshift) {
+		double *new_ptsrc_redshifts = new double[n_ptsrc_redshifts-1];
+		int *new_assigned_mask = new int[n_ptsrc_redshifts-1];
+		for (i=0; i < znum; i++) {
+			new_ptsrc_redshifts[i] = ptsrc_redshifts[i];
+			new_assigned_mask[i] = assigned_mask[i];
+		}
+		for (i=znum; i < n_ptsrc_redshifts-1; i++) {
+			new_ptsrc_redshifts[i] = ptsrc_redshifts[i+1];
+			new_assigned_mask[i] = assigned_mask[i+1];
+		}
+		if (ptsrc_redshifts != NULL) delete[] ptsrc_redshifts;
+		ptsrc_redshifts = new_ptsrc_redshifts;
+		if (assigned_mask != NULL) delete[] assigned_mask;
+		assigned_mask = new_assigned_mask;
+		
+		double **new_zfactors;
+		if (n_lens_redshifts > 0) {
+			if (n_ptsrc_redshifts==1) {
+				for (i=0; i < n_ptsrc_redshifts; i++) delete[] ptsrc_zfactors[i];
+				delete[] ptsrc_zfactors;
+				ptsrc_zfactors = NULL;
+			} else {
+				new_zfactors = new double*[n_ptsrc_redshifts-1];
+
+				for (i=0; i < znum; i++) {
+					new_zfactors[i] = new double[n_lens_redshifts];
+					for (j=0; j < n_lens_redshifts; j++) {
+						new_zfactors[i][j] = ptsrc_zfactors[i][j];
+					}
+				}
+				for (i=znum; i < n_ptsrc_redshifts-1; i++) {
+					new_zfactors[i] = new double[n_lens_redshifts];
+					for (j=0; j < n_lens_redshifts; j++) {
+						new_zfactors[i][j] = ptsrc_zfactors[i+1][j];
+					}
+				}
+				for (i=0; i < n_ptsrc_redshifts; i++) delete[] ptsrc_zfactors[i];
+				delete[] ptsrc_zfactors;
+				ptsrc_zfactors = new_zfactors;
+
+				double ***new_beta_factors;
+				if (n_lens_redshifts > 1) {
+					if (n_ptsrc_redshifts==1) {
+						for (i=0; i < n_lens_redshifts; i++) {
+							delete[] ptsrc_beta_factors[0][i];
+						}
+						delete[] ptsrc_beta_factors[0];
+						delete[] ptsrc_beta_factors;
+						ptsrc_beta_factors = NULL;
+					} else {
+						new_beta_factors = new double**[n_ptsrc_redshifts-1];
+						for (i=0; i < n_ptsrc_redshifts-1; i++) {
+							new_beta_factors[i] = new double*[n_lens_redshifts-1];
+							for (j=1; j < n_lens_redshifts; j++) {
+								new_beta_factors[i][j-1] = new double[j];
+								if (include_recursive_lensing) {
+									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+								} else {
+									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
+								}
+							}
+						}
+						if (ptsrc_beta_factors != NULL) {
+							for (i=0; i < n_ptsrc_redshifts; i++) {
+								for (j=0; j < n_lens_redshifts-1; j++) {
+									delete[] ptsrc_beta_factors[i][j];
+								}
+								delete[] ptsrc_beta_factors[i];
+							}
+							delete[] ptsrc_beta_factors;
+						}
+						ptsrc_beta_factors = new_beta_factors;
+					}
+				}
+			}
+		}
+		n_ptsrc_redshifts--;
+		for (i=0; i < n_ptsrc; i++) {
+			if (ptsrc_redshift_idx[i] > znum) ptsrc_redshift_idx[i]--;
+		}
+	}
+}
+
+
 
 bool QLens::assign_mask(const int znum, const int mask_i)
 {
@@ -3160,15 +2323,15 @@ void QLens::print_beta_matrices()
 
 	if (n_sourcepts_fit > 0) {
 		for (i=0; i < n_sourcepts_fit; i++) {
-			cout << "ZFACTORS for ptsrc redshift index " << i << " (zs=" << ptsrc_redshifts[i] << "): ";
-			for (j=0; j < n_lens_redshifts; j++) cout << ptsrc_zfactors[i][j] << " ";
+			cout << "ZFACTORS for ptsrc redshift index " << i << " (zs=" << specific_ptsrc_redshifts[i] << "): ";
+			for (j=0; j < n_lens_redshifts; j++) cout << specific_ptsrc_zfactors[i][j] << " ";
 			cout << endl;
 		}
 		if (n_lens_redshifts > 1) {
 			for (i=0; i < n_sourcepts_fit; i++) {
 				cout << "source " << i << " beta matrix:\n";
 				for (j=0; j < n_lens_redshifts-1; j++) {
-					for (k=0; k < j+1; k++) cout << ptsrc_beta_factors[i][j][k] << " ";
+					for (k=0; k < j+1; k++) cout << specific_ptsrc_beta_factors[i][j][k] << " ";
 					cout << endl;
 				}
 				cout << endl;
@@ -3194,13 +2357,6 @@ void QLens::print_beta_matrices()
 			}
 		}
 	}
-
-	//lensvector x,y;
-	//x[0] = 2; x[1] = 0;
-	//lensvector defp;
-	//lens_list[0]->deflection(x[0],x[1],defp);
-	//y = x - default_zsrc_beta_factors[0][0]*defp;
-	//cout << "map to lens plane 1: " << y[0] << " " << y[1] << endl;
 }
 
 bool QLens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
@@ -3279,6 +2435,7 @@ bool QLens::set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags)
 
 bool QLens::set_sourcept_vary_parameters(const int sptnumber, const bool vary_x, const bool vary_y)
 {
+	// DEPRECATED--replace with set_ptsrc_vary_parameters function
 	int pi, pf, nparams;
 	get_sourcept_parameter_numbers(sptnumber,pi,pf);
 	if (pf > pi) param_settings->remove_params(pi,pf);
@@ -3302,6 +2459,52 @@ bool QLens::set_sourcept_vary_parameters(const int sptnumber, const bool vary_x,
 	}
 	return true;
 }
+
+bool QLens::set_pixellated_src_vary_parameters(const int src_number, boolvector &vary_flags)
+{
+	int pi, pf, nparams;
+	get_pixsrc_parameter_numbers(src_number,pi,pf);
+	if (srcgrids[src_number]->set_varyflags(vary_flags)==false) return false;
+	if (pf > pi) param_settings->remove_params(pi,pf);
+	get_n_fit_parameters(nparams);
+	dvector stepsizes(nparams);
+	get_parameter_names();
+	if (get_sb_parameter_numbers(src_number,pi,pf) == true) {
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		srcgrids[src_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
+		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
+bool QLens::set_ptsrc_vary_parameters(const int src_number, boolvector &vary_flags)
+{
+	int pi, pf, nparams;
+	get_ptsrc_parameter_numbers(src_number,pi,pf);
+	if (ptsrc_list[src_number]->set_varyflags(vary_flags)==false) return false;
+	if (pf > pi) param_settings->remove_params(pi,pf);
+	get_n_fit_parameters(nparams);
+	dvector stepsizes(nparams);
+	get_parameter_names();
+	if (get_sb_parameter_numbers(src_number,pi,pf) == true) {
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		ptsrc_list[src_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
+		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
+
 
 void QLens::update_parameter_list()
 {
@@ -3409,8 +2612,13 @@ void QLens::clear_lenses()
 			delete[] reference_zfactors;
 			reference_zfactors = NULL;
 		}
+		if (specific_ptsrc_zfactors != NULL) {
+			for (int i=0; i < n_sourcepts_fit; i++) delete[] specific_ptsrc_zfactors[i];
+			delete[] specific_ptsrc_zfactors;
+			specific_ptsrc_zfactors = NULL;
+		}
 		if (ptsrc_zfactors != NULL) {
-			for (int i=0; i < n_sourcepts_fit; i++) delete[] ptsrc_zfactors[i];
+			for (int i=0; i < n_ptsrc_redshifts; i++) delete[] ptsrc_zfactors[i];
 			delete[] ptsrc_zfactors;
 			ptsrc_zfactors = NULL;
 		}
@@ -3419,8 +2627,16 @@ void QLens::clear_lenses()
 			delete[] default_zsrc_beta_factors;
 			default_zsrc_beta_factors = NULL;
 		}
-		if (ptsrc_beta_factors != NULL) {
+		if (specific_ptsrc_beta_factors != NULL) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
+				for (int j=0; j < n_lens_redshifts-1; j++) delete[] specific_ptsrc_beta_factors[i][j];
+				if (n_lens_redshifts > 1) delete[] specific_ptsrc_beta_factors[i];
+			}
+			delete[] specific_ptsrc_beta_factors;
+			specific_ptsrc_beta_factors = NULL;
+		}
+		if (ptsrc_beta_factors != NULL) {
+			for (int i=0; i < n_ptsrc_redshifts; i++) {
 				for (int j=0; j < n_lens_redshifts-1; j++) delete[] ptsrc_beta_factors[i][j];
 				if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
 			}
@@ -3445,7 +2661,13 @@ void QLens::set_source_redshift(const double zsrc)
 		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = 1.0;
 		for (i=0; i < n_sourcepts_fit; i++) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				specific_ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],specific_ptsrc_redshifts[i],reference_source_redshift);
+			}
+		}
+		if (n_ptsrc_redshifts > 1) die("cannot have multiple point source redshifts and zsrc_scaling on--fix so this is forbidden");
+		if (n_ptsrc_redshifts==1) {
+			for (j=0; j < n_lens_redshifts; j++) {
+				ptsrc_zfactors[0][j] = kappa_ratio(lens_redshifts[j],specific_ptsrc_redshifts[i],reference_source_redshift);
 			}
 		}
 	} else {
@@ -3466,7 +2688,7 @@ void QLens::set_reference_source_redshift(const double zsrc)
 	if (n_sourcepts_fit > 0) {
 		for (i=0; i < n_sourcepts_fit; i++) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				specific_ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],specific_ptsrc_redshifts[i],reference_source_redshift);
 			}
 		}
 	}
@@ -3665,22 +2887,6 @@ void QLens::add_source_object(const char *splinefile, const bool is_lensed, cons
 	if (emode != -1) SB_Profile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 }
 
-/*
-void QLens::remove_source_object(int sb_number)
-{
-	if ((sb_number >= n_sb) or (n_sb == 0)) { warn(warnings,"Specified source object does not exist"); return; }
-	SB_Profile** newlist = new SB_Profile*[n_sb-1];
-	int i,j;
-	for (i=0, j=0; i < n_sb; i++)
-		if (i != sb_number) { newlist[j] = sb_list[i]; j++; }
-	delete[] sb_list;
-	n_sb--;
-
-	sb_list = newlist;
-	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
-}
-*/
-
 void QLens::remove_source_object(int sb_number)
 {
 	int pi, pf;
@@ -3798,6 +3004,7 @@ void QLens::print_source_list(bool show_vary_params)
 
 void QLens::add_pixellated_source(const double zsrc)
 {
+	srcgrids = new SourceParams*[n_pixellated_src+1];
 	DelaunayGrid** newlist = new DelaunayGrid*[n_pixellated_src+1];
 	SourcePixelGrid** newlist2 = new SourcePixelGrid*[n_pixellated_src+1];
 	int* new_pixellated_src_redshift_idx = new int[n_pixellated_src+1];
@@ -3811,20 +3018,34 @@ void QLens::add_pixellated_source(const double zsrc)
 		delete[] cartesian_srcgrids;
 		delete[] pixellated_src_redshift_idx;
 	}
-	newlist[n_pixellated_src] = NULL; // don't actually create the Delaunay source grid until we are ready to do an inversion (or plotting)
-	newlist2[n_pixellated_src] = NULL; // don't actually create the Cartesian source grid until we are ready to do an inversion (or plotting)
 
 	pixellated_src_redshift_idx = new_pixellated_src_redshift_idx;
 	add_new_extended_src_redshift(zsrc,n_pixellated_src,true);
+
+	newlist[n_pixellated_src] = new DelaunayGrid(this); 
+	newlist2[n_pixellated_src] = new SourcePixelGrid(this);
+
 	n_pixellated_src++;
 	delaunay_srcgrids = newlist;
 	cartesian_srcgrids = newlist2;
+
+	for (int i=0; i < n_pixellated_src; i++) {
+		if (source_fit_mode==Delaunay_Source) srcgrids[i] = delaunay_srcgrids[i];
+		else srcgrids[i] = cartesian_srcgrids[i];
+	}
 }
 
 void QLens::remove_pixellated_source(int src_number)
 {
-	DelaunayGrid** newlist = new DelaunayGrid*[n_pixellated_src-1];
-	SourcePixelGrid** newlist2 = new SourcePixelGrid*[n_pixellated_src-1];
+	if ((n_pixellated_src==0) or (src_number >= n_pixellated_src)) return;
+	DelaunayGrid** newlist;
+	SourcePixelGrid** newlist2;
+	if (n_pixellated_src > 1) {
+		delete[] srcgrids;
+		srcgrids = new SourceParams*[n_pixellated_src-1];
+		newlist = new DelaunayGrid*[n_pixellated_src-1];
+		newlist2 = new SourcePixelGrid*[n_pixellated_src-1];
+	}
 	int* new_pixellated_src_redshift_idx;
 	if (n_pixellated_src > 1) new_pixellated_src_redshift_idx = new int[n_pixellated_src-1];
 
@@ -3845,13 +3066,23 @@ void QLens::remove_pixellated_source(int src_number)
 	delete[] cartesian_srcgrids;
 	delete[] pixellated_src_redshift_idx;
 	n_pixellated_src--;
-	if (n_pixellated_src > 0) pixellated_src_redshift_idx = new_pixellated_src_redshift_idx;
-	else pixellated_src_redshift_idx = NULL;
-	delaunay_srcgrids = newlist;
-	cartesian_srcgrids = newlist2;
+	if (n_pixellated_src > 0) {
+		pixellated_src_redshift_idx = new_pixellated_src_redshift_idx;
+		delaunay_srcgrids = newlist;
+		cartesian_srcgrids = newlist2;
+		for (int i=0; i < n_pixellated_src; i++) {
+			if (source_fit_mode==Delaunay_Source) srcgrids[i] = delaunay_srcgrids[i];
+			else srcgrids[i] = cartesian_srcgrids[i];
+		}
+	} else {
+		pixellated_src_redshift_idx = NULL;
+		srcgrids = NULL;
+		delaunay_srcgrids = NULL;
+		cartesian_srcgrids = NULL;
+	}
 }
 
-void QLens::print_pixellated_source_list()
+void QLens::print_pixellated_source_list(bool show_vary_params)
 {
 	cout << resetiosflags(ios::scientific);
 	double zs;
@@ -3861,17 +3092,29 @@ void QLens::print_pixellated_source_list()
 			//cout << "IDX=" << sbprofile_redshift_idx[i] << endl;
 			if (pixellated_src_redshift_idx[i]==-1) zs = -1;
 			else zs = extended_src_redshifts[pixellated_src_redshift_idx[i]];
-			cout << i << ": zsrc=";
+			cout << i << ". ";
+			if (source_fit_mode==Delaunay_Source) cout << "delaunay(zsrc=";
+			else if (source_fit_mode==Cartesian_Source) cout << "cartesian(zsrc=";
 			if (zs < 0) cout << "undefined";
 			else cout << zs;
 			if (source_fit_mode==Delaunay_Source) {
-				if (delaunay_srcgrids[i] == NULL) cout << ", Delaunay grid not created yet";
-				else cout << ", Delaunay grid has been created";
+				if (delaunay_srcgrids[i] == NULL) cout << "), Delaunay grid not created yet" << endl;
+				else {
+					if (delaunay_srcgrids[i]->n_srcpts > 0) cout << ",npix=" << delaunay_srcgrids[i]->n_srcpts;
+					cout << "): ";
+					delaunay_srcgrids[i]->print_parameters();
+					if (show_vary_params)
+						delaunay_srcgrids[i]->print_vary_parameters();
+				}
 			} else if (source_fit_mode==Cartesian_Source) {
-				if (cartesian_srcgrids[i] == NULL) cout << ", Cartesian grid not created yet";
-				else cout << ", Cartesian grid has been created";
+				if (cartesian_srcgrids[i] == NULL) cout << ", Cartesian grid not created yet" << endl;
+				else {
+					cout << "): ";
+					cartesian_srcgrids[i]->print_parameters();
+					if (show_vary_params)
+						cartesian_srcgrids[i]->print_vary_parameters();
+				}
 			}
-			cout << endl;
 		}
 	}
 	else cout << "No pixellated source objects have been specified" << endl;
@@ -3896,6 +3139,93 @@ void QLens::find_pixellated_source_moments(const int npix, double& qs, double& p
 		yavg = 0;
 	}
 }
+
+
+void QLens::add_point_source(const double zsrc)
+{
+	PointSource** newlist = new PointSource*[n_ptsrc+1];
+	int* new_ptsrc_redshift_idx = new int[n_ptsrc+1];
+	if (n_ptsrc > 0) {
+		for (int i=0; i < n_ptsrc; i++) {
+			newlist[i] = ptsrc_list[i];
+			new_ptsrc_redshift_idx[i] = ptsrc_redshift_idx[i];
+		}
+		delete[] ptsrc_list;
+		delete[] ptsrc_redshift_idx;
+	}
+
+	ptsrc_redshift_idx = new_ptsrc_redshift_idx;
+	add_new_ptsrc_redshift(zsrc,n_ptsrc);
+
+	newlist[n_ptsrc] = new PointSource(this); 
+
+	n_ptsrc++;
+	ptsrc_list = newlist;
+}
+
+void QLens::remove_point_source(int ptsrc_number)
+{
+	if ((n_ptsrc==0) or (ptsrc_number >= n_ptsrc)) return;
+	PointSource** newlist;
+	if (n_ptsrc > 1) {
+		newlist = new PointSource*[n_ptsrc-1];
+	}
+	int* new_ptsrc_redshift_idx;
+	if (n_ptsrc > 1) new_ptsrc_redshift_idx = new int[n_ptsrc-1];
+
+	remove_old_ptsrc_redshift(ptsrc_redshift_idx[ptsrc_number]); // removes the ptsrc redshift from the list if no other sources share that redshift
+	int i,j;
+	for (i=0, j=0; i < n_ptsrc; i++) {
+		if (i != ptsrc_number) {
+			newlist[j] = ptsrc_list[i];
+			new_ptsrc_redshift_idx[j] = ptsrc_redshift_idx[i];
+			j++;
+		}
+	}
+
+	delete ptsrc_list[ptsrc_number];
+	delete[] ptsrc_list;
+	delete[] ptsrc_redshift_idx;
+	n_ptsrc--;
+	if (n_ptsrc > 0) {
+		ptsrc_redshift_idx = new_ptsrc_redshift_idx;
+		ptsrc_list = newlist;
+	} else {
+		ptsrc_redshift_idx = NULL;
+		ptsrc_list = NULL;
+	}
+}
+
+void QLens::print_point_source_list(bool show_vary_params)
+{
+	cout << resetiosflags(ios::scientific);
+	double zs;
+	//cout << "N_ZSRC: "<< n_extended_src_redshifts << endl;
+	if (n_ptsrc > 0) {
+		for (int i=0; i < n_ptsrc; i++) {
+			//cout << "IDX=" << sbprofile_redshift_idx[i] << endl;
+			if (ptsrc_redshift_idx[i]==-1) zs = -1;
+			else zs = ptsrc_redshifts[ptsrc_redshift_idx[i]];
+			cout << i << ". ";
+			cout << "(zsrc=";
+			if (zs < 0) cout << "undefined";
+			else cout << zs;
+			if (ptsrc_list[i] == NULL) cout << "), Delaunay grid not created yet" << endl;
+			else {
+				cout << "): ";
+				ptsrc_list[i]->print_parameters();
+				if (show_vary_params)
+					ptsrc_list[i]->print_vary_parameters();
+			}
+		}
+	}
+	else cout << "No point sources have been specified" << endl;
+	cout << endl;
+	if (use_scientific_notation) cout << setiosflags(ios::scientific);
+}
+
+
+
 
 
 void QLens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2, bool use_kpc)
@@ -3998,8 +3328,6 @@ void QLens::set_grid_from_pixels()
 	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
 }
 
-
-
 void QLens::autogrid(double rmin, double rmax, double frac)
 {
 	cc_rmin = rmin;
@@ -4068,7 +3396,7 @@ bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int
 	record_singular_points(zfacs); // grid cells will split around singular points (e.g. center of point mass, etc.)
 
 	Grid::set_splitting(usplit_initial, wsplit_initial, splitlevels, cc_splitlevels, min_cell_area, cc_neighbor_splittings);
-	Grid::set_enforce_min_area(enforce_min_cell_area);
+	Grid::set_enforce_min_area(true);
 	Grid::set_lens(this);
 	if ((autogrid_before_grid_creation) or (autocenter) or (auto_gridsize_from_einstein_radius)) find_automatic_grid_position_and_size(zfacs);
 	double rmax = 0.5*dmax(grid_xlength,grid_ylength);
@@ -5281,143 +4609,6 @@ double QLens::inverse_magnification_r(const double r)
 	return determinant(jac);
 }
 
-double QLens::source_plane_r(const double r)
-{
-	lensvector x,def;
-	x[0] = grid_xcenter + r*cos(theta_crit);
-	x[1] = grid_ycenter + r*sin(theta_crit);
-	find_sourcept(x,def,0,reference_zfactors,default_zsrc_beta_factors);
-	def[0] -= grid_xcenter; // this assumes the deflection is approximately zero at the center of the grid (roughly true if any perturber gal's are small)
-	def[1] -= grid_ycenter;
-	return def.norm();
-}
-
-void QLens::create_deflection_spline(int steps)
-{
-	spline_deflection(0.5*grid_xlength*spline_frac, 0.5*grid_ylength*spline_frac, steps);
-}
-
-void QLens::spline_deflection(double xl, double yl, int steps)
-{
-	dvector xtable(steps+1);
-	dvector ytable(steps+1);
-	dmatrix defxmatrix(steps+1);
-	dmatrix defymatrix(steps+1);
-	dmatrix defxxmatrix(steps+1);
-	dmatrix defyymatrix(steps+1);
-	dmatrix defxymatrix(steps+1);
-
-	double xmin, xmax, ymin, ymax;
-	xmin = -xl; xmax = xl;
-	ymin = -yl; ymax = yl;
-	double x, y, xstep, ystep;
-	xstep = (xmax-xmin)/steps;
-	ystep = (ymax-ymin)/steps;
-
-	int i, j;
-	lensvector def;
-	lensmatrix hess;
-	for (i=0, x=xmin; i <= steps; i++, x += xstep) {
-		xtable[i] = x;
-		for (j=0, y=ymin; j <= steps; j++, y += ystep) {
-			if (i==0) ytable[j] = y;		// Only needs to be done the first time around (hence "if i==0")
-			deflection(x,y,def,0,reference_zfactors,default_zsrc_beta_factors);
-			hessian(x,y,hess,0,reference_zfactors,default_zsrc_beta_factors);
-			defxmatrix[i][j] = def[0];
-			defymatrix[i][j] = def[1];
-			defxxmatrix[i][j] = hess[0][0];
-			defyymatrix[i][j] = hess[1][1];
-			defxymatrix[i][j] = hess[0][1];
-		}
-	}
-
-	if (defspline) delete defspline; // delete previous spline
-	defspline = new Defspline;
-	defspline->ax.input(xtable, ytable, defxmatrix);
-	defspline->ay.input(xtable, ytable, defymatrix);
-	defspline->axx.input(xtable, ytable, defxxmatrix);
-	defspline->ayy.input(xtable, ytable, defyymatrix);
-	defspline->axy.input(xtable, ytable, defxymatrix);
-}
-
-bool QLens::get_deflection_spline_info(double &xmax, double &ymax, int &nsteps)
-{
-	if (!defspline) return false;
-	xmax = defspline->xmax();
-	ymax = defspline->ymax();
-	nsteps = defspline->nsteps();
-	return true;
-}
-
-bool QLens::unspline_deflection()
-{
-	if (!defspline) return false;
-	delete defspline;
-	defspline = NULL;
-	return true;
-}
-
-bool QLens::autospline_deflection(int steps)
-{
-	double (Brent::*mag_r)(const double);
-	mag_r = static_cast<double (Brent::*)(const double)> (&QLens::inverse_magnification_r);
-
-	double mag0, mag1, root0, root1x, root1y;
-	bool found_first_root;
-	double r, rstep, step_increment, step_increment_change;
-	rstep = cc_rmin;
-	step_increment = 1.1;
-	step_increment_change = 0.5;
-	int i;
-	for (i=0, theta_crit=0; i < 2; i++, theta_crit += M_PI/2)  // just samples point on x-axis and y-axis
-	{
-		for (;;)
-		{
-			mag1 = inverse_magnification_r(rstep);
-			found_first_root = false;
-			for (r=rstep; r < cc_rmax; r += ((rstep *= step_increment)/step_increment))
-			{
-				mag0 = mag1;
-				mag1 = inverse_magnification_r(r+rstep);
-				if (mag0*mag1 < 0) {
-					if (!found_first_root) {
-						root0 = BrentsMethod(mag_r, r, r+rstep, 1e-3);
-							found_first_root = true;
-					} else {
-						if (i==0) root1x = BrentsMethod(mag_r, r, r+rstep, 1e-3);
-						if (i==1) root1y = BrentsMethod(mag_r, r, r+rstep, 1e-3);
-						break;
-					}
-				}
-			}
-			if (r >= cc_rmax) {
-				if (cc_rmin > 1e-5) cc_rmin = ((cc_rmin/10) > 1e-5) ? cc_rmin/10 : 1e-5;
-				else step_increment = 1 + (step_increment-1)*step_increment_change;
-				cc_rmax *= 1.5;
-				rstep = cc_rmin;
-			} else {
-				if (i==0)	// adjust the scale of rstep if it is too small
-				{
-					rstep = cc_rmin;
-					double rmin_frac, cc0_max_rfrac_range;
-					rmin_frac = root0 / cc_rmin;
-					cc0_max_rfrac_range = 1.1; // This is the (fractional) margin allowed for the inner cc radius to vary
-					while (rmin_frac > 2*cc0_max_rfrac_range) {
-						rstep *= 2;
-						cc_rmin *= 2;
-						rmin_frac /= 2;
-					}
-				}
-				break;
-			}
-		}
-	}
-	grid_xlength = spline_frac*autogrid_frac*root1x;
-	grid_ylength = spline_frac*autogrid_frac*root1y;
-	spline_deflection(grid_xlength,grid_ylength,steps);
-	return true;
-}
-
 Vector<dvector> QLens::find_critical_curves(bool &check)
 {
 	Vector<dvector> rcrit(2);
@@ -5427,8 +4618,6 @@ Vector<dvector> QLens::find_critical_curves(bool &check)
 	double (Brent::*mag_r)(const double);
 	mag_r = static_cast<double (Brent::*)(const double)> (&QLens::inverse_magnification_r);
 
-	respline_at_end = false;
-	resplinesteps = 0;
 	double mag0, mag1;
 	bool found_first_root;
 	double rstep, thetastep, step_increment, step_increment_change, beginning_increment;
@@ -5468,26 +4657,16 @@ Vector<dvector> QLens::find_critical_curves(bool &check)
 				}
 			}
 			if (r+rstep >= cc_rmax) {
-				if (defspline) {
-					resplinesteps = defspline->nsteps();
-					respline_at_end = true;
-					unspline_deflection();
-					if (cc_rmin > 1e-5) cc_rmin = ((cc_rmin/10) > 1e-5) ? cc_rmin/10 : 1e-5;
-					cc_rmax *= 1.5;
-					warn(warnings, "could not find critical curves after automatic deflection spline; deleting spline and trying again...");
-					i = 0; theta_crit = 0;
-				} else {
-					if (iterations >= max_cc_search_iterations)
-					{
-						check = false;
-						if (!found_first_root)
-							warn(warnings, "could not find any critical curves along theta = %g after %i iterations",theta_crit,iterations);
-						else
-							warn(warnings, "could not find two critical curves along theta = %g after %i iterations",theta_crit,iterations);
-						return rcrit;
-					}
-					step_increment = 1 + (step_increment-1)*step_increment_change;
+				if (iterations >= max_cc_search_iterations)
+				{
+					check = false;
+					if (!found_first_root)
+						warn(warnings, "could not find any critical curves along theta = %g after %i iterations",theta_crit,iterations);
+					else
+						warn(warnings, "could not find two critical curves along theta = %g after %i iterations",theta_crit,iterations);
+					return rcrit;
 				}
+				step_increment = 1 + (step_increment-1)*step_increment_change;
 				rstep = default_autogrid_initial_step;
 			} else {
 				if (first_iteration)	// adjust the scale of rstep if it is too small
@@ -5560,7 +4739,6 @@ bool QLens::find_optimal_gridsize()
 		max_y = abs(max_r*sin(theta_crit));
 		if (min_r < global_rmin) {
 			global_rmin = min_r;
-			//source_plane_rscale = source_plane_r(min_r);
 		}
 		if (max_r > global_rmax) {
 			global_rmax = max_r;
@@ -6085,52 +5263,6 @@ void QLens::raytrace_image_rectangle(const double xmin, const double xmax, const
 	}
 }
 
-/*
-double QLens::make_perturber_population(const double number_density, const double rmax, const double b, const double a)
-{
-	int N = (int) (number_density*M_PI*rmax*rmax);
-	int realizations = 3000;
-	double r, theta, alpha_x, alpha_y, defsqr, defnorm, defsqr2;
-	double mean_alpha_x=0, mean_alpha_y=0, mean_defsqr=0, mean_defsqr2=0;
-	int i,j;
-	for (j=0; j < realizations; j++) {
-		alpha_x=alpha_y=0;
-		defsqr2=0;
-		for (i=0; i < N; i++) {
-			r = sqrt(RandomNumber())*rmax;
-			theta = RandomNumber()*2*M_PI;
-			defnorm = b*(1+(a-sqrt(r*r+a*a))/r);
-			alpha_x += -defnorm*cos(theta);
-			alpha_y += -defnorm*sin(theta);
-		}
-		defsqr = SQR(alpha_x) + SQR(alpha_y);
-		mean_defsqr += defsqr;
-		mean_alpha_x += alpha_x;
-		mean_alpha_y += alpha_y;
-	}
-	mean_defsqr /= realizations;
-	mean_alpha_x /= realizations;
-	mean_alpha_y /= realizations;
-	//cout << "Root-mean square deflection: " << mean_defsqr << " " << mean_defsqr2 << endl;
-	//cout << "Mean deflection: " << mean_alpha_x << " " << mean_alpha_y << endl;
-	return mean_defsqr;
-}
-
-void QLens::plot_perturber_deflection_vs_area()
-{
-	int i,nn = 30;
-	double r,rmin,rmax,rstep,logrstep,defsqr_avg;
-	rmin=5;
-	rmax=5000;
-	rstep = (rmax-rmin)/nn;
-	logrstep = pow(rmax/rmin,1.0/(nn-1));
-	for (i=0, r=rmin; i < nn; i++, r *= logrstep) {
-		defsqr_avg = make_perturber_population(0.04,r,0.1,0.6);
-		cout << r << " " << log(r) << " " << defsqr_avg << endl;
-	}
-}
-*/
-
 /********************************* Functions for point image data (reading, writing, simulating etc.) *********************************/
 
 bool QLens::add_simulated_image_data(const lensvector &sourcept)
@@ -6241,9 +5373,9 @@ bool QLens::add_fit_sourcept(const lensvector &sourcept, const double zsrc)
 	if (n_lens_redshifts > 0) new_zfactors = new double*[n_sourcepts_fit+1];
 	new_beta_factors = new double**[n_sourcepts_fit+1];
 	for (i=0; i < n_sourcepts_fit; i++) {
-		new_redshifts[i] = ptsrc_redshifts[i];
-		if (n_lens_redshifts > 0) new_zfactors[i] = ptsrc_zfactors[i];
-		if (n_lens_redshifts > 1) new_beta_factors[i] = ptsrc_beta_factors[i];
+		new_redshifts[i] = specific_ptsrc_redshifts[i];
+		if (n_lens_redshifts > 0) new_zfactors[i] = specific_ptsrc_zfactors[i];
+		if (n_lens_redshifts > 1) new_beta_factors[i] = specific_ptsrc_beta_factors[i];
 	}
 	new_redshifts[n_sourcepts_fit] = zsrc;
 	if (n_lens_redshifts > 0) {
@@ -6263,13 +5395,13 @@ bool QLens::add_fit_sourcept(const lensvector &sourcept, const double zsrc)
 			}
 		}
 	} else new_beta_factors[n_sourcepts_fit] = NULL;
-	if (ptsrc_redshifts != NULL) delete[] ptsrc_redshifts;
-	if (ptsrc_zfactors != NULL) delete[] ptsrc_zfactors;
-	if (ptsrc_beta_factors != NULL) delete[] ptsrc_beta_factors;
-	ptsrc_redshifts = new_redshifts;
+	if (specific_ptsrc_redshifts != NULL) delete[] specific_ptsrc_redshifts;
+	if (specific_ptsrc_zfactors != NULL) delete[] specific_ptsrc_zfactors;
+	if (specific_ptsrc_beta_factors != NULL) delete[] specific_ptsrc_beta_factors;
+	specific_ptsrc_redshifts = new_redshifts;
 	if (n_lens_redshifts > 0) {
-		ptsrc_zfactors = new_zfactors;
-		ptsrc_beta_factors = new_beta_factors;
+		specific_ptsrc_zfactors = new_zfactors;
+		specific_ptsrc_beta_factors = new_beta_factors;
 	}
 	sourcepts_fit.push_back(sourcept);
 	vary_sourcepts_x.push_back(false);
@@ -6297,7 +5429,7 @@ void QLens::write_image_data(string filename)
 	outfile << "zlens = " << lens_redshift << endl;
 	outfile << n_sourcepts_fit << " # number of source points" << endl;
 	for (int i=0; i < n_sourcepts_fit; i++) {
-		outfile << image_data[i].n_images << " " << ptsrc_redshifts[i] << " # number of images, source redshift" << endl;
+		outfile << image_data[i].n_images << " " << specific_ptsrc_redshifts[i] << " # number of images, source redshift" << endl;
 		image_data[i].write_to_file(outfile);
 	}
 }
@@ -6352,36 +5484,36 @@ bool QLens::load_image_data(string filename)
 	if (nsrcfit <= 0) { warn("number of source points must be greater than zero"); return false; }
 	n_sourcepts_fit = nsrcfit;
 
-	if (ptsrc_redshifts != NULL) delete[] ptsrc_redshifts;
-	if (ptsrc_zfactors != NULL) {
-		for (i=0; i < n_sourcepts_fit; i++) delete[] ptsrc_zfactors[i];
-		delete[] ptsrc_zfactors;
+	if (specific_ptsrc_redshifts != NULL) delete[] specific_ptsrc_redshifts;
+	if (specific_ptsrc_zfactors != NULL) {
+		for (i=0; i < n_sourcepts_fit; i++) delete[] specific_ptsrc_zfactors[i];
+		delete[] specific_ptsrc_zfactors;
 	}
-	if (ptsrc_beta_factors != NULL) {
+	if (specific_ptsrc_beta_factors != NULL) {
 		for (i=0; i < n_sourcepts_fit; i++) {
-			if (ptsrc_beta_factors[i] != NULL) {
-				for (j=0; j < n_lens_redshifts-1; j++) delete[] ptsrc_beta_factors[i][j];
-				if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+			if (specific_ptsrc_beta_factors[i] != NULL) {
+				for (j=0; j < n_lens_redshifts-1; j++) delete[] specific_ptsrc_beta_factors[i][j];
+				if (n_lens_redshifts > 1) delete[] specific_ptsrc_beta_factors[i];
 			}
 		}
-		delete[] ptsrc_beta_factors;
+		delete[] specific_ptsrc_beta_factors;
 	}
 
-	ptsrc_redshifts = new double[n_sourcepts_fit];
+	specific_ptsrc_redshifts = new double[n_sourcepts_fit];
 	if (n_lens_redshifts > 0) {
-		ptsrc_zfactors = new double*[n_sourcepts_fit];
-		ptsrc_beta_factors = new double**[n_sourcepts_fit];
+		specific_ptsrc_zfactors = new double*[n_sourcepts_fit];
+		specific_ptsrc_beta_factors = new double**[n_sourcepts_fit];
 	}
 	lensvector zero; zero[0]=0; zero[1]=0;
 	for (i=0; i < n_sourcepts_fit; i++) {
 		sourcepts_fit.push_back(zero);
 		vary_sourcepts_x.push_back(true);
 		vary_sourcepts_y.push_back(true);
-		ptsrc_redshifts[i] = source_redshift;
+		specific_ptsrc_redshifts[i] = source_redshift;
 		if (n_lens_redshifts > 0) {
-			ptsrc_zfactors[i] = new double[n_lens_redshifts];
-			if (n_lens_redshifts > 1) ptsrc_beta_factors[i] = new double*[n_lens_redshifts-1];
-			else ptsrc_beta_factors[i] = NULL;
+			specific_ptsrc_zfactors[i] = new double[n_lens_redshifts];
+			if (n_lens_redshifts > 1) specific_ptsrc_beta_factors[i] = new double*[n_lens_redshifts-1];
+			else specific_ptsrc_beta_factors[i] = NULL;
 		}
 	}
 	point_imgs.resize(n_sourcepts_fit);
@@ -6415,7 +5547,7 @@ bool QLens::load_image_data(string filename)
 			return false;
 		}
 		if (n_datawords==2) {
-			if (datastring_convert(datawords[1],ptsrc_redshifts[i])==false) {
+			if (datastring_convert(datawords[1],specific_ptsrc_redshifts[i])==false) {
 				warn("data file has incorrect format; could not read redshift for source point %i",i);
 				clear_image_data();
 				return false;
@@ -6481,9 +5613,9 @@ bool QLens::load_image_data(string filename)
 	}
 	if (zsrc_given_in_datafile) {
 		if (!user_changed_zsource) {
-			source_redshift = ptsrc_redshifts[0];
+			source_redshift = specific_ptsrc_redshifts[0];
 			if (auto_zsource_scaling) {
-				reference_source_redshift = ptsrc_redshifts[0];
+				reference_source_redshift = specific_ptsrc_redshifts[0];
 				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = 1.0;
 			}
 			else {
@@ -6497,7 +5629,7 @@ bool QLens::load_image_data(string filename)
 	if (n_lens_redshifts > 0) {
 		for (i=0; i < n_sourcepts_fit; i++) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				specific_ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],specific_ptsrc_redshifts[i],reference_source_redshift);
 			}
 		}
 	}
@@ -6505,11 +5637,11 @@ bool QLens::load_image_data(string filename)
 	if (n_lens_redshifts > 1) {
 		for (i=0; i < n_sourcepts_fit; i++) {
 			for (j=1; j < n_lens_redshifts; j++) {
-				ptsrc_beta_factors[i][j-1] = new double[j];
+				specific_ptsrc_beta_factors[i][j-1] = new double[j];
 				if (include_recursive_lensing) {
-					for (k=0; k < j; k++) ptsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+					for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
 				} else {
-					for (k=0; k < j; k++) ptsrc_beta_factors[i][j-1][k] = 0;
+					for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = 0;
 				}
 			}
 		}
@@ -6579,7 +5711,7 @@ void QLens::sort_image_data_into_redshift_groups()
 	if (n_lens_redshifts > 0) {
 		sorted_zfactors = new double*[n_sourcepts_fit];
 		sorted_beta_factors = new double**[n_sourcepts_fit];
-		for (i=0; i < n_sourcepts_fit; i++) sorted_beta_factors[i] = ptsrc_beta_factors[i];
+		for (i=0; i < n_sourcepts_fit; i++) sorted_beta_factors[i] = specific_ptsrc_beta_factors[i];
 	}
 	bool *sorted_vary_sourcepts_x = new bool[n_sourcepts_fit];
 	bool *sorted_vary_sourcepts_y = new bool[n_sourcepts_fit];
@@ -6597,7 +5729,7 @@ void QLens::sort_image_data_into_redshift_groups()
 	for (i=0; i < n_sourcepts_fit; i++) {
 		if (!assigned[i]) {
 			sorted_image_data[j].input(image_data[i]);
-			sorted_redshifts[j] = ptsrc_redshifts[i];
+			sorted_redshifts[j] = specific_ptsrc_redshifts[i];
 			sorted_vary_sourcepts_x[j] = vary_sourcepts_x[i];
 			sorted_vary_sourcepts_y[j] = vary_sourcepts_y[i];
 			if (sort_sourcept_limits) {
@@ -6605,19 +5737,19 @@ void QLens::sort_image_data_into_redshift_groups()
 				sorted_sourcepts_lower_limit[j] = sourcepts_lower_limit[i];
 			}
 			if (n_lens_redshifts > 0) {
-				sorted_zfactors[j] = ptsrc_zfactors[i];
-				sorted_beta_factors[j] = ptsrc_beta_factors[i];
+				sorted_zfactors[j] = specific_ptsrc_zfactors[i];
+				sorted_beta_factors[j] = specific_ptsrc_beta_factors[i];
 			}
 			assigned[i] = true;
 			j++;
 			for (k=i+1; k < n_sourcepts_fit; k++) {
 				if (!assigned[k]) {
-					if (ptsrc_redshifts[k]==ptsrc_redshifts[i]) {
+					if (specific_ptsrc_redshifts[k]==specific_ptsrc_redshifts[i]) {
 						sorted_image_data[j].input(image_data[k]);
-						sorted_redshifts[j] = ptsrc_redshifts[k];
+						sorted_redshifts[j] = specific_ptsrc_redshifts[k];
 						if (n_lens_redshifts > 0) {
-							sorted_zfactors[j] = ptsrc_zfactors[k];
-							sorted_beta_factors[j] = ptsrc_beta_factors[k];
+							sorted_zfactors[j] = specific_ptsrc_zfactors[k];
+							sorted_beta_factors[j] = specific_ptsrc_beta_factors[k];
 						}
 						sorted_vary_sourcepts_x[j] = vary_sourcepts_x[k];
 						sorted_vary_sourcepts_y[j] = vary_sourcepts_y[k];
@@ -6634,11 +5766,11 @@ void QLens::sort_image_data_into_redshift_groups()
 		}
 	}
 	delete[] image_data;
-	delete[] ptsrc_redshifts;
+	delete[] specific_ptsrc_redshifts;
 	if (n_lens_redshifts > 0) {
-		delete[] ptsrc_zfactors;
+		delete[] specific_ptsrc_zfactors;
 	}
-	if (n_lens_redshifts > 0) delete[] ptsrc_beta_factors;
+	if (n_lens_redshifts > 0) delete[] specific_ptsrc_beta_factors;
 	for (int i=0; i < n_sourcepts_fit; i++) {
 		vary_sourcepts_x[i] = sorted_vary_sourcepts_x[i];
 		vary_sourcepts_y[i] = sorted_vary_sourcepts_y[i];
@@ -6647,10 +5779,10 @@ void QLens::sort_image_data_into_redshift_groups()
 	delete[] sorted_vary_sourcepts_y;
 	delete[] assigned;
 	image_data = sorted_image_data;
-	ptsrc_redshifts = sorted_redshifts;
+	specific_ptsrc_redshifts = sorted_redshifts;
 	if (n_lens_redshifts > 0) {
-		ptsrc_zfactors = sorted_zfactors;
-		ptsrc_beta_factors = sorted_beta_factors;
+		specific_ptsrc_zfactors = sorted_zfactors;
+		specific_ptsrc_beta_factors = sorted_beta_factors;
 	}
 	if (sort_sourcept_limits) {
 		for (int i=0; i < n_sourcepts_fit; i++) {
@@ -6682,33 +5814,33 @@ void QLens::remove_image_data(int image_set)
 	for (i=0,j=0; i < n_sourcepts_fit; i++) {
 		if (i != image_set) {
 			new_image_data[j].input(image_data[i]);
-			new_redshifts[j] = ptsrc_redshifts[i];
+			new_redshifts[j] = specific_ptsrc_redshifts[i];
 			if (n_lens_redshifts > 0) {
-				new_zfactors[j] = ptsrc_zfactors[i];
-				new_beta_factors[j] = ptsrc_beta_factors[i];
+				new_zfactors[j] = specific_ptsrc_zfactors[i];
+				new_beta_factors[j] = specific_ptsrc_beta_factors[i];
 			}
 			j++;
 		} else {
 			if (n_lens_redshifts > 0) {
-				delete[] ptsrc_zfactors[i];
-				if (ptsrc_beta_factors[i] != NULL) {
-					for (k=0; k < n_lens_redshifts-1; k++) delete[] ptsrc_beta_factors[i][k];
-					if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+				delete[] specific_ptsrc_zfactors[i];
+				if (specific_ptsrc_beta_factors[i] != NULL) {
+					for (k=0; k < n_lens_redshifts-1; k++) delete[] specific_ptsrc_beta_factors[i][k];
+					if (n_lens_redshifts > 1) delete[] specific_ptsrc_beta_factors[i];
 				}
 			}
 		}
 	}
-	delete[] ptsrc_redshifts;
+	delete[] specific_ptsrc_redshifts;
 	delete[] image_data;
 
 	n_sourcepts_fit--;
 	image_data = new_image_data;
-	ptsrc_redshifts = new_redshifts;
+	specific_ptsrc_redshifts = new_redshifts;
 	if (n_lens_redshifts > 0) {
-		delete[] ptsrc_zfactors;
-		delete[] ptsrc_beta_factors;
-		ptsrc_zfactors = new_zfactors;
-		ptsrc_beta_factors = new_beta_factors;
+		delete[] specific_ptsrc_zfactors;
+		delete[] specific_ptsrc_beta_factors;
+		specific_ptsrc_zfactors = new_zfactors;
+		specific_ptsrc_beta_factors = new_beta_factors;
 	}
 
 	sort_image_data_into_redshift_groups(); // this updates redshift_groups, in case there are no other image sets that shared the redshift of the one being deleted
@@ -6722,7 +5854,7 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 	int i,n_srcpts = image_data[dataset_number].n_images;
 	lensvector *srcpts = new lensvector[n_srcpts];
 	for (i=0; i < n_srcpts; i++) {
-		find_sourcept(image_data[dataset_number].pos[i],srcpts[i],0,ptsrc_zfactors[dataset_number],ptsrc_beta_factors[dataset_number]);
+		find_sourcept(image_data[dataset_number].pos[i],srcpts[i],0,specific_ptsrc_zfactors[dataset_number],specific_ptsrc_beta_factors[dataset_number]);
 	}
 
 	if (use_scientific_notation==false) {
@@ -6736,11 +5868,11 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 		time_delays_mod = new double[n_srcpts];
 		double min_td_obs, min_td_mod;
 		double pot;
-		td_factor = time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[dataset_number]);
+		td_factor = time_delay_factor_arcsec(lens_redshift,specific_ptsrc_redshifts[dataset_number]);
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (i=0; i < n_srcpts; i++) {
-			pot = potential(image_data[dataset_number].pos[i],ptsrc_zfactors[dataset_number],ptsrc_beta_factors[dataset_number]);
+			pot = potential(image_data[dataset_number].pos[i],specific_ptsrc_zfactors[dataset_number],specific_ptsrc_beta_factors[dataset_number]);
 			time_delays_mod[i] = 0.5*(SQR(image_data[dataset_number].pos[i][0] - srcpts[i][0]) + SQR(image_data[dataset_number].pos[i][1] - srcpts[i][1])) - pot;
 			if (time_delays_mod[i] < min_td_mod) min_td_mod = time_delays_mod[i];
 		}
@@ -6761,7 +5893,7 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 			cout << image_data[dataset_number].pos[i][0] << "\t" << image_data[dataset_number].pos[i][1] << "\t" << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (srcfile != NULL) (*srcfile) << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (flux != -1) {
-				imgflux = flux/inverse_magnification(image_data[dataset_number].pos[i],0,ptsrc_zfactors[dataset_number],ptsrc_beta_factors[dataset_number]);
+				imgflux = flux/inverse_magnification(image_data[dataset_number].pos[i],0,specific_ptsrc_zfactors[dataset_number],specific_ptsrc_beta_factors[dataset_number]);
 				cout << "\t" << imgflux;
 			}
 			if (include_time_delays) {
@@ -6788,7 +5920,7 @@ vector<ImageDataSet> QLens::export_to_ImageDataSet()
 	int i,j;
 	for (i=0; i < n_sourcepts_fit; i++) {
 		image_data_sets[i].set_n_images(image_data[i].n_images);
-		image_data_sets[i].zsrc = ptsrc_redshifts[i];
+		image_data_sets[i].zsrc = specific_ptsrc_redshifts[i];
 		for (j=0; j < image_data[i].n_images; j++) {
 			image_data_sets[i].images[j].pos[0] = image_data[i].pos[j][0];
 			image_data_sets[i].images[j].pos[1] = image_data[i].pos[j][1];
@@ -6801,6 +5933,8 @@ vector<ImageDataSet> QLens::export_to_ImageDataSet()
 	}
 	return image_data_sets;
 }
+
+/********************************* Functions for weak lensing data (reading, writing, simulating etc.) *********************************/
 
 bool QLens::load_weak_lensing_data(string filename)
 {
@@ -6861,12 +5995,12 @@ bool QLens::load_weak_lensing_data(string filename)
 		}
 	}
 
-	// For starters, let's not store ptsrc_zfactors, we'll just calculate them when we evaluate the chi-square. We can always put
-	// the ptsrc_zfactors in to save time later.
+	// For starters, let's not store specific_ptsrc_zfactors, we'll just calculate them when we evaluate the chi-square. We can always put
+	// the specific_ptsrc_zfactors in to save time later.
 	//if (n_lens_redshifts > 0) {
 		//for (i=0; i < n_sourcepts_fit; i++) {
 			//for (j=0; j < n_lens_redshifts; j++) {
-				//weak_lensing_data.ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				//weak_lensing_data.specific_ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],specific_ptsrc_redshifts[i],reference_source_redshift);
 			//}
 		//}
 	//}
@@ -6875,11 +6009,11 @@ bool QLens::load_weak_lensing_data(string filename)
 	//if (n_lens_redshifts > 1) {
 		//for (i=0; i < n_sourcepts_fit; i++) {
 			//for (j=1; j < n_lens_redshifts; j++) {
-				//ptsrc_beta_factors[i][j-1] = new double[j];
+				//specific_ptsrc_beta_factors[i][j-1] = new double[j];
 				//if (include_recursive_lensing) {
-					//for (k=0; k < j; k++) ptsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+					//for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
 				//} else {
-					//for (k=0; k < j; k++) ptsrc_beta_factors[i][j-1][k] = 0;
+					//for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = 0;
 				//}
 			//}
 		//}
@@ -7018,27 +6152,27 @@ void QLens::clear_sourcepts()
 	sourcepts_lower_limit.clear();
 	sourcepts_upper_limit.clear();
 	point_imgs.clear();
-	if (ptsrc_zfactors != NULL) {
-		for (i=0; i < n_sourcepts_fit; i++) delete[] ptsrc_zfactors[i];
-		delete[] ptsrc_zfactors;
-		ptsrc_zfactors = NULL;
+	if (specific_ptsrc_zfactors != NULL) {
+		for (i=0; i < n_sourcepts_fit; i++) delete[] specific_ptsrc_zfactors[i];
+		delete[] specific_ptsrc_zfactors;
+		specific_ptsrc_zfactors = NULL;
 	}
 	if (default_zsrc_beta_factors != NULL) {
 		for (i=1; i < n_lens_redshifts; i++) delete[] default_zsrc_beta_factors[i-1];
 		delete[] default_zsrc_beta_factors;
 		default_zsrc_beta_factors = NULL;
 	}
-	if (ptsrc_beta_factors != NULL) {
+	if (specific_ptsrc_beta_factors != NULL) {
 		for (i=0; i < n_sourcepts_fit; i++) {
-			for (j=1; j < n_lens_redshifts; j++) delete[] ptsrc_beta_factors[i][j-1];
-			if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+			for (j=1; j < n_lens_redshifts; j++) delete[] specific_ptsrc_beta_factors[i][j-1];
+			if (n_lens_redshifts > 1) delete[] specific_ptsrc_beta_factors[i];
 		}
-		delete[] ptsrc_beta_factors;
-		ptsrc_beta_factors = NULL;
+		delete[] specific_ptsrc_beta_factors;
+		specific_ptsrc_beta_factors = NULL;
 	}
-	if (ptsrc_redshifts != NULL) {
-		delete[] ptsrc_redshifts;
-		ptsrc_redshifts = NULL;
+	if (specific_ptsrc_redshifts != NULL) {
+		delete[] specific_ptsrc_redshifts;
+		specific_ptsrc_redshifts = NULL;
 	}
 
 	n_sourcepts_fit = 0;
@@ -7059,8 +6193,8 @@ void QLens::print_image_data(bool include_errors)
 {
 	if (mpi_id==0) {
 		for (int i=0; i < n_sourcepts_fit; i++) {
-			cout << "Source " << i << ": zsrc=" << ptsrc_redshifts[i];
-			if ((n_lens_redshifts==0) or ((n_lens_redshifts==1) and (ptsrc_redshifts[i]==lens_redshifts[0]))) cout << " (unlensed)";
+			cout << "Source " << i << ": zsrc=" << specific_ptsrc_redshifts[i];
+			if ((n_lens_redshifts==0) or ((n_lens_redshifts==1) and (specific_ptsrc_redshifts[i]==lens_redshifts[0]))) cout << " (unlensed)";
 			cout << endl;
 			image_data[i].print_list(include_errors,use_scientific_notation);
 		}
@@ -7447,7 +6581,6 @@ void WeakLensingData::clear()
 
 bool QLens::initialize_fitmodel(const bool running_fit_in)
 {
-	//cout << "making fitmodel..." << endl;
 	if (source_fit_mode == Point_Source) {
 		if (((!include_weak_lensing_chisq) or (weak_lensing_data.n_sources==0)) and ((sourcepts_fit.empty()) or (image_data==NULL))) {
 			warn("image data points have not been defined");
@@ -7511,20 +6644,20 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		fitmodel->sourcepts_lower_limit = sourcepts_lower_limit;
 		fitmodel->sourcepts_upper_limit = sourcepts_upper_limit;
 		fitmodel->point_imgs = point_imgs;
-		fitmodel->ptsrc_redshifts = new double[n_sourcepts_fit];
+		fitmodel->specific_ptsrc_redshifts = new double[n_sourcepts_fit];
 		if (n_lens_redshifts > 0) {
-			fitmodel->ptsrc_zfactors = new double*[n_sourcepts_fit];
-			fitmodel->ptsrc_beta_factors = new double**[n_sourcepts_fit];
+			fitmodel->specific_ptsrc_zfactors = new double*[n_sourcepts_fit];
+			fitmodel->specific_ptsrc_beta_factors = new double**[n_sourcepts_fit];
 		}
 		for (i=0; i < n_sourcepts_fit; i++) {
-			fitmodel->ptsrc_redshifts[i] = ptsrc_redshifts[i];
+			fitmodel->specific_ptsrc_redshifts[i] = specific_ptsrc_redshifts[i];
 			if (n_lens_redshifts > 0) {
-				fitmodel->ptsrc_zfactors[i] = new double[n_lens_redshifts];
-				fitmodel->ptsrc_beta_factors[i] = new double*[n_lens_redshifts-1];
-				for (j=0; j < n_lens_redshifts; j++) fitmodel->ptsrc_zfactors[i][j] = ptsrc_zfactors[i][j];
+				fitmodel->specific_ptsrc_zfactors[i] = new double[n_lens_redshifts];
+				fitmodel->specific_ptsrc_beta_factors[i] = new double*[n_lens_redshifts-1];
+				for (j=0; j < n_lens_redshifts; j++) fitmodel->specific_ptsrc_zfactors[i][j] = specific_ptsrc_zfactors[i][j];
 				for (j=0; j < n_lens_redshifts-1; j++) {
-					fitmodel->ptsrc_beta_factors[i][j] = new double[j+1];
-					for (k=0; k < j+1; k++) fitmodel->ptsrc_beta_factors[i][j][k] = ptsrc_beta_factors[i][j][k];
+					fitmodel->specific_ptsrc_beta_factors[i][j] = new double[j+1];
+					for (k=0; k < j+1; k++) fitmodel->specific_ptsrc_beta_factors[i][j][k] = specific_ptsrc_beta_factors[i][j][k];
 				}
 			}
 		}
@@ -7609,6 +6742,37 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		}
 	}
 
+	if (n_ptsrc_redshifts > 0) {
+		fitmodel->n_ptsrc_redshifts = n_ptsrc_redshifts;
+		fitmodel->ptsrc_redshifts = new double[n_ptsrc_redshifts];
+		if (n_lens_redshifts > 0) {
+			fitmodel->ptsrc_zfactors = new double*[n_ptsrc_redshifts];
+			fitmodel->ptsrc_beta_factors = new double**[n_ptsrc_redshifts];
+		}
+		for (i=0; i < n_ptsrc_redshifts; i++) {
+			fitmodel->ptsrc_redshifts[i] = ptsrc_redshifts[i];
+			if (n_lens_redshifts > 0) {
+				fitmodel->ptsrc_zfactors[i] = new double[n_lens_redshifts];
+				fitmodel->ptsrc_beta_factors[i] = new double*[n_lens_redshifts-1];
+				for (j=0; j < n_lens_redshifts; j++) fitmodel->ptsrc_zfactors[i][j] = ptsrc_zfactors[i][j];
+				for (j=0; j < n_lens_redshifts-1; j++) {
+					fitmodel->ptsrc_beta_factors[i][j] = new double[j+1];
+					for (k=0; k < j+1; k++) fitmodel->ptsrc_beta_factors[i][j][k] = ptsrc_beta_factors[i][j][k];
+				}
+			}
+		}
+	}
+	fitmodel->n_ptsrc = n_ptsrc;
+	if (n_ptsrc > 0) {
+		fitmodel->ptsrc_list = new PointSource*[n_ptsrc];
+		fitmodel->ptsrc_redshift_idx = new int[n_ptsrc];
+		for (i=0; i < n_ptsrc; i++) {
+			fitmodel->ptsrc_redshift_idx[i] = ptsrc_redshift_idx[i];
+			fitmodel->ptsrc_list[i] = new PointSource(fitmodel);
+			fitmodel->ptsrc_list[i]->copy_ptsrc_data(ptsrc_list[i]);
+		}
+	}
+
 	fitmodel->n_sb = n_sb;
 	if (n_sb > 0) {
 		fitmodel->sb_list = new SB_Profile*[n_sb];
@@ -7647,17 +6811,21 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 
 	fitmodel->n_pixellated_src = n_pixellated_src;
 	if (n_pixellated_src > 0) {
+		fitmodel->srcgrids = new SourceParams*[n_pixellated_src];
 		fitmodel->delaunay_srcgrids = new DelaunayGrid*[n_pixellated_src];
-		fitmodel->pixellated_src_redshift_idx = new int[n_pixellated_src];
-		for (i=0; i < n_pixellated_src; i++) {
-			fitmodel->pixellated_src_redshift_idx[i] = pixellated_src_redshift_idx[i];
-			fitmodel->delaunay_srcgrids[i] = NULL;
-		}
 		fitmodel->cartesian_srcgrids = new SourcePixelGrid*[n_pixellated_src];
 		fitmodel->pixellated_src_redshift_idx = new int[n_pixellated_src];
 		for (i=0; i < n_pixellated_src; i++) {
 			fitmodel->pixellated_src_redshift_idx[i] = pixellated_src_redshift_idx[i];
-			fitmodel->cartesian_srcgrids[i] = NULL;
+			fitmodel->delaunay_srcgrids[i] = new DelaunayGrid(fitmodel);
+			fitmodel->cartesian_srcgrids[i] = new SourcePixelGrid(fitmodel);
+			if (source_fit_mode==Delaunay_Source) {
+				fitmodel->delaunay_srcgrids[i]->copy_pixsrc_data(delaunay_srcgrids[i]);
+				fitmodel->srcgrids[i] = fitmodel->delaunay_srcgrids[i];
+			} else if (source_fit_mode==Cartesian_Source) {
+				fitmodel->cartesian_srcgrids[i]->copy_pixsrc_data(cartesian_srcgrids[i]);
+				fitmodel->srcgrids[i] = fitmodel->cartesian_srcgrids[i];
+			}
 		}
 	}
 
@@ -7702,6 +6870,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->n_fit_parameters = n_fit_parameters;
 	fitmodel->lensmodel_fit_parameters = lensmodel_fit_parameters;
 	fitmodel->srcmodel_fit_parameters = srcmodel_fit_parameters;
+	fitmodel->pixsrc_fit_parameters = pixsrc_fit_parameters;
 	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
 
 	if (open_chisq_logfile) {
@@ -7724,13 +6893,11 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	if ((source_fit_mode != Point_Source) and (!redo_lensing_calculations_before_inversion)) {
 		for (int i=0; i < n_extended_src_redshifts; i++) fitmodel->image_pixel_grids[i]->redo_lensing_calculations(); 
 	}
-	//cout << "DONE making fitmodel" << endl;
 	return true;
 }
 
 void QLens::update_anchored_parameters_and_redshift_data()
 {
-	//cout << "updating anchors and redshifts..." << endl;
 	for (int i=0; i < n_sb; i++) {
 		if ((sb_list[i]->center_anchored_to_lens) or (sb_list[i]->center_anchored_to_source)) {
 			sb_list[i]->update_anchor_center();
@@ -7744,7 +6911,6 @@ void QLens::update_anchored_parameters_and_redshift_data()
 	}
 	update_lens_redshift_data();
 	reset_grid();
-	//cout << "just updated anchors and redshifts" << endl;
 }
 
 bool QLens::update_lens_centers_from_pixsrc_coords()
@@ -7768,11 +6934,15 @@ double QLens::update_model(const double* params)
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->update_fit_parameters(params,index,status);
 	}
-	//if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
 	for (i=0; i < n_sb; i++) {
 		sb_list[i]->update_fit_parameters(params,index,status);
 	}
-	//}
+	for (i=0; i < n_pixellated_src; i++) {
+		srcgrids[i]->update_fit_parameters(params,index);
+	}
+	for (i=0; i < n_ptsrc; i++) {
+		ptsrc_list[i]->update_fit_parameters(params,index);
+	}
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (i=0; i < n_sourcepts_fit; i++) {
@@ -7781,61 +6951,12 @@ double QLens::update_model(const double* params)
 			}
 		}
 	}
+
 	if (vary_srcpt_xshift) srcpt_xshift = params[index++];
 	if (vary_srcpt_yshift) srcpt_yshift = params[index++];
 	if (vary_srcflux) {
 		source_flux = params[index++];
 	}
-	if ((vary_regularization_parameter) and (regularization_method != None)) regularization_parameter = params[index++];
-	if (source_fit_mode == Cartesian_Source) {
-		if (vary_pixel_fraction) pixel_fraction = params[index++];
-		if (vary_srcgrid_size_scale) srcgrid_size_scale = params[index++];
-		if (vary_magnification_threshold) pixel_magnification_threshold = params[index++];
-	}
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (regularization_method != None)) {
-		if (vary_regparam_lsc) regparam_lsc = params[index++];
-		if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index)) regparam_lum_index = params[index++];
-
-		if (vary_lumreg_rc) lumreg_rc = params[index++];
-		//if (vary_regparam_lsc2) regparam_lsc2 = params[index++];
-		//if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index2)) regparam_lum_index2 = params[index++];
-
-		if (use_distance_weighted_regularization) {
-			if (!auto_lumreg_center) {
-				if (vary_lumreg_xcenter) lumreg_xcenter = params[index++];
-				if (vary_lumreg_ycenter) lumreg_ycenter = params[index++];
-			}
-			if (vary_lumreg_e1) lumreg_e1 = params[index++];
-			if (vary_lumreg_e2) lumreg_e2 = params[index++];
-		}
-	}
-	if ((use_mag_weighted_regularization) and (regularization_method != None)) {
-		if (vary_mag_weight_sc) mag_weight_sc = params[index++];
-		if (vary_mag_weight_index) mag_weight_index = params[index++];
-	}
-
-	if ((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) {
-		if (vary_alpha_clus) alpha_clus = params[index++];
-		if (vary_beta_clus) beta_clus = params[index++];
-	}
-
-	if ((source_fit_mode == Delaunay_Source) and (vary_correlation_length) and (regularization_method != None)) {
-		kernel_correlation_length = params[index++];
-	}
-	//if ((source_fit_mode == Delaunay_Source) and (vary_matern_scale) and (regularization_method != None)) {
-		//matern_scale = params[index++];
-	//}
-	if ((source_fit_mode == Delaunay_Source) and (vary_matern_index) and (regularization_method != None)) {
-		matern_index = params[index++];
-	}
-
-	//if ((source_fit_mode == Delaunay_Source) and (vary_kernel2_amplitude_ratio) and (regularization_method != None)) {
-		//kernel2_amplitude_ratio = params[index++];
-	//}
-	//if ((source_fit_mode == Delaunay_Source) and (vary_kernel2_correlation_length) and (regularization_method != None)) {
-		//kernel2_correlation_length = params[index++];
-	//}
-
 
 	if (vary_hubble_parameter) {
 		hubble = params[index++];
@@ -7894,7 +7015,7 @@ void QLens::find_analytic_srcpos(lensvector *beta_i)
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].use_in_chisq[j]) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(image_data[i].pos[j],beta_ji,jac,0,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
+					sourcept_jacobian(image_data[i].pos[j],beta_ji,jac,0,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
 					mag = jac.inverse();
 					lensmatsqr(mag,magsqr);
 					siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
@@ -7905,7 +7026,7 @@ void QLens::find_analytic_srcpos(lensvector *beta_i)
 					bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
 					bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
 				} else {
-					find_sourcept(image_data[i].pos[j],beta_ji,0,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
+					find_sourcept(image_data[i].pos[j],beta_ji,0,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
 					siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 					beta_i[i][0] += beta_ji[0]*siginv;
 					beta_i[i][1] += beta_ji[1]*siginv;
@@ -7949,7 +7070,6 @@ void QLens::set_analytic_sourcepts(const bool verbal)
 				cout << "adjusted analytic best-fit source";
 				if (n_sourcepts_fit > 1) cout << " " << i;
 				cout << ": " << sourcepts_fit[i][0] << " " << sourcepts_fit[i][1] << endl;
-				//cout << "source plane r-scale: " << source_plane_rscale << endl;
 			}
 		}
 	}
@@ -7986,7 +7106,7 @@ double QLens::chisq_pos_source_plane()
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].use_in_chisq[j]) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(image_data[i].pos[j],beta_ji[j],jac,0,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
+					sourcept_jacobian(image_data[i].pos[j],beta_ji[j],jac,0,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
 					mag = jac.inverse();
 					mag00[j] = mag[0][0];
 					mag01[j] = mag[0][1];
@@ -8003,7 +7123,7 @@ double QLens::chisq_pos_source_plane()
 						bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
 					}
 				} else {
-					find_sourcept(image_data[i].pos[j],beta_ji[j],0,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
+					find_sourcept(image_data[i].pos[j],beta_ji[j],0,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
 					if (use_analytic_bestfit_src) {
 						siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 						src_bf[0] += beta_ji[j][0]*siginv;
@@ -8078,7 +7198,7 @@ double QLens::chisq_pos_image_plane()
 	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
-		create_grid(false,ptsrc_zfactors[ptsrc_redshift_groups[m]],ptsrc_beta_factors[ptsrc_redshift_groups[m]],m);
+		create_grid(false,specific_ptsrc_zfactors[ptsrc_redshift_groups[m]],specific_ptsrc_beta_factors[ptsrc_redshift_groups[m]],m);
 		for (i=ptsrc_redshift_groups[m]; i < ptsrc_redshift_groups[m+1]; i++) {
 			chisq_each_srcpt = 0;
 			image *img = get_images(sourcepts_fit[i], n_images, false);
@@ -8184,7 +7304,6 @@ double QLens::chisq_pos_image_plane()
 }
 
 double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double &rms_imgpos_err, int &n_matched_images, const string output_filename)
-//double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, double &rms_imgpos_err, int &n_matched_images)
 {
 	int n_redshift_groups = ptsrc_redshift_groups.size()-1;
 	int mpi_chunk=n_redshift_groups, mpi_start=0;
@@ -8212,8 +7331,8 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	int i,j,k,m,n;
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
-		create_grid(false,ptsrc_zfactors[ptsrc_redshift_groups[m]],ptsrc_beta_factors[ptsrc_redshift_groups[m]],m);
-		if ((mpi_id==0) and (verbose)) cout << endl << "zsrc=" << ptsrc_redshifts[ptsrc_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
+		create_grid(false,specific_ptsrc_zfactors[ptsrc_redshift_groups[m]],specific_ptsrc_beta_factors[ptsrc_redshift_groups[m]],m);
+		if ((mpi_id==0) and (verbose)) cout << endl << "zsrc=" << specific_ptsrc_redshifts[ptsrc_redshift_groups[m]] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
 		for (i=ptsrc_redshift_groups[m]; i < ptsrc_redshift_groups[m+1]; i++) {
 			chisq_each_srcpt = 0;
 			n_matched_images_each_srcpt = 0;
@@ -8434,7 +7553,7 @@ void QLens::output_model_source_flux(double *bestfit_flux)
 		double num=0, denom=0;
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].sigma_f[j]==0) { k++; continue; }
-			hessian(image_data[i].pos[j],jac,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
+			hessian(image_data[i].pos[j],jac,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
@@ -8470,7 +7589,7 @@ double QLens::chisq_flux()
 		k=0; num=0; denom=0;
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].sigma_f[j]==0) { k++; continue; }
-			hessian(image_data[i].pos[j],jac,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
+			hessian(image_data[i].pos[j],jac,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
@@ -8529,13 +7648,13 @@ double QLens::chisq_time_delays()
 	double pot;
 	lensvector beta_ij;
 	for (k=0, i=0; i < n_sourcepts_fit; i++) {
-		td_factor = time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[i]);
+		td_factor = time_delay_factor_arcsec(lens_redshift,specific_ptsrc_redshifts[i]);
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (j=0; j < image_data[i].n_images; j++) {
 			if (image_data[i].sigma_t[j]==0) continue;
-			find_sourcept(image_data[i].pos[j],beta_ij,0,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
-			pot = potential(image_data[i].pos[j],ptsrc_zfactors[i],ptsrc_beta_factors[i]);
+			find_sourcept(image_data[i].pos[j],beta_ij,0,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
+			pot = potential(image_data[i].pos[j],specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
 			time_delays_mod[j] = 0.5*(SQR(image_data[i].pos[j][0] - beta_ij[0]) + SQR(image_data[i].pos[j][1] - beta_ij[1])) - pot;
 			if (time_delays_mod[j] < min_td_mod) min_td_mod = time_delays_mod[j];
 
@@ -8729,39 +7848,46 @@ bool QLens::output_weak_lensing_chivals(string filename)
 	return true;
 }
 
+double QLens::get_avg_ptsrc_dist(const int ptsrc_i)
+{
+	// is this even useful? maybe get rid of this, since it's better to use analytic_bestfit_src combined with xshift, yshift params
+	double avg_srcdist;
+	int j,k,n_srcpts,n_src_pairs;
+	if (image_data[ptsrc_i].n_images > 1) {
+		avg_srcdist=0;
+		n_src_pairs=0;
+		n_srcpts = image_data[ptsrc_i].n_images;
+		lensvector *srcpts = new lensvector[n_srcpts];
+		for (j=0; j < n_srcpts; j++) {
+			find_sourcept(image_data[ptsrc_i].pos[j],srcpts[j],0,specific_ptsrc_zfactors[ptsrc_i],specific_ptsrc_beta_factors[ptsrc_i]);
+			for (k=0; k < j; k++) {
+				avg_srcdist += sqrt(SQR(srcpts[j][0] - srcpts[k][0]) + SQR(srcpts[j][1] - srcpts[k][1]));
+				n_src_pairs++;
+			}
+		}
+		avg_srcdist /= n_src_pairs;
+		delete[] srcpts;
+		return avg_srcdist;
+	} else {
+		return sqrt(grid_xlength*grid_ylength); // nothing else to use, since there's no lens or image data to model 
+	}
+}
+
 void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 {
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
-	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
 	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_stepsizes(stepsizes,index);
-	//}
+	for (i=0; i < n_pixellated_src; i++) srcgrids[i]->get_auto_stepsizes(stepsizes,index);
+	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_stepsizes(stepsizes,index);
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			if ((nlens > 0) and (image_data != NULL)) {
 				double avg_srcdist;
-				int j,k,n_srcpts,n_src_pairs;
 				for (i=0; i < n_sourcepts_fit; i++) {
-					if (image_data[i].n_images > 1) {
-						avg_srcdist=0;
-						n_src_pairs=0;
-						n_srcpts = image_data[i].n_images;
-						lensvector *srcpts = new lensvector[n_srcpts];
-						for (j=0; j < n_srcpts; j++) {
-							find_sourcept(image_data[i].pos[j],srcpts[j],0,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
-							for (k=0; k < j; k++) {
-								avg_srcdist += sqrt(SQR(srcpts[j][0] - srcpts[k][0]) + SQR(srcpts[j][1] - srcpts[k][1]));
-								n_src_pairs++;
-							}
-						}
-						avg_srcdist /= n_src_pairs;
-						if (vary_sourcepts_x[i]) stepsizes[index++] = 0.01*avg_srcdist;
-						if (vary_sourcepts_y[i]) stepsizes[index++] = 0.01*avg_srcdist;
-						delete[] srcpts;
-					} else {
-						if (vary_sourcepts_x[i]) stepsizes[index++] = 0.01*grid_xlength; // nothing else to use, since there's no lens or image data to model 
-						if (vary_sourcepts_y[i]) stepsizes[index++] = 0.01*grid_ylength;
-					}
+					avg_srcdist = get_avg_ptsrc_dist(i);
+					if (vary_sourcepts_x[i]) stepsizes[index++] = 0.01*avg_srcdist;
+					if (vary_sourcepts_y[i]) stepsizes[index++] = 0.01*avg_srcdist;
 				}
 			} else {
 				for (i=0; i < n_sourcepts_fit; i++) {
@@ -8774,42 +7900,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	if (vary_srcpt_xshift) stepsizes[index++] = 0.01;
 	if (vary_srcpt_yshift) stepsizes[index++] = 0.01;
 	if (vary_srcflux) stepsizes[index++] = (source_flux > 0) ? 0.1*source_flux : source_flux;
-	if ((vary_regularization_parameter) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (regularization_method != None)) {
-		stepsizes[index++] = 0.33*regularization_parameter;
-	}
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (regularization_method != None)) {
-		if (vary_regparam_lsc) stepsizes[index++] = 0.33*regparam_lsc;
-		if (vary_regparam_lum_index) stepsizes[index++] = 0.33;
-		if (vary_lumreg_rc) stepsizes[index++] = 0.05;
-		//if (vary_regparam_lsc2) stepsizes[index++] = 0.33*regparam_lsc2;
-		//if (vary_regparam_lum_index2) stepsizes[index++] = 0.33;
-		if (use_distance_weighted_regularization) {
-			if (!auto_lumreg_center) {
-				if (vary_lumreg_xcenter) stepsizes[index++] = 0.1;
-				if (vary_lumreg_ycenter) stepsizes[index++] = 0.1;
-			}
-			if (vary_lumreg_e1) stepsizes[index++] = 0.1;
-			if (vary_lumreg_e2) stepsizes[index++] = 0.1;
-		}
-	}
-	if ((use_mag_weighted_regularization) and (regularization_method != None)) {
-		if (vary_mag_weight_sc) stepsizes[index++] = 0.33*mag_weight_sc;
-		if (vary_mag_weight_index) stepsizes[index++] = 0.33;
-	}
 
-	if ((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) {
-		if (vary_alpha_clus) stepsizes[index++] = 0.33*alpha_clus;
-		if (vary_beta_clus) stepsizes[index++] = 0.33*beta_clus;
-	}
-
-	if ((vary_correlation_length) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) stepsizes[index++] = 0.3*kernel_correlation_length;
-	//if ((vary_matern_scale) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) stepsizes[index++] = 0.3*matern_scale;
-	if ((vary_matern_index) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) stepsizes[index++] = 0.3;
-	//if ((vary_kernel2_amplitude_ratio) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) stepsizes[index++] = 0.3*kernel2_amplitude_ratio;
-	//if ((vary_kernel2_correlation_length) and (source_fit_mode == Delaunay_Source) and (regularization_method != None)) stepsizes[index++] = 0.3*kernel2_correlation_length;
-	if (vary_pixel_fraction) stepsizes[index++] = 0.3;
-	if (vary_srcgrid_size_scale) stepsizes[index++] = 0.3;
-	if (vary_magnification_threshold) stepsizes[index++] = 0.3;
 	if (vary_hubble_parameter) stepsizes[index++] = 0.1;
 	if (vary_omega_matter_parameter) stepsizes[index++] = 0.1;
 	if (vary_syserr_pos_parameter) stepsizes[index++] = 0.1;
@@ -8827,9 +7918,9 @@ void QLens::set_default_plimits()
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	}
-	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
 	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	//}
+	for (i=0; i < n_pixellated_src; i++) srcgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (i=0; i < n_sourcepts_fit; i++) {
@@ -8841,34 +7932,6 @@ void QLens::set_default_plimits()
 	if (vary_srcpt_xshift) index++;
 	if (vary_srcpt_yshift) index++;
 	if (vary_srcflux) index++;
-	if ((vary_regularization_parameter) and (regularization_method != None)) index++;
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lsc) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_lumreg_rc) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	//if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lsc2) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	//if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index2) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-
-	if (use_distance_weighted_regularization) {
-		if (!auto_lumreg_center) {
-			if (vary_lumreg_xcenter) index++;
-			if (vary_lumreg_ycenter) index++;
-		}
-		if (vary_lumreg_e1) index++;
-		if (vary_lumreg_e2) index++;
-	}
-	if ((use_mag_weighted_regularization) and (vary_mag_weight_sc) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	if ((use_mag_weighted_regularization) and (vary_mag_weight_index) and (regularization_method != None)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-
-	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) { use_penalty_limits[index] = true; lower[index] = 0; index++; }
-	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
-	//if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
-	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
-	//if ((vary_kernel2_amplitude_ratio) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
-	//if ((vary_kernel2_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) index++;
-	if (vary_pixel_fraction) index++;
-	if (vary_srcgrid_size_scale) index++;
-	if (vary_magnification_threshold) index++;
 	if (vary_hubble_parameter) index++;
 	if (vary_omega_matter_parameter) index++;
 	if (vary_syserr_pos_parameter) index++;
@@ -8881,59 +7944,37 @@ void QLens::get_n_fit_parameters(int &nparams)
 {
 	lensmodel_fit_parameters = 0;
 	srcmodel_fit_parameters = 0;
+	srcpt_fit_parameters = 0;
+	pixsrc_fit_parameters = 0;
+	ptsrc_fit_parameters = 0;
 	for (int i=0; i < nlens; i++) lensmodel_fit_parameters += lens_list[i]->get_n_vary_params();
 	nparams = lensmodel_fit_parameters;
-	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-	for (int i=0; i < n_sb; i++)
-		srcmodel_fit_parameters += sb_list[i]->get_n_vary_params();
+	for (int i=0; i < n_sb; i++) srcmodel_fit_parameters += sb_list[i]->get_n_vary_params();
 	nparams += srcmodel_fit_parameters;
-	//}
+	for (int i=0; i < n_pixellated_src; i++) pixsrc_fit_parameters += srcgrids[i]->get_n_vary_params();
+	nparams += pixsrc_fit_parameters;
+	for (int i=0; i < n_ptsrc; i++) ptsrc_fit_parameters += ptsrc_list[i]->get_n_vary_params();
+	nparams += ptsrc_fit_parameters;
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
-				if (vary_sourcepts_x[i]) nparams++;
-				if (vary_sourcepts_y[i]) nparams++;
+				if (vary_sourcepts_x[i]) srcpt_fit_parameters++;
+				if (vary_sourcepts_y[i]) srcpt_fit_parameters++;
 			}
 		}
 	}
+	nparams += srcpt_fit_parameters;
+
 	if (vary_srcpt_xshift) nparams++;
 	if (vary_srcpt_yshift) nparams++;
 	if (vary_srcflux) nparams++;
-	if ((vary_regularization_parameter) and (regularization_method != None)) nparams++;
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lsc) and (regularization_method != None)) nparams++;
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) nparams++;
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_lumreg_rc) and (regularization_method != None)) nparams++;
-	//if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lsc2) and (regularization_method != None)) nparams++;
-	//if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index2) and (regularization_method != None)) nparams++;
-
-	if (use_distance_weighted_regularization) {
-		if (!auto_lumreg_center) {
-			if (vary_lumreg_xcenter) nparams++;
-			if (vary_lumreg_ycenter) nparams++;
-		}
-		if (vary_lumreg_e1) nparams++;
-		if (vary_lumreg_e2) nparams++;
-	}
-	if ((use_mag_weighted_regularization) and (vary_mag_weight_sc) and (regularization_method != None)) nparams++;
-	if ((use_mag_weighted_regularization) and (vary_mag_weight_index) and (regularization_method != None)) nparams++;
-
-	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) nparams++;
-	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) nparams++;
-	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
-	//if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
-	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
-	//if ((vary_kernel2_amplitude_ratio) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
-	//if ((vary_kernel2_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) nparams++;
-	if (vary_pixel_fraction) nparams++;
-	if (vary_srcgrid_size_scale) nparams++;
-	if (vary_magnification_threshold) nparams++;
 	if (vary_hubble_parameter) nparams++;
 	if (vary_omega_matter_parameter) nparams++;
 	if (vary_syserr_pos_parameter) nparams++;
 	if (vary_wl_shear_factor_parameter) nparams++;
 }
 
-bool QLens::setup_fit_parameters()
+bool QLens::setup_fit_parameters(const bool ignore_limits)
 {
 	//if (source_fit_mode==Point_Source) {
 		//if (image_data==NULL) { warn("cannot do fit; image data points have not been loaded"); return false; }
@@ -8962,7 +8003,7 @@ bool QLens::setup_fit_parameters()
 			}
 			all_unlensed = true;
 			for (int i=0; i < n_sourcepts_fit; i++) {
-				if (ptsrc_redshifts[i] != lens_redshift) all_unlensed = false;
+				if (specific_ptsrc_redshifts[i] != lens_redshift) all_unlensed = false;
 			}
 			if (!all_unlensed) {
 				warn("background source points have been defined, but no lens models have been defined");
@@ -8976,11 +8017,12 @@ bool QLens::setup_fit_parameters()
 	int index = 0;
 	for (int i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
 	if (index != lensmodel_fit_parameters) die("Index didn't go through all the lens model fit parameters (%i vs %i)",index,lensmodel_fit_parameters);
-	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
 	for (int i=0; i < n_sb; i++) sb_list[i]->get_fit_parameters(fitparams,index);
-	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters;
+	for (int i=0; i < n_pixellated_src; i++) srcgrids[i]->get_fit_parameters(fitparams,index);
+	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_fit_parameters(fitparams,index);
+	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + ptsrc_fit_parameters;
 	if (index != expected_index) die("Index didn't go through all the lens+source model fit parameters (%i vs %i)",index,expected_index);
-	//}
+
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
@@ -8989,37 +8031,10 @@ bool QLens::setup_fit_parameters()
 			}
 		}
 	}
+
 	if (vary_srcpt_xshift) fitparams[index++] = srcpt_xshift;
 	if (vary_srcpt_yshift) fitparams[index++] = srcpt_yshift;
 	if (vary_srcflux) fitparams[index++] = source_flux;
-	if ((vary_regularization_parameter) and (regularization_method != None)) fitparams[index++] = regularization_parameter;
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lsc) and (regularization_method != None)) fitparams[index++] = regparam_lsc;
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index) and (regularization_method != None)) fitparams[index++] = regparam_lum_index;
-	if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_lumreg_rc) and (regularization_method != None)) fitparams[index++] = lumreg_rc;
-	//if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_second_covariance_kernel)) and (vary_regparam_lsc2) and (regularization_method != None)) fitparams[index++] = regparam_lsc2;
-	//if (((use_lum_weighted_regularization) or (use_distance_weighted_regularization)) and (vary_regparam_lum_index2) and (regularization_method != None)) fitparams[index++] = regparam_lum_index2;
-
-	if (use_distance_weighted_regularization) {
-		if (!auto_lumreg_center) {
-			if (vary_lumreg_xcenter) fitparams[index++] = lumreg_xcenter;
-			if (vary_lumreg_ycenter) fitparams[index++] = lumreg_ycenter;
-		}
-		if (vary_lumreg_e1) fitparams[index++] = lumreg_e1;
-		if (vary_lumreg_e2) fitparams[index++] = lumreg_e2;
-	}
-	if ((use_mag_weighted_regularization) and (vary_mag_weight_sc) and (regularization_method != None)) fitparams[index++] = mag_weight_sc;
-	if ((use_mag_weighted_regularization) and (vary_mag_weight_index) and (regularization_method != None)) fitparams[index++] = mag_weight_index;
-
-	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_alpha_clus)) fitparams[index++] = alpha_clus;
-	if (((use_dist_weighted_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering)) and (vary_beta_clus)) fitparams[index++] = beta_clus;
-	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel_correlation_length;
-	//if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = matern_scale;
-	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = matern_index;
-	//if ((vary_kernel2_amplitude_ratio) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel2_amplitude_ratio;
-	//if ((vary_kernel2_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) fitparams[index++] = kernel2_correlation_length;
-	if (vary_pixel_fraction) fitparams[index++] = pixel_fraction;
-	if (vary_srcgrid_size_scale) fitparams[index++] = srcgrid_size_scale;
-	if (vary_magnification_threshold) fitparams[index++] = pixel_magnification_threshold;
 	if (vary_hubble_parameter) fitparams[index++] = hubble;
 	if (vary_omega_matter_parameter) fitparams[index++] = omega_matter;
 	if (vary_syserr_pos_parameter) fitparams[index++] = syserr_pos;
@@ -9036,7 +8051,7 @@ bool QLens::setup_fit_parameters()
 	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_parameter_names.data(),latex_parameter_names.data(),transformed_latex_parameter_names.data());
 
 	//cout << "SETTING UP FIT PARAMS" << endl;
-	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) return setup_limits();
+	if ((!ignore_limits) and (fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) return setup_limits();
 	//if (include_limits) {
 		//cout << "GONNA SET LIMITS" << endl;
 		//return setup_limits();
@@ -9059,7 +8074,14 @@ bool QLens::setup_limits()
 	for (int i=0; i < n_sb; i++) {
 		if ((sb_list[i]->get_n_vary_params() > 0) and (sb_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for source %i",i); return false; }
 	}
-	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters;
+	for (int i=0; i < n_pixellated_src; i++) {
+		if ((srcgrids[i]->get_n_vary_params() > 0) and (srcgrids[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for pixellated source %i",i); return false; }
+	}
+	for (int i=0; i < n_ptsrc; i++) {
+		if ((ptsrc_list[i]->get_n_vary_params() > 0) and (ptsrc_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for point source %i",i); return false; }
+	}
+
+	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + ptsrc_fit_parameters;
 	if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
 	//}
 	if (n_sourcepts_fit > 0) {
@@ -9103,185 +8125,9 @@ bool QLens::setup_limits()
 		upper_limits_initial[index] = upper_limits[index];
 		index++;
 	}
-	if ((vary_regularization_parameter) and (regularization_method != None)) {
-		if ((regularization_parameter_lower_limit==1e30) or (regularization_parameter_upper_limit==1e30)) { warn("lower/upper limits must be set for regularization parameter (see 'regparam') before doing fit"); return false; }
-		lower_limits[index] = regularization_parameter_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = regularization_parameter_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if ((vary_regparam_lsc) and (regularization_method != None)) {
-		if ((regparam_lsc_lower_limit==1e30) or (regparam_lsc_upper_limit==1e30)) { warn("lower/upper limits must be set for regparam_lsc (see 'regparam') before doing fit"); return false; }
-		lower_limits[index] = regparam_lsc_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = regparam_lsc_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if ((vary_regparam_lum_index) and (regularization_method != None)) {
-		if ((regparam_lum_index_lower_limit==1e30) or (regparam_lum_index_upper_limit==1e30)) { warn("lower/upper limits must be set for regparam_lum_index before doing fit"); return false; }
-		lower_limits[index] = regparam_lum_index_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = regparam_lum_index_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-
-	if ((vary_lumreg_rc) and (regularization_method != None)) {
-		if ((lumreg_rc_lower_limit==1e30) or (lumreg_rc_upper_limit==1e30)) { warn("lower/upper limits must be set for lumreg_rc (see 'regparam') before doing fit"); return false; }
-		lower_limits[index] = lumreg_rc_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = lumreg_rc_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	//if ((vary_regparam_lsc2) and (regularization_method != None)) {
-		//if ((regparam_lsc2_lower_limit==1e30) or (regparam_lsc2_upper_limit==1e30)) { warn("lower/upper limits must be set for regparam_lsc2 (see 'regparam') before doing fit"); return false; }
-		//lower_limits[index] = regparam_lsc2_lower_limit;
-		//lower_limits_initial[index] = lower_limits[index];
-		//upper_limits[index] = regparam_lsc2_upper_limit;
-		//upper_limits_initial[index] = upper_limits[index];
-		//index++;
-	//}
-	//if ((vary_regparam_lum_index2) and (regularization_method != None)) {
-		//if ((regparam_lum_index2_lower_limit==1e30) or (regparam_lum_index2_upper_limit==1e30)) { warn("lower/upper limits must be set for regparam_lum_index2 before doing fit"); return false; }
-		//lower_limits[index] = regparam_lum_index2_lower_limit;
-		//lower_limits_initial[index] = lower_limits[index];
-		//upper_limits[index] = regparam_lum_index2_upper_limit;
-		//upper_limits_initial[index] = upper_limits[index];
-		//index++;
-	//}
-
-
-	if ((vary_lumreg_xcenter) and (regularization_method != None)) {
-		if ((lumreg_xcenter_lower_limit==1e30) or (lumreg_xcenter_upper_limit==1e30)) { warn("lower/upper limits must be set for lumreg_xcenter before doing fit"); return false; }
-		lower_limits[index] = lumreg_xcenter_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = lumreg_xcenter_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if ((vary_lumreg_ycenter) and (regularization_method != None)) {
-		if ((lumreg_ycenter_lower_limit==1e30) or (lumreg_ycenter_upper_limit==1e30)) { warn("lower/upper limits must be set for lumreg_ycenter before doing fit"); return false; }
-		lower_limits[index] = lumreg_ycenter_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = lumreg_ycenter_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if ((vary_lumreg_e1) and (regularization_method != None)) {
-		if ((lumreg_e1_lower_limit==1e30) or (lumreg_e1_upper_limit==1e30)) { warn("lower/upper limits must be set for lumreg_e1 before doing fit"); return false; }
-		lower_limits[index] = lumreg_e1_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = lumreg_e1_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if ((vary_lumreg_e2) and (regularization_method != None)) {
-		if ((lumreg_e2_lower_limit==1e30) or (lumreg_e2_upper_limit==1e30)) { warn("lower/upper limits must be set for lumreg_e2 before doing fit"); return false; }
-		lower_limits[index] = lumreg_e2_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = lumreg_e2_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-
-	if ((vary_mag_weight_sc) and (regularization_method != None)) {
-		if ((mag_weight_sc_lower_limit==1e30) or (mag_weight_sc_upper_limit==1e30)) { warn("lower/upper limits must be set for mag_weight_sc (see 'regparam') before doing fit"); return false; }
-		lower_limits[index] = mag_weight_sc_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = mag_weight_sc_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if ((vary_mag_weight_index) and (regularization_method != None)) {
-		if ((mag_weight_index_lower_limit==1e30) or (mag_weight_index_upper_limit==1e30)) { warn("lower/upper limits must be set for mag_weight_index before doing fit"); return false; }
-		lower_limits[index] = mag_weight_index_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = mag_weight_index_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-
-
-
-	if (vary_alpha_clus) {
-		if ((alpha_clus_lower_limit==1e30) or (alpha_clus_upper_limit==1e30)) { warn("lower/upper limits must be set for alpha_clus before doing fit"); return false; }
-		lower_limits[index] = alpha_clus_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = alpha_clus_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if (vary_beta_clus) {
-		if ((beta_clus_lower_limit==1e30) or (beta_clus_upper_limit==1e30)) { warn("lower/upper limits must be set for beta_clus before doing fit"); return false; }
-		lower_limits[index] = beta_clus_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = beta_clus_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-
-	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		lower_limits[index] = kernel_correlation_length_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = kernel_correlation_length_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	//if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		//lower_limits[index] = matern_scale_lower_limit;
-		//lower_limits_initial[index] = lower_limits[index];
-		//upper_limits[index] = matern_scale_upper_limit;
-		//upper_limits_initial[index] = upper_limits[index];
-		//index++;
-	//}
-	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		lower_limits[index] = matern_index_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = matern_index_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	//if ((vary_kernel2_amplitude_ratio) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		//lower_limits[index] = kernel2_amplitude_ratio_lower_limit;
-		//lower_limits_initial[index] = lower_limits[index];
-		//upper_limits[index] = kernel2_amplitude_ratio_upper_limit;
-		//upper_limits_initial[index] = upper_limits[index];
-		//index++;
-	//}
-	//if ((vary_kernel2_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		//lower_limits[index] = kernel2_correlation_length_lower_limit;
-		//lower_limits_initial[index] = lower_limits[index];
-		//upper_limits[index] = kernel2_correlation_length_upper_limit;
-		//upper_limits_initial[index] = upper_limits[index];
-		//index++;
-	//}
 
 	// The way limits are handled here is really ugly. The limits should just be handled in the ParamSettings class. IMPLEMENT THIS!!!!!!!!!!!
-	if (vary_pixel_fraction) {
-		lower_limits[index] = pixel_fraction_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = pixel_fraction_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if (vary_srcgrid_size_scale) {
-		lower_limits[index] = srcgrid_size_scale_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = srcgrid_size_scale_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
 
-	if (vary_magnification_threshold) {
-		lower_limits[index] = pixel_magnification_threshold_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = pixel_magnification_threshold_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
 	if (vary_hubble_parameter) {
 		lower_limits[index] = hubble_lower_limit;
 		lower_limits_initial[index] = lower_limits[index];
@@ -9337,26 +8183,19 @@ void QLens::get_parameter_names()
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
-	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-	int srcparams_start = fit_parameter_names.size();
 	for (i=0; i < n_sb; i++) {
 		sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts,true);
 	}
-		//for (i=srcparams_start; i < fit_parameter_names.size(); i++) {
-			//fit_parameter_names[i] += "_src";
-		//}
-	//}
+	for (i=0; i < n_pixellated_src; i++) {
+		srcgrids[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+	}
+	for (i=0; i < n_ptsrc; i++) {
+		ptsrc_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+	}
+
 	// find any parameters with matching names and number them so they can be distinguished
 	int count, n_names;
 	n_names = fit_parameter_names.size();
-
-	//if (source_fit_mode==Parameterized_Source) {
-		//for (i=0; i < n_names; i++) {
-			//cout << "PARAM " << i << ": " << fit_parameter_names[i] << endl;
-		//}
-		//die();
-	//}
-
 	string *new_parameter_names = new string[n_names];
 	for (i=0; i < n_names; i++) {
 		count=1;
@@ -9436,125 +8275,7 @@ void QLens::get_parameter_names()
 		latex_parameter_names.push_back("f");
 		latex_parameter_subscripts.push_back("src");
 	}
-	if (vary_pixel_fraction) {
-		fit_parameter_names.push_back("pixel_fraction");
-		latex_parameter_names.push_back("f");
-		latex_parameter_subscripts.push_back("pixel");
-	}
-	if ((vary_regularization_parameter) and (regularization_method != None)) {
-		fit_parameter_names.push_back("regparam");
-		latex_parameter_names.push_back("\\lambda");
-		latex_parameter_subscripts.push_back("");
-	}
-	if ((vary_regparam_lsc) and (regularization_method != None)) {
-		fit_parameter_names.push_back("regparam_lsc");
-		latex_parameter_names.push_back("\\lambda");
-		latex_parameter_subscripts.push_back("sc");
-	}
-	if ((vary_regparam_lum_index) and (regularization_method != None)) {
-		fit_parameter_names.push_back("regparam_lum_index");
-		latex_parameter_names.push_back("\\gamma");
-		latex_parameter_subscripts.push_back("reg");
-	}
-	if ((vary_lumreg_rc) and (regularization_method != None)) {
-		fit_parameter_names.push_back("lumreg_rc");
-		latex_parameter_names.push_back("\\sigma");
-		latex_parameter_subscripts.push_back("sc");
-	}
-	//if ((vary_regparam_lsc2) and (regularization_method != None)) {
-		//fit_parameter_names.push_back("regparam_lsc2");
-		//latex_parameter_names.push_back("\\lambda");
-		//latex_parameter_subscripts.push_back("sc2");
-	//}
-	//if ((vary_regparam_lum_index2) and (regularization_method != None)) {
-		//fit_parameter_names.push_back("regparam_lum_index2");
-		//latex_parameter_names.push_back("\\gamma");
-		//latex_parameter_subscripts.push_back("reg2");
-	//}
 
-	if ((vary_lumreg_xcenter) and (regularization_method != None)) {
-		fit_parameter_names.push_back("lumreg_xcenter");
-		latex_parameter_names.push_back("x");
-		latex_parameter_subscripts.push_back("c,\\lambda");
-	}
-	if ((vary_lumreg_ycenter) and (regularization_method != None)) {
-		fit_parameter_names.push_back("lumreg_ycenter");
-		latex_parameter_names.push_back("y");
-		latex_parameter_subscripts.push_back("c,\\lambda");
-	}
-	if ((vary_lumreg_e1) and (regularization_method != None)) {
-		fit_parameter_names.push_back("lumreg_e1");
-		latex_parameter_names.push_back("e");
-		latex_parameter_subscripts.push_back("1,\\lambda");
-	}
-	if ((vary_lumreg_e2) and (regularization_method != None)) {
-		fit_parameter_names.push_back("lumreg_e2");
-		latex_parameter_names.push_back("e");
-		latex_parameter_subscripts.push_back("2,\\lambda");
-	}
-	if ((vary_mag_weight_sc) and (regularization_method != None)) {
-		fit_parameter_names.push_back("mag_weight_sc");
-		latex_parameter_names.push_back("\\lambda");
-		latex_parameter_subscripts.push_back("\\mu,sc");
-	}
-	if ((vary_mag_weight_index) and (regularization_method != None)) {
-		fit_parameter_names.push_back("mag_weight_index");
-		latex_parameter_names.push_back("\\gamma");
-		latex_parameter_subscripts.push_back("\\mu");
-	}
-
-	if (vary_alpha_clus) {
-		fit_parameter_names.push_back("alpha_clus");
-		latex_parameter_names.push_back("\\alpha");
-		latex_parameter_subscripts.push_back("clus");
-	}
-	if (vary_beta_clus) {
-		fit_parameter_names.push_back("beta_clus");
-		latex_parameter_names.push_back("\\beta");
-		latex_parameter_subscripts.push_back("clus");
-	}
-
-	if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		fit_parameter_names.push_back("corrlength");
-		latex_parameter_names.push_back("l");
-		latex_parameter_subscripts.push_back("corr");
-	}
-	//if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		//fit_parameter_names.push_back("matern_scale");
-		//latex_parameter_names.push_back("M");
-		//latex_parameter_subscripts.push_back("src");
-	//}
-	if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		fit_parameter_names.push_back("matern_index");
-		latex_parameter_names.push_back("\\nu");
-		latex_parameter_subscripts.push_back("src");
-	}
-	//if ((vary_kernel2_amplitude_ratio) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		//fit_parameter_names.push_back("kernel_amp_ratio");
-		//latex_parameter_names.push_back("f");
-		//latex_parameter_subscripts.push_back("k");
-	//}
-	//if ((vary_kernel2_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) {
-		//fit_parameter_names.push_back("corrlength2");
-		//latex_parameter_names.push_back("l");
-		//latex_parameter_subscripts.push_back("corr,2");
-	//}
-
-	if (vary_pixel_fraction) {
-		fit_parameter_names.push_back("pixel_fraction");
-		latex_parameter_names.push_back("f");
-		latex_parameter_subscripts.push_back("pixel");
-	}
-	if (vary_srcgrid_size_scale) {
-		fit_parameter_names.push_back("srcgrid_scale");
-		latex_parameter_names.push_back("f");
-		latex_parameter_subscripts.push_back("sg");
-	}
-	if (vary_magnification_threshold) {
-		fit_parameter_names.push_back("mag_threshold");
-		latex_parameter_names.push_back("m");
-		latex_parameter_subscripts.push_back("split");
-	}
 	if (vary_hubble_parameter) {
 		fit_parameter_names.push_back("h0");
 		latex_parameter_names.push_back("H");
@@ -9631,7 +8352,7 @@ void QLens::create_parameter_value_string(string &pvals)
 
 bool QLens::output_parameter_values()
 {
-	if (setup_fit_parameters()==false) return false;
+	if (setup_fit_parameters(true)==false) return false;
 	if (mpi_id==0) {
 		for (int i=0; i < n_fit_parameters; i++) {
 			cout << i << ". " << transformed_parameter_names[i] << ": " << fitparams[i] << endl;
@@ -9715,6 +8436,44 @@ bool QLens::get_sb_parameter_numbers(const int sb_i, int& pi, int& pf)
 	return true;
 }
 
+bool QLens::get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf)
+{
+	if (pixsrc_i >= n_pixellated_src) { pf=pi=0; return false; }
+	get_n_fit_parameters(n_fit_parameters);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < pixsrc_i; i++) {
+		srcgrids[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fit_parameters) { pf=pi=0; return false; }
+	srcgrids[pixsrc_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pf = dummy.size();
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters; // since lens and sb fit parameters come before the source params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters; // since lens and sb fit parameters come before the source params
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_ptsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf)
+{
+	if (pixsrc_i >= n_ptsrc) { pf=pi=0; return false; }
+	get_n_fit_parameters(n_fit_parameters);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < pixsrc_i; i++) {
+		ptsrc_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fit_parameters) { pf=pi=0; return false; }
+	ptsrc_list[pixsrc_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pf = dummy.size();
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens, sb and pixsrc fit parameters come before the source params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens, sb and pixsrc fit parameters come before the source params
+	if (pf==pi) return false;
+	return true;
+}
+
 bool QLens::get_sourcept_parameter_numbers(const int sp_i, int& pi, int& pf)
 {
 	if (sp_i >= n_sourcepts_fit) { pf=pi=0; return false; }
@@ -9731,8 +8490,8 @@ bool QLens::get_sourcept_parameter_numbers(const int sp_i, int& pi, int& pf)
 	if (vary_sourcepts_x[sp_i]) pf++;
 	if (vary_sourcepts_y[sp_i]) pf++;
 
-	pi += lensmodel_fit_parameters + srcmodel_fit_parameters; // since lens and sb fit parameters come before the source point params
-	pf += lensmodel_fit_parameters + srcmodel_fit_parameters; // since lens and sb fit parameters come before the source point params
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens and sb fit parameters come before the source point params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens and sb fit parameters come before the source point params
 	if (pf==pi) return false;
 	return true;
 }
@@ -10234,30 +8993,6 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 		if (vary_srcpt_xshift) cout << "source point x-shift = " << fitmodel->srcpt_xshift << endl;
 		if (vary_srcpt_yshift) cout << "source point y-shift = " << fitmodel->srcpt_yshift << endl;
 		if (vary_srcflux) cout << "srcflux = " << fitmodel->source_flux << endl;
-		if (regularization_method != None) {
-			if (vary_regularization_parameter) cout << "regularization parameter lambda=" << fitmodel->regularization_parameter << endl;
-			if (vary_regparam_lsc) cout << "regparam_lsc=" << fitmodel->regparam_lsc << endl;
-			if (vary_regparam_lum_index) cout << "regparam_lum_index=" << fitmodel->regparam_lum_index << endl;
-			if (vary_lumreg_rc) cout << "lumreg_rc=" << fitmodel->lumreg_rc << endl;
-			//if (vary_regparam_lsc2) cout << "regparam_lsc2=" << fitmodel->regparam_lsc2 << endl;
-			//if (vary_regparam_lum_index2) cout << "regparam_lum_index2=" << fitmodel->regparam_lum_index2 << endl;
-			if (vary_lumreg_xcenter) cout << "lumreg_xcenter=" << fitmodel->lumreg_xcenter << endl;
-			if (vary_lumreg_ycenter) cout << "lumreg_ycenter=" << fitmodel->lumreg_ycenter << endl;
-			if (vary_lumreg_e1) cout << "lumreg_e1=" << fitmodel->lumreg_e1 << endl;
-			if (vary_lumreg_e2) cout << "lumreg_e2=" << fitmodel->lumreg_e2 << endl;
-			if (vary_mag_weight_sc) cout << "mag_weight_sc=" << fitmodel->mag_weight_sc << endl;
-			if (vary_mag_weight_index) cout << "mag_weight_index=" << fitmodel->mag_weight_index << endl;
-		}
-		if (vary_alpha_clus) cout << "alpha_clus=" << fitmodel->alpha_clus << endl;
-		if (vary_beta_clus) cout << "beta_clus=" << fitmodel->beta_clus << endl;
-		if ((vary_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "correlation length = " << fitmodel->kernel_correlation_length << endl;
-		//if ((vary_matern_scale) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "Matern scale = " << fitmodel->matern_scale << endl;
-		if ((vary_matern_index) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "Matern index nu = " << fitmodel->matern_index << endl;
-		//if ((vary_kernel2_amplitude_ratio) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "kernel amplitude ratio = " << fitmodel->kernel2_amplitude_ratio << endl;
-		//if ((vary_kernel2_correlation_length) and (source_fit_mode==Delaunay_Source) and (regularization_method != None)) cout << "kernel_2 correlation length = " << fitmodel->kernel2_correlation_length << endl;
-		if (vary_pixel_fraction) cout << "pixel fraction = " << fitmodel->pixel_fraction << endl;
-		if (vary_srcgrid_size_scale) cout << "source grid scale = " << fitmodel->srcgrid_size_scale << endl;
-		if (vary_magnification_threshold) cout << "magnification threshold = " << fitmodel->pixel_magnification_threshold << endl;
 		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
 		if (vary_omega_matter_parameter) cout << "omega_m = " << fitmodel->omega_matter << endl;
 		if (vary_syserr_pos_parameter) cout << "syserr_pos = " << fitmodel->syserr_pos << endl;
@@ -11286,12 +10021,9 @@ void QLens::output_bestfit_model()
 	bool include_limits;
 	if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) include_limits = false;
 	else include_limits = true;
-	string scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
-	model->output_lens_commands(scriptfile_str,include_limits);
 	if (include_limits) {
 		// save version without limits in case user wants to load best-fit model while in Simplex or Powell mode
 		string scriptfile_str2 = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
-		model->output_lens_commands(scriptfile_str2,false);
 	}
 }
 
@@ -12521,18 +11253,12 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 	chisq=0,chisq0=0;
 	double chisq00;
 	if (loglike < 1e30) {
-		if ((fitmodel->regularization_parameter < 0) and ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (!optimize_regparam)) chisq = 2e30;
-		else {
-			for (int i=0; i < n_ranchisq; i++) {
-				if (!use_old_pixelgrids)
-					chisq += fitmodel->invert_image_surface_brightness_map(chisq00,false,i);
-				else
-					chisq += fitmodel->invert_image_surface_brightness_map_old(chisq00,false,i);
-				chisq0 += chisq00;
-			}
-			chisq /= n_ranchisq;
-			chisq0 /= n_ranchisq;
+		for (int i=0; i < n_ranchisq; i++) {
+			chisq += fitmodel->invert_image_surface_brightness_map(chisq00,false,i);
+			chisq0 += chisq00;
 		}
+		chisq /= n_ranchisq;
+		chisq0 /= n_ranchisq;
 	}
 
 	raw_chisq = chisq0; // in case the chi-square is being used as a derived parameter
@@ -12711,8 +11437,6 @@ void QLens::set_integral_convergence_warnings(const bool warn)
 	}
 }
 
-
-
 void QLens::reassign_lensparam_pointers_and_names(const bool reset_plimits)
 {
 	// parameter pointers should be reassigned if the parameterization mode has been changed (e.g., shear components turned on/off)
@@ -12852,101 +11576,17 @@ void QLens::print_lens_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
-void QLens::output_lens_commands(string filename, const bool print_limits)
-{
-	ofstream scriptfile(filename.c_str());
-	if (print_limits) scriptfile << "#limits included" << endl;
-	else scriptfile << "#nolimits included" << endl;
-	for (int i=0; i < nlens; i++) {
-		lens_list[i]->print_lens_command(scriptfile,print_limits);
-	}
-	if (source_fit_mode == Point_Source) {
-		if (!sourcepts_fit.empty()) {
-			if (!use_analytic_bestfit_src) {
-				scriptfile << "fit sourcept\n";
-				if (!print_limits) {
-					for (int i=0; i < n_sourcepts_fit; i++) scriptfile << sourcepts_fit[i][0] << " " << sourcepts_fit[i][1] << endl;
-				} else {
-					for (int i=0; i < n_sourcepts_fit; i++) {
-						scriptfile << sourcepts_fit[i][0] << " " << sourcepts_fit[i][1] << endl;
-						scriptfile << sourcepts_lower_limit[i][0] << " " << sourcepts_upper_limit[i][0] << endl;
-						scriptfile << sourcepts_lower_limit[i][1] << " " << sourcepts_upper_limit[i][1] << endl;
-					}
-				}
-			} else {
-				scriptfile << "fit sourcept auto\n";
-			}
-		} else if (n_sourcepts_fit > 0) scriptfile << "# Warning: Initial source point parameters not chosen\n";
-	}
-	if (vary_srcflux) {
-		scriptfile << "srcflux = " << source_flux << endl;
-		if (print_limits) {
-			scriptfile << srcflux_lower_limit << " " << srcflux_upper_limit << endl;
-		}
-	}
-	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
-		if (vary_regularization_parameter) {
-			if (!print_limits) {
-				scriptfile << "regparam " << regularization_parameter << endl;
-			} else {
-				scriptfile << "regparam " << regularization_parameter_lower_limit << " " << regularization_parameter << " " << regularization_parameter_upper_limit << endl;
-			}
-		}
-		if (source_fit_mode==Cartesian_Source) {
-			if (vary_magnification_threshold) {
-				if (!print_limits) {
-					scriptfile << "srcpixel_mag_threshold " << pixel_magnification_threshold << endl;
-				} else {
-					scriptfile << "srcpixel_mag_threshold " << pixel_magnification_threshold_lower_limit << " " << pixel_magnification_threshold << " " << pixel_magnification_threshold_upper_limit << endl;
-				}
-			}
-		}
-	}
-	//if ((source_fit_mode == Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-	if (print_limits) scriptfile << "#limits included" << endl;
-	else scriptfile << "#nolimits included" << endl;
-	for (int i=0; i < n_sb; i++) {
-		sb_list[i]->print_source_command(scriptfile,print_limits);
-	}
-	//}
-
-	if (vary_hubble_parameter) {
-		scriptfile << "hubble = " << hubble << endl;
-		if (print_limits) {
-			scriptfile << hubble_lower_limit << " " << hubble_upper_limit << endl;
-		}
-	}
-	if (vary_omega_matter_parameter) {
-		scriptfile << "omega_m = " << omega_matter << endl;
-		if (print_limits) {
-			scriptfile << omega_matter_lower_limit << " " << omega_matter_upper_limit << endl;
-		}
-	}
-	if (vary_syserr_pos_parameter) {
-		scriptfile << "syserr_pos = " << syserr_pos << endl;
-		if (print_limits) {
-			scriptfile << syserr_pos_lower_limit << " " << syserr_pos_upper_limit << endl;
-		}
-	}
-	if (vary_wl_shear_factor_parameter) {
-		scriptfile << "wl_shearfac = " << wl_shear_factor << endl;
-		if (print_limits) {
-			scriptfile << wl_shear_factor_lower_limit << " " << wl_shear_factor_upper_limit << endl;
-		}
-	}
-}
-
 void QLens::print_sourcept_list()
 {
 	if (!sourcepts_fit.empty()) {
 		if (!use_analytic_bestfit_src) {
 			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 				cout << "Source point coordinates:\n";
-				for (int i=0; i < n_sourcepts_fit; i++) cout << "Source point " << i << ": (" << sourcepts_fit[i][0] << "," << sourcepts_fit[i][1] << "), z=" << ptsrc_redshifts[i] << endl;
+				for (int i=0; i < n_sourcepts_fit; i++) cout << "Source point " << i << ": (" << sourcepts_fit[i][0] << "," << sourcepts_fit[i][1] << "), z=" << specific_ptsrc_redshifts[i] << endl;
 			} else {
 				cout << "Source point coordinates and limits:\n";
 				for (int i=0; i < n_sourcepts_fit; i++) {
-					cout << "Source point " << i << ": (" << sourcepts_fit[i][0] << "," << sourcepts_fit[i][1] << "), z=" << ptsrc_redshifts[i] << endl;
+					cout << "Source point " << i << ": (" << sourcepts_fit[i][0] << "," << sourcepts_fit[i][1] << "), z=" << specific_ptsrc_redshifts[i] << endl;
 					cout << "x" << i << ": [" << sourcepts_lower_limit[i][0] << ":" << sourcepts_upper_limit[i][0] << "]\n";
 					cout << "y" << i << ": [" << sourcepts_lower_limit[i][1] << ":" << sourcepts_upper_limit[i][1] << "]\n";
 				}
@@ -12965,6 +11605,10 @@ void QLens::print_fit_model()
 	if (n_sb > 0) {
 		cout << "Source profile list:" << endl;
 		print_source_list(true);
+	}
+	if (n_pixellated_src > 0) {
+		cout << "Pixellated source list:" << endl;
+		print_pixellated_source_list(true);
 	}
 	//}
 	if (n_sourcepts_fit > 0) print_sourcept_list();
@@ -12990,184 +11634,6 @@ void QLens::print_fit_model()
 		} else {
 			if ((srcflux_lower_limit==1e30) or (srcflux_upper_limit==1e30)) cout << "\nSource flux: lower/upper limits not given (these must be set by 'srcflux' command before fit)\n";
 			else cout << "Source flux: [" << srcflux_lower_limit << ":" << source_flux << ":" << srcflux_upper_limit << "]\n";
-		}
-	}
-	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
-		if (vary_regularization_parameter) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "Regularization parameter: " << regularization_parameter << endl;
-			} else {
-				if ((regularization_parameter_lower_limit==1e30) or (regularization_parameter_upper_limit==1e30)) cout << "\nRegularization parameter: lower/upper limits not given (these must be set by 'regparam' command before fit)\n";
-				else cout << "Regularization parameter: [" << regularization_parameter_lower_limit << ":" << regularization_parameter << ":" << regularization_parameter_upper_limit << "]\n";
-			}
-		}
-		if (vary_regparam_lsc) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "regparam_lsc: " << regparam_lsc << endl;
-			} else {
-				if ((regparam_lsc_lower_limit==1e30) or (regparam_lsc_upper_limit==1e30)) cout << "\nregparam_lsc: lower/upper limits not given (these must be set by 'regparam_lsc' command before fit)\n";
-				else cout << "regparam_lsc: [" << regparam_lsc_lower_limit << ":" << regparam_lsc << ":" << regparam_lsc_upper_limit << "]\n";
-			}
-		}
-		if (vary_regparam_lum_index) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "regparam_lum_index: " << regparam_lum_index << endl;
-			} else {
-				if ((regparam_lum_index_lower_limit==1e30) or (regparam_lum_index_upper_limit==1e30)) cout << "\nregparam_lum_index: lower/upper limits not given (these must be set by 'regparam_lum_index' command before fit)\n";
-				else cout << "regparam_lum_index: [" << regparam_lum_index_lower_limit << ":" << regparam_lum_index << ":" << regparam_lum_index_upper_limit << "]\n";
-			}
-		}
-		if (vary_lumreg_rc) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "lumreg_rc: " << lumreg_rc << endl;
-			} else {
-				if ((lumreg_rc_lower_limit==1e30) or (lumreg_rc_upper_limit==1e30)) cout << "\nlumreg_rc: lower/upper limits not given (these must be set by 'lumreg_rc' command before fit)\n";
-				else cout << "lumreg_rc: [" << lumreg_rc_lower_limit << ":" << lumreg_rc << ":" << lumreg_rc_upper_limit << "]\n";
-			}
-		}
-		//if (vary_regparam_lsc2) {
-			//if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				//cout << "regparam_lsc2: " << regparam_lsc2 << endl;
-			//} else {
-				//if ((regparam_lsc2_lower_limit==1e30) or (regparam_lsc2_upper_limit==1e30)) cout << "\nregparam_lsc2: lower/upper limits not given (these must be set by 'regparam_lsc2' command before fit)\n";
-				//else cout << "regparam_lsc2: [" << regparam_lsc2_lower_limit << ":" << regparam_lsc2 << ":" << regparam_lsc2_upper_limit << "]\n";
-			//}
-		//}
-		//if (vary_regparam_lum_index2) {
-			//if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				//cout << "regparam_lum_index2: " << regparam_lum_index2 << endl;
-			//} else {
-				//if ((regparam_lum_index2_lower_limit==1e30) or (regparam_lum_index2_upper_limit==1e30)) cout << "\nregparam_lum_index2: lower/upper limits not given (these must be set by 'regparam_lum_index2' command before fit)\n";
-				//else cout << "regparam_lum_index2: [" << regparam_lum_index2_lower_limit << ":" << regparam_lum_index2 << ":" << regparam_lum_index2_upper_limit << "]\n";
-			//}
-		//}
-		if (vary_lumreg_xcenter) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "lumreg_xcenter: " << lumreg_xcenter << endl;
-			} else {
-				if ((lumreg_xcenter_lower_limit==1e30) or (lumreg_xcenter_upper_limit==1e30)) cout << "\nlumreg_xcenter: lower/upper limits not given (these must be set by 'lumreg_xcenter' command before fit)\n";
-				else cout << "lumreg_xcenter: [" << lumreg_xcenter_lower_limit << ":" << lumreg_xcenter << ":" << lumreg_xcenter_upper_limit << "]\n";
-			}
-		}
-		if (vary_lumreg_ycenter) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "lumreg_ycenter: " << lumreg_ycenter << endl;
-			} else {
-				if ((lumreg_ycenter_lower_limit==1e30) or (lumreg_ycenter_upper_limit==1e30)) cout << "\nlumreg_ycenter: lower/upper limits not given (these must be set by 'lumreg_ycenter' command before fit)\n";
-				else cout << "lumreg_ycenter: [" << lumreg_ycenter_lower_limit << ":" << lumreg_ycenter << ":" << lumreg_ycenter_upper_limit << "]\n";
-			}
-		}
-		if (vary_lumreg_e1) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "lumreg_e1: " << lumreg_e1 << endl;
-			} else {
-				if ((lumreg_e1_lower_limit==1e30) or (lumreg_e1_upper_limit==1e30)) cout << "\nlumreg_e1: lower/upper limits not given (these must be set by 'lumreg_e1' command before fit)\n";
-				else cout << "lumreg_e1: [" << lumreg_e1_lower_limit << ":" << lumreg_e1 << ":" << lumreg_e1_upper_limit << "]\n";
-			}
-		}
-		if (vary_lumreg_e2) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "lumreg_e2: " << lumreg_e2 << endl;
-			} else {
-				if ((lumreg_e2_lower_limit==1e30) or (lumreg_e2_upper_limit==1e30)) cout << "\nlumreg_e2: lower/upper limits not given (these must be set by 'lumreg_e2' command before fit)\n";
-				else cout << "lumreg_e2: [" << lumreg_e2_lower_limit << ":" << lumreg_e2 << ":" << lumreg_e2_upper_limit << "]\n";
-			}
-		}
-		if (vary_mag_weight_sc) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "mag_weight_sc: " << mag_weight_sc << endl;
-			} else {
-				if ((mag_weight_sc_lower_limit==1e30) or (mag_weight_sc_upper_limit==1e30)) cout << "\nmag_weight_sc: lower/upper limits not given (these must be set by 'mag_weight_sc' command before fit)\n";
-				else cout << "mag_weight_sc: [" << mag_weight_sc_lower_limit << ":" << mag_weight_sc << ":" << mag_weight_sc_upper_limit << "]\n";
-			}
-		}
-		if (vary_mag_weight_index) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "mag_weight_index: " << mag_weight_index << endl;
-			} else {
-				if ((mag_weight_index_lower_limit==1e30) or (mag_weight_index_upper_limit==1e30)) cout << "\nmag_weight_index: lower/upper limits not given (these must be set by 'mag_weight_index' command before fit)\n";
-				else cout << "mag_weight_index: [" << mag_weight_index_lower_limit << ":" << mag_weight_index << ":" << mag_weight_index_upper_limit << "]\n";
-			}
-		}
-
-
-		if (vary_alpha_clus) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "alpha_clus: " << alpha_clus << endl;
-			} else {
-				if ((alpha_clus_lower_limit==1e30) or (alpha_clus_upper_limit==1e30)) cout << "\nalpha_clus: lower/upper limits not given (these must be set by 'alpha_clus' command before fit)\n";
-				else cout << "alpha_clus: [" << alpha_clus_lower_limit << ":" << alpha_clus << ":" << alpha_clus_upper_limit << "]\n";
-			}
-		}
-		if (vary_beta_clus) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "beta_clus: " << beta_clus << endl;
-			} else {
-				if ((beta_clus_lower_limit==1e30) or (beta_clus_upper_limit==1e30)) cout << "\nbeta_clus: lower/upper limits not given (these must be set by 'beta_clus' command before fit)\n";
-				else cout << "beta_clus: [" << beta_clus_lower_limit << ":" << beta_clus << ":" << beta_clus_upper_limit << "]\n";
-			}
-		}
-
-		if (vary_correlation_length) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "correlation length: " << kernel_correlation_length << endl;
-			} else {
-				if ((kernel_correlation_length_lower_limit==1e30) or (kernel_correlation_length_upper_limit==1e30)) cout << "\ncorrelation length: lower/upper limits not given (these must be set by 'corrlength' command before fit)\n";
-				else cout << "correlation length: [" << kernel_correlation_length_lower_limit << ":" << kernel_correlation_length << ":" << kernel_correlation_length_upper_limit << "]\n";
-			}
-		}
-		//if (vary_matern_scale) {
-			//if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				//cout << "Matern scale: " << matern_scale << endl;
-			//} else {
-				//if ((matern_scale_lower_limit==1e30) or (matern_scale_upper_limit==1e30)) cout << "\nMatern scale: lower/upper limits not given (these must be set by 'matern_scale' command before fit)\n";
-				//else cout << "Matern scale: [" << matern_scale_lower_limit << ":" << matern_scale << ":" << matern_scale_upper_limit << "]\n";
-			//}
-		//}
-		if (vary_matern_index) {
-			if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				cout << "Matern index: " << matern_index << endl;
-			} else {
-				if ((matern_index_lower_limit==1e30) or (matern_index_upper_limit==1e30)) cout << "\nMatern index: lower/upper limits not given (these must be set by 'matern_index' command before fit)\n";
-				else cout << "Matern index: [" << matern_index_lower_limit << ":" << matern_index << ":" << matern_index_upper_limit << "]\n";
-			}
-		}
-
-		//if (vary_kernel2_correlation_length) {
-			//if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-				//cout << "kernel_2 correlation length: " << kernel2_correlation_length << endl;
-			//} else {
-				//if ((kernel2_correlation_length_lower_limit==1e30) or (kernel2_correlation_length_upper_limit==1e30)) cout << "\nkernel_2 correlation length: lower/upper limits not given (these must be set by 'corrlength' command before fit)\n";
-				//else cout << "correlation length: [" << kernel2_correlation_length_lower_limit << ":" << kernel2_correlation_length << ":" << kernel2_correlation_length_upper_limit << "]\n";
-			//}
-		//}
-
-
-		if (source_fit_mode==Cartesian_Source) {
-			if (vary_magnification_threshold) {
-				if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-					cout << "Pixel magnification threshold: " << pixel_magnification_threshold << endl;
-				} else {
-					if ((pixel_magnification_threshold_lower_limit==1e30) or (pixel_magnification_threshold_upper_limit==1e30)) cout << "\nPixel magnification threshold: lower/upper limits not given (these must be set by 'srcpixel_mag_threshold' command before fit)\n";
-					else cout << "Pixel magnification threshold: [" << pixel_magnification_threshold_lower_limit << ":" << pixel_magnification_threshold << ":" << pixel_magnification_threshold_upper_limit << "]\n";
-				}
-			}
-			if (vary_pixel_fraction) {
-				if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-					cout << "Source grid pixel fraction: " << pixel_fraction << endl;
-				} else {
-					if ((pixel_fraction_lower_limit==1e30) or (pixel_fraction_upper_limit==1e30)) cout << "\nSource grid pixel fraction: lower/upper limits not given (these must be set before fit)\n";
-					else cout << "Source grid pixel fraction: [" << pixel_fraction_lower_limit << ":" << pixel_fraction << ":" << pixel_fraction_upper_limit << "]\n";
-				}
-			}
-			if (vary_srcgrid_size_scale) {
-				if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-					cout << "Source grid scale: " << srcgrid_size_scale << endl;
-				} else {
-					if ((srcgrid_size_scale_lower_limit==1e30) or (srcgrid_size_scale_upper_limit==1e30)) cout << "\nSource grid scale: lower/upper limits not given (these must be set before fit)\n";
-					else cout << "Source grid scale: [" << srcgrid_size_scale_lower_limit << ":" << srcgrid_size_scale << ":" << srcgrid_size_scale_upper_limit << "]\n";
-				}
-			}
 		}
 	}
 	if (vary_hubble_parameter) {
@@ -13474,126 +11940,6 @@ void QLens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N, c
 
 // Pixel grid functions
 
-void QLens::fit_los_despali()
-{
-	double mvir, z, logm, zstep;
-	int i,nz = 10;
-	double zmin = 0.05, zmax = 1.0;
-	zstep = (zmax-zmin)/nz;
-	//ofstream mzout("despali.dat");
-	double lm, lowlm, hilm, defresid;
-	double c;
-	lowlm = 5.0;
-	hilm = 10.0;
-	int nlm = 140;
-	int nx=512, ny=512;
-	double lmstep = (hilm-lowlm)/(nlm-1);
-	ofstream desout("despali_lm.dat");
-	int j;
-	double min_defresid;
-	double lm_mindef;
-	for (i=0, z=zmin; i < nz; i++, z += zstep) {
-		min_defresid = 1e30;
-		for (j=0, lm=lowlm; j < nlm; j++, lm += lmstep) {
-			mvir = pow(10.0,lm);
-			defresid = average_def_residual(nx,ny,nlens-1,z,mvir);
-			if (defresid < min_defresid) {
-				min_defresid = defresid;
-				lm_mindef = lm;
-			}
-		}
-		desout << z << " " << lm_mindef << " " << min_defresid << endl;
-	}
-}
-
-double QLens::average_def_residual(const int x_N, const int y_N, const int perturber_lensnum, double z, double mvir)
-{
-	double mvir0,z0; // just to save original values
-	if (lens_list[perturber_lensnum]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
-	if (lens_list[perturber_lensnum]->get_specific_parameter("z",z0)==false) die("could not find z parameter");
-
-	double xc,yc,xl,yl;
-	if (lens_list[perturber_lensnum]->get_specific_parameter("xc_l",xc)==false) die("could not find xc_l parameter");
-	if (lens_list[perturber_lensnum]->get_specific_parameter("yc_l",yc)==false) die("could not find yc_l parameter");
-	xl = sqrt(5);
-	yl = sqrt(5);
-	double x,xmin,xmax,xstep,y,ymin,ymax,ystep;
-	xmin = xc-0.5*xl; xmax = xc+0.5*xl;
-	ymin = yc-0.5*yl; ymax = yc+0.5*yl;
-	xstep = (xmax-xmin)/x_N;
-	ystep = (ymax-ymin)/y_N;
-	int i,j;
-
-	double **al_los_x = new double*[x_N];
-	double **al_los_y = new double*[x_N];
-	double **al_sub_x= new double*[x_N];
-	double **al_sub_y= new double*[x_N];
-	for (i=0; i < x_N; i++) {
-		al_los_x[i] = new double[y_N];
-		al_los_y[i] = new double[y_N];
-		al_sub_x[i] = new double[y_N];
-		al_sub_y[i] = new double[y_N];
-	}
-
-	bool *exclude = new bool[nlens];
-	for (int i=0; i < nlens; i++) exclude[i] = false;
-	for (int i=0; i < nlens; i++) {
-		if (i==perturber_lensnum) exclude[i] = true;
-	}
-
-	lensvector alpha, alpha_unperturbed;
-	lensvector pos;
-	for (j=0, y=ymin+0.5*ystep; j < y_N; j++, y += ystep) {
-		pos[1] = y;
-		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
-			pos[0] = x;
-			deflection(pos,alpha,reference_zfactors,default_zsrc_beta_factors);
-			//custom_deflection(pos[0],pos[1],alpha);
-			al_sub_x[i][j] = alpha[0];
-			al_sub_y[i][j] = alpha[1];
-		}
-	}
-	if (lens_list[perturber_lensnum]->update_specific_parameter("z",z)==false) die("could not find parameter");
-	if (lens_list[perturber_lensnum]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
-
-	for (j=0, y=ymin+0.5*ystep; j < y_N; j++, y += ystep) {
-		pos[1] = y;
-		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
-			pos[0] = x;
-			deflection(pos,alpha,reference_zfactors,default_zsrc_beta_factors);
-			//custom_deflection(pos[0],pos[1],alpha);
-			al_los_x[i][j] = alpha[0];
-			al_los_y[i][j] = alpha[1];
-		}
-	}
-
-	double avg_def_resid = 0;
-	for (j=0; j < y_N; j++) {
-		for (i=0; i < x_N; i++) {
-			//cout << al_los_x[i][j] << " " << al_sub_x[i][j] << endl;
-			avg_def_resid += SQR(al_los_x[i][j] - al_sub_x[i][j]) + SQR(al_los_y[i][j] - al_sub_y[i][j]);
-		}
-	}
-	avg_def_resid /= (x_N*y_N);
-	avg_def_resid = sqrt(avg_def_resid);
-
-	if (lens_list[perturber_lensnum]->update_specific_parameter("z",z0)==false) die("could not find parameter");
-	if (lens_list[perturber_lensnum]->update_specific_parameter("mvir",mvir0)==false) die("could not find parameter");
-
-	delete[] exclude;
-	for (i=0; i < x_N; i++) {
-		delete[] al_los_x[i];
-		delete[] al_los_y[i];
-		delete[] al_sub_x[i];
-		delete[] al_sub_y[i];
-	}
-	delete[] al_los_x;
-	delete[] al_los_y;
-	delete[] al_sub_x;
-	delete[] al_sub_y;
-	return avg_def_resid;
-}
-
 void QLens::find_optimal_sourcegrid_for_analytic_source()
 {
 	if (n_sb==0) { warn("no source objects have been specified"); return; }
@@ -13646,8 +11992,7 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 	}
 	if ((!image_grid_already_exists) and (use_image_pixelgrid) and (!at_least_one_lensed_src)) die("there are no analytic sources or current pixel grid available to generate source plot");
 
-	bool raytrace = true;
-	if ((use_mask) and (image_pixel_data != NULL)) raytrace = false;
+	if (cartesian_srcgrids[src_i]==NULL) cartesian_srcgrids[src_i] = new SourcePixelGrid(this);
 
 	if (use_image_pixelgrid) {
 		if (n_extended_src_redshifts==0) die("no ext src redshift has been created");
@@ -13660,10 +12005,14 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 			ymax += 1e-10;
 			if (image_pixel_grids[zsrc_i] == NULL) {
 				//image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,0);
+				bool raytrace = true;
+				if ((use_mask) and (image_pixel_data != NULL)) raytrace = false;
 				image_pixel_grids[zsrc_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace,zsrc_i);
 				if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i]); 
 			}
 		}
+		cartesian_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
+		image_pixel_grids[zsrc_i]->set_cartesian_srcgrid(cartesian_srcgrids[src_i]);
 
 		int n_imgpixels;
 		if (auto_sourcegrid) {
@@ -13680,11 +12029,12 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 				image_pixel_grids[zsrc_i]->set_sourcegrid_params_from_ray_tracing(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
 			}
 		}
+
 		if ((auto_srcgrid_npixels) and (!use_auxiliary_srcgrid)) {
 			if (auto_srcgrid_set_pixel_size) // this option doesn't work well, DON'T USE RIGHT NOW
 				image_pixel_grids[zsrc_i]->find_optimal_firstlevel_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_imgpixels);
 			else
-				image_pixel_grids[zsrc_i]->find_optimal_sourcegrid_npixels(pixel_fraction,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_imgpixels);
+				image_pixel_grids[zsrc_i]->find_optimal_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_imgpixels);
 			if ((verbal) and (mpi_id==0)) {
 				cout << "Optimal sourcegrid number of pixels: " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
 				cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
@@ -13703,12 +12053,11 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 	} else {
 		if ((auto_sourcegrid) and (autogrid_from_analytic_source) and (n_sb > 0)) find_optimal_sourcegrid_for_analytic_source();
 	}
-	//source_plane_rscale = dmin(sourcegrid_xmax-sourcegrid_xmin,sourcegrid_ymax-sourcegrid_ymin) / 2;
 
 	if (auto_sourcegrid) {
-		if (srcgrid_size_scale != 0) {
-			double xwidth_adj = srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
-			double ywidth_adj = srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
+		if (cartesian_srcgrids[src_i]->srcgrid_size_scale != 0) {
+			double xwidth_adj = cartesian_srcgrids[src_i]->srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
+			double ywidth_adj = cartesian_srcgrids[src_i]->srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
 			double srcgrid_xc, srcgrid_yc;
 			srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
 			srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
@@ -13727,12 +12076,7 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 		nsplitx = auxiliary_srcgrid_npixels;
 		nsplity = auxiliary_srcgrid_npixels;
 	}
-	if (cartesian_srcgrids[src_i] != NULL) delete cartesian_srcgrids[src_i];
-	cartesian_srcgrids[src_i] = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,nsplitx,nsplity);
-	if (use_image_pixelgrid) {
-		cartesian_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
-		image_pixel_grids[zsrc_i]->set_cartesian_srcgrid(cartesian_srcgrids[src_i]);
-	}
+	cartesian_srcgrids[src_i]->create_pixel_grid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,nsplitx,nsplity);
 	if ((mpi_id==0) and (verbal)) {
 		cout << "# of Cartesian source pixels: " << cartesian_srcgrids[src_i]->number_of_pixels << endl;
 	}
@@ -13747,122 +12091,6 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 		//delete image_pixel_grids[zsrc_i]; // shouldn't have to do this!!!
 		//image_pixel_grids[zsrc_i] = NULL;
 	//}
-	return true;
-}
-
-bool QLens::create_sourcegrid_cartesian_old(const int zsrc_i, const bool verbal, const bool autogrid_from_analytic_source, const bool image_grid_already_exists, const bool use_auxiliary_srcgrid)
-{
-	bool use_image_pixelgrid = false;
-	if ((adaptive_subgrid) and (nlens==0)) { cerr << "Error: cannot ray trace source for adaptive grid; no lens model has been specified\n"; return false; }
-	if ((adaptive_subgrid) or (((auto_sourcegrid) or (auto_srcgrid_npixels)) and (nlens > 0))) use_image_pixelgrid = true;
-	//if ((autogrid_from_analytic_source) and (n_sb==0)) { warn("no source objects have been specified"); return false; }
-	if ((auto_sourcegrid) and (!autogrid_from_analytic_source) and (!image_grid_already_exists)) { warn("no image data have been generated from which to automatically set source grid dimensions"); return false; }
-
-	bool at_least_one_lensed_src = false;
-	ImagePixelGrid *image_pixel_grid = NULL;
-	for (int k=0; k < n_sb; k++) {
-		if (sb_list[k]->is_lensed) { at_least_one_lensed_src = true; break; }
-	}
-	if ((!image_grid_already_exists) and (use_image_pixelgrid) and (!at_least_one_lensed_src)) die("there are no analytic sources or current pixel grid available to generate source plot");
-
-	if (use_image_pixelgrid) {
-		if (zsrc_i >= 0) {
-			if (n_extended_src_redshifts==0) die("no ext src redshift has been created");
-			image_pixel_grid = image_pixel_grids[zsrc_i];
-		} else image_pixel_grid = image_pixel_grid0;
-
-		if (!image_grid_already_exists) {
-			double xmin,xmax,ymin,ymax;
-			xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
-			ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
-			xmax += 1e-10;
-			ymax += 1e-10;
-			if (image_pixel_grid != NULL) delete image_pixel_grid;
-			image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,0);
-		}
-
-		int n_imgpixels;
-		if (auto_sourcegrid) {
-			if (source_fit_mode != Delaunay_Source) {
-				if ((autogrid_from_analytic_source) and (at_least_one_lensed_src)) {
-					find_optimal_sourcegrid_for_analytic_source();
-				}
-				else {
-					image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
-				}
-			} else {
-				// Use the ray-traced points to define the source grid
-				//image_pixel_grid->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
-				image_pixel_grid->set_sourcegrid_params_from_ray_tracing(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
-			}
-		}
-		if ((auto_srcgrid_npixels) and (!use_auxiliary_srcgrid)) {
-			if (auto_srcgrid_set_pixel_size) // this option doesn't work well, DON'T USE RIGHT NOW
-				image_pixel_grid->find_optimal_firstlevel_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_imgpixels);
-			else
-				image_pixel_grid->find_optimal_sourcegrid_npixels(pixel_fraction,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_imgpixels);
-			if ((verbal) and (mpi_id==0)) {
-				cout << "Optimal sourcegrid number of pixels: " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
-				cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
-				cout << "Number of active image pixels expected: " << n_imgpixels << endl;
-			}
-		}
-
-		if ((srcgrid_npixels_x < 2) or (srcgrid_npixels_y < 2)) {
-			warn("too few source pixels for ray tracing");
-			if (!image_grid_already_exists) {
-				delete image_pixel_grid;
-				image_pixel_grid = NULL;
-			}
-			return false;
-		}
-	} else {
-		if ((auto_sourcegrid) and (autogrid_from_analytic_source) and (n_sb > 0)) find_optimal_sourcegrid_for_analytic_source();
-	}
-	//source_plane_rscale = dmin(sourcegrid_xmax-sourcegrid_xmin,sourcegrid_ymax-sourcegrid_ymin) / 2;
-
-	if (auto_sourcegrid) {
-		if (srcgrid_size_scale != 0) {
-			double xwidth_adj = srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
-			double ywidth_adj = srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
-			double srcgrid_xc, srcgrid_yc;
-			srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
-			srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
-			sourcegrid_xmin = srcgrid_xc - xwidth_adj/2;
-			sourcegrid_xmax = srcgrid_xc + xwidth_adj/2;
-			sourcegrid_ymin = srcgrid_yc - ywidth_adj/2;
-			sourcegrid_ymax = srcgrid_yc + ywidth_adj/2;
-		}
-	}
-
-	int nsplitx, nsplity;
-	if (!use_auxiliary_srcgrid) {
-		nsplitx = srcgrid_npixels_x;
-		nsplity = srcgrid_npixels_y;
-	} else {
-		nsplitx = auxiliary_srcgrid_npixels;
-		nsplity = auxiliary_srcgrid_npixels;
-	}
-	if (cartesian_srcgrid0 != NULL) delete cartesian_srcgrid0;
-	cartesian_srcgrid0 = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,nsplitx,nsplity);
-	if (use_image_pixelgrid) {
-		cartesian_srcgrid0->set_image_pixel_grid(image_pixel_grid);
-		image_pixel_grid->set_cartesian_srcgrid(cartesian_srcgrid0);
-	}
-	if ((mpi_id==0) and (verbal)) {
-		cout << "# of Cartesian source pixels: " << cartesian_srcgrid0->number_of_pixels << endl;
-	}
-
-	if (adaptive_subgrid) {
-		cartesian_srcgrid0->adaptive_subgrid();
-		if ((mpi_id==0) and (verbal)) {
-			cout << "# of source pixels after subgridding: " << cartesian_srcgrid0->number_of_pixels << endl;
-		}
-	}
-	if ((use_image_pixelgrid) and (!image_grid_already_exists)) {
-		delete image_pixel_grid;
-		image_pixel_grid = NULL;
-	}
 	return true;
 }
 
@@ -13916,6 +12144,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		}
 	}
 	if (src_i < 0) { warn("no pixellated source corresponding to given redshift has been created"); return false; }
+	if (delaunay_srcgrids[src_i]==NULL) delaunay_srcgrids[src_i] = new DelaunayGrid(this);
 	double *srcpts_x, *srcpts_y, *srcpts2_x, *srcpts2_y;
 	int *ivals, *jvals;
 	int *pixptr_i, *pixptr_j;
@@ -14029,8 +12258,6 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		}
 	}
 
-	if (delaunay_srcgrids[src_i] != NULL) delete delaunay_srcgrids[src_i];
-
 	bool find_invmag = ((use_mag_weighted_regularization) and (zsrc_i==0)) ? true : false;
 	if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) {
 #ifdef USE_MLPACK
@@ -14047,7 +12274,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		} else {
 			for (i=0; i < npix; i++) {
 				//cout << "wfactor " << i << ": " << wfactors[i] << endl;
-				weights[i] = pow(wfactors[i]+alpha_clus,beta_clus);
+				weights[i] = pow(wfactors[i]+delaunay_srcgrids[src_i]->alpha_clus,delaunay_srcgrids[src_i]->beta_clus);
 				if (weights[i] < min_weight) min_weight = weights[i];
 			}
 		}
@@ -14171,7 +12398,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << n_src_centroids << endl;
 		//cout << "Source grid = (" << sourcegrid_xmin << "," << sourcegrid_xmax << ") x (" << sourcegrid_ymin << "," << sourcegrid_ymax << ")";
-		delaunay_srcgrids[src_i] = new DelaunayGrid(this,zsrc_i,src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y,find_invmag);
+		delaunay_srcgrids[src_i]->create_pixel_grid(src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y,find_invmag,zsrc_i);
 		double edge_sum = delaunay_srcgrids[src_i]->sum_edge_sqrlengths(avg_sb);
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid edge_sum: " << edge_sum << endl;
 		delete[] src_centroids_x;
@@ -14183,28 +12410,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 #endif
 	} else {
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid has n_pixels=" << npix << endl;
-		DelaunayGrid *srcgrid1, *srcgrid2;
-		srcgrid1 = new DelaunayGrid(this,zsrc_i,srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y,find_invmag);
-		//if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 1: " << srcgrid1->n_triangles << endl;
-		if ((delaunay_try_two_grids) and (split_imgpixels) and (delaunay_mode != 5)) {
-			srcgrid2 = new DelaunayGrid(this,zsrc_i,srcpts2_x,srcpts2_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y,find_invmag);
-			if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 2: " << srcgrid2->n_triangles << endl;
-
-			double edge_sum1 = srcgrid1->sum_edge_sqrlengths(avg_sb);
-			double edge_sum2 = srcgrid2->sum_edge_sqrlengths(avg_sb);
-			if (edge_sum1 < edge_sum2) {
-				delete srcgrid2;
-				delaunay_srcgrids[src_i] = srcgrid1;
-				if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid 1 chosen over 2 (edge_sum: " << edge_sum1 << " vs " << edge_sum2 << ")" << endl;
-			} else {
-				delete srcgrid1;
-				delaunay_srcgrids[src_i] = srcgrid2;
-				if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid 2 chosen over 1 (edge_sum: " << edge_sum2 << " vs " << edge_sum1 << ")" << endl;
-			}
-			if ((mpi_id==0) and (verbal) and (sbfrac > 0)) cout << "SB threshold for source pixel gridding scheme: " << sbfrac*avg_sb << endl;
-		} else {
-			delaunay_srcgrids[src_i] = srcgrid1;
-		}
+		if (delaunay_srcgrids[src_i]==NULL) delaunay_srcgrids[src_i] = new DelaunayGrid(this);
+		delaunay_srcgrids[src_i]->create_pixel_grid(srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y,find_invmag,zsrc_i);
 	}
 
 	delete[] include_in_delaunay_grid;
@@ -14218,292 +12425,11 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	return true;
 }
 
-void QLens::create_sourcegrid_from_imggrid_delaunay_old(const bool use_weighted_srcpixel_clustering, const bool verbal)
-{
-	double *srcpts_x, *srcpts_y, *srcpts2_x, *srcpts2_y;
-	int *ivals, *jvals;
-	int *pixptr_i, *pixptr_j;
-	int npix_in_mask;
-	if (include_extended_mask_in_inversion) {
-		npix_in_mask = image_pixel_grid0->ntot_cells_emask;
-		pixptr_i = image_pixel_grid0->emask_pixels_i;
-		pixptr_j = image_pixel_grid0->emask_pixels_j;
-	} else {
-		npix_in_mask = image_pixel_grid0->ntot_cells;
-		pixptr_i = image_pixel_grid0->masked_pixels_i;
-		pixptr_j = image_pixel_grid0->masked_pixels_j;
-	}
-	double avg_sb = -1e30;
-	if (image_pixel_data) avg_sb = image_pixel_data->find_avg_sb(10*background_pixel_noise);
-
-	int i,j,k,l,n,npix=0;
-	bool include;
-	double max_sb = -1e30, min_sb = 1e30;
-	double sbfrac = delaunay_high_sn_sbfrac;
-	if (n_sourcepts_fit > 0) sbfrac = 0; // if there are point sources in the data, then we can't use the peak surface brightness in the data image to help construct the Delaunay grid, since the Delaunay grid is only for the extended source
-	bool *include_in_delaunay_grid = new bool[npix_in_mask];
-	// if delaunay_high_sn_mode is on, we use sbfrac*avg_sb as the SB threshold to determine the region to have more source pixels;
-	// avg_sb is also used to find where to compare grids 1/2
-	int nsubpix, nysubpix;
-	double sb;
-	if (reinitialize_random_grid) reinitialize_random_generator();
-	for (n=0; n < npix_in_mask; n++) {
-		include = false;
-		i = pixptr_i[n];
-		j = pixptr_j[n];
-		nysubpix = image_pixel_grid0->nsplits[i][j]; // why not just store the square and avoid having to always take the square?
-		nsubpix = INTSQR(nysubpix); // why not just store the square and avoid having to always take the square?
-		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
-			include = true;
-			sb = image_pixel_data->surface_brightness[i][j];
-			if (sb > max_sb) max_sb = sb;
-			if (sb < min_sb) min_sb = sb;
-		} else {
-			if ((delaunay_high_sn_mode) and (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb)) {
-				if ((delaunay_mode==1) or (delaunay_mode==2)) include = true;
-				else if ((delaunay_mode==3) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true; // switch to mode 1 if S/N high enough
-				else if ((delaunay_mode==4) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true; // switch to mode 2 if S/N high enough
-				else if (image_pixel_data->surface_brightness[i][j] > 3*sbfrac*avg_sb) include = true; // if threshold is high enough, just include it
-			}
-			else if ((delaunay_mode==0) or (delaunay_mode==5)) include = true;
-			else if ((delaunay_mode==1) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true;
-			else if ((delaunay_mode==2) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true;
-			else if ((delaunay_mode==3) and (((i%3==0) and (j%3==0)) or ((i%3==1) and (j%3==1)) or ((i%3==2) and (j%3==2)))) include = true;
-			else if ((delaunay_mode==4) and (((i%4==0) and (j%4==0)) or ((i%4==1) and (j%4==1)) or ((i%4==2) and (j%4==2)) or ((i%4==3) and (j%4==3)))) include = true;
-		}
-		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) npix += nsubpix;
-		else if (include) {
-			npix++;
-			if (split_imgpixels) npix++;
-		}
-		include_in_delaunay_grid[n] = include;
-	}
-	if (min_sb < 0) min_sb = 0;
-
-	srcpts_x = new double[npix];
-	srcpts_y = new double[npix];
-	srcpts2_x = new double[npix];
-	srcpts2_y = new double[npix];
-	double *wfactors = new double[npix];
-	ivals = new int[npix];
-	jvals = new int[npix];
-
-	npix = 0;
-	int subcell_i1, subcell_i2;
-	for (n=0; n < npix_in_mask; n++) {
-		i = pixptr_i[n];
-		j = pixptr_j[n];
-		if (include_in_delaunay_grid[n]) {
-			if (!split_imgpixels) {
-				srcpts_x[npix] = image_pixel_grid0->center_sourcepts[i][j][0];
-				srcpts_y[npix] = image_pixel_grid0->center_sourcepts[i][j][1];
-			} else {
-				nsubpix = INTSQR(image_pixel_grid0->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
-				if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
-					for (int k=0; k < nsubpix; k++) {
-						srcpts_x[npix] = image_pixel_grid0->subpixel_center_sourcepts[i][j][nsubpix-1-k][0];
-						srcpts_y[npix] = image_pixel_grid0->subpixel_center_sourcepts[i][j][nsubpix-1-k][1];
-						ivals[npix] = i;
-						jvals[npix] = j;
-						wfactors[npix] = image_pixel_grid0->subpixel_weights[i][j][nsubpix-1-k];
-						npix++;
-					}
-				} else {
-					if (use_random_delaunay_srcgrid) {
-						subcell_i1 = (int) (nsubpix*RandomNumber());
-						subcell_i2 = (int) (nsubpix*RandomNumber());
-					} else {
-						subcell_i1 = nsubpix-1 - ((i+2*j) % nsubpix); // this is really only optimized for 2x2 splittings
-						subcell_i2 = nsubpix-1 - ((i+2*j+2) % nsubpix); // this is really only optimized for 2x2 splittings
-					}
-
-					srcpts_x[npix] = image_pixel_grid0->subpixel_center_sourcepts[i][j][subcell_i1][0];
-					srcpts_y[npix] = image_pixel_grid0->subpixel_center_sourcepts[i][j][subcell_i1][1];
-					srcpts2_x[npix] = image_pixel_grid0->subpixel_center_sourcepts[i][j][subcell_i2][0];
-					srcpts2_y[npix] = image_pixel_grid0->subpixel_center_sourcepts[i][j][subcell_i2][1];
-				}
-			}
-			if ((!use_srcpixel_clustering) and (!use_weighted_srcpixel_clustering) and (delaunay_mode != 5)) {
-				ivals[npix] = i;
-				jvals[npix] = j;
-				npix++;
-			}
-		}
-	}
-
-	if (delaunay_srcgrid0 != NULL) delete delaunay_srcgrid0;
-
-	if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) {
-#ifdef USE_MLPACK
-		int *iweights_norm;
-		double min_weight = 1e30;
-		double *input_data = new double[2*npix];
-		double *weights = new double[npix];
-		double *initial_centroids;
-		int *ivals_centroids;
-		int *jvals_centroids;
-
-		if (!use_weighted_srcpixel_clustering) {
-			for (i=0; i < npix; i++) weights[i] = 1;
-		} else {
-			for (i=0; i < npix; i++) {
-				weights[i] = pow(wfactors[i]+alpha_clus,beta_clus);
-				if (weights[i] < min_weight) min_weight = weights[i];
-			}
-		}
-		bool use_weighted_initial_centroids;
-		if ((use_weighted_srcpixel_clustering) and (weight_initial_centroids) and (min_weight != 0)) use_weighted_initial_centroids = true;
-		else use_weighted_initial_centroids = false;
-
-		int n_src_centroids = n_src_clusters;	
-		if (n_src_centroids < 0) n_src_centroids = npix_in_mask / 2;
-		else if (n_src_centroids == 0) n_src_centroids = npix_in_mask;
-
-		int data_reduce_factor;
-		int icent_offset;
-		double xrand;
-		if (!use_weighted_initial_centroids) {
-			int ncorig = n_src_centroids;
-			xrand = RandomNumber();
-			data_reduce_factor = npix / n_src_centroids;
-			icent_offset = (int) (data_reduce_factor*xrand);
-			n_src_centroids = npix / data_reduce_factor;
-			if (npix % data_reduce_factor > icent_offset) n_src_centroids++;
-		} else {
-			iweights_norm = new int[npix];
-			int totweight=0;
-			for (i=0; i < npix; i++) {
-				iweights_norm[i] = (int) (pow(weights[i]/min_weight,0.3)); // trying the square root in an attempt to reduce noise in the original centroid assignments
-				totweight += iweights_norm[i];
-			}
-			data_reduce_factor = totweight / n_src_centroids;
-			n_src_centroids = totweight / data_reduce_factor;
-			if (totweight % data_reduce_factor != 0) n_src_centroids++;
-			//cout << "totweight = " << totweight << endl;
-		}
-		//cout << "n_centroids is " << n_src_centroids << endl;
-		initial_centroids = new double[2*n_src_centroids];
-		ivals_centroids = new int[n_src_centroids];
-		jvals_centroids = new int[n_src_centroids];
-		if (icent_offset >= data_reduce_factor) die("FOOK");
-		if (!use_weighted_initial_centroids) {
-			for (i=0,j=0,k=0,l=0; i < npix; i++) {
-				input_data[j++] = srcpts_x[i];
-				input_data[j++] = srcpts_y[i];
-				if (i%data_reduce_factor==icent_offset) {
-					initial_centroids[k++] = srcpts_x[i];
-					initial_centroids[k++] = srcpts_y[i];
-					ivals_centroids[l] = ivals[i]; // the centroid locations will shift after k-means, but the image-plane pixel ij will still ray-trace to somewhere near the centroid
-					jvals_centroids[l] = jvals[i];
-
-					l++;
-				}
-			}
-			if (l != n_src_centroids) die("centroid miscount: %i %i",l,n_src_centroids);
-		} else {
-			int m,n,wnorm;
-			for (i=0,j=0,k=0,l=0,n=0; i < npix; i++) {
-				input_data[j++] = srcpts_x[i];
-				input_data[j++] = srcpts_y[i];
-				wnorm = iweights_norm[i];
-				if (wnorm >= 2*data_reduce_factor) cout << "RUHROH! Will count a centroid twice due to overweighting" << endl;
-				for (m=0; m < wnorm; m++) {
-					if (n%data_reduce_factor==0) {
-						initial_centroids[k++] = srcpts_x[i];
-						initial_centroids[k++] = srcpts_y[i];
-						ivals_centroids[l] = ivals[i];
-						jvals_centroids[l] = jvals[i];
-						l++;
-					}
-					n++;
-				}
-			}
-			if (l != n_src_centroids) die("miscount of initial centroids");
-			delete[] iweights_norm;
-		}
-
-		arma::mat dataset(input_data, 2, npix);
-		arma::Col<double> weightvec(weights, npix);
-		arma::mat centroids(initial_centroids, 2, n_src_centroids);
-		delete[] input_data;
-		delete[] initial_centroids;
-		delete[] weights;
-
-		bool guess_initial_clusters;
-		if (!clustering_random_initialization) guess_initial_clusters = true;
-		else guess_initial_clusters = false;
-
-		if (!use_dualtree_kmeans) {
-			KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus(n_cluster_iterations);
-			clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
-		} else {
-			KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, DefaultDualTreeKMeans> clus(n_cluster_iterations);
-			bool status;
-			status = clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
-			if (status==false) warn("Dual-tree k-means algorithm failed");
-		}
-
-		double *src_centroids_x = new double[n_src_centroids];
-		double *src_centroids_y = new double[n_src_centroids];
-		for (i=0; i < n_src_centroids; i++) {
-			src_centroids_x[i] = (double) centroids(0,i);
-			src_centroids_y[i] = (double) centroids(1,i);
-			//ivals_centroids[i] = 0; // I don't have a good way of finding this without already doing ray-tracing, which would be too slow. Doesn't seem to be a bottleneck though
-			//jvals_centroids[i] = 0;
-		}
-
-		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << n_src_centroids << endl;
-		delaunay_srcgrid0 = new DelaunayGrid(this,-1,src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y);
-		double edge_sum = delaunay_srcgrid0->sum_edge_sqrlengths(avg_sb);
-		if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid edge_sum: " << edge_sum << endl;
-		delete[] src_centroids_x;
-		delete[] src_centroids_y;
-		delete[] ivals_centroids;
-		delete[] jvals_centroids;
-#else
-		die("Must compile with -DUSE_MLPACK option to use source pixel clustering algorithm with adaptive grid");
-#endif
-	} else {
-		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid has n_pixels=" << npix << endl;
-		DelaunayGrid *srcgrid1, *srcgrid2;
-		srcgrid1 = new DelaunayGrid(this,-1,srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
-		if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 1: " << srcgrid1->n_triangles << endl;
-		if ((delaunay_try_two_grids) and (split_imgpixels) and (delaunay_mode != 5)) {
-			srcgrid2 = new DelaunayGrid(this,-1,srcpts2_x,srcpts2_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y);
-			if ((mpi_id==0) and (verbal)) cout << "# triangles in grid 2: " << srcgrid2->n_triangles << endl;
-
-			double edge_sum1 = srcgrid1->sum_edge_sqrlengths(avg_sb);
-			double edge_sum2 = srcgrid2->sum_edge_sqrlengths(avg_sb);
-			if (edge_sum1 < edge_sum2) {
-				delete srcgrid2;
-				delaunay_srcgrid0 = srcgrid1;
-				if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid 1 chosen over 2 (edge_sum: " << edge_sum1 << " vs " << edge_sum2 << ")" << endl;
-			} else {
-				delete srcgrid1;
-				delaunay_srcgrid0 = srcgrid2;
-				if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid 2 chosen over 1 (edge_sum: " << edge_sum2 << " vs " << edge_sum1 << ")" << endl;
-			}
-			if ((mpi_id==0) and (verbal) and (sbfrac > 0)) cout << "SB threshold for source pixel gridding scheme: " << sbfrac*avg_sb << endl;
-		} else {
-			delaunay_srcgrid0 = srcgrid1;
-		}
-	}
-
-	delete[] include_in_delaunay_grid;
-	delete[] srcpts_x;
-	delete[] srcpts_y;
-	delete[] srcpts2_x;
-	delete[] srcpts2_y;
-	delete[] wfactors;
-	delete[] ivals;
-	delete[] jvals;
-}
-
-void QLens::load_source_surface_brightness_grid(string source_inputfile) // DEPRECATED
-{
-	if (cartesian_srcgrid0 != NULL) delete cartesian_srcgrid0;
-	cartesian_srcgrid0 = new SourcePixelGrid(this,source_inputfile,1e-6);
-}
+//void QLens::load_source_surface_brightness_grid(string source_inputfile) // DEPRECATED
+//{
+	//if (cartesian_srcgrid0 != NULL) delete cartesian_srcgrid0;
+	//cartesian_srcgrid0 = new SourcePixelGrid(this,source_inputfile,1e-6);
+//}
 
 bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root, const int hdu_indx, const bool show_fits_header)
 {
@@ -14563,19 +12489,16 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root,
 
 bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_all_pixels, bool normalize_residuals, bool offload_to_data, bool show_extended_mask, bool show_foreground_mask, bool show_noise_thresh, bool exclude_ptimgs, bool only_ptimgs, int specific_zsrc_i, bool verbose)
 {
+	// Note that if specific_zsrc_i is negative, it will plot images from *all* source redshifts
 	// You need to simplify the code in this function. It's too convoluted!!!
 	if (source_fit_mode==Cartesian_Source) {
-		if ((!use_old_pixelgrids) and (cartesian_srcgrids==NULL) and (n_sourcepts_fit==0)) { warn("No Cartesian source grid has been generated"); return false; }
-		else if ((use_old_pixelgrids) and (cartesian_srcgrid0==NULL) and (n_sourcepts_fit==0)) { warn("No Cartesian source grid has been generated"); return false; }
+		if ((cartesian_srcgrids==NULL) and (n_sourcepts_fit==0)) { warn("No Cartesian source grid has been generated"); return false; }
 	} else if (source_fit_mode==Delaunay_Source) {
-		if (!use_old_pixelgrids) {
-			if (n_sourcepts_fit==0) {
-				if ((delaunay_srcgrids==NULL) or (delaunay_srcgrids[0]==NULL)) { warn("No Delaunay source grid has been generated"); return false; }
-			}
+		if (n_sourcepts_fit==0) {
+			if ((delaunay_srcgrids==NULL) or (delaunay_srcgrids[0]==NULL)) { warn("No Delaunay source grid has been generated"); return false; }
 		}
-		else if ((delaunay_srcgrid0==NULL) and (n_sourcepts_fit==0)) { warn("No Delaunay source grid has been generated"); return false; }
 	}
-	if ((!use_old_pixelgrids) and (image_pixel_grids == NULL)) { warn("no extended source redshifts have been setup"); return false; }
+	if (image_pixel_grids == NULL) { warn("no extended source redshifts have been setup"); return false; }
 	if (((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) and (n_sb==0) and (n_sourcepts_fit==0)) { warn("No surface brightness profiles have been defined"); return false; }
 	if ((plot_foreground_only) and (omit_foreground)) { warn("cannot omit both foreground and lensed sources when plotting"); return false; }
 	bool use_data = true;
@@ -14595,40 +12518,28 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		//xmax += 1e-10; // is this still necessary? Check
 		//ymax += 1e-10;
 	}
-	if ((!use_old_pixelgrids) and (n_extended_src_redshifts==0)) die("no extended source redshifts have been created");
+	if (n_extended_src_redshifts==0) die("no extended source redshifts have been created");
 	//bool raytrace = ((use_data) or (plot_foreground_only)) ? false : true;
 	ImagePixelGrid* image_pixel_grid;
 	int mask_num;
 	int zsrc_i_0 = 0;
 	int zsrc_i_f = n_extended_src_redshifts;
-	if (use_old_pixelgrids) {
-		zsrc_i_0 = -1;
-		zsrc_i_f = 0;
-	} else if (specific_zsrc_i != -1) {
+	if (specific_zsrc_i >= 0) {
 		zsrc_i_0 = specific_zsrc_i;
 		zsrc_i_f = specific_zsrc_i+1;
 	}
 	bool changed_mask = false;
 	for (int zsrc_i=zsrc_i_0; zsrc_i < zsrc_i_f; zsrc_i++) {
-		if (zsrc_i < 0) {
-			if (image_pixel_grid0 == NULL) {
-				image_pixel_grid0 = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,false,zsrc_i);
-				image_pixel_grid0->setup_ray_tracing_arrays(verbose);
+		if (image_pixel_grids[zsrc_i] == NULL) {
+			// if it hasn't been created yet, create now
+			if (use_data) image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, -1, false);
+			else {
+				image_pixel_grids[zsrc_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,false,zsrc_i);
+				image_pixel_grids[zsrc_i]->setup_ray_tracing_arrays(verbose);
 			}
-			image_pixel_grid = image_pixel_grid0;
-			mask_num = 0;
-		} else {
-			if (image_pixel_grids[zsrc_i] == NULL) {
-				// if it hasn't been created yet, create now
-				if (use_data) image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, -1, false);
-				else {
-					image_pixel_grids[zsrc_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,false,zsrc_i);
-					image_pixel_grids[zsrc_i]->setup_ray_tracing_arrays(verbose);
-				}
-			}
-			image_pixel_grid = image_pixel_grids[zsrc_i];
-			mask_num = assigned_mask[zsrc_i];
 		}
+		image_pixel_grid = image_pixel_grids[zsrc_i];
+		mask_num = assigned_mask[zsrc_i];
 		if (use_data) {
 			image_pixel_grid->setup_noise_map(this);
 			if (show_all_pixels) { 
@@ -14652,8 +12563,8 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		bool at_least_one_lensed_src_object = false; // this could be analytic source or pixellated source grid
 		bool at_least_one_foreground_src_included = false;
 		for (int k=0; k < n_sb; k++) {
-			if ((sb_list[k]->is_lensed) and ((use_old_pixelgrids) or (sbprofile_redshift_idx[k]==zsrc_i))) at_least_one_lensed_src_object = true;
-			if ((!sb_list[k]->is_lensed) and ((use_old_pixelgrids) or (zsrc_i==0))) at_least_one_foreground_src_included = true;
+			if ((sb_list[k]->is_lensed) and (sbprofile_redshift_idx[k]==zsrc_i)) at_least_one_lensed_src_object = true;
+			if ((!sb_list[k]->is_lensed) and (zsrc_i==0)) at_least_one_foreground_src_included = true;
 		}
 		if (source_fit_mode==Cartesian_Source) {
 			at_least_one_lensed_src_object = true;
@@ -14683,28 +12594,24 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 			int i,j;
 			// this is a hack so that it only shows the point images
 			bool single_imggrid = true;
-			if (!use_old_pixelgrids) {
-				if (n_extended_src_redshifts > 1) {
-					if (specific_zsrc_i >= 0) {
-						image_pixel_grid = image_pixel_grids[specific_zsrc_i];
-					}
-					else {
-						single_imggrid = false;
-						// If there are multiple extended source redshifts and no specific redshift index is given, combine the surface brightness from the separate image grids
-						int k;
-						for (i=0; i < n_image_pixels_x; i++) {
-							for (j=0; j < n_image_pixels_y; j++) {
-								for (k=0; k < n_extended_src_redshifts; k++) {
-									image_pixel_grids[k]->surface_brightness[i][j] = 0;
-								}
+			if (n_extended_src_redshifts > 1) {
+				if (specific_zsrc_i >= 0) {
+					image_pixel_grid = image_pixel_grids[specific_zsrc_i];
+				}
+				else {
+					single_imggrid = false;
+					// If there are multiple extended source redshifts and no specific redshift index is given, combine the surface brightness from the separate image grids
+					int k;
+					for (i=0; i < n_image_pixels_x; i++) {
+						for (j=0; j < n_image_pixels_y; j++) {
+							for (k=0; k < n_extended_src_redshifts; k++) {
+								image_pixel_grids[k]->surface_brightness[i][j] = 0;
 							}
 						}
 					}
-				} else {
-					image_pixel_grid = image_pixel_grids[0];
 				}
 			} else {
-				image_pixel_grid = image_pixel_grid0;
+				image_pixel_grid = image_pixel_grids[0];
 			}
 			if (single_imggrid) {
 				for (i=0; i < n_image_pixels_x; i++) {
@@ -14723,7 +12630,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				bool is_lensed;
 				for (i=0; i < n_sourcepts_fit; i++) {
 					is_lensed = true;
-					if (ptsrc_redshifts[i]==lens_redshift) is_lensed = false;
+					if (specific_ptsrc_redshifts[i]==lens_redshift) is_lensed = false;
 					if (!include_imgfluxes_in_inversion) image_pixel_grid->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],false,is_lensed,verbose);
 					//cout << "srcflux=" << source_flux << endl;
 					image_pixel_grid->generate_and_add_point_images(point_imgs[i], include_imgfluxes_in_inversion, source_flux);
@@ -14735,28 +12642,24 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	}
 
 	int i,j,k;
-	if (!use_old_pixelgrids) {
-		if (n_extended_src_redshifts > 1) {
-			if (specific_zsrc_i >= 0) {
-				image_pixel_grid = image_pixel_grids[specific_zsrc_i];
-			}
-			else {
-				// If there are multiple extended source redshifts and no specific redshift index is given, combine the surface brightness from the separate image grids
-				for (i=0; i < n_image_pixels_x; i++) {
-					for (j=0; j < n_image_pixels_y; j++) {
-						for (k=1; k < n_extended_src_redshifts; k++) {
-							image_pixel_grids[0]->surface_brightness[i][j] += image_pixel_grids[k]->surface_brightness[i][j];
-							if ((image_pixel_grids[k]->pixel_in_mask[i][j]) and (!image_pixel_grids[0]->pixel_in_mask[i][j])) image_pixel_grids[0]->pixel_in_mask[i][j] = true;
-						}
+	if (n_extended_src_redshifts > 1) {
+		if (specific_zsrc_i >= 0) {
+			image_pixel_grid = image_pixel_grids[specific_zsrc_i];
+		}
+		else {
+			// If there are multiple extended source redshifts and no specific redshift index is given, combine the surface brightness from the separate image grids
+			for (i=0; i < n_image_pixels_x; i++) {
+				for (j=0; j < n_image_pixels_y; j++) {
+					for (k=1; k < n_extended_src_redshifts; k++) {
+						image_pixel_grids[0]->surface_brightness[i][j] += image_pixel_grids[k]->surface_brightness[i][j];
+						if ((image_pixel_grids[k]->pixel_in_mask[i][j]) and (!image_pixel_grids[0]->pixel_in_mask[i][j])) image_pixel_grids[0]->pixel_in_mask[i][j] = true;
 					}
 				}
-				image_pixel_grid = image_pixel_grids[0]; // now we can just work with the first image_pixel_grid, which has the combined surface brightness
 			}
-		} else {
-			image_pixel_grid = image_pixel_grids[0];
+			image_pixel_grid = image_pixel_grids[0]; // now we can just work with the first image_pixel_grid, which has the combined surface brightness
 		}
 	} else {
-		image_pixel_grid = image_pixel_grid0;
+		image_pixel_grid = image_pixel_grids[0];
 	}
 
 	if ((background_pixel_noise != 0) or (use_noise_map)) {
@@ -14840,41 +12743,6 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	return true;
 }
 
-/*
-double QLens::image_pixel_chi_square()
-{
-	if (n_extended_src_redshifts==0) { warn("no extended src redshift has been created"); return -1e30; }
-	if (image_pixel_grids[0]==NULL) { warn("No image surface brightness map has been generated"); return -1e30; }
-	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
-	int i,j;
-	if (image_pixel_data->npixels_x != image_pixel_grids[0]->x_N) die("image surface brightness map does not have same dimensions of image pixel data");
-	if (image_pixel_data->npixels_y != image_pixel_grids[0]->y_N) die("image surface brightness map does not have same dimensions of image pixel data");
-	double chisq=0;
-	for (i=0; i < image_pixel_data->npixels_x; i++) {
-		for (j=0; j < image_pixel_data->npixels_y; j++) {
-			if (image_pixel_grids[0]->maps_to_source_pixel)
-				chisq += SQR(image_pixel_grids[0]->surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j]);
-		}
-	}
-	return chisq;
-}
-*/
-
-/*
-void QLens::update_source_amplitudes_from_shapelets()
-{
-	if (source_pixel_vector == NULL) die("source pixel vector has not been created");
-	SB_Profile* shapelet;
-	for (int i=0; i < n_sb; i++) {
-		if (sb_list[i]->sbtype==SHAPELET) {
-			shapelet = sb_list[i];
-			break; // currently only one shapelet source supported
-		}
-	}
-	shapelet->get_amplitudes(source_pixel_vector);
-}
-*/
-
 bool QLens::find_shapelet_scaling_parameters(const int i_shapelet, const int zsrc_i, const bool verbal)
 {
 	SB_Profile* shapelet = sb_list[i_shapelet];
@@ -14950,26 +12818,19 @@ int QLens::get_shapelet_nn(const int zsrc_i)
 	return *(shapelet->indxptr);
 }
 
-
 bool QLens::load_pixel_grid_from_data()
 {
 	bool loaded_new_grid = false;
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return false; }
-	if (!use_old_pixelgrids) {
-		if ((n_extended_src_redshifts==0) and (source_fit_mode==Delaunay_Source)) {
-			if (mpi_id==0) cout << "NOTE: automatically generating Delaunay source object at zsrc=" << source_redshift << endl;
-			add_pixellated_source(source_redshift);
+	if ((n_extended_src_redshifts==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) {
+		if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
+		add_pixellated_source(source_redshift);
+	}
+	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+		if (image_pixel_grids[zsrc_i] != NULL) {
+			delete image_pixel_grids[zsrc_i];
 		}
-		for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-			if (image_pixel_grids[zsrc_i] != NULL) {
-				delete image_pixel_grids[zsrc_i];
-			}
-			image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);
-			loaded_new_grid = true;
-		}
-	} else {
-		if (image_pixel_grid0 != NULL) delete image_pixel_grid0;
-		image_pixel_grid0 = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, -1, 0);
+		image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);
 		loaded_new_grid = true;
 	}
 	return loaded_new_grid;
@@ -14978,8 +12839,9 @@ bool QLens::load_pixel_grid_from_data()
 void QLens::plot_image_pixel_grid(const int zsrc_i)
 {
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return; }
-	if ((n_extended_src_redshifts==0) and (source_fit_mode==Delaunay_Source)) {
-		if (mpi_id==0) cout << "NOTE: automatically generating Delaunay source object at zsrc=" << source_redshift << endl;
+	if (image_pixel_grids == NULL) { warn("No extended sources have been created"); return; }
+	if ((n_extended_src_redshifts==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) {
+		if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
 		add_pixellated_source(source_redshift);
 	}
 
@@ -14993,19 +12855,13 @@ void QLens::plot_image_pixel_grid(const int zsrc_i)
 double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool verbal, const bool zero_verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
-	if (!use_old_pixelgrids) {
-		if (n_extended_src_redshifts==0) {
-			if ((mpi_id==0) and (verbal)) cout << "NOTE: automatically generating source object at zsrc=" << source_redshift << endl;
-			add_pixellated_source(source_redshift);
-		}
-		for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-			if (image_pixel_grids[zsrc_i] == NULL) {
-				image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, assigned_mask[zsrc_i], true, verbal);
-			}
-		}
-	} else {
-		if (image_pixel_grid0 == NULL) {
-			image_pixel_grid0 = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, -1, 0, true, verbal);
+	if (n_extended_src_redshifts==0) {
+		if ((mpi_id==0) and (verbal)) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
+		add_pixellated_source(source_redshift);
+	}
+	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+		if (image_pixel_grids[zsrc_i] == NULL) {
+			image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, assigned_mask[zsrc_i], true, verbal);
 		}
 	}
 	double chisq=0,chisq00;
@@ -15017,10 +12873,7 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 	}
 #endif
 	for (int i=0; i < n_ranchisq; i++) {
-		if (!use_old_pixelgrids)
-			chisq += invert_image_surface_brightness_map(chisq00,verbal,i);
-		else
-			chisq += invert_image_surface_brightness_map_old(chisq00,verbal,i);
+		chisq += invert_image_surface_brightness_map(chisq00,verbal,i);
 		chisq0 += chisq00;
 	}
 	chisq /= n_ranchisq;
@@ -15035,19 +12888,11 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 #endif
 
 	//chisq = invert_image_surface_brightness_map(chisq0,verbal);
-	if (!use_old_pixelgrids) {
-		if (chisq == 2e30) {
-			// in this case, the inversion didn't work, so we delete the image pixel grids so there is no confusion if the user tries to plot the lensed images
-			for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-				delete image_pixel_grids[zsrc_i];
-				image_pixel_grids[zsrc_i] = NULL;
-			}
-		}
-	} else {
-		if (chisq == 2e30) {
-			// in this case, the inversion didn't work, so we delete the image pixel grids so there is no confusion if the user tries to plot the lensed images
-			delete image_pixel_grid0;
-			image_pixel_grid0 = NULL;
+	if (chisq == 2e30) {
+		// in this case, the inversion didn't work, so we delete the image pixel grids so there is no confusion if the user tries to plot the lensed images
+		for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+			delete image_pixel_grids[zsrc_i];
+			image_pixel_grids[zsrc_i] = NULL;
 		}
 	}
 
@@ -15056,7 +12901,7 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 
 double QLens::invert_image_surface_brightness_map(double &chisq0, const bool verbal, const int ranchisq_i) // This function should probably be renamed to something like 'pixel_level_log_evidence' or something like that
 {
-	// This function is too long, and should be broken into a bunch of inline functions.
+	// This function is WAY too long, and should be broken into a bunch of inline functions.
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
 	if (n_extended_src_redshifts==0) add_pixellated_source(source_redshift); // THIS IS UGLY. There must be a better way to do this
 	//if (n_pixellated_src==0) add_pixellated_source(source_redshift);
@@ -15071,7 +12916,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	}
 
 	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in mask 0 : " << image_pixel_data->n_mask_pixels[0] << endl;
-	if (pixel_fraction <= 0) die("pixel fraction cannot be less than or equal to zero");
 #ifdef USE_OPENMP
 	double tot_wtime0, tot_wtime;
 	if (show_wtime) {
@@ -15184,7 +13028,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					bool is_lensed;
 					for (i=0; i < n_sourcepts_fit; i++) {
 						is_lensed = true;
-						if (ptsrc_redshifts[i]==lens_redshift) is_lensed = false;
+						if (specific_ptsrc_redshifts[i]==lens_redshift) is_lensed = false;
 						if ((is_lensed) and (nlens==0)) die("lensed source point has been defined, but no lens objects have been created");
 						image_pixel_grids[0]->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],source_grid_defined,is_lensed,verbal);
 					}
@@ -15193,7 +13037,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		}
 	}
 
-	double regparam_first_srcplane;
 	if (source_fit_mode == Cartesian_Source) {
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			int src_i = -1;
@@ -15203,15 +13046,18 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					break;
 				}
 			}
+			if (cartesian_srcgrids[src_i]==NULL) cartesian_srcgrids[src_i] = new SourcePixelGrid(this);
+			image_pixel_grids[zsrc_i]->set_cartesian_srcgrid(cartesian_srcgrids[src_i]);
 			if (auto_sourcegrid) image_pixel_grids[zsrc_i]->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
 			int n_expected_imgpixels;
 			if (auto_srcgrid_npixels) {
-				if (auto_srcgrid_set_pixel_size)
+				if (auto_srcgrid_set_pixel_size) {
 					image_pixel_grids[zsrc_i]->find_optimal_firstlevel_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_expected_imgpixels);
-				else
-					image_pixel_grids[zsrc_i]->find_optimal_sourcegrid_npixels(pixel_fraction,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_expected_imgpixels);
+				} else {
+					image_pixel_grids[zsrc_i]->find_optimal_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_expected_imgpixels);
 					srcgrid_npixels_x *= 2; // aim high, since many of the source grid pixels may lie outside the mask (we'll refine the # of pixels after drawing the grid once)
 					srcgrid_npixels_y *= 2;
+				}
 			}
 			if ((srcgrid_npixels_x < 2) or (srcgrid_npixels_y < 2)) {
 				if ((mpi_id==0) and (verbal)) cout << "Source grid has negligible size...cannot invert image\n";
@@ -15220,9 +13066,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				return 2e30;
 			}
 			if (auto_sourcegrid) {
-				if (srcgrid_size_scale != 0) {
-					double xwidth_adj = srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
-					double ywidth_adj = srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
+				if (image_pixel_grids[zsrc_i]->cartesian_srcgrid->srcgrid_size_scale != 0) {
+					double xwidth_adj = image_pixel_grids[zsrc_i]->cartesian_srcgrid->srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
+					double ywidth_adj = image_pixel_grids[zsrc_i]->cartesian_srcgrid->srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
 					double srcgrid_xc, srcgrid_yc;
 					srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
 					srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
@@ -15235,18 +13081,20 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
 				}
 			}
-			if (cartesian_srcgrids[src_i] != NULL) delete cartesian_srcgrids[src_i];
 #ifdef USE_OPENMP
 			double srcgrid_wtime0, srcgrid_wtime;
 			if (show_wtime) {
 				srcgrid_wtime0 = omp_get_wtime();
 			}
 #endif
-			cartesian_srcgrids[src_i] = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y);
-			image_pixel_grids[zsrc_i]->set_cartesian_srcgrid(cartesian_srcgrids[src_i]);
+			cartesian_srcgrids[src_i]->create_pixel_grid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y);
 			cartesian_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
+			regparam_ptr = &(image_pixel_grids[zsrc_i]->cartesian_srcgrid->regparam);
 
 			bool verbal_now = verbal;
+			/*
+			// The following code used the magnifications somehow to refine the number of pixels...I can't remember exactly how it worked. Commenting it out for now
+			// It's probably too convoluted to be worth reviving...
 			if (auto_srcgrid_npixels) verbal_now = false; // since we're gonna redo the sourcegrid a second time, don't show the first one (it would just confuse people)
 			if ((auto_srcgrid_npixels) or (n_image_prior)) cartesian_srcgrids[src_i]->calculate_pixel_magnifications();
 			if (auto_srcgrid_npixels) {
@@ -15257,20 +13105,20 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
 
 				double srcgrid_area_covered_frac = high_sn_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
-				srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_pixel_grids[zsrc_i]->n_high_sn_pixels/srcgrid_area_covered_frac*aspect_ratio);
+				srcgrid_npixels_x = (int) sqrt(cartesian_srcgrids[src_i]->pixel_fraction*image_pixel_grids[zsrc_i]->n_high_sn_pixels/srcgrid_area_covered_frac*aspect_ratio);
 				srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
 
 				if (srcgrid_npixels_x < 3) srcgrid_npixels_x = 3;
 				if (srcgrid_npixels_y < 3) srcgrid_npixels_y = 3;
 
-				delete cartesian_srcgrids[src_i];
-				cartesian_srcgrids[src_i] = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y);
+				cartesian_srcgrids[src_i]->create_pixel_grid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y);
 				image_pixel_grids[zsrc_i]->set_cartesian_srcgrid(cartesian_srcgrids[src_i]);
 				cartesian_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
 				if ((mpi_id==0) and (verbal)) {
 					cout << "Optimal sourcegrid number of firstlevel pixels (active + inactive): " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
 				}
 			}
+			*/
 			if (adaptive_subgrid) {
 				cartesian_srcgrids[src_i]->adaptive_subgrid();
 				if ((mpi_id==0) and (verbal)) {
@@ -15318,7 +13166,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 			if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
 			initialize_pixel_matrices(zsrc_i,verbal);
-			if (regularization_method != None) create_regularization_matrix(0);
+			if (regularization_method != None) create_regularization_matrix(zsrc_i);
 			if (inversion_method==DENSE) {
 				convert_Lmatrix_to_dense();
 				PSF_convolution_Lmatrix_dense(zsrc_i,verbal);
@@ -15367,8 +13215,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			}
 
 			if ((regularization_method != None) and (source_npixels > 0)) {
-				if (regularization_parameter != 0) {
-					regterms = calculate_regularization_prior_term();
+				if ((*regparam_ptr) != 0) {
+					regterms = calculate_regularization_prior_term(regparam_ptr);
 					loglike_times_two += regterms;
 					loglike_reg += regterms;
 				}
@@ -15382,9 +13230,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			}
 #endif
 			clear_pixel_matrices(zsrc_i);
-			if (zsrc_i==0) {
-				regparam_first_srcplane = regularization_parameter;
-			}
 		}
 	} else if (source_fit_mode == Delaunay_Source) {
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
@@ -15415,6 +13260,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					}
 #endif
 					bool use_weighted_clustering = ((use_dist_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights))) ? true : false;
+
 					create_sourcegrid_from_imggrid_delaunay(use_weighted_clustering,zsrc_i,verbal);
 #ifdef USE_OPENMP
 					if (show_wtime) {
@@ -15425,6 +13271,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					image_pixel_grids[zsrc_i]->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
 					delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
 				}
+				regparam_ptr = &(image_pixel_grids[zsrc_i]->delaunay_srcgrid->regparam);
 
 				if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
 				if (assign_pixel_mappings(zsrc_i,verbal)==false) {
@@ -15482,9 +13329,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 				if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 				//if ((optimize_regparam) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) 
-				if (((optimize_regparam) or (zsrc_i > 0)) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) {
-					// right now, we don't support more than one regularization parameter as a free parameter, so if there are multiple source planes,
-					// the source planes with zsrc_i > 0 have to optimize the regularization parameter
+				if ((optimize_regparam) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) {
 					bool pre_srcgrid = ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) ? true : false;
 					if (optimize_regularization_parameter(zsrc_i,dense_Fmatrix,verbal,pre_srcgrid)==false) { chisq0=2e30; clear_pixel_matrices(zsrc_i); clear_sparse_lensing_matrices(); return 2e30; }
 				}
@@ -15553,12 +13398,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					}
 #endif
 					if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-					if (((optimize_regparam) or (zsrc_i > 0)) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) {
+					if ((optimize_regparam) and (regularization_method != None) and (image_pixel_grids[zsrc_i]->delaunay_srcgrid != NULL)) {
 						if (optimize_regularization_parameter(zsrc_i,dense_Fmatrix,verbal)==false) { chisq0=2e30; clear_pixel_matrices(zsrc_i); clear_sparse_lensing_matrices(); return 2e30; }
 					}
 				}
 
-				if ((!optimize_regparam) and (zsrc_i==0)) {
+				if (!optimize_regparam) {
 					if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(zsrc_i,verbal);
 					else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(zsrc_i,verbal);
 					else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(zsrc_i,verbal);
@@ -15573,8 +13418,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					image_pixel_grids[zsrc_i]->add_point_images(point_image_surface_brightness,image_pixel_grids[zsrc_i]->n_active_pixels);
 				}
 				if ((regularization_method != None) and (source_npixels > 0)) {
-					if (regularization_parameter != 0) {
-						regterms = calculate_regularization_prior_term();
+					if ((*regparam_ptr) != 0) {
+						regterms = calculate_regularization_prior_term(regparam_ptr);
 						loglike_reg += regterms;
 						loglike_times_two += regterms;
 					}
@@ -15582,11 +13427,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					else loglike_times_two += Gmatrix_log_determinant;
 				}
 				clear_pixel_matrices(zsrc_i);
-				if (zsrc_i==0) {
-					regparam_first_srcplane = regularization_parameter;
-				}
 			}
-
 		}
 
 		//split_imgpixels = old_split_imgpixels;
@@ -15621,8 +13462,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				calculate_foreground_pixel_surface_brightness(zsrc_i);
 				store_foreground_pixel_surface_brightness(zsrc_i);
 			}
+			int i_shapelet = -1;
 			if ((n_sb > 0) and ((auto_shapelet_scaling) or (auto_shapelet_center))) {
-				int i_shapelet = -1;
 				for (int i=0; i < n_sb; i++) {
 					if ((sb_list[i]->sbtype==SHAPELET) and (sbprofile_redshift_idx[i]==zsrc_i)) {
 						i_shapelet = i;
@@ -15642,6 +13483,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					}
 				}
 			}
+			sb_list[i_shapelet]->get_regularization_param_ptr(regparam_ptr);
 			initialize_pixel_matrices_shapelets(zsrc_i,verbal);
 			if ((mpi_id==0) and (verbal)) {
 				cout << "Number of active image pixels: " << image_npixels << endl;
@@ -15683,8 +13525,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 			//cout << "LOGLIKE0: " << loglike_times_two << endl;
 			if ((regularization_method != None) and (source_npixels > 0)) {
-				if (regularization_parameter != zsrc_i) {
-					regterms = calculate_regularization_prior_term();
+				if ((*regparam_ptr) != zsrc_i) {
+					regterms = calculate_regularization_prior_term(regparam_ptr);
 					//loglike_reg += calculate_regularization_prior_term();
 					loglike_reg += regterms;
 					loglike_times_two += regterms;
@@ -15702,7 +13544,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		}
 #endif
 	}
-	if (n_extended_src_redshifts > 1) regularization_parameter = regparam_first_srcplane; // restore regularization parameter for the first source plane in case it's being varied as a free param
 
 	//if (n_extended_src_redshifts > 1) {
 		//// If there are multiple extended source redshifts, combine the surface brightness from the separate image grids so it's all in the first image pixel grid
@@ -15790,23 +13631,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				logfile << "it=" << chisq_it << ": ";
 				if (n_extended_src_redshifts > 1) logfile << "zsrc_i=" << zsrc_i;
 				logfile << " chisq0=" << chisq0_zsrc << " chisq0_per_pixel=" << chisq0_zsrc/n_tot_pixels << " (ntot_pixels=" << n_tot_pixels << ") regterms=" << regterms;
-				//if (vary_pixel_fraction) logfile << "F=" << ((double) source_n_amps)/image_npixels << " ";
 			}
 		}
 		if ((mpi_id==0) and (verbal)) {
 			if (n_extended_src_redshifts > 1) cout << "zsrc_i=" << zsrc_i << ": ";
 			//cout << "chisq0=" << chisq0_zsrc << " chisq0_per_pixel=" << chisq0_zsrc/n_tot_pixels << endl;
 			cout << "chisq0=" << chisq0_zsrc << " chisq0_per_pixel=" << chisq0_zsrc/n_tot_pixels << " (ntot_pixels=" << n_tot_pixels << ") regterms=" << regterms << endl;
-		}
-		if ((source_fit_mode != Parameterized_Source) and (regularization_method != None)) {
-			if (group_id==0) {
-				if (logfile.is_open()) {
-					//if (use_lum_weighted_regularization) logfile << "reg_lsc=" << regparam_lsc << " reg_lhi=" << regparam_lhi << " reg_lum_index=" << regparam_lum_index << " reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
-					//if (use_lum_weighted_regularization) logfile << "reg_lhi=" << regparam_lhi << " reg_lum_index=" << regparam_lum_index << " reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
-					logfile << "reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
-				}
-				if (logfile.is_open()) logfile << "logdet=" << Fmatrix_log_determinant << " Rlogdet=" << Rmatrix_log_determinant << " chisq_tot=" << loglike_times_two;
-			}
 		}
 		//if ((mpi_id==0) and (verbal)) cout << "regterms=" << loglike_reg << ", n_data_pixels=" << n_data_pixels << endl;
 		if (include_noise_term_in_loglike) {
@@ -15821,7 +13651,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			loglike_times_two += n_data_pixels*log(M_2PI);
 		}
 		if ((mpi_id==0) and (verbal)) {
-			if ((source_npixels > 0) and ((vary_pixel_fraction) or (regularization_method != None))) {
+			if ((source_npixels > 0) and (regularization_method != None)) {
 				if (n_extended_src_redshifts > 1) cout << "zsrc_i=" << zsrc_i << ": ";
 				if (use_covariance_matrix) cout << "logdet(Gmatrix)=" << Gmatrix_log_determinant;
 				else cout << "logdet(Fmatrix)=" << Fmatrix_log_determinant;
@@ -15968,1454 +13798,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	chisq_it++;
 
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) clear_sparse_lensing_matrices();
+	regparam_ptr = NULL;
 
 	return loglike_times_two;
-}
-
-double QLens::invert_image_surface_brightness_map_old(double &chisq0, const bool verbal, const int ranchisq_i) // This function should probably be renamed to something like 'pixel_level_log_evidence' or something like that
-{
-	// This function is too long, and should be broken into a bunch of inline functions.
-	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
-	if (image_pixel_grid0 == NULL) { warn("No image surface brightness grid has been loaded"); return -1e30; }
-	if ((source_fit_mode == Parameterized_Source) and (n_sb==0)) {
-		warn("no parameterized sources have been defined; cannot evaluate chi-square");
-		chisq0=-1e30; return -1e30;
-	}
-
-	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in mask: " << image_pixel_data->n_mask_pixels[0] << endl;
-	if (pixel_fraction <= 0) die("pixel fraction cannot be less than or equal to zero");
-#ifdef USE_OPENMP
-	double tot_wtime0, tot_wtime;
-	if (show_wtime) {
-		tot_wtime0 = omp_get_wtime();
-	}
-#endif
-	bool at_least_one_zoom_lensed_src = false;
-	for (int k=0; k < n_sb; k++) {
-		if (sb_list[k]->is_lensed) {
-			if (sb_list[k]->zoom_subgridding) at_least_one_zoom_lensed_src = true;
-		}
-	}
-	bool at_least_one_foreground_src = false;
-	for (int k=0; k < n_sb; k++) {
-		if (!sb_list[k]->is_lensed) {
-			at_least_one_foreground_src = true;
-			break;
-		}
-	}
-
-#ifdef USE_OPENMP
-		double fspline_wtime0;
-		if (show_wtime) {
-			fspline_wtime0 = omp_get_wtime();
-		}
-#endif
-
-	bool splined_fourier_integrals = false;
-	for (int i=0; i < nlens; i++) {
-		if (lens_list[i]->n_fourier_modes > 0) {
-			lens_list[i]->spline_fourier_mode_integrals(0.01*image_pixel_data->emask_rmax,image_pixel_data->emask_rmax);
-			splined_fourier_integrals = true;
-		}
-	}
-#ifdef USE_OPENMP
-		if ((show_wtime) and (splined_fourier_integrals)) {
-			double fspline_wtime = omp_get_wtime() - fspline_wtime0;
-			if (mpi_id==0) cout << "Wall time for splining Fourier integrals: " << fspline_wtime << endl;
-		}
-#endif
-
-	if ((redo_lensing_calculations_before_inversion) and (ranchisq_i==0)) {
-		image_pixel_grid0->redo_lensing_calculations(verbal);
-	}
-	//if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source) or (n_image_prior)) image_pixel_grid0->redo_lensing_calculations(verbal);
-	//else if (at_least_one_zoom_lensed_src) image_pixel_grid0->redo_lensing_calculations_corners(); // this function needs to be updated (or else scrapped)
-
-	int i,j;
-	double loglike_times_two = 0;
-	double pixel_avg_n_images;
-
-	if (((n_image_prior) or (n_sourcepts_fit > 0)) and (source_fit_mode != Cartesian_Source)) {
-		if ((mpi_id==0) and (verbal)) cout << "Trying auxiliary sourcegrid creation..." << endl;
-#ifdef USE_OPENMP
-		double srcgrid_wtime0, srcgrid_wtime;
-		if (show_wtime) {
-			srcgrid_wtime0 = omp_get_wtime();
-		}
-#endif
-		bool source_grid_defined = true;
-		if (nlens > 0) {
-			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-				create_sourcegrid_cartesian_old(-1,verbal,true,true,true);
-			} else if (source_fit_mode==Delaunay_Source) {
-				create_sourcegrid_cartesian_old(-1,verbal,false,true,true);
-			}
-		} else source_grid_defined = false;
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-			if (mpi_id==0) cout << "wall time for auxiliary source grid creation: " << srcgrid_wtime << endl;
-		}
-#endif
-		if (source_grid_defined) {
-			image_pixel_grid0->set_cartesian_srcgrid(cartesian_srcgrid0);
-			cartesian_srcgrid0->set_image_pixel_grid(image_pixel_grid0);
-			if (!adaptive_subgrid) cartesian_srcgrid0->calculate_pixel_magnifications(); // if adaptive_subgrid is off, we still need to get pixel magnifications for nimg_prior
-		}
-		if (n_sourcepts_fit > 0) {
-			if (use_analytic_bestfit_src) set_analytic_sourcepts(verbal);
-			bool is_lensed;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				is_lensed = true;
-				if (ptsrc_redshifts[i]==lens_redshift) is_lensed = false;
-				if ((is_lensed) and (nlens==0)) die("lensed source point has been defined, but no lens objects have been created");
-				image_pixel_grid0->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],source_grid_defined,is_lensed,verbal);
-			}
-		}
-	}
-
-	if (source_fit_mode == Cartesian_Source) {
-		if (auto_sourcegrid) image_pixel_grid0->find_optimal_sourcegrid(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,sourcegrid_limit_xmin,sourcegrid_limit_xmax,sourcegrid_limit_ymin,sourcegrid_limit_ymax);
-		int n_expected_imgpixels;
-		if (auto_srcgrid_npixels) {
-			if (auto_srcgrid_set_pixel_size)
-				image_pixel_grid0->find_optimal_firstlevel_sourcegrid_npixels(sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_expected_imgpixels);
-			else
-				image_pixel_grid0->find_optimal_sourcegrid_npixels(pixel_fraction,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y,n_expected_imgpixels);
-				srcgrid_npixels_x *= 2; // aim high, since many of the source grid pixels may lie outside the mask (we'll refine the # of pixels after drawing the grid once)
-				srcgrid_npixels_y *= 2;
-		}
-		if ((srcgrid_npixels_x < 2) or (srcgrid_npixels_y < 2)) {
-			if ((mpi_id==0) and (verbal)) cout << "Source grid has negligible size...cannot invert image\n";
-			if (logfile.is_open()) 
-				logfile << "it=" << chisq_it << " chisq0=2e30" << endl;
-			return 2e30;
-		}
-		if (auto_sourcegrid) {
-			if (srcgrid_size_scale != 0) {
-				double xwidth_adj = srcgrid_size_scale*(sourcegrid_xmax-sourcegrid_xmin);
-				double ywidth_adj = srcgrid_size_scale*(sourcegrid_ymax-sourcegrid_ymin);
-				double srcgrid_xc, srcgrid_yc;
-				srcgrid_xc = (sourcegrid_xmax + sourcegrid_xmin)/2;
-				srcgrid_yc = (sourcegrid_ymax + sourcegrid_ymin)/2;
-				sourcegrid_xmin = srcgrid_xc - xwidth_adj/2;
-				sourcegrid_xmax = srcgrid_xc + xwidth_adj/2;
-				sourcegrid_ymin = srcgrid_yc - ywidth_adj/2;
-				sourcegrid_ymax = srcgrid_yc + ywidth_adj/2;
-			}
-			if ((mpi_id==0) and (verbal)) {
-				cout << "Sourcegrid dimensions: " << sourcegrid_xmin << " " << sourcegrid_xmax << " " << sourcegrid_ymin << " " << sourcegrid_ymax << endl;
-			}
-		}
-		if (cartesian_srcgrid0 != NULL) delete cartesian_srcgrid0;
-#ifdef USE_OPENMP
-		double srcgrid_wtime0, srcgrid_wtime;
-		if (show_wtime) {
-			srcgrid_wtime0 = omp_get_wtime();
-		}
-#endif
-		cartesian_srcgrid0 = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y);
-		image_pixel_grid0->set_cartesian_srcgrid(cartesian_srcgrid0);
-		cartesian_srcgrid0->set_image_pixel_grid(image_pixel_grid0);
-
-		bool verbal_now = verbal;
-		if (auto_srcgrid_npixels) verbal_now = false; // since we're gonna redo the sourcegrid a second time, don't show the first one (it would just confuse people)
-		if ((auto_srcgrid_npixels) or (n_image_prior)) cartesian_srcgrid0->calculate_pixel_magnifications();
-		if (auto_srcgrid_npixels) {
-			if ((mpi_id==0) and (verbal_now)) cout << "Assigning pixel mappings...\n";
-			if (assign_pixel_mappings(-1,verbal_now)==false) {
-				return 2e30;
-			}
-			double aspect_ratio = (sourcegrid_xmax-sourcegrid_xmin)/(sourcegrid_ymax-sourcegrid_ymin);
-
-			double srcgrid_area_covered_frac = high_sn_srcgrid_overlap_area / ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin));
-			srcgrid_npixels_x = (int) sqrt(pixel_fraction*image_pixel_grid0->n_high_sn_pixels/srcgrid_area_covered_frac*aspect_ratio);
-			srcgrid_npixels_y = (int) srcgrid_npixels_x/aspect_ratio;
-
-			if (srcgrid_npixels_x < 3) srcgrid_npixels_x = 3;
-			if (srcgrid_npixels_y < 3) srcgrid_npixels_y = 3;
-
-			delete cartesian_srcgrid0;
-			cartesian_srcgrid0 = new SourcePixelGrid(this,sourcegrid_xmin,sourcegrid_xmax,sourcegrid_ymin,sourcegrid_ymax,srcgrid_npixels_x,srcgrid_npixels_y);
-			image_pixel_grid0->set_cartesian_srcgrid(cartesian_srcgrid0);
-			cartesian_srcgrid0->set_image_pixel_grid(image_pixel_grid0);
-			if ((mpi_id==0) and (verbal)) {
-				cout << "Optimal sourcegrid number of firstlevel pixels (active + inactive): " << srcgrid_npixels_x << " " << srcgrid_npixels_y << endl;
-			}
-		}
-		if (adaptive_subgrid) {
-			cartesian_srcgrid0->adaptive_subgrid();
-			if ((mpi_id==0) and (verbal)) {
-				cout << "# of source pixels after subgridding: " << cartesian_srcgrid0->number_of_pixels;
-				if (auto_srcgrid_npixels) {
-					double pix_frac = ((double) cartesian_srcgrid0->number_of_pixels) / n_expected_imgpixels;
-					cout << ", f=" << pix_frac;
-				}
-				cout << endl;
-			}
-		} else {
-			if (n_image_prior) cartesian_srcgrid0->calculate_pixel_magnifications();
-		}
-		if (n_sourcepts_fit > 0) {
-			bool use_overlap = ((n_image_prior) or (adaptive_subgrid)) ? true : false;
-			bool is_lensed;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				is_lensed = true;
-				if (ptsrc_redshifts[i]==lens_redshift) is_lensed = false;
-				image_pixel_grid0->find_point_images(sourcepts_fit[i][0],sourcepts_fit[i][1],point_imgs[i],use_overlap,is_lensed,verbal);
-			}
-		}
-
-		if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
-		if (assign_pixel_mappings(-1,verbal)==false) {
-			return 2e30;
-		}
-		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
-		assign_foreground_mappings(-1);
-
-		if ((mpi_id==0) and (verbal)) {
-			cout << "Number of active image pixels: " << image_npixels << endl;
-		}
-		//if (mpi_id==0) cout << "****Overlap area: " << total_srcgrid_overlap_area << endl;
-		//if (mpi_id==0) cout << "****High S/N Overlap area: " << high_sn_srcgrid_overlap_area << endl;
-		double src_pixel_area = ((sourcegrid_xmax-sourcegrid_xmin)*(sourcegrid_ymax-sourcegrid_ymin)) / (srcgrid_npixels_x*srcgrid_npixels_y);
-		double est_nmapped = total_srcgrid_overlap_area / src_pixel_area;
-		double est_pixfrac = est_nmapped / image_npixels;
-		if ((mpi_id==0) and (verbal)) {
-			double pixfrac = ((double) source_n_amps) / image_npixels;
-			cout << "Actual f = " << pixfrac << endl;
-			if (auto_srcgrid_npixels) {
-				double high_sn_pixfrac = ((double) source_n_amps*high_sn_srcgrid_overlap_area/total_srcgrid_overlap_area) / image_pixel_grid0->n_high_sn_pixels;
-				cout << "Actual high S/N f = " << high_sn_pixfrac << endl;
-			}
-		}
-
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-			if (mpi_id==0) cout << "Wall time for creating source pixel grid: " << srcgrid_wtime << endl;
-		}
-#endif
-
-		if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
-		initialize_pixel_matrices(-1,verbal);
-		if (regularization_method != None) create_regularization_matrix(-1);
-		if (inversion_method==DENSE) {
-			convert_Lmatrix_to_dense();
-			PSF_convolution_Lmatrix_dense(-1,verbal);
-		} else {
-			PSF_convolution_Lmatrix(-1,verbal);
-		}
-		image_pixel_grid0->fill_surface_brightness_vector(); // note that image_pixel_grid0 just has the data pixel values stored in it
-		if (!ignore_foreground_in_chisq) {
-			calculate_foreground_pixel_surface_brightness(-1,true);
-			store_foreground_pixel_surface_brightness(-1);
-		}
-		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
-			}
-		}
-
-		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
-		bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
-		if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(verbal);
-		else create_lensing_matrices_from_Lmatrix(dense_Fmatrix,verbal);
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			tot_wtime = omp_get_wtime() - tot_wtime0;
-			if (mpi_id==0) cout << "Total wall time before F-matrix inversion: " << tot_wtime << endl;
-		}
-#endif
-
-		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-		if ((optimize_regparam) and (regularization_method != None)) {
-			optimize_regularization_parameter(-1,dense_Fmatrix,verbal);
-		}
-		if ((!optimize_regparam)) {
-			if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(-1,verbal);
-			else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(-1,verbal);
-			else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(-1,verbal);
-			else invert_lens_mapping_CG_method(-1,verbal);
-		}
-
-		if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
-		else calculate_image_pixel_surface_brightness();
-		//store_image_pixel_surface_brightness(-1);
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			tot_wtime = omp_get_wtime() - tot_wtime0;
-			if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime << endl;
-		}
-#endif
-	} else if (source_fit_mode == Delaunay_Source) {
-		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
-		assign_foreground_mappings(-1);
-
-		if (use_saved_sbweights) load_pixel_sbweights();
-		if (nlens > 0) {
-#ifdef USE_OPENMP
-			double srcgrid_wtime0, srcgrid_wtime;
-			if (show_wtime) {
-				srcgrid_wtime0 = omp_get_wtime();
-			}
-#endif
-			bool use_weighted_clustering = ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights)) ? true : false;
-			create_sourcegrid_from_imggrid_delaunay_old(use_weighted_clustering,verbal);
-#ifdef USE_OPENMP
-			if (show_wtime) {
-				srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-				if (mpi_id==0) cout << "wall time for Delaunay grid creation: " << srcgrid_wtime << endl;
-			}
-#endif
-			image_pixel_grid0->set_delaunay_srcgrid(delaunay_srcgrid0);
-		}
-
-		if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
-		if (assign_pixel_mappings(-1,verbal)==false) {
-			return 2e30;
-		}
-		if ((mpi_id==0) and (verbal)) {
-			cout << "Number of active image pixels: " << image_npixels << endl;
-		}
-
-		if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
-		initialize_pixel_matrices(-1,verbal);
-		bool include_lum_weighting = ((use_lum_weighted_regularization) and (get_lumreg_from_sbweights)) ? true : false;
-		if ((regularization_method != None) and (delaunay_srcgrid0 != NULL)) {
-			if (create_regularization_matrix(-1,include_lum_weighting,get_lumreg_from_sbweights)==false) { chisq0=2e30; clear_pixel_matrices(-1); return 2e30; } // in this case, covariance matrix was not positive definite (happens with lum_weighted_corrlength)
-		}
-		if ((mpi_id==0) and (verbal)) {
-			cout << "Number of active image pixels: " << image_npixels << endl;
-			cout << "Number of source pixels: " << source_npixels << endl;
-			if (source_n_amps > source_npixels) cout << "Number of total amplitudes: " << source_n_amps << endl;
-		}
-
-		if (inversion_method==DENSE) {
-			convert_Lmatrix_to_dense();
-			PSF_convolution_Lmatrix_dense(-1,verbal);
-		} else {
-			PSF_convolution_Lmatrix(-1,verbal);
-		}
-		image_pixel_grid0->fill_surface_brightness_vector(); // note that image_pixel_grid0 just has the data pixel values stored in it
-		if (!ignore_foreground_in_chisq) {
-			calculate_foreground_pixel_surface_brightness(-1,true);
-			store_foreground_pixel_surface_brightness(-1);
-		}
-		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
-			}
-		}
-
-		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
-		bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
-		if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(-1,verbal);
-		else create_lensing_matrices_from_Lmatrix(-1,dense_Fmatrix,verbal);
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			tot_wtime = omp_get_wtime() - tot_wtime0;
-			if (mpi_id==0) cout << "Total wall time before F-matrix inversion: " << tot_wtime << endl;
-		}
-#endif
-
-		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-		if ((optimize_regparam) and (regularization_method != None) and (delaunay_srcgrid0 != NULL)) {
-			bool pre_srcgrid = ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) ? true : false;
-			if (optimize_regularization_parameter(-1,dense_Fmatrix,verbal,pre_srcgrid)==false) { chisq0=2e30; clear_pixel_matrices(); clear_sparse_lensing_matrices(); return 2e30; }
-		}
-		if ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) {
-#ifdef USE_OPENMP
-			double srcgrid_wtime0, srcgrid_wtime;
-			if (show_wtime) {
-				srcgrid_wtime0 = omp_get_wtime();
-			}
-#endif
-			create_sourcegrid_from_imggrid_delaunay_old(true,verbal);
-
-#ifdef USE_OPENMP
-			if (show_wtime) {
-				srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-				if (mpi_id==0) cout << "wall time for Delaunay grid creation (with lum weighting): " << srcgrid_wtime << endl;
-			}
-#endif
-			image_pixel_grid0->set_delaunay_srcgrid(delaunay_srcgrid0);
-			clear_sparse_lensing_matrices();
-			clear_pixel_matrices();
-
-			if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings (with lum weighting)...\n";
-			if (assign_pixel_mappings(-1,verbal)==false) {
-				return 2e30;
-			}
-			if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings (with lum weighting)... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
-			assign_foreground_mappings(-1);
-
-			if ((mpi_id==0) and (verbal)) {
-				cout << "Number of active image pixels (with lum weighting): " << image_npixels << endl;
-			}
-
-			if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices (with lum weighting)...\n";
-			initialize_pixel_matrices(-1,verbal);
-			if (regularization_method != None) {
-				if (create_regularization_matrix(-1,include_lum_weighting,get_lumreg_from_sbweights)==false) { chisq0 = 2e30; clear_pixel_matrices(); return 2e30; } // in this case, covariance matrix was not positive definite (happens with lum_weighted_corrlength)
-			}
-			if (inversion_method==DENSE) {
-				convert_Lmatrix_to_dense();
-				PSF_convolution_Lmatrix_dense(-1,verbal);
-			} else {
-				PSF_convolution_Lmatrix(-1,verbal);
-			}
-			image_pixel_grid0->fill_surface_brightness_vector(); // note that image_pixel_grid0 just has the data pixel values stored in it
-			if (!ignore_foreground_in_chisq) {
-				calculate_foreground_pixel_surface_brightness(-1,true);
-				store_foreground_pixel_surface_brightness(-1);
-			}
-			if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-				for (i=0; i < n_sourcepts_fit; i++) {
-					image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
-				}
-			}
-
-			if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices (with lum weighting)...\n" << flush;
-			bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
-			if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(-1,verbal);
-			else create_lensing_matrices_from_Lmatrix(-1,dense_Fmatrix,verbal);
-#ifdef USE_OPENMP
-			if (show_wtime) {
-				tot_wtime = omp_get_wtime() - tot_wtime0;
-				if (mpi_id==0) cout << "Total wall time before F-matrix inversion (with lum weighting): " << tot_wtime << endl;
-			}
-#endif
-			if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-			if ((optimize_regparam) and (regularization_method != None)) {
-				if (optimize_regularization_parameter(-1,dense_Fmatrix,verbal)==false) { chisq0=2e30; clear_pixel_matrices(); clear_sparse_lensing_matrices(); return 2e30; }
-			}
-		}
-
-		if ((!optimize_regparam)) {
-			if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(-1,verbal);
-			else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(-1,verbal);
-			else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(-1,verbal);
-			else invert_lens_mapping_CG_method(-1,verbal);
-		}
-		if ((!use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights) and (save_sbweights_during_inversion)) calculate_subpixel_sbweights(-1,true,verbal);
-
-		if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
-		else calculate_image_pixel_surface_brightness();
-		//store_image_pixel_surface_brightness(-1);
-		//split_imgpixels = old_split_imgpixels;
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			tot_wtime = omp_get_wtime() - tot_wtime0;
-			if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime << endl;
-		}
-#endif
-	} else if (source_fit_mode == Parameterized_Source) {
-		bool foreground_only = (nlens==0) ? true : false;
-		image_pixel_grid0->find_surface_brightness(foreground_only);
-		vectorize_image_pixel_surface_brightness(-1);
-		PSF_convolution_pixel_vector(-1,false,verbal);
-		if (save_sbweights_during_inversion) calculate_subpixel_sbweights(-1,true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
-		if (n_sourcepts_fit > 0) {
-			point_image_surface_brightness = new double[image_npixels];
-			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, false, source_flux);
-			}
-		}
-		store_image_pixel_surface_brightness(-1);
-	} else {
-		// Shapelet_Source mode
-		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
-		assign_foreground_mappings(-1);
-		if (!ignore_foreground_in_chisq) {
-			calculate_foreground_pixel_surface_brightness(-1);
-			store_foreground_pixel_surface_brightness(-1);
-		}
-		if ((n_sb > 0) and ((auto_shapelet_scaling) or (auto_shapelet_center))) {
-			int i_shapelet = -1;
-			for (int i=0; i < n_sb; i++) {
-				if (sb_list[i]->sbtype==SHAPELET) {
-					i_shapelet = i;
-					break; // currently only one shapelet source supported
-				}
-			}
-			if (!ignore_foreground_in_chisq) {
-				if ((i_shapelet >= 0) and (find_shapelet_scaling_parameters(i_shapelet,-1,verbal)==true)) {
-					// if returned true, then there is a source that is anchored to the shapelet params, so we must rebuild the foreground/sbprofile surface brightness now
-					if ((mpi_id==0) and (verbal)) cout << "Recalculating foreground/sbprofile surface brightness (two more iterations)..." << endl;
-					calculate_foreground_pixel_surface_brightness(-1);
-					store_foreground_pixel_surface_brightness(-1);
-					// one more iteration for good measure
-					find_shapelet_scaling_parameters(i_shapelet,-1,verbal);
-					calculate_foreground_pixel_surface_brightness(-1);
-					store_foreground_pixel_surface_brightness(-1);
-				}
-			}
-		}
-		initialize_pixel_matrices_shapelets(-1,verbal);
-		if ((mpi_id==0) and (verbal)) {
-			cout << "Number of active image pixels: " << image_npixels << endl;
-			cout << "Number of shapelet amplitudes: " << source_npixels << endl;
-			if (source_n_amps > source_npixels) cout << "Number of total amplitudes: " << source_n_amps << endl;
-		}
-
-		image_pixel_grid0->fill_surface_brightness_vector(); // note that image_pixel_grid0 just has the data pixel values stored in it
-		PSF_convolution_Lmatrix_dense(verbal);
-		if ((n_sourcepts_fit > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, false, source_flux);
-			}
-		}
-
-		if (regularization_method != None) create_regularization_matrix_shapelet(-1);
-		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
-		create_lensing_matrices_from_Lmatrix_dense(verbal);
-
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			tot_wtime = omp_get_wtime() - tot_wtime0;
-			if (mpi_id==0) cout << "Total wall time before F-matrix inversion: " << tot_wtime << endl;
-		}
-#endif
-		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-		if ((optimize_regparam) and (regularization_method != None) and (source_npixels > 0)) optimize_regularization_parameter(-1,true,verbal);
-		if ((!optimize_regparam) or (source_npixels==0) or (regularization_method==None)) invert_lens_mapping_dense(-1,verbal); 
-		if (save_sbweights_during_inversion) calculate_subpixel_sbweights(-1,true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
-		calculate_image_pixel_surface_brightness_dense();
-		//store_image_pixel_surface_brightness(-1);
-
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			tot_wtime = omp_get_wtime() - tot_wtime0;
-			if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime << endl;
-		}
-#endif
-	}
-
-	if ((n_image_prior) and (source_fit_mode != Cartesian_Source)) {
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			wtime0 = omp_get_wtime();
-		}
-#endif
-		//if (nlens==0) {
-			//for (i=0; i < n_sourcepts_fit; i++) {
-				//if (ptsrc_redshifts[i] != lens_redshift) die("lensed source point has been defined, but no lens objects have been created");
-			//}
-		//} else {
-			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-				cartesian_srcgrid0->assign_surface_brightness_from_analytic_source();
-			} else if (source_fit_mode==Delaunay_Source) {
-				cartesian_srcgrid0->assign_surface_brightness_from_delaunay_grid(delaunay_srcgrid0);
-			}
-			pixel_avg_n_images = cartesian_srcgrid0->find_avg_n_images(n_image_prior_sb_frac);
-		//}
-#ifdef USE_OPENMP
-		if (show_wtime) {
-			wtime = omp_get_wtime() - wtime0;
-			if (mpi_id==0) cout << "Wall time for assigning SB for nimg_prior: " << wtime << endl;
-		}
-#endif
-	}
-
-	if (n_sourcepts_fit > 0) {
-		if (((include_imgfluxes_in_inversion) or (include_srcflux_in_inversion)) and (source_fit_mode != Parameterized_Source)) {
-			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
-			//cout << "srcflux=" << source_flux << endl;
-			for (i=0; i < n_sourcepts_fit; i++) {
-				image_pixel_grid0->generate_point_images(point_imgs[i], point_image_surface_brightness, include_imgfluxes_in_inversion, source_flux);
-			}
-		} else {
-			for (i=0; i < image_npixels; i++) image_surface_brightness[i] += point_image_surface_brightness[i];
-		}
-		//image_pixel_grid0->add_point_images(point_image_surface_brightness, image_npixels);
-	}
-	//if (mpi_id==0) image_pixel_grid0->plot_surface_brightness("img_pixel",false,false);
-		//run_plotter("imgpixel");
-
-	double cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel
-	if (!use_noise_map) {
-		if (background_pixel_noise==0) cov_inverse = 1; // doesn't matter what cov_inverse is, since we won't be regularizing
-		else cov_inverse = 1.0/SQR(background_pixel_noise);
-	}
-	int img_index;
-	int count=0, foreground_count=0;
-	int n_data_pixels=0;
-	//ofstream wtfout("wtf.dat");
-	for (i=0; i < image_pixel_data->npixels_x; i++) {
-		for (j=0; j < image_pixel_data->npixels_y; j++) {
-			if ((image_pixel_grid0->pixel_in_mask[i][j]) or ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src) and (image_pixel_data->foreground_mask[i][j]))) {
-				n_data_pixels++;
-				if (use_noise_map) cov_inverse = image_pixel_data->covinv_map[i][j];
-				if ((image_pixel_grid0->pixel_in_mask[i][j]) and (image_pixel_grid0->maps_to_source_pixel[i][j])) {
-					img_index = image_pixel_grid0->pixel_index[i][j];
-					if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) {
-						loglike_times_two += SQR(image_surface_brightness[img_index] + image_pixel_grid0->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
-						//loglike_times_two += SQR(image_pixel_grid0->surface_brightness[i][j] + image_pixel_grid0->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/cov_inverse; // generalize to full cov_inverse matrix later
-						foreground_count++;
-					}
-					else {
-						loglike_times_two += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
-						//wtfout << i << " " << j << " " << SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j]) << endl;
-					}
-					//else loglike_times_two += SQR(image_pixel_grid0->surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])/cov_inverse; // generalize to full cov_inverse matrix later
-					count++;
-				} else {
-					// NOTE that if a pixel is not in the foreground mask, the foreground_surface_brightness has already been set to zero for that pixel
-					if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) {
-						loglike_times_two += SQR(image_pixel_grid0->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse;
-						foreground_count++;
-					}
-					else if (image_pixel_grid0->pixel_in_mask[i][j]) loglike_times_two += SQR(image_pixel_data->surface_brightness[i][j])*cov_inverse; // if we're not modeling foreground, then only add to chi-square if it's inside the primary mask
-				}
-			}
-		}
-	}
-	chisq0 = loglike_times_two;
-
-	int n_tot_pixels;
-	if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) n_tot_pixels = image_npixels_fgmask;
-	else n_tot_pixels = image_pixel_data->n_mask_pixels[0];
-	if (group_id==0) {
-		if (logfile.is_open()) {
-			logfile << "it=" << chisq_it << " chisq0=" << loglike_times_two << " chisq0_per_pixel=" << loglike_times_two/n_tot_pixels << " ";
-			if (vary_pixel_fraction) logfile << "F=" << ((double) source_n_amps)/image_npixels << " ";
-		}
-	}
-	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << loglike_times_two << " chisq0_per_pixel=" << loglike_times_two/n_tot_pixels << endl;
-	double loglike_reg;
-	if ((source_fit_mode != Parameterized_Source) and (regularization_method != None) and (source_npixels > 0)) {
-		if (regularization_parameter != 0) {
-			loglike_reg = calculate_regularization_prior_term();
-			loglike_times_two += loglike_reg;
-		}
-		if (!use_covariance_matrix) loglike_times_two += Fmatrix_log_determinant;
-		else loglike_times_two += Gmatrix_log_determinant;
-		if (group_id==0) {
-			if (logfile.is_open()) {
-				//if (use_lum_weighted_regularization) logfile << "reg_lsc=" << regparam_lsc << " reg_lhi=" << regparam_lhi << " reg_lum_index=" << regparam_lum_index << " reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
-				//if (use_lum_weighted_regularization) logfile << "reg_lhi=" << regparam_lhi << " reg_lum_index=" << regparam_lum_index << " reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
-				logfile << "reg=" << regularization_parameter << " chisq_reg=" << loglike_times_two << " ";
-			}
-			if (logfile.is_open()) logfile << "logdet=" << Fmatrix_log_determinant << " Rlogdet=" << Rmatrix_log_determinant << " chisq_tot=" << loglike_times_two;
-		}
-	}
-	//if ((mpi_id==0) and (verbal)) cout << "regterms=" << loglike_reg << ", n_data_pixels=" << n_data_pixels << endl;
-	if (include_noise_term_in_loglike) {
-		// Need to improve this when using noise map!
-		if (use_noise_map) {
-			for (i=0; i < image_npixels; i++) {
-				loglike_times_two -= log(imgpixel_covinv_vector[i]); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
-			}
-		} else {
-			loglike_times_two -= n_data_pixels*log(cov_inverse); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
-		}
-		loglike_times_two += n_data_pixels*log(M_2PI);
-	} else {
-		if ((mpi_id==0) and (verbal)) cout << "NOTE: the noise term in the log(evidence) is NOT being included (to include, set 'include_noise_term_in_loglike' to 'on')" << endl;
-	}
-
-	// to normalize the evidence properly
-
-	if (n_image_prior) {
-		double chisq_penalty;
-		if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
-		if (pixel_avg_n_images < n_image_threshold) {
-			chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,40) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
-			loglike_times_two += chisq_penalty;
-			if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_images << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
-		}
-	}
-
-	bool sb_outside_window = false;
-	if (outside_sb_prior) {
-		if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
-			clear_sparse_lensing_matrices();
-			clear_pixel_matrices();
-			//if (image_pixel_data->extended_mask_n_neighbors[0] == -1) image_pixel_grid0->include_all_pixels();
-			//if (extended_mask_n_neighbors == -1) image_pixel_grid0->include_all_pixels();
-			image_pixel_grid0->activate_extended_mask(); 
-			assign_pixel_mappings(-1,verbal);
-			initialize_pixel_matrices(-1,verbal);
-			//if (inversion_method==DENSE) die("need to implement FFT convolution of emask for outside_sb_prior");
-			if (inversion_method==DENSE) {
-				convert_Lmatrix_to_dense();
-				//PSF_convolution_Lmatrix_dense_emask(verbal);
-			}
-			//else PSF_convolution_Lmatrix(verbal);
-			if (source_fit_mode==Cartesian_Source) cartesian_srcgrid0->fill_surface_brightness_vector();
-			else delaunay_srcgrid0->fill_surface_brightness_vector();
-			if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
-			else calculate_image_pixel_surface_brightness();
-			PSF_convolution_pixel_vector(-1,false,verbal);
-		} else if (source_fit_mode==Shapelet_Source) {
-#ifdef USE_OPENMP
-			double sbwtime, sbwtime0;
-			if (show_wtime) {
-				sbwtime0 = omp_get_wtime();
-			}
-#endif
-			clear_pixel_matrices(-1);
-			//if (image_pixel_data->extended_mask_n_neighbors[0] == -1) image_pixel_grid0->include_all_pixels();
-			image_pixel_grid0->activate_extended_mask(); 
-
-			image_pixel_grid0->find_surface_brightness(false,true);
-			vectorize_image_pixel_surface_brightness(-1);
-#ifdef USE_OPENMP
-			if (show_wtime) {
-				sbwtime = omp_get_wtime() - sbwtime0;
-				if (mpi_id==0) cout << "Wall time for calculating SB outside mask: " << sbwtime << endl;
-			}
-#endif
-			PSF_convolution_pixel_vector(-1,false,verbal);
-			image_pixel_grid0->load_data((*image_pixel_data)); // This restores pixel data values to image_pixel_grid0 (used for the inversion)
-		} else if (source_fit_mode==Parameterized_Source) {
-			clear_pixel_matrices();
-			//if (image_pixel_data->extended_mask_n_neighbors[0] == -1) image_pixel_grid0->include_all_pixels();
-			image_pixel_grid0->activate_extended_mask(); 
-			image_pixel_grid0->find_surface_brightness(false,true);
-			vectorize_image_pixel_surface_brightness(-1);
-			PSF_convolution_pixel_vector(-1,false,verbal);
-			//store_image_pixel_surface_brightness(-1);
-		}
-
-		double max_external_sb = -1e30, max_sb = -1e30;
-		for (i=0; i < image_pixel_data->npixels_x; i++) {
-			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if ((image_pixel_data->in_mask[0][i][j]) and (image_pixel_grid0->maps_to_source_pixel[i][j])) {
-					img_index = image_pixel_grid0->pixel_index[i][j];
-					if (image_surface_brightness[img_index] > max_sb) {
-						 max_sb = image_surface_brightness[img_index];
-					}
-				}
-			}
-		}
-		 
-		// NOTE: by default, outside_sb_prior_noise_frac is a negative number so it isn't used. But it can be changed by the user (useful for low S/N sources)
-		double outside_sb_threshold = dmax(outside_sb_prior_noise_frac*background_pixel_noise,outside_sb_prior_threshold*max_sb);
-		int isb, jsb;
-		if ((verbal) and (mpi_id==0)) cout << "OUTSIDE SB THRESHOLD: " << outside_sb_threshold << endl;
-		for (i=0; i < image_pixel_data->npixels_x; i++) {
-			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if ((!image_pixel_data->in_mask[0][i][j]) and ((image_pixel_data->extended_mask[0][i][j])) and (image_pixel_grid0->maps_to_source_pixel[i][j])) {
-					img_index = image_pixel_grid0->pixel_index[i][j];
-					//cout << image_surface_brightness[img_index] << endl;
-					if (abs(image_surface_brightness[img_index]) >= outside_sb_threshold) {
-						if (abs(image_surface_brightness[img_index]) > max_external_sb) {
-							 max_external_sb = abs(image_surface_brightness[img_index]);
-							 isb=i; jsb=j;
-						}
-					}
-				}
-			}
-		}
-		if (max_external_sb > 0) {
-			double chisq_penalty;
-			sb_outside_window = true;
-			chisq_penalty = pow(1+abs((max_external_sb-outside_sb_threshold)/outside_sb_threshold),60) - 1.0;
-			loglike_times_two += chisq_penalty;
-			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << outside_sb_threshold << ") has been found outside the selected fit region at pixel (" << image_pixel_grid0->center_pts[isb][jsb][0] << "," << image_pixel_grid0->center_pts[isb][jsb][1] << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
-		}
-		image_pixel_grid0->set_fit_window((*image_pixel_data));
-	}
-
-	if (((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (source_npixels > 0))
-	{
-		if ((group_id==0) and (logfile.is_open())) {
-			if (sb_outside_window) logfile << " -2*log(ev)=" << loglike_times_two << " (no priors; SB produced outside window)" << endl;
-			else logfile << " -2*log(ev)=" << loglike_times_two << " (no priors)" << endl;
-		}
-		if ((mpi_id==0) and (verbal)) {
-			cout << "-2*log(ev)=" << loglike_times_two << " (a.k.a. 'chisq_pix')" << endl;
-			if ((source_npixels > 0) and ((vary_pixel_fraction) or (regularization_method != None))) {
-				if (use_covariance_matrix) cout << " logdet(Gmatrix)=" << Gmatrix_log_determinant << endl;
-				else cout << " logdet(Fmatrix)=" << Fmatrix_log_determinant << endl;
-			}
-			if (regularization_method != None) cout << " logdet(Rmatrix)=" << Rmatrix_log_determinant << endl;
-		}
-	}
-	if ((mpi_id==0) and (verbal)) {
-		cout << "number of image pixels included in loglike = " << count << endl;
-		if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) cout << "number of foreground image pixels included in loglike = " << foreground_count << endl;
-	}
-
-	chisq_it++;
-
-	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) clear_sparse_lensing_matrices();
-	clear_pixel_matrices(-1);
-	return loglike_times_two;
-}
-
-
-
-/*
-double QLens::calculate_chisq0_from_srcgrid(double &chisq0, bool verbal)
-{
-
-	if ((source_fit_mode==Cartesian_Source) and (cartesian_srcgrid0==NULL)) { warn("No source surface brightness map has been generated"); return false; }
-	if (((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) and (n_sb==0)) { warn("No surface brightness profiles have been defined"); return false; }
-	if (image_pixel_data==NULL) { warn("no pixel data image has been loaded"); return false; }
-	double xmin,xmax,ymin,ymax;
-	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
-	ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
-	xmax += 1e-10; // is this still necessary? Check
-	ymax += 1e-10;
-	if (image_pixel_grids != NULL) delete image_pixel_grids;
-	image_pixel_grids = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,0);
-	if (image_pixel_data != NULL) image_pixel_grids->set_fit_window((*image_pixel_data)); 
-	//if (image_pixel_data != NULL) image_pixel_grids->set_neighbor_pixels(5); 
-	if (active_image_pixel_i != NULL) {
-		delete[] active_image_pixel_i;
-		delete[] active_image_pixel_j;
-		active_image_pixel_i = NULL;
-		active_image_pixel_j = NULL;
-	}
-
-	if (source_fit_mode==Cartesian_Source) {
-		image_pixel_grids->set_cartesian_srcgrid(cartesian_srcgrid0);
-		cartesian_srcgrid0->set_image_pixel_grid(image_pixel_grids);
-		if (assign_pixel_mappings(verbal)==false) return false;
-	}
-	image_pixel_grids->find_surface_brightness();
-	vectorize_image_pixel_surface_brightness(0);
-	PSF_convolution_pixel_vector(image_surface_brightness,false,verbal); // if reduce factor > 1, we'll do the PSF convolution after reducing the resolution
-	store_image_pixel_surface_brightness(0);
-
-	double covariance; // right now we're using a uniform uncorrelated noise for each pixel
-	if (background_pixel_noise==0) covariance = 1; // doesn't matter what covariance is, since we won't be regularizing
-	else covariance = SQR(background_pixel_noise);
-	double chisq = 0;
-	int img_index;
-	int i,j;
-	for (i=0; i < image_pixel_data->npixels_x; i++) {
-		for (j=0; j < image_pixel_data->npixels_y; j++) {
-			if (image_pixel_data->in_mask[i][j]) {
-				if (image_pixel_grids->maps_to_source_pixel[i][j]) {
-					img_index = image_pixel_grids->pixel_index[i][j];
-					chisq += SQR(image_surface_brightness[img_index] - image_pixel_data->surface_brightness[i][j])/covariance; // generalize to full covariance matrix later
-				} else {
-					chisq += SQR(image_pixel_data->surface_brightness[i][j])/covariance;
-				}
-			}
-		}
-	}
-	chisq0 = chisq;
-	clear_pixel_matrices();
-
-	if (group_id==0) {
-		if (logfile.is_open()) {
-			logfile << "it=" << chisq_it << " chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << " ";
-			if (vary_pixel_fraction) logfile << "F=" << ((double) source_n_amps)/image_npixels << " ";
-		}
-	}
-	if ((mpi_id==0) and (verbal)) cout << "chisq0=" << chisq << " chisq0_per_pixel=" << chisq/image_pixel_data->n_required_pixels << endl;
-	return true;
-}
-*/
-
-int croot_lensnumber;
-
-void QLens::plot_mc_curve(const int lensnumber, const double logm_min, const double logm_max, const string filename)
-{
-	// Uncomment below if you don't want to load lens configuration from a script first
-	/*
-	clear_lenses();
-	LensProfile::use_ellipticity_components = true;
-	Shear::use_shear_component_params = true;
-
-	create_and_add_lens(sple_LENS,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
-	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,-0.0575047,0.0152892,-0.00558392);
-	lens_list[1]->anchor_center_to_lens(lens_list,0);
-	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
-	*/
-	double mvir0,c0; // just to save original values
-	if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
-	if (lens_list[lensnumber]->get_specific_parameter("c",c0)==false) die("could not find c parameter");
-
-	croot_lensnumber = lensnumber;
-	double rmax,rmax_true,avgsig,menc,menc_true,rmax_z,avgkap_scaled;
-	if (!calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_true,avgsig,menc_true,rmax_z,avgkap_scaled)) die("could not calculate critical curve perturbation radius");
-	menc_true = mass2d_r(rmax_true,lensnumber,false);
-
-	// overriding the above
-	//rmax_true = 0.07;
-	//menc_true = mass2d_r(rmax_true,lensnumber);
-
-	rmax_true_mc = rmax_true; // for root finder
-	menc_true_mc = menc_true; // for root finder
-
-	cout << "rmax_true=" << rmax_true << " menc_true=" << menc_true << endl;
-
-	double (Brent::*mc_eq)(const double);
-	mc_eq = static_cast<double (Brent::*)(const double)> (&QLens::croot_eq);
-
-	double mvir, c, logm, logm_step;
-	int i,n_logm = 100;
-	logm_step = (logm_max-logm_min)/(n_logm-1);
-	double lowc, hic, lowf, hif;
-	lowc = 1;
-	hic = 1000000;
-	ofstream mcout(filename.c_str());
-	for (i=0, logm=logm_min; i < n_logm; i++, logm += logm_step) {
-		mvir = pow(10,logm);
-		if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
-		lowf = (this->*mc_eq)(lowc);
-		hif = (this->*mc_eq)(hic);
-		if ((lowf*hif) > 0.0) {
-			warn("Root not bracketed for logm=%g\n",logm);
-			break;
-		}
-		c = BrentsMethod(mc_eq, lowc, hic, 1e-5);
-		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-		mcout << logm << " " << c << " " << rmax << endl;
-	}
-	if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir0)==false) die("could not find parameter");
-	if (lens_list[lensnumber]->update_specific_parameter("c",c0)==false) die("could not find parameter");
-}
-
-double QLens::croot_eq(const double c)
-{
-	if (lens_list[croot_lensnumber]->update_specific_parameter("c",c)==false) die("could not find parameter");
-	double avgsig, menc, rmax, avgkap_scaled, rmax_z;
-	calculate_critical_curve_perturbation_radius_numerical(croot_lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-	return (rmax - rmax_true_mc);
-	//return (mass2d_r(rmax_true_mc,croot_lensnumber,false) - menc_true_mc);
-}
-
-void QLens::find_equiv_mvir(const double newc)
-{
-	// Uncomment below if you don't want to load lens configuration from a script first
-	/*
-	clear_lenses();
-	LensProfile::use_ellipticity_components = true;
-	Shear::use_shear_component_params = true;
-
-	create_and_add_lens(sple_LENS,1,lens_redshift,reference_source_redshift,1.3634,1.17163,0,0.0347001,-0.0100747,0.0152892,-0.00558392);
-	add_shear_lens(lens_redshift,reference_source_redshift,0.0647257,-0.0575047,0.0152892,-0.00558392);
-	lens_list[1]->anchor_center_to_lens(lens_list,0);
-	create_and_add_lens(nfw,1,lens_redshift,reference_source_redshift,1e10,20.1015,0,0,0,0.18,-1.42,0,0,1);
-	*/
-	double rmax,rmax_true,avgsig,menc,menc_true,rmax_z,avgkap_scaled;
-	if (!calculate_critical_curve_perturbation_radius_numerical(2,false,rmax_true,avgsig,menc_true,rmax_z,avgkap_scaled)) die("could not calculate critical curve perturbation radius");
-	menc_true = mass2d_r(rmax_true,2,false);
-
-	// overriding the above
-	//rmax_true = 0.07;
-	//menc_true = mass2d_r(rmax_true,2);
-
-	rmax_true_mc = rmax_true; // for root finder
-	menc_true_mc = menc_true; // for root finder
-
-	double (Brent::*mc_eq)(const double);
-	mc_eq = static_cast<double (Brent::*)(const double)> (&QLens::mroot_eq);
-
-	if (lens_list[2]->update_specific_parameter("c",newc)==false) die("could not find parameter");
-	double lognewm = BrentsMethod(mc_eq, 6, 12, 1e-5);
-	double newm = pow(10,lognewm);
-	cout << "rmax_true=" << rmax_true << " menc_true=" << menc_true << " mvir=" << newm << endl;
-
-	if (lens_list[2]->update_specific_parameter("mvir",newm)==false) die("could not find parameter");
-	reset_grid();
-}
-
-double QLens::mroot_eq(const double logm)
-{
-	double m = pow(10,logm);
-	if (lens_list[2]->update_specific_parameter("mvir",m)==false) die("could not find parameter");
-	return (mass2d_r(rmax_true_mc,2,false) - menc_true_mc);
-}
-
-int zroot_lensnumber;
-
-double QLens::NFW_def_function(const double x)
-{
-	double xsq = x*x;
-	return ((xsq > 1.0) ? (atan(sqrt(xsq-1)) / sqrt(xsq-1)) : (xsq < 1.0) ?  (atanh(sqrt(1-xsq)) / sqrt(1-xsq)) : 1.0);
-}
-
-//const double alpha_c = -0.105;
-//const double alpha_c = -0.063;
-//const double alpha_c = -0.046;
-//const double gamma_c = -0.06;
-const double alpha_c0 = -0.063;
-const double alpha_c = -0.05;
-const double gamma_c = -0.045;
-const double delta_c = 0.025;
-//const double alpha_c = 0;
-double muroot_kprime;
-double muroot_mvir0, muroot_rs0, muroot_rmax_p,muroot_z,muroot_x0,muroot_fzm,muroot_c0,muroot_z0,muroot_rs;
-
-void QLens::plot_mz_curve(const int lensnumber, const double zmin, const double zmax, const double yslope_lowz, const double yslope_hiz, const bool keep_dr_const, const string filename)
-{
-	double mvir0,z0,c0,ycl0; // just to save original values
-	if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
-	if (lens_list[lensnumber]->get_specific_parameter("yc_l",ycl0)==false) die("could not find ycl parameter");
-	if (lens_list[lensnumber]->get_specific_parameter("z",z0)==false) die("could not find z parameter");
-	if (lens_list[lensnumber]->get_specific_parameter("c",c0)==false) {
-		double rs0;
-		if (lens_list[lensnumber]->get_specific_parameter("rs_kpc",rs0)==false) die("could not find c or rs_kpc parameter");
-		double nfwparams[10];
-		lens_list[lensnumber]->get_parameters_pmode(1,nfwparams);
-		c0 = nfwparams[1];
-	}
-
-	double alpha, alpha0, b0, b;
-	if (lens_list[primary_lens_number]->lenstype==sple_LENS) {
-		double host_params[10];
-		lens_list[primary_lens_number]->get_parameters(host_params);
-		alpha0 = host_params[1];
-		b0 = host_params[0];
-	} else {
-		alpha = 1.0;
-		b0 = 1.3; // this is bullshit...
-	}
-
-	if (lens_list[lensnumber]->get_specific_parameter("xc_l",perturber_center[0])==false) die("could not find xc_l parameter");
-	if (lens_list[lensnumber]->get_specific_parameter("yc_l",perturber_center[1])==false) die("could not find yc_l parameter");
-
-	double host_xc, host_yc;
-	lens_list[primary_lens_number]->get_center_coords(host_xc,host_yc);
-	double subhalo_rc = sqrt(SQR(perturber_center[0]-host_xc)+SQR(perturber_center[1]-host_yc));
-
-	zroot_lensnumber = lensnumber;
-	double rmax,rmax_true,avgsig,menc,menc_true,rmax_z,avgkap_scaled,avgkap0,rmax_z_true,avgkap_scaled_true,avgsig_true;
-	if (!calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_true,avgsig,menc_true,rmax_z_true,avgkap_scaled_true)) die("could not calculate critical curve perturbation radius");
-	cout << "avgkap_scaled_true = " << avgkap_scaled_true << endl;
-	get_perturber_avgkappa_scaled(lensnumber,rmax_true,avgkap_scaled,menc,avgkap0);
-	cout << "avgkap_scaled_check = " << avgkap_scaled << " " << avgkap0 << endl;
-	menc_true = mass2d_r(rmax_true,lensnumber,false);
-	avgsig_true = avgsig;
-
-	lensvector rmax_loc;
-	rmax_loc[0] = perturber_center[0] + rmax_true*cos(theta_shear);
-	rmax_loc[1] = perturber_center[1] + rmax_true*sin(theta_shear);
-
-	// overriding the above
-	//rmax_true = 0.07;
-	//menc_true = mass2d_r(rmax_true,lensnumber);
-
-	rmax_true_mz = rmax_true; // for root finder
-	menc_true_mz = menc_true; // for root finder
-	rmax_z_true_mz = rmax_z_true; // for root finder
-	avgkap_scaled_true_mz = avgkap_scaled_true; // for root finder
-
-	cout << "rmax_true=" << rmax_true << " menc_true=" << menc_true << endl;
-	//cout << "yslope=" << yslope << endl;
-
-	double (Brent::*mz_eq)(const double);
-	mz_eq = static_cast<double (Brent::*)(const double)> (&QLens::zroot_eq);
-
-	double (Brent::*mu_eq)(const double);
-	mu_eq = static_cast<double (Brent::*)(const double)> (&QLens::muroot_eq);
-
-	double (Brent::*mr_eq)(const double);
-	mr_eq = static_cast<double (Brent::*)(const double)> (&QLens::mrroot_eq);
-
-	double (Brent::*mr_eq0)(const double);
-	mr_eq0 = static_cast<double (Brent::*)(const double)> (&QLens::mrroot_eq0);
-
-	double dp, dL = angular_diameter_distance(lens_redshift); // in Mpc
-
-	double mvir, z, logm, zstep;
-	int i,nz = 60;
-	zstep = (zmax-zmin)/(nz-1);
-	string filename_mz = filename + ".mz";
-	string filename_zm = fit_output_dir + "/" + filename + ".zm";
-	ofstream mzout(filename_mz.c_str());
-	ofstream zmout(filename_zm.c_str());
-	double lowlm, hilm, lowf, hif, fz, fzm, fz0;
-	double c;
-	lowlm = 6;
-	hilm = 14;
-	double nfwparams[10];
-	double rs, rs0, x0;
-	lens_list[lensnumber]->get_parameters_pmode(2,nfwparams);
-	rs0 = nfwparams[1];
-	cout << "rs_kpc=" << rs0 << endl;
-	x0 = (rmax_true*dL/206.264806)/rs0;
-	muroot_x0=x0;
-	muroot_c0=c0;
-	muroot_z0=z0;
-		//ofstream muout("facmu.dat");
-		ofstream kpout("kpout.dat");
-	double ycl, rmax_y;
-	double rmax_rel;
-	for (i=0, z=zmin; i < nz; i++, z += zstep) {
-		if (lens_list[lensnumber]->update_specific_parameter("z",z)==false) die("could not find parameter");
-		//ycl = 0; 
-		if (z >= 0.5) ycl = yslope_hiz*(z-0.5) + ycl0;
-		else ycl = -yslope_lowz*(z-0.5) + ycl0;
-		//else ycl = ycl0;
-		//if (ycl > -1.4) ycl = -1.4;
-		if (lens_list[lensnumber]->update_specific_parameter("yc_l",ycl)==false) die("could not find parameter");
-		if (lens_list[lensnumber]->get_specific_parameter("xc_l",perturber_center[0])==false) die("could not find xc_l parameter");
-		if (lens_list[lensnumber]->get_specific_parameter("yc_l",perturber_center[1])==false) die("could not find yc_l parameter");
-
-		if (keep_dr_const) {
-			rmax_true_mz = (rmax_loc[1] - perturber_center[1]) / (sin(theta_shear));
-		}
-		rmax_loc[0] = perturber_center[0] + rmax_true_mz*cos(theta_shear);
-		rmax_loc[1] = perturber_center[1] + rmax_true_mz*sin(theta_shear);
-
-		lowf = (this->*mz_eq)(lowlm);
-		hif = (this->*mz_eq)(hilm);
-		if ((lowf*hif) > 0.0) {
-			warn("Root not bracketed for z=%g\n",z);
-			break;
-		}
-		//if (z > 0.8) lowlm = 10.0;
-		logm = BrentsMethod(mz_eq, lowlm, hilm, 1e-10);
-		double mvir = pow(10,logm);
-		if (lens_list[zroot_lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
-
-		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_rel,avgsig,menc,rmax_z,avgkap_scaled,true);
-		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-
-		double avgkap_scaled_bla, menc_scaled_bla;
-		double avgkap_scaled_bla2, menc_scaled_bla2;
-		double avgkap0_rmax;
-		get_perturber_avgkappa_scaled(zroot_lensnumber,rmax,avgkap_scaled_bla2,menc_scaled_bla2,avgkap0_rmax,false);
-		get_perturber_avgkappa_scaled(zroot_lensnumber,rmax_true_mz,avgkap_scaled_bla,menc_scaled_bla,avgkap0);
-		cout << z << " " << logm << " " << rmax << " " << rmax_rel << " loc=(" << rmax_loc[0] << "," << rmax_loc[1] << ") ycl=" << ycl << " akap=" << avgkap_scaled_bla << " akap0=" << avgkap0 << " f=" << (this->*mz_eq)(logm) << endl;
-		//cout << avgkap_scaled_bla << " " << avgkap_scaled_true_mz << " " << avgkap_scaled << " " << avgkap_scaled_bla2 << " " << avgkap0 << endl;
-		kpout << z << " " << logm << " " << rmax << " " << rmax_true_mz << " " << avgkap_scaled_bla << " " << avgkap_scaled_true_mz << " " << ycl << endl;
-		fz = calculate_sigpert_scale_factor(lens_redshift,z,source_redshift,rmax_true,alpha,subhalo_rc);
-		fzm = calculate_menc_scale_factor(lens_redshift,z,source_redshift,rmax_true,alpha,subhalo_rc);
-		if (lens_list[lensnumber]->get_specific_parameter("c",c)==false) {
-			double rstry;
-			if (lens_list[lensnumber]->get_specific_parameter("rs_kpc",rstry)==false) die("could not find c or rs_kpc parameter");
-			double nfwparams[10];
-			lens_list[lensnumber]->get_parameters_pmode(1,nfwparams);
-			c = nfwparams[1];
-		}
-
-		lens_list[lensnumber]->get_parameters_pmode(2,nfwparams);
-		rs = nfwparams[1];
-
-		muroot_rs = rs;
-		dp = angular_diameter_distance(z); // in Mpc
-		double rmax_p = rmax_true*dp/206.264806;
-		muroot_fzm=fzm;
-		muroot_mvir0=mvir0;
-		muroot_rs0=rs0;
-		muroot_rmax_p=rmax_p;
-		muroot_z=z;
-/*
-
-		double mu;
-		double mui=0.1, muf = 1000;
-		int nmu = 30000;
-		double mustep = (muf-mui)/(nmu-1);
-		int i;
-		ofstream muout("facmu.dat");
-		//for (i=0, mu=mui; i < nmu; i++, mu += mustep) {
-		for (i=0, mu=mui; i < nmu; i++, mu += mustep) {
-			//mu = 1000;
-			//c = median_concentration_dutton(mu*mvir0,z);
-			//c0 = median_concentration_dutton(mvir0,z0);
-			//mu = mvir/mvir0;
-			//double fac = (log(1+c) - c/(1+c)) / (log(1+c0) - c0/(1+c0));
-			//double factest = pow(mu,alpha_c+gamma_c*(z-z0)+delta_c*SQR(z-z0));
-			double sfac2 = (log(mu/2) + NFW_def_function(mu));
-			double sfac3 = pow(mu,1-alpha_c0);
-			muout << mu << " " << sfac2 << " " << sfac3 << endl;
-			//muout << (z-z0) << " " << fac << " " << factest << endl;
-			//muout << mu << " " << z << " " << fac << " " << factest << endl;
-			//muout << mu << " " << (this->*mu_eq)(mu) << endl;
-		}
-		die();
-*/
-
-		muroot_kprime = fzm*pow(rmax_p/rs0,(-1+alpha_c0)/0.4333333)*(log(x0/2)+NFW_def_function(x0));
-		double mu_expected = rmax_p/rs0*pow(mvir/mvir0,-0.4333333);
-		double wtf = pow(mu_expected,(-1+alpha_c0)/0.43333333)*(log(mu_expected/2) + NFW_def_function(mu_expected)) - muroot_kprime;
-		//double wtf = (this->*mu_eq)(mu_expected);
-		//cout << "Trying for z=" << z << "... (expect mu=" << mu_expected << "; f(mu) = " << wtf << ") kprime=" << muroot_kprime << endl;
-		double mu = 0.55*pow(muroot_kprime,-1.333333333);
-
-		//double mu0 = BrentsMethod(mu_eq, 1e-3, 10, 1e-5);
-		//kpout << muroot_kprime << " " << mu << " " << mu0 << endl;
-		double mvir_root = mvir0*pow(mu*rs0/rmax_p,-1.0/0.43333333);
-		double logm_root = log(mvir_root)/log(10);
-		//cout << "m200=" << mvir_root << " actual=" << mvir << endl;
-	
-		//mu = BrentsMethod(mr_eq0, 1e-3, 1000000, 1e-9);
-		//double mvir_check = mu*mvir0;
-		//double logm_check = log(mvir_check)/log(10);
-
-		double x_desp = (z < lens_redshift) ? (z/lens_redshift - 1) : (z > lens_redshift) ? ((z - lens_redshift) / (source_redshift - lens_redshift)) : 0;
-		double logmvir_desp = (log(mvir0)/log(10)) + 0.41*x_desp + 0.57*SQR(x_desp) + 0.9 * CUBE(x_desp);
-		double mvir_desp = pow(10,logmvir_desp);
-		
-		//mu = BrentsMethod(mr_eq, 1e-3, 1000000, 1e-9);
-		//double mvir_root = mu*mvir0;
-		//double logm_root = log(mvir_root)/log(10);
-
-		//double c_check = median_concentration_dutton(mvir_root,z);
-		//rs_check = pow(3*mvir_root/(4*M_PI*200*1e-9*critical_density(z)),1.0/3.0)/c_check;
-		//x = (rmax_true*dp/206.264806)/rs_check;
-		////cout << "RS: " << rs << " " << rs_check << endl;
-		//double fac = (log(1+c_check) - c_check/(1+c_check)) / (log(1+c0) - c0/(1+c0));
-		//double x = muroot_rmax_p/rs_check;
-		//double sfac = (log(x/2) + NFW_def_function(x)) / (log(muroot_x0/2) + NFW_def_function(muroot_x0));
-		//double fch = mu - (muroot_fzm*fac/sfac);
-		//double testm = mvir0*fzm*((log(1+c_check)-c_check/(1+c_check))/(log(1+c0)-c0/(1+c0))) * ((log(x0/2)+NFW_def_function(x0))/(log(x/2)+NFW_def_function(x)));
-
-		//mu = mvir/mvir0;
-		//x = (rmax_true*dp/206.264806)/rs;
-		//fac = (log(1+c) - c/(1+c)) / (log(1+c0) - c0/(1+c0));
-		//x = rmax_p/rs;
-		//sfac = (log(x/2) + NFW_def_function(x)) / (log(x0/2) + NFW_def_function(x0));
-		//double fch2 = mu - ((menc/menc_true)*fac/sfac);
-		//double mvcheck = mvir0*(menc/menc_true)*fac/sfac;
-		//double mvcheck2 = mvir0*fzm*fac/sfac;
-
-		//cout << "MVIR: " << testm << " " << mvcheck << " " << mvcheck2 << " " << mvir << " " << fch << " " << fch2 << endl;
-
-		//double mvir = fz*pow(10,9.95018);
-		//lens_list[lensnumber]->get_parameters_pmode(0,nfwparams);
-		//double ks = nfwparams[0];
-		//double sigcrit = sigma_crit_kpc(z,source_redshift);
-		//double sigcrit0 = sigma_crit_kpc(lens_redshift,source_redshift);
-		double dl = comoving_distance(lens_redshift);
-		double dpert = comoving_distance(z);
-		int i1,i2;
-		i1 = lens_redshift_idx[primary_lens_number];
-		i2 = lens_redshift_idx[lensnumber];
-		double betafac;
-		if (z > lens_redshift) betafac = default_zsrc_beta_factors[i2-1][i1];
-		else betafac = 0;
-		double dpert_tilde = dpert*(1-betafac);
-		double dchidz = comoving_distance_derivative(z);
-		double dndm = mass_function_ST(mvir,z);
-		double dsigdlogm_dz = mvir*dndm*dpert*dpert_tilde*dchidz/SQR(206264.8);
-
-		double dndm_desp = mass_function_ST(mvir_desp,z);
-		double dsigdlogm_dz_desp = mvir_desp*dndm_desp*dpert*dpert_tilde*dchidz/SQR(206264.8);
-
-		double dndm_mconst = mass_function_ST(mvir0,z);
-		double dsigdlogm_dz_mconst = mvir0*dndm_mconst*dpert*dpert_tilde*dchidz/SQR(206264.8);
-
-		//double ffac = 1 - beta;
-		//double gfac = (z > lens_redshift) ? (1-beta) : 1;
-
-		//double sengul_logmvir = log10((sigcrit0/sigcrit)*mvir0);
-
-		//cout << "MVIR: " << mvir << " " << mvir_check << endl;
-		//cout << "CHECK: " << fzm << " " << (fz*SQR(dp/dL)) << endl;
-		//cout << "rs0=" << rs0 << " rs=" << rs << " rs2=" << rs_check << endl;
-		//mzout << z << " " << logm << " " << rmax << " " << fz << " " << fzm << " " << mvir_ratio << " " << (avgsig/avgsig_true) << " " << (menc/menc_true) << " " << (mvir/mvir0) << " " << logm_check << " " << logm_root << " " << logmvir_desp << " " << dsigdlogm_dz << " " << dsigdlogm_dz_desp << endl;
-		mzout << z << " " << logm << " " << rmax << " " << fz << " " << fzm << " " << (avgsig/avgsig_true) << " " << (menc/menc_true) << " " << (mvir/mvir0) << " " << logm_root << " " << logmvir_desp << " " << dsigdlogm_dz << " " << dsigdlogm_dz_desp << " " << dsigdlogm_dz_mconst << endl;
-		zmout << logm << " " << z << endl;
-	}
-	if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir0)==false) die("could not find parameter");
-	if (lens_list[lensnumber]->update_specific_parameter("z",z0)==false) die("could not find parameter");
-	if (lens_list[lensnumber]->update_specific_parameter("yc_l",ycl0)==false) die("could not find parameter");
-}
-
-double QLens::mrroot_eq0(const double mu)
-{
-	double mvir, c, c0, fac, rs, x, sfac;
-	mvir = muroot_mvir0*mu;
-	c = median_concentration_dutton(mvir,muroot_z);
-	c0 = median_concentration_dutton(muroot_mvir0,muroot_z0);
-	fac = (log(1+c) - c/(1+c)) / (log(1+c0) - c0/(1+c0));
-	rs = pow(3*mvir/(4*M_PI*200*1e-9*critical_density(muroot_z)),1.0/3.0)/c;
-	x = muroot_rmax_p/rs;
-	sfac = (log(x/2) + NFW_def_function(x)) / (log(muroot_x0/2) + NFW_def_function(muroot_x0));
-	return mu - (muroot_fzm*fac/sfac);
-}
-
-double QLens::mrroot_eq(const double mu)
-{
-	double mvir, c, c0, fac, rs, x, sfac;
-	mvir = muroot_mvir0*mu;
-	c = median_concentration_dutton(mvir,muroot_z);
-	c0 = median_concentration_dutton(muroot_mvir0,muroot_z0);
-	fac = (log(1+c) - c/(1+c)) / (log(1+c0) - c0/(1+c0));
-	//fac = pow(mu,alpha_c+gamma_c*(muroot_z-muroot_z0)+delta_c*SQR(muroot_z-muroot_z0));
-	//fac = 1 - 0.062*log(mu);
-	//rs = pow(3*mvir/(4*M_PI*200*1e-9*critical_density(muroot_z)),1.0/3.0)/c;
-	//rs = muroot_rs0*pow(mu,0.45333333333);
-	//rs = muroot_rs0*pow(mu,0.433333333333);
-	rs = muroot_rs0*pow(mu,0.43433333-0.026*muroot_z0)*pow(critical_density(muroot_z)/critical_density(muroot_z0),-1.0/3.0)*pow(10,-0.381*(exp(-0.617*pow(muroot_z,1.21)) - exp(-0.617*pow(muroot_z0,1.21))));
-	//rs = muroot_rs0*pow(mu,0.43433333)*pow(critical_density(muroot_z)/critical_density(muroot_z0),-1.0/3.0)*pow(10,-0.381*(exp(-0.617*pow(muroot_z,1.21)) - exp(-0.617*pow(muroot_z0,1.21))))*pow(hubble*1e-12,-0.026*(muroot_z-muroot_z0)) * pow(mvir,-0.026*muroot_z)*pow(muroot_mvir0,0.026*muroot_z0);
-	//rs = muroot_rs0*pow(mu,0.33333333)*pow(critical_density(muroot_z)/critical_density(muroot_z0),-1.0/3.0)*pow(mvir*hubble*1e-12,0.101-0.026*muroot_z)*pow(muroot_mvir0*hubble*1e-12,-0.101+0.026*muroot_z0)*pow(10,-0.381*(exp(-0.617*pow(muroot_z,1.21)) - exp(-0.617*pow(muroot_z0,1.21))));
-	//rs = muroot_rs0*pow(mu,0.33333333)*pow(critical_density(muroot_z)/critical_density(muroot_z0),-1.0/3.0)*c0/c;
-	x = muroot_rmax_p/rs;
-	sfac = (log(x/2) + NFW_def_function(x)) / (log(muroot_x0/2) + NFW_def_function(muroot_x0));
-	return mu - (muroot_fzm*fac/sfac);
-}
-
-double QLens::muroot_eq(const double mu)
-{
-	return pow(mu,(-1+alpha_c0)/0.43333333)*(log(mu/2) + NFW_def_function(mu)) - muroot_kprime;
-	//return pow(mu,(-1+alpha_c)/0.43333333)*fac*(log(mu/2) + NFW_def_function(mu)) - muroot_kprime;
-	//return pow(mu,(-1+alpha_c)/0.43333333)*fac*(log(mu2/2) + NFW_def_function(mu2)) - muroot_kprime;
-}
-
-double QLens::zroot_eq(const double logm)
-{
-	double mvir = pow(10,logm);
-	if (lens_list[zroot_lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
-	double avgkap_scaled, menc_scaled, avgkap0;
-	get_perturber_avgkappa_scaled(zroot_lensnumber,rmax_true_mz,avgkap_scaled,menc_scaled,avgkap0);
-	return (avgkap_scaled - avgkap0);
-	//return (avgkap_scaled - avgkap_scaled_true_mz);
-	//return (mass2d_r(rmax_true_mz,zroot_lensnumber,false) - menc_true_mz);
-	//double avgsig, menc, rmax, rmax_z, avgkap_scaled;
-	//calculate_critical_curve_perturbation_radius_numerical(zroot_lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-	//return (rmax - rmax_true_mz);
-}
-
-void QLens::plot_mz_bestfit(const int lensnumber, const double zmin, const double zmax, const double zstep, string filename)
-{
-	double mvir0,z0; // just to save original values
-	if (lens_list[lensnumber]->get_specific_parameter("z",z0)==false) die("could not find z parameter");
-
-	set_fitmethod(POWELL);
-	boolvector varyflags;
-	lens_list[lensnumber]->get_vary_flags(varyflags);
-	int npar = varyflags.size();
-	varyflags[npar-1] = false; // make sure the redshift won't be varied during fit
-	set_lens_vary_parameters(lensnumber,varyflags);
-	calculate_parameter_errors = false;
-
-	double mvir, z, logm;
-	string filename_mz = filename + ".mzb";
-	string filename_zm = fit_output_dir + "/" + filename + ".zmb";
-	ofstream mzout(filename_mz.c_str());
-	ofstream zmout(filename_zm.c_str());
-	z=z0;
-	if (lens_list[lensnumber]->update_specific_parameter("z",z)==false) die("could not find parameter");
-	chi_square_fit_powell();
-	adopt_model(bestfitparams);
-	dvector fitpar0(bestfitparams);
-	if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
-
-	double rmax, rmax_rel;
-	double avgsig,menc,rmax_z,avgkap_scaled; // these won't get used, but required for function for getting rmax
-	for (z=z0; z > zmin; z -= zstep) {
-		if (lens_list[lensnumber]->update_specific_parameter("z",z)==false) die("could not find parameter");
-		chi_square_fit_powell();
-		adopt_model(bestfitparams);
-		if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir)==false) die("could not find mvir parameter");
-		logm = log10(mvir);
-
-		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_rel,avgsig,menc,rmax_z,avgkap_scaled,true);
-		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-
-		double x_desp = (z < lens_redshift) ? (z/lens_redshift - 1) : (z > lens_redshift) ? ((z - lens_redshift) / (source_redshift - lens_redshift)) : 0;
-		double logmvir_desp = (log(mvir0)/log(10)) + 0.41*x_desp + 0.57*SQR(x_desp) + 0.9 * CUBE(x_desp);
-		double mvir_desp = pow(10,logmvir_desp);
-	
-		double dpert = comoving_distance(z);
-		int i1,i2;
-		i1 = lens_redshift_idx[primary_lens_number];
-		i2 = lens_redshift_idx[lensnumber];
-		double betafac;
-		if (z > lens_redshift) betafac = default_zsrc_beta_factors[i2-1][i1];
-		else betafac = 0;
-		double dpert_tilde = dpert*(1-betafac);
-		double dchidz = comoving_distance_derivative(z);
-		double dndm = mass_function_ST(mvir,z);
-		double dsigdlogm_dz = mvir*dndm*dpert*dpert_tilde*dchidz/SQR(206264.8);
-
-		double dndm_desp = mass_function_ST(mvir_desp,z);
-		double dsigdlogm_dz_desp = mvir_desp*dndm_desp*dpert*dpert_tilde*dchidz/SQR(206264.8);
-
-		mzout << z << " " << logm << " " << " " << rmax << " " << rmax_rel << " " << dsigdlogm_dz << " " << dsigdlogm_dz_desp << endl;
-		zmout << logm << " " << z << endl;
-	}
-
-	if (lens_list[lensnumber]->update_specific_parameter("z",z0)==false) die("could not find parameter");
-	adopt_model(fitpar0);
-	mzout << endl;
-	zmout << endl;
-
-	for (z=z0; z < zmax; z += zstep) {
-		if (lens_list[lensnumber]->update_specific_parameter("z",z)==false) die("could not find parameter");
-		chi_square_fit_powell();
-		adopt_model(bestfitparams);
-		if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir)==false) die("could not find mvir parameter");
-		logm = log10(mvir);
-
-		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax_rel,avgsig,menc,rmax_z,avgkap_scaled,true);
-		calculate_critical_curve_perturbation_radius_numerical(lensnumber,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-
-		double x_desp = (z < lens_redshift) ? (z/lens_redshift - 1) : (z > lens_redshift) ? ((z - lens_redshift) / (source_redshift - lens_redshift)) : 0;
-		double logmvir_desp = (log(mvir0)/log(10)) + 0.41*x_desp + 0.57*SQR(x_desp) + 0.9 * CUBE(x_desp);
-		double mvir_desp = pow(10,logmvir_desp);
-
-		double dpert = comoving_distance(z);
-		int i1,i2;
-		i1 = lens_redshift_idx[primary_lens_number];
-		i2 = lens_redshift_idx[lensnumber];
-		double betafac;
-		if (z > lens_redshift) betafac = default_zsrc_beta_factors[i2-1][i1];
-		else betafac = 0;
-		double dpert_tilde = dpert*(1-betafac);
-		double dchidz = comoving_distance_derivative(z);
-		double dndm = mass_function_ST(mvir,z);
-		double dsigdlogm_dz = mvir*dndm*dpert*dpert_tilde*dchidz/SQR(206264.8);
-
-		double dndm_desp = mass_function_ST(mvir_desp,z);
-		double dsigdlogm_dz_desp = mvir_desp*dndm_desp*dpert*dpert_tilde*dchidz/SQR(206264.8);
-
-		//double dndm_mconst = mass_function_ST(mvir0,z);
-		//double dsigdlogm_dz_mconst = mvir0*dndm_mconst*dpert*dpert_tilde*dchidz/SQR(206264.8);
-
-		//mzout << z << " " << logm << " " << " " << dsigdlogm_dz << " " << dsigdlogm_dz_desp << " " << dsigdlogm_dz_mconst << endl;
-		mzout << z << " " << logm << " " << " " << rmax << " " << rmax_rel << " " << dsigdlogm_dz << " " << dsigdlogm_dz_desp << endl;
-		zmout << logm << " " << z << endl;
-	}
-
-	//if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir0)==false) die("could not find parameter");
-	//if (lens_list[lensnumber]->update_specific_parameter("z",z0)==false) die("could not find parameter");
-}
-
-void QLens::find_bestfit_smooth_model(const int lensnumber)
-{
-	set_fitmethod(POWELL);
-	boolvector varyflags;
-	lens_list[lensnumber]->get_vary_flags(varyflags);
-	int npar = varyflags.size();
-	for (int i=0; i < npar; i++) varyflags[i] = false; // won't vary subhalo during fits
-	set_lens_vary_parameters(lensnumber,varyflags);
-	calculate_parameter_errors = false;
-
-	double mvir_min = 1e5;
-	double mvir_scalefac = 0.9;
-	double mvir0, mvir;
-
-	if (lens_list[lensnumber]->get_specific_parameter("mvir",mvir0)==false) die("could not find mvir parameter");
-
-	double chisq = chi_square_fit_powell();
-	adopt_model(bestfitparams);
-	n_repeats = 10;
-	double chisqprev;
-	int i=0;
-	do {
-		cout << "Warm-up iteration " << i << ":" << endl;
-		chisqprev = chisq;
-		chisq = chi_square_fit_powell();
-		adopt_model(bestfitparams);
-		i++;
-	} while (abs(chisq-chisqprev) > 0.05);
-
-	double chisq0 = chisq;
-	n_repeats = 1;
-	for (mvir=mvir0; mvir > mvir_min; mvir *= mvir_scalefac) {
-		if (lens_list[lensnumber]->update_specific_parameter("mvir",mvir)==false) die("could not find parameter");
-		chisq = chi_square_fit_powell();
-		adopt_model(bestfitparams);
-	}
-	double likeratio = exp(-(chisq-chisq0)/2);
-	cout << "like_ratio=" << likeratio << ", chisq=" << chisq << ", chisq0=" << chisq0 << endl;
 }
 
 void QLens::create_output_directory()
@@ -17454,10 +13839,6 @@ void QLens::open_input_file(ifstream &infile, string filename_in)
 
 void QLens::reset_grid()
 {
-	if (defspline != NULL) {
-		delete defspline;
-		defspline = NULL;
-	}
 	if (grid != NULL) {
 		delete grid;
 		grid = NULL;
@@ -17496,19 +13877,34 @@ QLens::~QLens()
 		delete[] pixellated_src_redshift_idx;
 		delete[] delaunay_srcgrids;
 		delete[] cartesian_srcgrids;
+		delete[] srcgrids;
+	}
+	if (n_ptsrc > 0) {
+		for (int i=0; i < n_ptsrc; i++) {
+			if (ptsrc_list[i] != NULL) delete ptsrc_list[i];
+		}
+		delete[] ptsrc_redshift_idx;
+		delete[] ptsrc_list;
 	}
 
 	delete grid;
 	delete param_settings;
-	if (defspline != NULL) delete defspline;
 	if (fitmodel != NULL) delete fitmodel;
 	if (psf_matrix != NULL) {
 		for (int i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
 		delete[] psf_matrix;
 	}
-	if (ptsrc_redshifts != NULL) delete[] ptsrc_redshifts;
-	if (ptsrc_zfactors != NULL) {
-		for (i=0; i < n_sourcepts_fit; i++) delete[] ptsrc_zfactors[i];
+	if (specific_ptsrc_redshifts != NULL) delete[] specific_ptsrc_redshifts;
+	if (specific_ptsrc_zfactors != NULL) {
+		for (i=0; i < n_sourcepts_fit; i++) delete[] specific_ptsrc_zfactors[i];
+		delete[] specific_ptsrc_zfactors;
+	}
+
+	if (n_ptsrc_redshifts > 0) {
+		delete[] ptsrc_redshifts;
+		for (i=0; i < n_ptsrc_redshifts; i++) {
+			if (n_lens_redshifts > 0) delete[] ptsrc_zfactors[i];
+		}
 		delete[] ptsrc_zfactors;
 	}
 	if (n_extended_src_redshifts > 0) {
@@ -17528,12 +13924,12 @@ QLens::~QLens()
 			for (i=0; i < n_lens_redshifts-1; i++) delete[] default_zsrc_beta_factors[i];
 			delete[] default_zsrc_beta_factors;
 		}
-		if (ptsrc_beta_factors != NULL) {
+		if (specific_ptsrc_beta_factors != NULL) {
 			for (i=0; i < n_sourcepts_fit; i++) {
-				for (j=0; j < n_lens_redshifts-1; j++) delete[] ptsrc_beta_factors[i][j];
-				if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+				for (j=0; j < n_lens_redshifts-1; j++) delete[] specific_ptsrc_beta_factors[i][j];
+				if (n_lens_redshifts > 1) delete[] specific_ptsrc_beta_factors[i];
 			}
-			delete[] ptsrc_beta_factors;
+			delete[] specific_ptsrc_beta_factors;
 		}
 		if (extended_src_beta_factors != NULL) {
 			for (i=0; i < n_extended_src_redshifts; i++) {
@@ -17542,6 +13938,14 @@ QLens::~QLens()
 			}
 			delete[] extended_src_beta_factors;
 		}
+		if (ptsrc_beta_factors != NULL) {
+			for (i=0; i < n_ptsrc_redshifts; i++) {
+				for (j=0; j < n_lens_redshifts-1; j++) delete[] ptsrc_beta_factors[i][j];
+				if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+			}
+			delete[] ptsrc_beta_factors;
+		}
+
 	}
 	if ((image_data != NULL) and (borrowed_image_data==false)) delete[] image_data;
 	if ((image_pixel_data != NULL) and (borrowed_image_data==false)) delete image_pixel_data;
@@ -17551,8 +13955,6 @@ QLens::~QLens()
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (source_pixel_vector != NULL) delete[] source_pixel_vector;
 	if (reg_weight_factor != NULL) delete[] reg_weight_factor;
-	//if (reg_weight_factor2 != NULL) delete[] reg_weight_factor2;
-	//if (lumreg_pixel_weights != NULL) delete[] lumreg_pixel_weights;
 	if (source_pixel_n_images != NULL) delete[] source_pixel_n_images;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
 	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
@@ -17563,14 +13965,8 @@ QLens::~QLens()
 	if (Fmatrix_index != NULL) delete[] Fmatrix_index;
 	if (Rmatrix != NULL) delete[] Rmatrix;
 	if (Rmatrix_index != NULL) delete[] Rmatrix_index;
-	if (cartesian_srcgrid0 != NULL) delete cartesian_srcgrid0;
-	if (delaunay_srcgrid0 != NULL) delete delaunay_srcgrid0;
 	if (group_leader != NULL) delete[] group_leader;
 	if (saved_sbweights != NULL) delete[] saved_sbweights;
-	//if (psf_zvec != NULL) delete[] psf_zvec;
-#ifdef USE_FFTW
-	//if (fft_convolution) cleanup_FFT_convolution_arrays(); // not necessary to cleanup unless we need to redo the FFT arrays
-#endif
 }
 
 /***********************************************************************************************************************/
@@ -17667,7 +14063,7 @@ void QLens::test_lens_functions()
 	adopt_model(bestfitparams);
 
 	bool status;
-	vector<ImageSet> imgsets = get_fit_imagesets(status);
+	vector<PointSource> imgsets = get_fit_imagesets(status);
 
 	// The following shows how to access the image data in the "imgset" object
 	/*

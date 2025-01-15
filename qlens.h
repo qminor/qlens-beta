@@ -55,6 +55,7 @@ enum RayTracingMethod {
 	Interpolate,
 	Area_Overlap
 };
+
 enum DerivedParamType {
 	KappaR,
 	LambdaR,
@@ -78,12 +79,11 @@ enum DerivedParamType {
 	UserDefined
 };
 
-
 class QLens;			// Defined after class Grid
+class SourceParams;
 class SourcePixelGrid;
 class DelaunayGrid;
 class ImagePixelGrid;
-class Defspline;	// ...
 class DelaunayGrid;
 struct ImageData;
 struct WeakLensingData;
@@ -105,77 +105,6 @@ struct image_data : public image
 	double sigma_td;
 };
 
-// Used for the Python wrapper
-struct ImageSet {
-	lensvector src;
-	double zsrc, srcflux;
-	int n_images;
-	std::vector<image> images;
-
-	ImageSet() { }
-	ImageSet(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
-		copy_imageset(src_in, zsrc_in, images_in, nimg, srcflux_in);
-	}
-	void copy_imageset(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
-		n_images = nimg;
-		zsrc = zsrc_in;
-		srcflux = srcflux_in;
-		src[0] = src_in[0];
-		src[1] = src_in[1];
-		//if (images != NULL) delete[] images;
-		images.clear();
-		images.resize(n_images);
-		for (int i=0; i < n_images; i++) {
-			images[i].pos = images_in[i].pos;
-			images[i].mag = images_in[i].mag;
-			images[i].td = images_in[i].td;
-			images[i].parity = images_in[i].parity;
-		}
-	}
-	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*srcflux); else return -1; }
-	void print(bool include_time_delays = false, bool show_labels = true) { print_to_file(include_time_delays,show_labels,NULL,NULL); }
-	void print_to_file(bool include_time_delays, bool show_labels, std::ofstream* srcfile, std::ofstream* imgfile) {
-		std::cout << "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
-		if (srcflux != -1) std::cout << "\tsrc_flux";
-		std::cout << std::endl;
-		std::cout << src[0] << "\t" << src[1] << "\t" << n_images << "\t";
-		if (srcflux != -1) std::cout << "\t" << srcflux;
-		std::cout << std::endl << std::endl;
-
-		if (srcfile != NULL) (*srcfile) << src[0] << " " << src[1] << std::endl;
-		//std::cout << "# " << n_images << " images" << std::endl;
-		if (show_labels) {
-			std::cout << "#pos_x (arcsec)\tpos_y (arcsec)\tmagnification";
-			if (srcflux != -1.0) std::cout << "\tflux\t";
-			if (include_time_delays) std::cout << "\ttime_delay (days)";
-			std::cout << std::endl;
-		}
-		if (include_time_delays) {
-			for (int i = 0; i < n_images; i++) {
-				if (srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].td << std::endl;
-				else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << "\t" << images[i].td << std::endl;
-				if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << std::endl;
-			}
-		} else {
-			for (int i = 0; i < n_images; i++) {
-				if (srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << std::endl;
-				else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << std::endl;
-				if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << std::endl;
-			}
-		}
-
-		std::cout << std::endl;
-	}
-	void reset() {
-		//if (n_images != 0) delete[] images;
-		//images = NULL;
-		n_images = 0;
-	}
-	//~ImageSet() {
-		//if (n_images != 0) delete[] images;
-	//}
-};
-
 struct ImageDataSet {
 	double zsrc;
 	int n_images;
@@ -186,12 +115,89 @@ struct ImageDataSet {
 		images.clear();
 		images.resize(n_images);
 	}
-
 };
 
+class SourceParams
+{
+	// This is the base class inherited by pixellated source and point source objects (lens/source analytic profiles
+	// use separate functions for handling parameters)
+	public:
+	double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
+	int n_params, n_vary_params, n_active_params;
+	boolvector vary_params;
+	boolvector active_params; // this keeps track of which parameters are actually being used, based on the mode of regularization, pixellation etc.
+	std::string model_name;
+	std::vector<std::string> paramnames;
+	std::vector<std::string> latex_paramnames, latex_param_subscripts;
+	boolvector set_auto_penalty_limits;
+	dvector penalty_upper_limits, penalty_lower_limits;
+	dvector stepsizes;
+	boolvector scale_stepsize_by_param_value;
+	bool include_limits;
+	dvector lower_limits, upper_limits;
+	dvector lower_limits_initial, upper_limits_initial;
 
-struct jl_pair {
-	int j,l;
+	SourceParams() { param = NULL; }
+	void setup_parameter_arrays(const int npar);
+	virtual void setup_parameters(const bool initial_setup) {}  // don't need this, unless we want to work with SourceParams pointers in lens.cpp for parameter manipulation?
+	void copy_param_data(SourceParams* params_in);
+	void update_active_params(const int id) {
+		setup_parameters(false);
+		// check: if any parameters are no longer active, but they were being varied, turn off their vary flags
+		for (int i=0; i < n_params; i++) {
+			if ((!active_params[i]) and (vary_params[i])) {
+				if (id==0) std::cout << "Parameter " << paramnames[i] << " is no longer active, so its vary flag is being turned off" << std::endl;
+				vary_params[i] = false;
+				n_vary_params--;
+			}
+		}
+	}
+
+	void update_fit_parameters(const double* fitparams, int &index);
+	bool update_specific_parameter(const std::string name_in, const double& value);
+	bool set_varyflags(const boolvector& vary_in);
+	bool update_specific_varyflag(const string name_in, const bool& vary_in);
+	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
+	void set_limits(const dvector& lower, const dvector& upper) { set_limits(lower,upper,lower,upper); }
+	bool set_limits_specific_parameter(const string name_in, const double& lower, const double& upper);
+	bool get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index);
+	bool get_limits(dvector& lower, dvector& upper, int &index);
+	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+
+	void get_fit_parameters(dvector& fitparams, int &index);
+	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL);
+	bool get_specific_parameter(const std::string name_in, double& value);
+	bool get_specific_varyflag(const string name_in, bool& flag);
+	void print_parameters();
+	void print_vary_parameters();
+	int get_n_vary_params() { return n_vary_params; }
+};
+
+class PointSource : public SourceParams
+{
+	friend class QLens;
+	QLens *lens;
+
+	lensvector pos;
+	lensvector shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
+	double zsrc, srcflux;
+	int n_images;
+	std::vector<image> images;
+
+	public:
+	PointSource() { lens = NULL; }
+	PointSource(QLens* lens_in);
+	PointSource(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
+		copy_imageset(src_in, zsrc_in, images_in, nimg, srcflux_in);
+	}
+	void setup_parameters(const bool initial_setup);
+	void copy_ptsrc_data(PointSource* ptsrc_in);
+	void copy_imageset(const lensvector& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0);
+	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*srcflux); else return -1; }
+	void print(bool include_time_delays = false, bool show_labels = true) { print_to_file(include_time_delays,show_labels,NULL,NULL); }
+	void print_to_file(bool include_time_delays, bool show_labels, std::ofstream* srcfile, std::ofstream* imgfile);
+	void reset_images() { n_images = 0; images.clear(); }
 };
 
 class Grid : public Brent
@@ -403,6 +409,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool chisq_diagnostic;
 	std::ofstream logfile;
 
+	const int HALF_DATAPIXELS = -1;
+	const int ALL_DATAPIXELS = 0;
+
 	public:
 	int mpi_id, mpi_np, mpi_ngroups, group_id, group_num, group_np;
 	int *group_leader;
@@ -457,10 +466,13 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	int n_pixellated_src;
 	int* pixellated_src_redshift_idx;
+	SourceParams **srcgrids; // this is the base class for Delaunay and cartesian source grids
 	DelaunayGrid **delaunay_srcgrids;
-	DelaunayGrid *delaunay_srcgrid0;
 	SourcePixelGrid **cartesian_srcgrids;
-	SourcePixelGrid *cartesian_srcgrid0;
+
+	int n_ptsrc;
+	PointSource **ptsrc_list;
+	int* ptsrc_redshift_idx;
 
 	int n_derived_params;
 	DerivedParam** dparam_list;
@@ -470,30 +482,37 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	ImageSystemType system_type;
 
 	double lens_redshift;
-	double source_redshift, reference_source_redshift; // reference zsrc is the redshift used to define the lensing quantities (kappa, etc.)
+	double source_redshift, reference_source_redshift; // reference zsrc (zsrc_ref) is the redshift used to define scaled lensing quantities (kappa, etc.)
+
 	double *reference_zfactors;
 	double **default_zsrc_beta_factors;
-	bool user_changed_zsource;
-	bool auto_zsource_scaling;
-	double *ptsrc_redshifts; // used for modeling source points
+	double *specific_ptsrc_redshifts; // used for modeling source points
 	std::vector<int> ptsrc_redshift_groups;
-	double **ptsrc_zfactors;
-	double ***ptsrc_beta_factors;
+	double **specific_ptsrc_zfactors;
+	double ***specific_ptsrc_beta_factors;
 
 	int n_extended_src_redshifts;
 	double *extended_src_redshifts; // used for modeling extended sources 
 	int *assigned_mask;
 	//int *extended_zsrc_group_size;
-	//bool **extended_zsrc_group_is_pixellated; // tells if source is pixellated (true) or analytic (false)
 	//int **extended_zsrc_group_src_index;
 	double **extended_src_zfactors;
 	double ***extended_src_beta_factors;
 
+	int n_ptsrc_redshifts;
+	double *ptsrc_redshifts; // used for modeling extended sources 
+	double **ptsrc_zfactors;
+	double ***ptsrc_beta_factors;
+
+	int n_lens_redshifts;
 	double *lens_redshifts;
 	int *lens_redshift_idx;
 	int *zlens_group_size;
 	int **zlens_group_lens_indx;
-	int n_lens_redshifts;
+
+	bool user_changed_zsource; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
+	bool auto_zsource_scaling; // this automatically sets zsrc_ref (for kappa scaling) equal to the default source redshift being used
+
 	bool vary_hubble_parameter, vary_omega_matter_parameter;
 	double hubble, omega_matter;
 	double hubble_lower_limit, hubble_upper_limit;
@@ -514,7 +533,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double grid_xlength, grid_ylength, grid_xcenter, grid_ycenter;  // for gridsize
 	double sourcegrid_xmin, sourcegrid_xmax, sourcegrid_ymin, sourcegrid_ymax;
 	double sourcegrid_limit_xmin, sourcegrid_limit_xmax, sourcegrid_limit_ymin, sourcegrid_limit_ymax;
-	bool enforce_min_cell_area;
 	bool cc_neighbor_splittings;
 	bool skip_newtons_method;
 	double min_cell_area; // area of the smallest allowed cell area
@@ -530,7 +548,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
 	bool use_ansi_characters;
-	int lensmodel_fit_parameters, srcmodel_fit_parameters, n_fit_parameters, n_sourcepts_fit;
+	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, srcpt_fit_parameters, ptsrc_fit_parameters, n_fit_parameters, n_sourcepts_fit;
 	std::vector<string> fit_parameter_names, transformed_parameter_names;
 	std::vector<string> latex_parameter_names, transformed_latex_parameter_names;
 	//lensvector *sourcepts_fit;
@@ -538,7 +556,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	//bool *vary_sourcepts_y;
 	//lensvector *sourcepts_lower_limit;
 	//lensvector *sourcepts_upper_limit;
-	std::vector<int> sourcept_srcnum; // keeps track of which index a source point has in source_redshifts, zfactors etc.
 	std::vector<lensvector> sourcepts_fit;
 	std::vector<lensvector> sourcepts_lower_limit;
 	std::vector<lensvector> sourcepts_upper_limit;
@@ -546,21 +563,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	std::vector<std::vector<image>> point_imgs; // this will store the point images from the first source point in sourcepts_fit when doing source pixel modeling, to generate quasar images
 	std::vector<bool> vary_sourcepts_x;
 	std::vector<bool> vary_sourcepts_y;
-	double regularization_parameter, regularization_parameter_upper_limit, regularization_parameter_lower_limit;
-	double kernel_correlation_length, kernel_correlation_length_upper_limit, kernel_correlation_length_lower_limit;
-	double matern_index, matern_index_upper_limit, matern_index_lower_limit;
-	//bool use_second_covariance_kernel;
-	//double kernel2_correlation_length, kernel2_correlation_length_upper_limit, kernel2_correlation_length_lower_limit;
-	//double kernel2_amplitude_ratio, kernel2_amplitude_ratio_upper_limit, kernel2_amplitude_ratio_lower_limit;
-	//bool use_matern_scale_parameter; // ELIMINATE THIS FEATURE?
-	//double matern_scale, matern_scale_upper_limit, matern_scale_lower_limit; // can be used in place of correlation length; it's the magnitude of the Matern kernel at the characteristic size of the source (divided by 3) (ELIMINATE THIS FEATURE?)
+	double *regparam_ptr; // points to regularization parameter for given source pixel grid or shapelet object
 	double matern_approx_source_size;
-	bool vary_regularization_parameter;
-	bool vary_correlation_length;
 	//bool vary_matern_scale;
-	bool vary_matern_index;
-	bool vary_kernel2_amplitude_ratio;
-	bool vary_kernel2_correlation_length;
 	bool optimize_regparam;
 	//bool optimize_regparam_lhi;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
@@ -577,47 +582,20 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool lensed_lumreg_rc; // if true, then lumreg_rc is a distance in the image plane at the position of the (lensed) lumreg center, which is then mapped to rc in source plane
 	bool fix_lumreg_sig;
 	double lumreg_sig;
-	double lumreg_xcenter, lumreg_ycenter;
-	bool vary_lumreg_xcenter, vary_lumreg_ycenter;
-	double lumreg_xcenter_lower_limit, lumreg_xcenter_upper_limit;
-	double lumreg_ycenter_lower_limit, lumreg_ycenter_upper_limit;
-	double lumreg_e1, lumreg_e2;
-	bool vary_lumreg_e1, vary_lumreg_e2;
-	double lumreg_e1_lower_limit, lumreg_e1_upper_limit;
-	double lumreg_e2_lower_limit, lumreg_e2_upper_limit;
 
 	int lum_weight_function;
 	bool get_lumreg_from_sbweights;
-	double regparam_lsc, regparam_lum_index; 
-	double mag_weight_index, mag_weight_sc;
 
-	double lumreg_rc;
-	//double regparam_lsc2, regparam_lum_index2; 
-	//double regparam_lhi, regparam_lum_index; 
 	double *reg_weight_factor;
-	//double *lum_weight_factor2; // for second covariance kernel
-	//double *lumreg_pixel_weights;
 	bool vary_regparam_lsc, vary_regparam_lum_index;
 	bool vary_mag_weight_sc, vary_mag_weight_index;
 	bool vary_lumreg_rc;
-	//bool vary_regparam_lsc2, vary_regparam_lum_index2;
-	//bool vary_regparam_lhi, vary_regparam_lum_index;
-	//double regparam_lhi_lower_limit, regparam_lhi_upper_limit;
-	double regparam_lsc_lower_limit, regparam_lsc_upper_limit;
-	double regparam_lum_index_lower_limit, regparam_lum_index_upper_limit;
-	double lumreg_rc_lower_limit, lumreg_rc_upper_limit;
-	double mag_weight_sc_lower_limit, mag_weight_sc_upper_limit;
-	double mag_weight_index_lower_limit, mag_weight_index_upper_limit;
 
 	//double regparam_lsc2_lower_limit, regparam_lsc2_upper_limit;
 	//double regparam_lum_index2_lower_limit, regparam_lum_index2_upper_limit;
 
 	bool use_lum_weighted_srcpixel_clustering;
 	bool use_dist_weighted_srcpixel_clustering;
-	double alpha_clus, beta_clus;
-	bool vary_alpha_clus, vary_beta_clus;
-	double alpha_clus_lower_limit, alpha_clus_upper_limit;
-	double beta_clus_lower_limit, beta_clus_upper_limit;
 
 	bool save_sbweights_during_inversion;
 	bool use_saved_sbweights;
@@ -635,8 +613,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	ImageData *image_data;
 	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
-	//double chisqtol_lumreg;
-	//int lumreg_max_it, lumreg_max_it_final;
 	int lumreg_max_it;
 	int n_repeats;
 	bool display_chisq_status;
@@ -653,10 +629,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool use_average_magnification_for_subgridding;
 	bool redo_lensing_calculations_before_inversion;
 	int delaunay_mode;
-	bool delaunay_try_two_grids;
 	bool delaunay_high_sn_mode;
 	bool use_srcpixel_clustering;
-	bool use_old_pixelgrids;
 
 	bool use_random_delaunay_srcgrid;
 	bool reinitialize_random_grid;
@@ -674,7 +648,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool regrid_if_unmapped_source_subpixels;
 	bool calculate_bayes_factor;
 	double reference_lnZ;
-	double pixel_magnification_threshold, pixel_magnification_threshold_lower_limit, pixel_magnification_threshold_upper_limit;
 	double base_srcpixel_imgpixel_ratio;
 	double sim_err_pos, sim_err_flux, sim_err_td;
 	double sim_err_shear; // actually error in reduced shear (for weak lensing data)
@@ -752,11 +725,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int srcgrid_npixels_x, srcgrid_npixels_y;
 	bool auto_srcgrid_npixels;
 	bool auto_srcgrid_set_pixel_size;
-	double pixel_fraction, pixel_fraction_lower_limit, pixel_fraction_upper_limit;
 	double srcpt_xshift, srcpt_xshift_lower_limit, srcpt_xshift_upper_limit;
 	double srcpt_yshift, srcpt_yshift_lower_limit, srcpt_yshift_upper_limit;
-	double srcgrid_size_scale, srcgrid_size_scale_lower_limit, srcgrid_size_scale_upper_limit;
-	bool vary_pixel_fraction, vary_srcpt_xshift, vary_srcpt_yshift, vary_srcgrid_size_scale, vary_magnification_threshold;
+	bool vary_srcpt_xshift, vary_srcpt_yshift;
 	string psf_filename;
 	double psf_width_x, psf_width_y, background_pixel_noise;
 	bool simulate_pixel_noise;
@@ -769,13 +740,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static double rmin_frac;
 	static const double default_rmin_frac;
 	double cc_rmin, cc_rmax, cc_thetasteps;
-	//double source_plane_rscale;
 	bool effectively_spherical;
 	double newton_magnification_threshold;
 	bool reject_himag_images;
 	bool reject_images_found_outside_cell;
-
-	Defspline *defspline;
 
 	// private functions are all contained in the file lens.cpp
 	bool subgrid_around_perturbers; // if on, will always subgrid around perturbers (with pjaffe profile) when new grid is created
@@ -815,7 +783,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void plot_logpot_map(const int x_N, const int y_N, const string filename);
 
 	double average_def_residual(const int x_N, const int y_N, const int perturber_lensnum, double z, double mvir); // testing Despali et al (2017) procedure
-	void fit_los_despali();
 
 	struct critical_curve {
 		std::vector<lensvector> cc_pts;
@@ -838,7 +805,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	Vector<dvector> find_critical_curves(bool&);
 	double theta_crit;
 	double inverse_magnification_r(const double);
-	double source_plane_r(const double r);
+	//double source_plane_r(const double r);
 	bool find_optimal_gridsize();
 
 	bool auto_sourcegrid, auto_shapelet_scaling, auto_shapelet_center;
@@ -848,22 +815,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void plot_source_pixel_grid(const int zsrc_i, const char filename[]);
 
 	ImagePixelGrid **image_pixel_grids;
-	ImagePixelGrid *image_pixel_grid0;
 	ImagePixelData *image_pixel_data;
 	int image_npixels, source_npixels, source_n_amps;
 	int image_n_subpixels; // for supersampling
-	//int *active_image_pixel_i;
-	//int *active_image_pixel_j;
-	//int *active_image_pixel_i_ss;
-	//int *active_image_pixel_j_ss;
-	//int *active_image_subpixel_ii;
-	//int *active_image_subpixel_jj;
-	//int *active_image_subpixel_ss;
-	//int *image_pixel_i_from_subcell_ii;
-	//int *image_pixel_j_from_subcell_jj;
 	int image_npixels_fgmask;
-	//int *active_image_pixel_i_fgmask;
-	//int *active_image_pixel_j_fgmask;
 
 	double *image_surface_brightness;
 	double *image_surface_brightness_supersampled;
@@ -871,8 +826,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double *point_image_surface_brightness;
 	double *sbprofile_surface_brightness;
 	double *img_minus_sbprofile;
-	//double *sbprofile_surface_brightness_fgmask;
-	//double *source_pixel_vector_input_lumreg; // used to store best-fit solution before optimization of regularization parameter using luminosity-weighted regularization
 	double *source_pixel_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	double *source_pixel_vector;
 	double *source_pixel_n_images;
@@ -916,8 +869,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal=false);
 	void create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const bool verbal=false);
 	void generate_Gmatrix();
-	void add_regularization_term_to_dense_Fmatrix();
-	double calculate_regularization_prior_term();
+	void add_regularization_term_to_dense_Fmatrix(double *regparam_ptr);
+	double calculate_regularization_prior_term(double *regparam_ptr);
 
 	bool optimize_regularization_parameter(const int zsrc_i, const bool dense_Fmatrix=false, const bool verbal=false, const bool pre_srcgrid = false);
 	void setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatrix=false);
@@ -1003,21 +956,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int supersampled_psf_npixels_x, supersampled_psf_npixels_y;
 	double psf_threshold, psf_ptsrc_threshold;
 	int psf_ptsrc_nsplit; // allows for subpixel PSF
-	/*
-	static double *psf_zvec; // for convolutions using FFT
-	static int fft_imin, fft_jmin, fft_ni, fft_nj;
-#ifdef USE_FFTW
-	static complex<double> *psf_transform;
-	static complex<double> **Lmatrix_transform;
-	static double **Lmatrix_imgs_rvec;
-	static double *img_rvec;
-	static complex<double> *img_transform;
-	static fftw_plan fftplan;
-	static fftw_plan fftplan_inverse;
-	static fftw_plan *fftplans_Lmatrix;
-	static fftw_plan *fftplans_Lmatrix_inverse;
-#endif
-*/
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant;
 	double Gmatrix_log_determinant;
@@ -1063,7 +1001,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	double set_required_data_pixel_window(bool verbal);
 
-	//double image_pixel_chi_square();
 	void calculate_source_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness_dense();
@@ -1076,15 +1013,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double invert_image_surface_brightness_map(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
 	double invert_image_surface_brightness_map_old(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
 
-	//double calculate_chisq0_from_srcgrid(double &chisq0, bool verbal);
-
 	bool load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal, const bool zero_verbal = false);
 	void plot_image_pixel_grid(const int zsrc_i=-1);
 	bool find_shapelet_scaling_parameters(const int i_shapelet, const int zsrc_i, const bool verbal=false);
 	bool set_shapelet_imgpixel_nsplit(const int zsrc_i=-1);
 
-	void update_source_amplitudes_from_shapelets();
 	int get_shapelet_nn(const int zsrc_i=-1);
 
 	void find_optimal_sourcegrid_for_analytic_source();
@@ -1131,11 +1065,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	static void delete_mumps();
 
 	double kappa(const double& x, const double& y, double* zfacs, double** betafacs);
-	//double kappa_weak(const double& x, const double& y, double* zfacs);
 	double potential(const double&, const double&, double* zfacs, double** betafacs);
 	void deflection(const double&, const double&, lensvector&, const int &thread, double* zfacs, double** betafacs);
 	void deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs);
-	void custom_deflection(const double& x, const double& y, lensvector& def_tot);
 	void map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector& xi, const int &thread, double* zfacs, double** betafacs);
 	void hessian(const double&, const double&, lensmatrix&, const int &thread, double* zfacs, double** betafacs);
 	void hessian_weak(const double&, const double&, lensmatrix&, const int &thread, double* zfacs);
@@ -1143,11 +1075,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int &thread, double* zfacs, double** betafacs);
 	void kappa_inverse_mag_sourcept(const lensvector& x, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs);
 	void sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs);
-
-	// non-multithreaded versions
-	//void deflection(const double& x, const double& y, lensvector &def_in, double* zfacs) { deflection(x,y,def_in,0,zfacs); }
-	//void hessian(const double& x, const double& y, lensmatrix &hess_in, double* zfacs) { hessian(x,y,hess_in,0,zfacs); }
-	//void find_sourcept(const lensvector& x, lensvector& srcpt, double* zfacs) { find_sourcept(x,srcpt,0,zfacs); }
 
 	// versions of the above functions that use lensvector for (x,y) coordinates
 	double kappa(const lensvector &x, double* zfacs, double** betafacs) { return kappa(x[0], x[1], zfacs, betafacs); }
@@ -1182,20 +1109,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double shear_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs) { return shear_exclude(x,exclude,0,zfacs,betafacs); }
 	void shear_exclude(const lensvector &x, double &shear, double &angle, bool* exclude, double* zfacs, double** betafacs) { shear_exclude(x,shear,angle,exclude,0,zfacs,betafacs); }
 	void deflection_exclude(const lensvector& x, bool* exclude, lensvector& def, double* zfacs, double** betafacs) { deflection_exclude(x[0], x[1], exclude, def[0], def[1], 0, zfacs, betafacs); }
-
-/*
-	void hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs);
-	double magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs);
-	double shear_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs);
-	void shear_exclude(const lensvector &x, double& shear, double& angle, const int& exclude_i, const int& thread, double* zfacs, double** betafacs);
-	double kappa_exclude(const lensvector &x, const int& exclude_i, double* zfacs, double** betafacs);
-
-	// non-multithreaded versions
-	void hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, double* zfacs, double** betafacs) { hessian_exclude(x,y,exclude_i,hess_tot,0,zfacs,betafacs); }
-	double magnification_exclude(const lensvector &x, const int& exclude_i, double* zfacs, double** betafacs) { return magnification_exclude(x,exclude_i,0,zfacs,betafacs); }
-	double shear_exclude(const lensvector &x, const int& exclude_i, double* zfacs, double** betafacs) { return shear_exclude(x,exclude_i,0,zfacs,betafacs); }
-	void shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, double* zfacs, double** betafacs) { shear_exclude(x,shear,angle,exclude_i,0,zfacs,betafacs); }
-	*/
 
 	void record_singular_points(double *zfacs);
 
@@ -1259,8 +1172,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, std::ofstream& imgfile, std::ofstream& srcfile, const double flux = -1.0, const bool show_labels = false);
 	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
-	bool get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal = true); // used by Python wrapper
-	std::vector<ImageSet> get_fit_imagesets(bool& status, int min_dataset = 0, int max_dataset = -1, bool verbal = true);
+	bool get_imageset(const double src_x, const double src_y, PointSource& image_set, bool verbal = true); // used by Python wrapper
+	std::vector<PointSource> get_fit_imagesets(bool& status, int min_dataset = 0, int max_dataset = -1, bool verbal = true);
 	bool plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal);
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
@@ -1279,6 +1192,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void remove_old_extended_src_redshift(const int znum, const bool removing_pixellated_src);
 	bool assign_mask(const int znum, const int mask_i);
 	void print_mask_assignments();
+	int add_new_ptsrc_redshift(const double zs, const int src_i);
+	void remove_old_ptsrc_redshift(const int znum);
 
 	void add_new_lens_entry(const double zl);
 	void set_primary_lens();
@@ -1309,7 +1224,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags);
 	bool register_lens_vary_parameters(const int lensnumber);
 	bool set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags);
-	bool set_sourcept_vary_parameters(const int sptnumber, const bool vary_x, const bool vary_y);
+	bool set_pixellated_src_vary_parameters(const int src_number, boolvector &vary_flags);
+	bool set_sourcept_vary_parameters(const int sptnumber, const bool vary_x, const bool vary_y); // old--replace with below
+	bool set_ptsrc_vary_parameters(const int src_number, boolvector &vary_flags);
+
 	void update_parameter_list();
 	void update_anchored_parameters_and_redshift_data();
 	bool update_lens_centers_from_pixsrc_coords();
@@ -1318,7 +1236,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void reassign_sb_param_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
 	LensProfile* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }
-	void output_lens_commands(string filename, const bool use_limits);
 	void print_sourcept_list();
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
@@ -1338,8 +1255,13 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void add_pixellated_source(const double zsrc);
 	void remove_pixellated_source(int src_number);
-	void print_pixellated_source_list();
+	void print_pixellated_source_list(bool show_vary_params);
 	void find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& xavg, double& yavg);
+	void print_imggrid_list(bool show_vary_params);
+
+	void add_point_source(const double zsrc);
+	void remove_point_source(int src_number);
+	void print_point_source_list(bool show_vary_params);
 
 	void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30, bool use_kpc = false);
 	void remove_derived_param(int dparam_number);
@@ -1390,13 +1312,15 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
 	double chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime, bool showdiag, bool show_status, bool show_lensinfo = false);
-	bool setup_fit_parameters();
+	bool setup_fit_parameters(const bool ignore_limits = false);
 	bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
 	void get_parameter_names();
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
-	bool get_sourcept_parameter_numbers(const int lens_i, int& pi, int& pf);
+	bool get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
+	bool get_ptsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
+	bool get_sourcept_parameter_numbers(const int lens_i, int& pi, int& pf); // DEPRECATED, replace with above
 	bool lookup_parameter_value(const string pname, double& pval);
 	void create_parameter_value_string(string &pvals);
 	bool output_parameter_values();
@@ -1464,12 +1388,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double einstein_radius_root(const double r);
 	double get_einstein_radius_prior(const bool verbal);
 	void plot_mass_profile(double rmin, double rmax, int steps, const char *massname);
-	//void plot_matern_function(double rmin, double rmax, int rpts, const char *mfilename);
 	void print_lensing_info_at_point(const double x, const double y);
 
 	double chisq_pos_source_plane();
 	double chisq_pos_image_plane();
-	//double chisq_pos_image_plane_diagnostic(const bool verbose, double& rms_imgpos_err, int& n_matched_images);
 	double chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double& rms_imgpos_err, int& n_matched_images, const string output_filename = "fit_chivals.dat");
 
 	double chisq_flux();
@@ -1477,17 +1399,17 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double chisq_time_delays_from_model_imgs();
 	double chisq_weak_lensing();
 	bool output_weak_lensing_chivals(string filename);
-	//void output_imgplane_chisq_vals(); // what was this for?
 	void output_model_source_flux(double *bestfit_flux);
 	void find_analytic_srcpos(lensvector *beta_i);
 	void set_analytic_sourcepts(const bool verbal = false);
+	double get_avg_ptsrc_dist(const int ptsrc_i);
 
-	static bool respline_at_end;
-	static int resplinesteps;
-	void create_deflection_spline(int steps);
-	void spline_deflection(double xl, double yl, int steps);
-	bool autospline_deflection(int steps);
-	bool unspline_deflection();
+	//static bool respline_at_end;
+	//static int resplinesteps;
+	//void create_deflection_spline(int steps);
+	//void spline_deflection(double xl, double yl, int steps);
+	//bool autospline_deflection(int steps);
+	//bool unspline_deflection();
 	bool isspherical();
 	void set_grid_corners(double xmin, double xmax, double ymin, double ymax);
 	void set_grid_from_pixels();
@@ -1558,10 +1480,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	}
 	bool get_einstein_radius(int lens_number, double& re_major_axis, double& re_average);
 
-	//double make_perturber_population(const double number_density, const double rmax, const double a, const double b);
-	//void plot_perturber_deflection_vs_area();
-
-	//void generate_solution_chain_sdp81(); // specialty function...probably should put in separate file & header file; do this later
+	/*
+	// specialty functions...now contained in 'specialized.cpp', but not compiled with by default
 	double rmax_true_mc, menc_true_mc;
 	void plot_mc_curve(const int lensnumber, const double logm_min, const double logm_max, const string filename);
 	double croot_eq(const double c);
@@ -1576,6 +1496,8 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void find_bestfit_smooth_model(const int lensnumber);
 	void find_equiv_mvir(const double newc);
 	double mroot_eq(const double c);
+	*/
+
 	void test_lens_functions();
 };
 
@@ -1600,2223 +1522,5 @@ struct ImageData
 	bool set_use_in_chisq(int image_i, bool use_in_chisq_in);
 	~ImageData();
 };
-
-struct ParamPrior
-{
-	double gaussian_pos, gaussian_sig;
-	dmatrix covariance_matrix, inv_covariance_matrix;
-	dvector gauss_meanvals;
-	ivector gauss_paramnums;
-	Prior prior;
-	ParamPrior() { prior = UNIFORM_PRIOR; }
-	ParamPrior(ParamPrior *prior_in)
-	{
-		prior = prior_in->prior;
-		if (prior==GAUSS_PRIOR) {
-			gaussian_pos = prior_in->gaussian_pos;
-			gaussian_sig = prior_in->gaussian_sig;
-		}
-		else if (prior==GAUSS2_PRIOR) {
-			gauss_paramnums.input(prior_in->gauss_paramnums);
-			gauss_meanvals.input(prior_in->gauss_meanvals);
-			inv_covariance_matrix.input(prior_in->inv_covariance_matrix);
-		}
-	}
-	void set_uniform() { prior = UNIFORM_PRIOR; }
-	void set_log() { prior = LOG_PRIOR; }
-	void set_gaussian(double &pos_in, double &sig_in) { prior = GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; }
-	void set_gauss2(int p1, int p2, double &pos1_in, double &pos2_in, double &sig1_in, double &sig2_in, double &sig12_in) {
-		prior = GAUSS2_PRIOR;
-		gauss_paramnums.input(2);
-		gauss_meanvals.input(2);
-		covariance_matrix.input(2,2);
-		gauss_paramnums[0] = p1;
-		gauss_paramnums[1] = p2;
-		gauss_meanvals[0] = pos1_in;
-		gauss_meanvals[1] = pos2_in;
-		covariance_matrix[0][0] = SQR(sig1_in);
-		covariance_matrix[1][1] = SQR(sig2_in);
-		covariance_matrix[0][1] = SQR(sig12_in);
-		covariance_matrix[1][0] = covariance_matrix[0][1];
-		inv_covariance_matrix.input(2,2);
-		inv_covariance_matrix = covariance_matrix.inverse();
-	}
-	void set_gauss2_secondary(int p1, int p2) {
-		prior = GAUSS2_PRIOR_SECONDARY;
-		gauss_paramnums.input(2);
-		gauss_paramnums[0] = p1;
-		gauss_paramnums[1] = p2;
-	}
-};
-
-struct ParamTransform
-{
-	double gaussian_pos, gaussian_sig;
-	double a, b; // for linear transformations
-	bool include_jacobian;
-	int ratio_paramnum;
-	Transform transform;
-	ParamTransform() { transform = NONE; include_jacobian = false; }
-	ParamTransform(ParamTransform *transform_in)
-	{
-		transform = transform_in->transform;
-		include_jacobian = transform_in->include_jacobian;
-		if (transform==GAUSS_TRANSFORM) {
-			gaussian_pos = transform_in->gaussian_pos;
-			gaussian_sig = transform_in->gaussian_sig;
-		} else if (transform==LINEAR_TRANSFORM) {
-			a = transform_in->a;
-			b = transform_in->b;
-		} else if (transform==RATIO) {
-			ratio_paramnum = transform_in->ratio_paramnum;
-		}
-	}
-	void set_none() { transform = NONE; }
-	void set_log() { transform = LOG_TRANSFORM; }
-	void set_linear(double &a_in, double &b_in) { transform = LINEAR_TRANSFORM; a = a_in; b = b_in; }
-	void set_gaussian(double &pos_in, double &sig_in) { transform = GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
-	void set_ratio(int &paramnum_in) { transform = RATIO; ratio_paramnum = paramnum_in; }
-	void set_include_jacobian(bool &include) { include_jacobian = include; }
-};
-
-struct DerivedParam
-{
-	DerivedParamType derived_param_type;
-	double funcparam; // if funcparam == -1, then there is no parameter required
-	double funcparam2;
-	bool use_kpc_units;
-	int int_param;
-	string name, latex_name;
-	DerivedParam(DerivedParamType type_in, double param, int lensnum, double param2 = -1, bool usekpc = false) // if lensnum == -1, then it uses *all* the lenses (if possible)
-	{
-		derived_param_type = type_in;
-		funcparam = param;
-		funcparam2 = param2;
-		int_param = lensnum;
-		use_kpc_units = usekpc;
-		if (derived_param_type == KappaR) {
-			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
-		} else if (derived_param_type == LambdaR) { // here lambda_R = 1 - <kappa>(R)
-			name = "lambdaR"; latex_name = "\\lambda_R";
-		} else if (derived_param_type == DKappaR) {
-			name = "dkappa"; latex_name = "\\kappa'"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
-		} else if (derived_param_type == Mass2dR) {
-			name = "mass2d"; latex_name = "M_{2D}";
-		} else if (derived_param_type == Mass3dR) {
-			name = "mass3d"; latex_name = "M_{3D}";
-		} else if (derived_param_type == Einstein) {
-			name = "re_zsrc"; latex_name = "R_{e}";
-		} else if (derived_param_type == Einstein_Mass) {
-			name = "mass_re"; latex_name = "M_{Re}";
-		} else if (derived_param_type == Kappa_Re) {
-			name = "kappa_re"; latex_name = "\\kappa_{E}";
-		} else if (derived_param_type == LensParam) {
-			name = "lensparam"; latex_name = "\\lambda";
-		} else if (derived_param_type == AvgLogSlope) {
-			name = "logslope"; latex_name = "\\gamma_{avg}'";
-		} else if (derived_param_type == Relative_Perturbation_Radius) {
-			name = "r_perturb_rel"; latex_name = "\\Delta r_{\\delta c}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Perturbation_Radius) {
-			name = "r_perturb"; latex_name = "r_{\\delta c}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			name = "mass_perturb"; latex_name = "M_{\\delta c}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Robust_Perturbation_Density) {
-			name = "sigma_perturb"; latex_name = "\\Sigma_{\\delta c}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Chi_Square) {
-			name = "raw_chisq"; latex_name = "\\chi^2";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Adaptive_Grid_qs) {
-			name = "qs"; latex_name = "q_{s}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Adaptive_Grid_phi_s) {
-			name = "phi_s"; latex_name = "\\phi_{s}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Adaptive_Grid_xavg) {
-			name = "xavg_s"; latex_name = "x_{avg,s}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else if (derived_param_type == Adaptive_Grid_yavg) {
-			name = "yavg_s"; latex_name = "y_{avg,s}";
-			funcparam = -1e30; // no input parameter for this dparam
-		} else die("no user defined function yet");
-
-		if (funcparam != -1e30) {
-			if (funcparam2==-1) {
-				std::stringstream paramstr;
-				string paramstring;
-				paramstr << funcparam;
-				paramstr >> paramstring;
-				name += "(" + paramstring + ")";
-				latex_name += "(" + paramstring + ")";
-			} else {
-				std::stringstream paramstr, paramstr2;
-				string paramstring, paramstring2;
-				paramstr << funcparam;
-				paramstr >> paramstring;
-				paramstr2 << funcparam2;
-				paramstr2 >> paramstring2;
-				name += "(" + paramstring + "," + paramstring2 + ")";
-				latex_name += "(" + paramstring + "," + paramstring2 + ")";
-			}
-		}
-	}
-	double get_derived_param(QLens* lens_in)
-	{
-		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,int_param,use_kpc_units);
-		else if (derived_param_type == LambdaR) return (1 - lens_in->total_dkappa(funcparam,-1,use_kpc_units));
-		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,int_param,use_kpc_units);
-		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,int_param,use_kpc_units);
-		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,int_param,use_kpc_units);
-		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,int_param);
-		else if (derived_param_type == AvgLogSlope) return lens_in->calculate_average_log_slope(int_param,funcparam,funcparam2,use_kpc_units);
-		else if (derived_param_type == Einstein_Mass) {
-			double re = lens_in->einstein_radius_single_lens(funcparam,int_param);
-			return lens_in->mass2d_r(re,int_param,false);
-		} else if (derived_param_type == Kappa_Re) {
-			double reav=0;
-			lens_in->einstein_radius_of_primary_lens(lens_in->reference_zfactors[lens_in->lens_redshift_idx[lens_in->primary_lens_number]],reav);
-			if (reav <= 0) return 0.0;
-			else return lens_in->total_kappa(reav,-1,false);
-		} else if (derived_param_type == LensParam) {
-			return lens_in->get_lens_parameter_using_pmode((int)funcparam,int_param,(int)funcparam2);
-		}
-		else if (derived_param_type == Relative_Perturbation_Radius) {
-			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(int_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled,true);
-			return rmax;
-		} else if (derived_param_type == Perturbation_Radius) {
-			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(int_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-			return rmax;
-		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(int_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-			return menc;
-		} else if (derived_param_type == Robust_Perturbation_Density) {
-			double rmax,avgsig,menc,rmax_z,avgkap_scaled;
-			lens_in->calculate_critical_curve_perturbation_radius_numerical(int_param,false,rmax,avgsig,menc,rmax_z,avgkap_scaled);
-			return avgsig;
-		} else if (derived_param_type == Adaptive_Grid_qs) {
-			if (lens_in->lens_parent != NULL) {
-				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
-				if (lens_in->raw_chisq==-1e30) lens_in->lens_parent->LogLikeFunc(NULL); // If a source inversion hasn't been performed yet, do it here
-			} else if (lens_in->raw_chisq==-1e30) {
-				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
-			}
-			double qs,phi_s,xavg,yavg;
-			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
-			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
-			return qs;
-		} else if (derived_param_type == Adaptive_Grid_phi_s) {
-			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
-			if (lens_in->lens_parent != NULL) {
-				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
-				if (lens_in->raw_chisq==-1e30) lens_in->lens_parent->LogLikeFunc(NULL); // If a source inversion hasn't been performed yet, do it here
-			} else if (lens_in->raw_chisq==-1e30) {
-				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
-			}
-			double qs,phi_s,phi_s_deg,xavg,yavg;
-			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
-			phi_s_deg = phi_s*180.0/M_PI;
-			return phi_s_deg;
-		} else if (derived_param_type == Adaptive_Grid_xavg) {
-			if (lens_in->lens_parent != NULL) {
-				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
-				if (lens_in->raw_chisq==-1e30) lens_in->lens_parent->LogLikeFunc(NULL); // If a source inversion hasn't been performed yet, do it here
-			} else if (lens_in->raw_chisq==-1e30) {
-				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
-			}
-			double qs,phi_s,xavg,yavg;
-			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
-			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
-			return xavg;
-		} else if (derived_param_type == Adaptive_Grid_yavg) {
-			if (lens_in->lens_parent != NULL) {
-				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
-				if (lens_in->raw_chisq==-1e30) lens_in->lens_parent->LogLikeFunc(NULL); // If a source inversion hasn't been performed yet, do it here
-			} else if (lens_in->raw_chisq==-1e30) {
-				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
-			}
-			double qs,phi_s,xavg,yavg;
-			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
-			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
-			return yavg;
-		} else if (derived_param_type == Chi_Square) {
-			double chisq_out;
-			if (lens_in->raw_chisq==-1e30) {
-				if (lens_in->lens_parent != NULL) {
-					// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
-					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
-					chisq_out = lens_in->raw_chisq;
-				} else {
-					chisq_out = lens_in->chisq_single_evaluation(true,false,false,false);
-				}
-			}
-			return chisq_out;
-		}
-		else die("no user defined function yet");
-		return 0.0;
-	}
-	void print_param_description(QLens* lens_in)
-	{
-		string unitstring = (use_kpc_units) ? " kpc" : " arcsec";
-		double dpar = get_derived_param(lens_in);
-		//cout << name << ": ";
-		if (derived_param_type == KappaR) {
-			if (int_param==-1) std::cout << "Total kappa within r = " << funcparam << unitstring << std::endl;
-			else std::cout << "kappa for lens " << int_param << " within r = " << funcparam << unitstring << std::endl;
-		} else if (derived_param_type == LambdaR) {
-			std::cout << "One minus average kappa at r = " << funcparam << unitstring << std::endl;
-		} else if (derived_param_type == DKappaR) {
-			if (int_param==-1) std::cout << "Derivative of total kappa within r = " << funcparam << unitstring << std::endl;
-			else std::cout << "Derivative of kappa for lens " << int_param << " within r = " << funcparam << unitstring << std::endl;
-		} else if (derived_param_type == Mass2dR) {
-			std::cout << "Projected (2D) mass of lens " << int_param << " enclosed within r = " << funcparam << unitstring << std::endl;
-		} else if (derived_param_type == Mass3dR) {
-			std::cout << "Deprojected (3D) mass of lens " << int_param << " enclosed within r = " << funcparam << unitstring << std::endl;
-		} else if (derived_param_type == Einstein) {
-			std::cout << "Einstein radius of lens " << int_param << " for source redshift zsrc = " << funcparam << std::endl;
-		} else if (derived_param_type == Einstein_Mass) {
-			std::cout << "Projected mass within Einstein radius of lens " << int_param << " for source redshift zsrc = " << funcparam << std::endl;
-		} else if (derived_param_type == Kappa_Re) {
-			std::cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << std::endl;
-		} else if (derived_param_type == LensParam) {
-			std::cout << "Parameter " << ((int) funcparam) << " of lens " << int_param << " using pmode=" << ((int) funcparam2) << std::endl;
-		} else if (derived_param_type == AvgLogSlope) {
-			std::cout << "Average log-slope of kappa from lens " << int_param << " between r1=" << funcparam << unitstring << " and r2=" << funcparam2 << unitstring << std::endl;
-		} else if (derived_param_type == Perturbation_Radius) {
-			std::cout << "Critical curve perturbation radius of lens " << int_param << std::endl;
-		} else if (derived_param_type == Relative_Perturbation_Radius) {
-			std::cout << "Relative critical curve perturbation radius of lens " << int_param << std::endl;
-		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			std::cout << "Projected mass within perturbation radius of lens " << int_param << std::endl;
-		} else if (derived_param_type == Robust_Perturbation_Density) {
-			std::cout << "Average projected density within perturbation radius of lens " << int_param << std::endl;
-		} else if (derived_param_type == Adaptive_Grid_qs) {
-			std::cout << "Axis ratio derived from source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
-		} else if (derived_param_type == Adaptive_Grid_phi_s) {
-			std::cout << "Orientation angle derived of source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
-		} else if (derived_param_type == Adaptive_Grid_xavg) {
-			std::cout << "Centroid x-coordinate of pixellated source using a " << int_param << "x" << int_param << " sampling" << std::endl;
-		} else if (derived_param_type == Adaptive_Grid_yavg) {
-			std::cout << "Centroid y-coordinate of pixellated source using a " << int_param << "x" << int_param << " sampling" << std::endl;
-		} else if (derived_param_type == Chi_Square) {
-			std::cout << "Raw chi-square value for given set of parameters" << std::endl;
-		} else die("no user defined function yet");
-		std::cout << "   name: '" << name << "', latex_name: '" << latex_name << "'" << std::endl;
-		std::cout << "   " << name << " = " << dpar << std::endl;
-	}
-	void rename(const string new_name, const string new_latex_name)
-	{
-		name = new_name;
-		latex_name = new_latex_name;
-	}
-};
-
-struct ParamSettings
-{
-	int nparams;
-	ParamPrior **priors;
-	ParamTransform **transforms;
-	string *param_names;
-	string *override_names; // this allows to manually set names even after parameter transformations
-	// ParamSettings should handle the latex names too, to simplify things; this would also allow for manual override of the latex names. Implement this!!!!!!
-	double *prior_norms;
-	double *penalty_limits_lo, *penalty_limits_hi;
-	bool *use_penalty_limits;
-	// It would be nice if penalty limits and override_limits could be merged. The tricky part is that the penalty limits deal with the	
-	// untransformed parameters, while override_limits deal with the transformed parameters. Not sure yet what is the best way to handle this.
-	double *override_limits_lo, *override_limits_hi;
-	bool *override_prior_limits;
-	double *stepsizes;
-	bool *auto_stepsize;
-	bool *hist2d_param;
-	bool *hist2d_dparam;
-	bool *subplot_param;
-	bool *subplot_dparam;
-	string *dparam_names;
-	int n_dparams;
-	ParamSettings() { priors = NULL; param_names = NULL; transforms = NULL; nparams = 0; stepsizes = NULL; auto_stepsize = NULL; hist2d_param = NULL; hist2d_dparam = NULL; subplot_param = NULL; dparam_names = NULL; subplot_dparam = NULL; nparams = 0; n_dparams = 0; }
-	ParamSettings(ParamSettings& param_settings_in) {
-		nparams = param_settings_in.nparams;
-		n_dparams = param_settings_in.n_dparams;
-		param_names = new string[nparams];
-		override_names = new string[nparams];
-		priors = new ParamPrior*[nparams];
-		transforms = new ParamTransform*[nparams];
-		stepsizes = new double[nparams];
-		auto_stepsize = new bool[nparams];
-		hist2d_param = new bool[nparams];
-		subplot_param = new bool[nparams];
-		prior_norms = new double[nparams];
-		penalty_limits_lo = new double[nparams];
-		penalty_limits_hi = new double[nparams];
-		use_penalty_limits = new bool[nparams];
-		override_limits_lo = new double[nparams];
-		override_limits_hi = new double[nparams];
-		override_prior_limits = new bool[nparams];
-		for (int i=0; i < nparams; i++) {
-			priors[i] = new ParamPrior(param_settings_in.priors[i]);
-			transforms[i] = new ParamTransform(param_settings_in.transforms[i]);
-			param_names[i] = param_settings_in.param_names[i];
-			override_names[i] = param_settings_in.override_names[i];
-			stepsizes[i] = param_settings_in.stepsizes[i];
-			auto_stepsize[i] = param_settings_in.auto_stepsize[i];
-			hist2d_param[i] = param_settings_in.hist2d_param[i];
-			subplot_param[i] = param_settings_in.subplot_param[i];
-			prior_norms[i] = param_settings_in.prior_norms[i];
-			penalty_limits_lo[i] = param_settings_in.penalty_limits_lo[i];
-			penalty_limits_hi[i] = param_settings_in.penalty_limits_hi[i];
-			use_penalty_limits[i] = param_settings_in.use_penalty_limits[i];
-			override_limits_lo[i] = param_settings_in.override_limits_lo[i];
-			override_limits_hi[i] = param_settings_in.override_limits_hi[i];
-			override_prior_limits[i] = param_settings_in.override_prior_limits[i];
-		}
-		if (n_dparams > 0) {
-			dparam_names = new string[n_dparams];
-			hist2d_dparam = new bool[n_dparams];
-			subplot_dparam = new bool[n_dparams];
-			for (int i=0; i < n_dparams; i++) {
-				dparam_names[i] = param_settings_in.dparam_names[i];
-				hist2d_dparam[i] = param_settings_in.hist2d_dparam[i];
-				subplot_dparam[i] = param_settings_in.subplot_dparam[i];
-			}
-		}
-	}
-	void update_params(const int nparams_in, std::vector<string>& names, double* stepsizes_in);
-	void insert_params(const int pi, const int pf, std::vector<string>& names, double* stepsizes_in);
-	bool remove_params(const int pi, const int pf);
-	void add_dparam(string dparam_name);
-	void remove_dparam(int dparam_number);
-	void rename_dparam(int dparam_number, string newname) { dparam_names[dparam_number] = newname; }
-	void clear_dparams()
-	{
-		if (n_dparams > 0) {
-			delete[] dparam_names;
-			delete[] hist2d_dparam;
-			delete[] subplot_dparam;
-			n_dparams = 0;
-		}
-	}
-	int lookup_param_number(const string pname)
-	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		int pnum = -1;
-		for (int i=0; i < nparams; i++) {
-			if ((transformed_names[i]==pname) or (param_names[i]==pname)) { pnum = i; break; }
-		}
-		for (int i=0; i < n_dparams; i++) {
-			if (dparam_names[i]==pname) pnum = nparams+i;
-		}
-		delete[] transformed_names;
-		return pnum;
-	}
-	string lookup_param_name(const int i)
-	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		string name = transformed_names[i];
-		delete[] transformed_names;
-		return name;
-	}
-	bool exclude_hist2d_param(const string pname)
-	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		bool found_name = false;
-		int i;
-		for (i=0; i < nparams; i++) {
-			if ((param_names[i]==pname) or (transformed_names[i]==pname)) {
-				hist2d_param[i] = false;
-				found_name = true;
-				break;
-			}
-		}
-		if (!found_name) {
-			for (i=0; i < n_dparams; i++) {
-				if (dparam_names[i]==pname) {
-					hist2d_dparam[i] = false;
-					found_name = true;
-					break;
-				}
-			}
-		}
-		delete[] transformed_names;
-		return found_name;
-	}
-	bool hist2d_params_defined()
-	{
-		bool active_param = false;
-		int i;
-		for (i=0; i < nparams; i++) {
-			if (!hist2d_param[i]) {
-				active_param = true;
-				break;
-			}
-		}
-		if (!active_param) {
-			for (i=0; i < n_dparams; i++) {
-				if (!hist2d_dparam[i]) {
-					active_param = true;
-					break;
-				}
-			}
-		}
-		return active_param;
-	}
-	bool hist2d_param_flag(const int i, string &name)
-	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		bool flag;
-		if (i < nparams) {
-			name = transformed_names[i];
-			flag = hist2d_param[i];
-		} else {
-			int j = i - nparams;
-			name = dparam_names[j];
-			flag = hist2d_dparam[j];
-		}
-		delete[] transformed_names;
-		return flag;
-	}
-	string print_excluded_hist2d_params()
-	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		string pstring = "";
-		int i;
-		for (i=0; i < nparams; i++) {
-			if (!hist2d_param[i]) pstring += transformed_names[i] + " ";
-		}
-		for (i=0; i < n_dparams; i++) {
-			if (!hist2d_dparam[i]) pstring += dparam_names[i] + " ";
-		}
-		delete[] transformed_names;
-		return pstring;
-	}
-	void reset_hist2d_params()
-	{
-		int i;
-		for (i=0; i < nparams; i++) hist2d_param[i] = true;
-		for (i=0; i < n_dparams; i++) hist2d_dparam[i] = true;
-	}
-	bool set_subplot_param(const string pname)
-	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		bool found_name = false;
-		int i;
-		for (i=0; i < nparams; i++) {
-			if ((param_names[i]==pname) or (transformed_names[i]==pname)) {
-				subplot_param[i] = true;
-				found_name = true;
-				break;
-			}
-		}
-		if (!found_name) {
-			for (i=0; i < n_dparams; i++) {
-				if (dparam_names[i]==pname) {
-					subplot_dparam[i] = true;
-					found_name = true;
-					break;
-				}
-			}
-		}
-		delete[] transformed_names;
-		return found_name;
-	}
-	bool subplot_params_defined()
-	{
-		bool active_param = false;
-		int i;
-		for (i=0; i < nparams; i++) {
-			if (subplot_param[i]) {
-				active_param = true;
-				break;
-			}
-		}
-		if (!active_param) {
-			for (i=0; i < n_dparams; i++) {
-				if (subplot_dparam[i]) {
-					active_param = true;
-					break;
-				}
-			}
-		}
-		return active_param;
-	}
-	bool subplot_param_flag(const int i, string &name)
-	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		bool flag;
-		if (i < nparams) {
-			name = transformed_names[i];
-			flag = subplot_param[i];
-		} else {
-			int j = i - nparams;
-			name = dparam_names[j];
-			flag = subplot_dparam[j];
-		}
-		delete[] transformed_names;
-		return flag;
-	}
-	string print_subplot_params()
-	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		string pstring = "";
-		int i;
-		for (i=0; i < nparams; i++) {
-			if (subplot_param[i]) pstring += transformed_names[i] + " ";
-		}
-		for (i=0; i < n_dparams; i++) {
-			if (subplot_dparam[i]) pstring += dparam_names[i] + " ";
-		}
-		delete[] transformed_names;
-		return pstring;
-	}
-	void reset_subplot_params()
-	{
-		int i;
-		for (i=0; i < nparams; i++) subplot_param[i] = false;
-		for (i=0; i < n_dparams; i++) subplot_dparam[i] = false;
-	}
-	void clear_penalty_limits()
-	{
-		for (int i=0; i < nparams; i++) {
-			use_penalty_limits[i] = false;
-		}
-	}
-	void print_priors();
-	bool output_prior(const int i);
-	void print_stepsizes();
-	void print_penalty_limits();
-	void scale_stepsizes(const double fac)
-	{
-		for (int i=0; i < nparams; i++) {
-			stepsizes[i] *= fac;
-			auto_stepsize[i] = false;
-		}
-	}
-	void reset_stepsizes(double *stepsizes_in)
-	{
-		for (int i=0; i < nparams; i++) {
-			stepsizes[i] = stepsizes_in[i];
-			auto_stepsize[i] = true;
-		}
-		transform_stepsizes();
-	}
-	void set_stepsize(const int i, const double step)
-	{
-		if (i >= nparams) die("parameter chosen for stepsize is greater than total number of parameters (%i vs %i)",i,nparams);
-		auto_stepsize[i] = false;
-		stepsizes[i] = step;
-	}
-	void set_penalty_limit(const int i, const double lo, const double hi)
-	{
-		if (i >= nparams) die("parameter chosen for penalty limit is greater than total number of parameters (%i vs %i)",i,nparams);
-		use_penalty_limits[i] = true;
-		penalty_limits_lo[i] = lo;
-		penalty_limits_hi[i] = hi;
-	}
-	void get_penalty_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
-	{
-		use_plimits.input(nparams);
-		lower.input(nparams);
-		upper.input(nparams);
-		for (int i=0; i < nparams; i++) {
-			use_plimits[i] = use_penalty_limits[i];
-			lower[i] = penalty_limits_lo[i];
-			upper[i] = penalty_limits_hi[i];
-		}
-	}
-	void update_penalty_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
-	{
-		for (int i=0; i < nparams; i++) {
-			use_penalty_limits[i] = use_plimits[i];
-			penalty_limits_lo[i] = lower[i];
-			penalty_limits_hi[i] = upper[i];
-		}
-	}
-	void update_specific_penalty_limits(const int pi, const int pf, boolvector& use_plimits, dvector& lower, dvector& upper)
-	{
-		int i, index;
-		for (i=0, index=pi; index < pf; i++, index++) {
-			use_penalty_limits[index] = use_plimits[i];
-			penalty_limits_lo[index] = lower[i];
-			penalty_limits_hi[index] = upper[i];
-		}
-	}
-	void clear_penalty_limit(const int i)
-	{
-		if (i >= nparams) die("parameter chosen for penalty limit is greater than total number of parameters (%i vs %i)",i,nparams);
-		use_penalty_limits[i] = true; // this ensures that it won't be overwritten by default values
-		penalty_limits_lo[i] = -1e30;
-		penalty_limits_hi[i] = 1e30;
-	}
-	void transform_parameters(double *params)
-	{
-		double *new_params = new double[nparams];
-		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==NONE) new_params[i] = params[i];
-			else if (transforms[i]->transform==LOG_TRANSFORM) new_params[i] = log(params[i])/M_LN10;
-			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				new_params[i] = erff((params[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
-			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				new_params[i] = transforms[i]->a * params[i] + transforms[i]->b;
-			} else if (transforms[i]->transform==RATIO) {
-				new_params[i] = params[i]/params[transforms[i]->ratio_paramnum];
-			}
-		}
-		for (int i=0; i < nparams; i++) {
-			params[i] = new_params[i];
-		}
-		delete[] new_params;
-	}
-	void transform_limits(double *lower, double *upper)
-	{
-		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==LOG_TRANSFORM) lower[i] = log(lower[i])/M_LN10;
-			if (transforms[i]->transform==LOG_TRANSFORM) upper[i] = log(upper[i])/M_LN10;
-			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				lower[i] = erff((lower[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
-				upper[i] = erff((upper[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
-			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				lower[i] = transforms[i]->a * lower[i] + transforms[i]->b;
-				upper[i] = transforms[i]->a * upper[i] + transforms[i]->b;
-				if (lower[i] > upper[i]) {
-					double temp = lower[i]; lower[i] = upper[i]; upper[i] = temp;
-				}
-			} else if (transforms[i]->transform==RATIO) {
-				lower[i] = 0; // these can be manually adjusted using 'fit priors range ...'
-				upper[i] = 1; // these can be customized
-			}
-		}
-	}
-	void set_override_prior_limit(const int i, const double lo, const double hi)
-	{
-		if (i >= nparams) die("parameter chosen for prior limit is greater than total number of parameters (%i vs %i)",i,nparams);
-		override_prior_limits[i] = true;
-		override_limits_lo[i] = lo;
-		override_limits_hi[i] = hi;
-	}
-	void override_limits(double *lower, double *upper)
-	{
-		for (int i=0; i < nparams; i++) {
-			if (override_prior_limits[i]) {
-				lower[i] = override_limits_lo[i];
-				upper[i] = override_limits_hi[i];
-			}
-		}
-	}
-	void inverse_transform_parameters(double *params, double *transformed_params)
-	{
-		bool apply_ratio_transform_afterwards = false;
-		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==NONE) transformed_params[i] = params[i];
-			else if (transforms[i]->transform==LOG_TRANSFORM) transformed_params[i] = pow(10.0,params[i]);
-			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				transformed_params[i] = transforms[i]->gaussian_pos + M_SQRT2*transforms[i]->gaussian_sig*erfinv(params[i]);
-			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				transformed_params[i] = (params[i] - transforms[i]->b) / transforms[i]->a;
-			} else if (transforms[i]->transform==RATIO) {
-				if (transforms[i]->ratio_paramnum < i) {
-					transformed_params[i] = params[i]*transformed_params[transforms[i]->ratio_paramnum];
-				} else apply_ratio_transform_afterwards = true;
-			}
-		}
-		if (apply_ratio_transform_afterwards) {
-			for (int i=0; i < nparams; i++) {
-				if (transforms[i]->transform==RATIO) transformed_params[i] = params[i]*transformed_params[transforms[i]->ratio_paramnum];
-			}
-		}
-	}
-	void inverse_transform_parameters(double *params)
-	{
-		inverse_transform_parameters(params,params);
-	}
-	void transform_parameter_names(string *names, string *transformed_names, string *latex_names, string *transformed_latex_names)
-	{
-		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==NONE) {
-				transformed_names[i] = names[i];
-				if (latex_names != NULL) transformed_latex_names[i] = latex_names[i];
-			}
-			else if (transforms[i]->transform==LOG_TRANSFORM) {
-				transformed_names[i] = "log(" + names[i] + ")";
-				if (latex_names != NULL) transformed_latex_names[i] = "\\log(" + latex_names[i] + ")";
-			}
-			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				transformed_names[i] = "u{" + names[i] + "}";
-				if (latex_names != NULL) transformed_latex_names[i] = "u\\{" + latex_names[i] + "\\}";
-			}
-			else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				transformed_names[i] = "L{" + names[i] + "}";
-				if (latex_names != NULL) transformed_latex_names[i] = "L\\{" + latex_names[i] + "\\}";
-			}
-			else if (transforms[i]->transform==RATIO) {
-				transformed_names[i] = names[i] + "_over_" + names[transforms[i]->ratio_paramnum];
-				if (latex_names != NULL) transformed_latex_names[i] = latex_names[i] + "/" + latex_names[transforms[i]->ratio_paramnum];
-			}
-		}
-		override_parameter_names(transformed_names); // allows for manually setting parameter names
-	}
-	bool set_override_parameter_name(const int i, const string name)
-	{
-		bool unique_name = true;
-		for (int j=0; j < nparams; j++) {
-			if ((i != j) and (((override_names[j] != "") and (override_names[j]==name)) or (param_names[j]==name))) unique_name = false;
-		}
-		if (!unique_name) return false;
-		override_names[i] = name;
-		return true;
-	}
-	void override_parameter_names(string* names)
-	{
-		for (int i=0; i < nparams; i++) {
-			if (override_names[i] != "") names[i] = override_names[i];
-		}
-	}
-	void transform_stepsizes()
-	{
-		// It would be better to have it pass in the current value of the parameters, then use the default
-		// (untransformed) stepsize to define the transformed stepsize. For example, the log stepsize would
-		// be log((pi+step)/pi). But passing in the parameter values is a bit of a pain...do this later
-		for (int i=0; i < nparams; i++) {
-			if (auto_stepsize[i]) {
-				if (transforms[i]->transform==LOG_TRANSFORM) {
-					stepsizes[i] = 0.5; // default for a log transform
-				}
-				else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				}
-				else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				}
-				else if (transforms[i]->transform==RATIO) {
-					stepsizes[i] = 0.5; // default for a ratio
-				}
-			}
-		}
-	}
-	void add_prior_terms_to_loglike(double *params, double& loglike)
-	{
-		//std::cout << "LOGLIKE00=" << (2*loglike) << std::endl;
-		double dloglike,dloglike_tot=0;
-		for (int i=0; i < nparams; i++) {
-			if (priors[i]->prior!=UNIFORM_PRIOR) {
-				//std::cout << "PRIOR NORM (param " << i << "): " << (2*log(prior_norms[i])) << std::endl;
-				dloglike_tot += log(prior_norms[i]); // Normalize the prior for the bayesian evidence
-				if (priors[i]->prior==LOG_PRIOR) {
-					dloglike = log(params[i]);
-					dloglike_tot += dloglike;
-				}
-				else if (priors[i]->prior==GAUSS_PRIOR) {
-					dloglike = SQR((params[i] - priors[i]->gaussian_pos)/priors[i]->gaussian_sig)/2.0;
-					//std::cout << "YO: " << params[i] << " " << priors[i]->gaussian_pos << " " << priors[i]->gaussian_sig << " " << dloglike << std::endl;
-					dloglike_tot += dloglike;
-				}
-				else if (priors[i]->prior==GAUSS2_PRIOR) {
-					int j = priors[i]->gauss_paramnums[1];
-					dvector bvec, cvec;
-					bvec.input(2);
-					cvec.input(2);
-					bvec[0] = params[i] - priors[i]->gauss_meanvals[0];
-					bvec[1] = params[j] - priors[i]->gauss_meanvals[1];
-					cvec = priors[i]->inv_covariance_matrix * bvec;
-					dloglike = (bvec[0]*cvec[0] + bvec[1]*cvec[1]) / 2.0;
-					dloglike_tot += dloglike;
-				}
-			}
-		}
-		//std::cout << "DLOGLIKE_TOT*2: " << (2*dloglike_tot) << " LOGLIKE0: " << (2*loglike) << std::endl;
-		loglike += dloglike_tot;
-		//std::cout << "NEW LOGLIKE: " << (2*loglike) << std::endl;
-	}
-	void update_reference_paramnums(int *new_paramnums)
-	{
-		// This updates any parameter numbers that are referenced by the priors or transforms; this is done any time the parameter list is changed
-		int new_paramnum;
-		for (int i=0; i < nparams; i++) {
-			if (priors[i]->prior==GAUSS2_PRIOR) {
-				new_paramnum = new_paramnums[priors[i]->gauss_paramnums[0]];
-				if (new_paramnum==-1) {
-					// parameter no longer exists; revert back to uniform prior
-					priors[i]->set_uniform();
-				} else {
-					priors[i]->gauss_paramnums[0] = new_paramnum;
-					priors[i]->gauss_paramnums[1] = new_paramnum;
-				}
-			}
-			if (transforms[i]->transform==RATIO) {
-				new_paramnum = new_paramnums[transforms[i]->ratio_paramnum];
-				if (new_paramnum==-1) {
-					// parameter no longer exists; remove transformation
-					transforms[i]->set_none();
-				} else {
-					transforms[i]->ratio_paramnum = new_paramnum;
-				}
-			}
-		}
-	}
-	void set_prior_norms(double *lower_limit, double* upper_limit)
-	{
-		// flat priors are automatically given a norm of 1.0, since we'll be transforming to the unit hypercube when doing nested sampling;
-		// however a correction is required for other priors
-		for (int i=0; i < nparams; i++) {
-			if (priors[i]->prior!=UNIFORM_PRIOR) {
-				if (priors[i]->prior==LOG_PRIOR) prior_norms[i] = log(upper_limit[i]/lower_limit[i]);
-				else if (priors[i]->prior==GAUSS_PRIOR) {
-					prior_norms[i] = (erff((upper_limit[i] - priors[i]->gaussian_pos)/(M_SQRT2*priors[i]->gaussian_sig)) - erff((lower_limit[i] - priors[i]->gaussian_pos)/(M_SQRT2*priors[i]->gaussian_sig))) * M_SQRT_HALFPI * priors[i]->gaussian_sig;
-				}
-				prior_norms[i] /= (upper_limit[i] - lower_limit[i]); // correction since we are transforming to the unit hypercube
-			}
-		}
-	}
-	void add_jacobian_terms_to_loglike(double *params, double& loglike)
-	{
-		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->include_jacobian==true) {
-				if (transforms[i]->transform==LOG_TRANSFORM) loglike -= log(params[i]);
-				else if (transforms[i]->transform==GAUSS_TRANSFORM) loglike -= SQR((params[i] - transforms[i]->gaussian_pos)/transforms[i]->gaussian_sig)/2.0;
-				else if (transforms[i]->transform==RATIO) loglike += log(params[transforms[i]->ratio_paramnum]);
-			}
-		}
-	}
-	void clear_params()
-	{
-		if (nparams > 0) {
-			delete[] param_names;
-			delete[] override_names;
-			for (int i=0; i < nparams; i++) {
-				delete priors[i];
-				delete transforms[i];
-			}
-			delete[] priors;
-			delete[] transforms;
-			delete[] stepsizes;
-			delete[] auto_stepsize;
-			delete[] subplot_param;
-			delete[] hist2d_param;
-			delete[] prior_norms;
-			delete[] penalty_limits_lo;
-			delete[] penalty_limits_hi;
-			delete[] use_penalty_limits;
-			delete[] override_limits_lo;
-			delete[] override_limits_hi;
-			delete[] override_prior_limits;
-
-		}
-		priors = NULL;
-		param_names = NULL;
-		override_names = NULL;
-		transforms = NULL;
-		nparams = 0;
-		stepsizes = NULL;
-		auto_stepsize = NULL;
-		subplot_param = NULL;
-	}
-	~ParamSettings()
-	{
-		if (nparams > 0) {
-			delete[] param_names;
-			delete[] override_names;
-			for (int i=0; i < nparams; i++) {
-				delete priors[i];
-				delete transforms[i];
-			}
-			delete[] priors;
-			delete[] transforms;
-			delete[] stepsizes;
-			delete[] auto_stepsize;
-			delete[] subplot_param;
-			delete[] hist2d_param;
-			delete[] prior_norms;
-			delete[] penalty_limits_lo;
-			delete[] penalty_limits_hi;
-			delete[] use_penalty_limits;
-			delete[] override_limits_lo;
-			delete[] override_limits_hi;
-			delete[] override_prior_limits;
-		}
-		if (n_dparams > 0) {
-			delete[] dparam_names;
-			delete[] subplot_dparam;
-		}
-	}
-};
-
-class Defspline
-{
-	Spline2D ax, ay;
-	Spline2D axx, ayy, axy;
-
-	public:
-	friend void QLens::spline_deflection(double,double,int);
-	int nsteps() { return (ax.xlength()-1); }
-	double xmax() { return ax.xmax(); }
-	double ymax() { return ax.ymax(); }
-
-	lensvector deflection(const double &x, const double &y)
-	{
-		lensvector ans;
-		ans[0] = ax.splint(x,y);
-		ans[1] = ay.splint(x,y);
-		return ans;
-	}
-
-	lensmatrix hessian(const double &x, const double &y)
-	{
-		lensmatrix ans;
-		ans[0][0] = axx.splint(x,y);
-		ans[1][1] = ayy.splint(x,y);
-		ans[1][0] = axy.splint(x,y);
-		ans[0][1] = ans[1][0];
-		return ans;
-	}
-};
-
-inline double QLens::kappa(const double& x, const double& y, double* zfacs, double** betafacs)
-{
-	double kappa;
-	if (n_lens_redshifts==1) {
-		int j;
-		kappa=0;
-		for (j=0; j < nlens; j++) {
-			kappa += lens_list[j]->kappa(x,y);
-		}
-		kappa *= zfacs[0];
-	} else {
-		lensmatrix *jac = &jacs[0];
-		hessian(x,y,(*jac),0,zfacs,betafacs);
-		kappa = ((*jac)[0][0] + (*jac)[1][1])/2;
-	}
-
-	return kappa;
-}
-
-/*
-inline double QLens::kappa_weak(const double& x, const double& y, double* zfacs)
-{
-	double kappa;
-	int j;
-	kappa=0;
-	for (j=0; j < nlens; j++) {
-		kappa += lens_list[j]->kappa(x,y);
-	}
-	kappa *= zfacs[0];
-
-	return kappa;
-}
-*/
-
-inline double QLens::potential(const double& x, const double& y, double* zfacs, double** betafacs)
-{
-	double pot=0, pot_subtot;
-	// This is not really sensical for multiplane lensing, and time delays need to be treated as in Schneider's textbook. Fix later
-	int i,j;
-	for (i=0; i < n_lens_redshifts; i++) {
-		if (zfacs[i] != 0.0) {
-			pot_subtot=0;
-			for (j=0; j < zlens_group_size[i]; j++) {
-				pot_subtot += lens_list[zlens_group_lens_indx[i][j]]->potential(x,y);
-			}
-			pot += zfacs[i]*pot_subtot;
-		}
-	}
-	return pot;
-}
-
-inline void QLens::deflection(const double& x, const double& y, lensvector& def_tot, const int &thread, double* zfacs, double** betafacs)
-{
-	if (!defspline)
-	{
-		lensvector *x_i = &xvals_i[thread];
-		lensvector *def = &defs_i[thread];
-		lensvector **def_i = &defs_subtot[thread];
-
-		int i,j;
-		def_tot[0] = 0;
-		def_tot[1] = 0;
-		//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
-		//for (i=0; i < n_lens_redshifts; i++) {
-			//std::cout << "Lens redshift" << i << " (z=" << lens_redshifts[i] << "): zfac=" << zfacs[i] << std::endl;
-		//}
-		for (i=0; i < n_lens_redshifts; i++) {
-			if (zfacs[i] != 0.0) {
-				//std::cout << "redshift " << i << ":\n";
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-					//std::cout << "Lens redshift " << i << ", lens " << zlens_group_lens_indx[i][j] << " def=" << (*def)[0] << " " << (*def)[1] << std::endl;
-					(*def_i)[i][0] += (*def)[0];
-					(*def_i)[i][1] += (*def)[1];
-				}
-				//std::cout << "Lens redshift" << i << " (z=" << lens_redshifts[i] << "): xi=" << (*x_i)[0] << " " << (*x_i)[1] << std::endl;
-				(*def_i)[i][0] *= zfacs[i];
-				(*def_i)[i][1] *= zfacs[i];
-				def_tot[0] += (*def_i)[i][0];
-				def_tot[1] += (*def_i)[i][1];
-			}
-		}
-	}
-	else {
-		def_tot = defspline->deflection(x,y);
-	}
-}
-
-inline void QLens::custom_deflection(const double& x, const double& y, lensvector& def_tot)
-{
-	lensvector def;
-	lensvector pos, pos_prime;
-
-	def_tot[0] = 0;
-	def_tot[1] = 0;
-	pos[0] = x;
-	pos[1] = y;
-	double zlens1 = lens_list[0]->zlens;
-	double zlens2 = lens_list[2]->zlens;
-	double beta;
-	if (zlens1 > zlens2) {
-		beta = calculate_beta_factor(zlens2,zlens1,1);
-		//std::cout << "BETA! " << beta << std::endl;
-		lens_list[2]->deflection(pos[0],pos[1],def);
-		def_tot[0] += def[0];
-		def_tot[1] += def[1];
-		pos_prime[0] = pos[0] - beta*def_tot[0];
-		pos_prime[1] = pos[1] - beta*def_tot[1];
-		//std::cout << "Lens 0,1 xprime=" << pos_prime[0] << " " << pos_prime[1] << std::endl;
-		lens_list[0]->deflection(pos_prime[0],pos_prime[1],def);
-		def_tot[0] += def[0];
-		def_tot[1] += def[1];
-		lens_list[1]->deflection(pos_prime[0],pos_prime[1],def);
-		def_tot[0] += def[0];
-		def_tot[1] += def[1];
-	} else if (zlens1 < zlens2) {
-		beta = calculate_beta_factor(zlens1,zlens2,1);
-		//std::cout << "BETA! " << beta << std::endl;
-		lens_list[0]->deflection(pos[0],pos[1],def);
-		//std::cout << "lens 0 def=" << def[0] << " " << def[1] << std::endl;
-		def_tot[0] += def[0];
-		def_tot[1] += def[1];
-		lens_list[1]->deflection(pos[0],pos[1],def);
-		//std::cout << "lens 1 def=" << def[0] << " " << def[1] << std::endl;
-		def_tot[0] += def[0];
-		def_tot[1] += def[1];
-		pos_prime[0] = pos[0] - beta*def_tot[0];
-		pos_prime[1] = pos[1] - beta*def_tot[1];
-		//std::cout << "Lens 2 xprime=" << pos_prime[0] << " " << pos_prime[1] << std::endl;
-		lens_list[2]->deflection(pos_prime[0],pos_prime[1],def);
-		//std::cout << "lens 2 def=" << def[0] << " " << def[1] << std::endl;
-		def_tot[0] += def[0];
-		def_tot[1] += def[1];
-	} else {
-		lens_list[0]->deflection(pos[0],pos[1],def);
-		def_tot[0] += def[0];
-		def_tot[1] += def[1];
-		lens_list[1]->deflection(pos[0],pos[1],def);
-		def_tot[0] += def[0];
-		def_tot[1] += def[1];
-		lens_list[2]->deflection(pos[0],pos[1],def);
-		def_tot[0] += def[0];
-		def_tot[1] += def[1];
-	}
-}
-
-inline void QLens::deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs)
-{
-	if (!defspline)
-	{
-		lensvector *x_i = &xvals_i[thread];
-		lensvector *def = &defs_i[thread];
-		lensvector **def_i = &defs_subtot[thread];
-		int i,j;
-		def_tot_x = 0;
-		def_tot_y = 0;
-		//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
-		for (i=0; i < n_lens_redshifts; i++) {
-			if (zfacs[i] != 0.0) {
-				//std::cout << "redshift " << i << ":\n";
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-					(*def_i)[i][0] += (*def)[0];
-					(*def_i)[i][1] += (*def)[1];
-				}
-				(*def_i)[i][0] *= zfacs[i];
-				(*def_i)[i][1] *= zfacs[i];
-				def_tot_x += (*def_i)[i][0];
-				def_tot_y += (*def_i)[i][1];
-			}
-		}
-	}
-	else {
-		lensvector *def = &defs_i[thread];
-		(*def) = defspline->deflection(x,y);
-		def_tot_x = (*def)[0];
-		def_tot_y = (*def)[1];
-	}
-}
-
-inline void QLens::deflection_exclude(const double& x, const double& y, bool* exclude, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs)
-{
-	bool skip_lens_plane = false;
-	int skip_i = -1;
-	lensvector *x_i = &xvals_i[thread];
-	lensvector *def = &defs_i[thread];
-	lensvector **def_i = &defs_subtot[thread];
-	int i,j;
-	def_tot_x = 0;
-	def_tot_y = 0;
-
-	for (i=0; i < n_lens_redshifts; i++) {
-		if ((zlens_group_size[i]==1) and (exclude[zlens_group_lens_indx[i][0]])) {
-			skip_lens_plane = true;
-			skip_i = i;
-			// should allow for multiple redshifts to be excluded...fix later
-		}
-	}
-
-	//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
-	for (i=0; i < n_lens_redshifts; i++) {
-		//std::cout << "redshift " << i << ":\n";
-		if ((!skip_lens_plane) or (skip_i != i)) {
-			(*def_i)[i][0] = 0;
-			(*def_i)[i][1] = 0;
-			(*x_i)[0] = x;
-			(*x_i)[1] = y;
-			for (j=0; j < i; j++) {
-				//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-				if ((!skip_lens_plane) or (skip_i != j)) {
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-				}
-			}
-			for (j=0; j < zlens_group_size[i]; j++) {
-				if (exclude[zlens_group_lens_indx[i][j]]) ;
-				else {
-					lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-					(*def_i)[i][0] += (*def)[0];
-					(*def_i)[i][1] += (*def)[1];
-				}
-			}
-			(*def_i)[i][0] *= zfacs[i];
-			(*def_i)[i][1] *= zfacs[i];
-			def_tot_x += (*def_i)[i][0];
-			def_tot_y += (*def_i)[i][1];
-		}
-	}
-}
-
-inline void QLens::lens_equation(const lensvector& x, lensvector& f, const int& thread, double *zfacs, double** betafacs)
-{
-	deflection(x[0],x[1],f,thread,zfacs,betafacs);
-	f[0] = source[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
-	f[1] = source[1] - x[1] + f[1];
-}
-
-inline void QLens::map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector& xi, const int &thread, double* zfacs, double** betafacs)
-{
-	if (redshift_i >= n_lens_redshifts) die("lens redshift index does not exist");
-	lensvector *x_i = &xvals_i[thread];
-	lensvector *def = &defs_i[thread];
-	lensvector **def_i = &defs_subtot[thread];
-
-	int i,j;
-	//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
-	for (i=0; i <= redshift_i; i++) {
-		//std::cout << "redshift " << i << ":\n";
-		(*def_i)[i][0] = 0;
-		(*def_i)[i][1] = 0;
-		(*x_i)[0] = x;
-		(*x_i)[1] = y;
-		for (j=0; j < i; j++) {
-			//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-			(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-			(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-		}
-		if (i==redshift_i) break;
-		for (j=0; j < zlens_group_size[i]; j++) {
-			lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-			(*def_i)[i][0] += (*def)[0];
-			(*def_i)[i][1] += (*def)[1];
-		}
-		(*def_i)[i][0] *= zfacs[i];
-		(*def_i)[i][1] *= zfacs[i];
-	}
-	xi[0] = (*x_i)[0];
-	xi[1] = (*x_i)[1];
-}
-
-inline void QLens::hessian(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, double* zfacs, double** betafacs) // calculates the Hessian of the lensing potential
-{
-	if (!defspline)
-	{
-		if (n_lens_redshifts > 1) {
-			lensvector *x_i = &xvals_i[thread];
-			lensmatrix *A_i = &Amats_i[thread];
-			lensvector *def = &defs_i[thread];
-			lensvector **def_i = &defs_subtot[thread];
-			lensmatrix *hess = &hesses_i[thread];
-			lensmatrix **hess_i = &hesses_subtot[thread];
-
-			int i,j;
-			hess_tot[0][0] = 0;
-			hess_tot[1][1] = 0;
-			hess_tot[0][1] = 0;
-			hess_tot[1][0] = 0;
-			for (i=0; i < n_lens_redshifts; i++) {
-				if (zfacs[i] != 0.0) {
-					(*hess_i)[i][0][0] = 0;
-					(*hess_i)[i][1][1] = 0;
-					(*hess_i)[i][0][1] = 0;
-					(*hess_i)[i][1][0] = 0;
-					(*A_i)[0][0] = 1;
-					(*A_i)[1][1] = 1;
-					(*A_i)[0][1] = 0;
-					(*A_i)[1][0] = 0;
-					(*def_i)[i][0] = 0;
-					(*def_i)[i][1] = 0;
-					(*x_i)[0] = x;
-					(*x_i)[1] = y;
-					for (j=0; j < i; j++) {
-						//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-						(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-						(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-						(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
-						(*A_i)[1][1] -= (betafacs[i-1][j])*((*hess_i)[j])[1][1];
-						(*A_i)[1][0] -= (betafacs[i-1][j])*((*hess_i)[j])[1][0];
-						(*A_i)[0][1] -= (betafacs[i-1][j])*((*hess_i)[j])[0][1];
-					}
-					for (j=0; j < zlens_group_size[i]; j++) {
-						lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess));
-						(*hess_i)[i][0][0] += (*hess)[0][0];
-						(*hess_i)[i][1][1] += (*hess)[1][1];
-						(*hess_i)[i][0][1] += (*hess)[0][1];
-						(*hess_i)[i][1][0] += (*hess)[1][0];
-						if (i < n_lens_redshifts-1) {
-							(*def_i)[i][0] += (*def)[0];
-							(*def_i)[i][1] += (*def)[1];
-						}
-					}
-					if (i < n_lens_redshifts-1) {
-						(*def_i)[i][0] *= zfacs[i];
-						(*def_i)[i][1] *= zfacs[i];
-					}
-					(*hess_i)[i][0][0] *= zfacs[i];
-					(*hess_i)[i][1][1] *= zfacs[i];
-					(*hess_i)[i][0][1] *= zfacs[i];
-					(*hess_i)[i][1][0] *= zfacs[i];
-
-					(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-					(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-					(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-					(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-					(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-					(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-
-					hess_tot[0][0] += (*hess_i)[i][0][0];
-					hess_tot[1][1] += (*hess_i)[i][1][1];
-					hess_tot[1][0] += (*hess_i)[i][1][0];
-					hess_tot[0][1] += (*hess_i)[i][0][1];
-				}
-			}
-		} else {
-			lensmatrix *hess = &hesses_i[thread];
-			int j;
-			hess_tot[0][0] = 0;
-			hess_tot[1][1] = 0;
-			hess_tot[0][1] = 0;
-			hess_tot[1][0] = 0;
-			for (j=0; j < nlens; j++) {
-				lens_list[j]->hessian(x,y,(*hess));
-				hess_tot[0][0] += (*hess)[0][0];
-				hess_tot[1][1] += (*hess)[1][1];
-				hess_tot[0][1] += (*hess)[0][1];
-				hess_tot[1][0] += (*hess)[1][0];
-			}
-			hess_tot[0][0] *= zfacs[0];
-			hess_tot[1][1] *= zfacs[0];
-			hess_tot[0][1] *= zfacs[0];
-			hess_tot[1][0] *= zfacs[0];
-		}
-	}
-	else {
-		hess_tot = defspline->hessian(x,y);
-	}
-}
-
-inline void QLens::hessian_weak(const double& x, const double& y, lensmatrix& hess_tot, const int &thread, double* zfacs) // calculates the Hessian of the lensing potential, but ignores multiplane recursive lensing since it's assumed we're in the weak regime
-{
-	if (!defspline)
-	{
-		lensmatrix *hess = &hesses_i[thread];
-		int j;
-		hess_tot[0][0] = 0;
-		hess_tot[1][1] = 0;
-		hess_tot[0][1] = 0;
-		hess_tot[1][0] = 0;
-		for (j=0; j < nlens; j++) {
-			lens_list[j]->hessian(x,y,(*hess));
-			hess_tot[0][0] += (*hess)[0][0];
-			hess_tot[1][1] += (*hess)[1][1];
-			hess_tot[0][1] += (*hess)[0][1];
-			hess_tot[1][0] += (*hess)[1][0];
-		}
-		hess_tot[0][0] *= zfacs[0];
-		hess_tot[1][1] *= zfacs[0];
-		hess_tot[0][1] *= zfacs[0];
-		hess_tot[1][0] *= zfacs[0];
-	}
-	else {
-		hess_tot = defspline->hessian(x,y);
-	}
-}
-
-/*
-inline void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
-{
-	//std::cout << "CHECK " << zfacs[0] << " " << betafacs[0][0] << std::endl;
-	double x = xvec[0], y = xvec[1];
-	lensmatrix *jac = &jacs[thread];
-	lensvector *def_tot = &defs[thread];
-
-	if (!defspline)
-	{
-		if (n_lens_redshifts > 1) {
-			lensvector *x_i = &xvals_i[thread];
-			lensmatrix *A_i = &Amats_i[thread];
-			lensvector *def = &defs_i[thread];
-			lensvector **def_i = &defs_subtot[thread];
-			lensmatrix *hess = &hesses_i[thread];
-			lensmatrix **hess_i = &hesses_subtot[thread];
-
-			int i,j;
-			(*jac)[0][0] = 0;
-			(*jac)[1][1] = 0;
-			(*jac)[0][1] = 0;
-			(*jac)[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			for (i=0; i < n_lens_redshifts; i++) {
-				(*hess_i)[i][0][0] = 0;
-				(*hess_i)[i][1][1] = 0;
-				(*hess_i)[i][0][1] = 0;
-				(*hess_i)[i][1][0] = 0;
-				(*A_i)[0][0] = 1;
-				(*A_i)[1][1] = 1;
-				(*A_i)[0][1] = 0;
-				(*A_i)[1][0] = 0;
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
-					(*A_i)[1][1] -= (betafacs[i-1][j])*((*hess_i)[j])[1][1];
-					(*A_i)[1][0] -= (betafacs[i-1][j])*((*hess_i)[j])[1][0];
-					(*A_i)[0][1] -= (betafacs[i-1][j])*((*hess_i)[j])[0][1];
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess));
-					(*hess_i)[i][0][0] += (*hess)[0][0];
-					(*hess_i)[i][1][1] += (*hess)[1][1];
-					(*hess_i)[i][0][1] += (*hess)[0][1];
-					(*hess_i)[i][1][0] += (*hess)[1][0];
-					(*def_i)[i][0] += (*def)[0];
-					(*def_i)[i][1] += (*def)[1];
-				}
-				(*def_i)[i][0] *= zfacs[i];
-				(*def_i)[i][1] *= zfacs[i];
-				(*def_tot)[0] += (*def_i)[i][0];
-				(*def_tot)[1] += (*def_i)[i][1];
-
-				(*hess_i)[i][0][0] *= zfacs[i];
-				(*hess_i)[i][1][1] *= zfacs[i];
-				(*hess_i)[i][0][1] *= zfacs[i];
-				(*hess_i)[i][1][0] *= zfacs[i];
-
-				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-
-				(*jac)[0][0] += (*hess_i)[i][0][0];
-				(*jac)[1][1] += (*hess_i)[i][1][1];
-				(*jac)[1][0] += (*hess_i)[i][1][0];
-				(*jac)[0][1] += (*hess_i)[i][0][1];
-			}
-			kap_tot = ((*jac)[0][0] + (*jac)[1][1])/2;
-		} else {
-			(*jac)[0][0] = 0;
-			(*jac)[1][1] = 0;
-			(*jac)[0][1] = 0;
-			(*jac)[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			kap_tot = 0;
-
-			if (nthreads==1) {
-				int j;
-				double kap;
-				(*jac)[0][0] = 0;
-				(*jac)[1][1] = 0;
-				(*jac)[0][1] = 0;
-				(*jac)[1][0] = 0;
-				(*def_tot)[0] = 0;
-				(*def_tot)[1] = 0;
-				kap_tot = 0;
-				lensvector *def = &defs_i[0];
-				lensmatrix *hess = &hesses_i[0];
-				for (j=0; j < nlens; j++) {
-					lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
-					(*jac)[0][0] += (*hess)[0][0];
-					(*jac)[1][1] += (*hess)[1][1];
-					(*jac)[0][1] += (*hess)[0][1];
-					(*jac)[1][0] += (*hess)[1][0];
-					(*def_tot)[0] += (*def)[0];
-					(*def_tot)[1] += (*def)[1];
-					kap_tot += kap;
-				}
-			} else {
-				// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-				#pragma omp parallel
-				{
-					int thread2;
-#ifdef USE_OPENMP
-					thread2 = omp_get_thread_num();
-#else
-					thread2 = 0;
-#endif
-					lensvector *def = &defs_i[thread2];
-					lensmatrix *hess = &hesses_i[thread2];
-					double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
-					int j;
-					double kap;
-					#pragma omp for schedule(dynamic)
-					for (j=0; j < nlens; j++) {
-						lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
-						hess00 += (*hess)[0][0];
-						hess11 += (*hess)[1][1];
-						hess01 += (*hess)[0][1];
-						def0 += (*def)[0];
-						def1 += (*def)[1];
-						kapi += kap;
-					}
-					#pragma omp critical
-					{
-						(*jac)[0][0] += hess00;
-						(*jac)[1][1] += hess11;
-						(*jac)[0][1] += hess01;
-						(*jac)[1][0] += hess01;
-						(*def_tot)[0] += def0;
-						(*def_tot)[1] += def1;
-						kap_tot += kapi;
-					}
-				}
-			}
-			(*jac)[0][0] *= zfacs[0];
-			(*jac)[1][1] *= zfacs[0];
-			(*jac)[0][1] *= zfacs[0];
-			(*jac)[1][0] *= zfacs[0];
-			(*def_tot)[0] *= zfacs[0];
-			(*def_tot)[1] *= zfacs[0];
-			kap_tot *= zfacs[0];
-		}
-	}
-	else {
-		(*def_tot) = defspline->deflection(x,y);
-		(*jac) = defspline->hessian(x,y);
-		kap_tot = kappa(x,y,zfacs,betafacs);
-	}
-	srcpt[0] = x - (*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
-	srcpt[1] = y - (*def_tot)[1];
-
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-	invmag = determinant((*jac));
-}
-
-inline void QLens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs)
-{
-	double x = xvec[0], y = xvec[1];
-	lensvector *def_tot = &defs[thread];
-
-	if (!defspline)
-	{
-		if (n_lens_redshifts > 1) {
-			lensvector *x_i = &xvals_i[thread];
-			lensmatrix *A_i = &Amats_i[thread];
-			lensvector *def = &defs_i[thread];
-			lensvector **def_i = &defs_subtot[thread];
-			lensmatrix *hess = &hesses_i[thread];
-			lensmatrix **hess_i = &hesses_subtot[thread];
-
-			int i,j;
-			jac_tot[0][0] = 0;
-			jac_tot[1][1] = 0;
-			jac_tot[0][1] = 0;
-			jac_tot[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-			for (i=0; i < n_lens_redshifts; i++) {
-				(*hess_i)[i][0][0] = 0;
-				(*hess_i)[i][1][1] = 0;
-				(*hess_i)[i][0][1] = 0;
-				(*hess_i)[i][1][0] = 0;
-				(*A_i)[0][0] = 1;
-				(*A_i)[1][1] = 1;
-				(*A_i)[0][1] = 0;
-				(*A_i)[1][0] = 0;
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
-					(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-					(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-					(*A_i)[0][0] -= (betafacs[i-1][j])*((*hess_i)[j])[0][0];
-					(*A_i)[1][1] -= (betafacs[i-1][j])*((*hess_i)[j])[1][1];
-					(*A_i)[1][0] -= (betafacs[i-1][j])*((*hess_i)[j])[1][0];
-					(*A_i)[0][1] -= (betafacs[i-1][j])*((*hess_i)[j])[0][1];
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					lens_list[zlens_group_lens_indx[i][j]]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess));
-					(*hess_i)[i][0][0] += (*hess)[0][0];
-					(*hess_i)[i][1][1] += (*hess)[1][1];
-					(*hess_i)[i][0][1] += (*hess)[0][1];
-					(*hess_i)[i][1][0] += (*hess)[1][0];
-					(*def_i)[i][0] += (*def)[0];
-					(*def_i)[i][1] += (*def)[1];
-				}
-				(*def_i)[i][0] *= zfacs[i];
-				(*def_i)[i][1] *= zfacs[i];
-				(*def_tot)[0] += (*def_i)[i][0];
-				(*def_tot)[1] += (*def_i)[i][1];
-
-				(*hess_i)[i][0][0] *= zfacs[i];
-				(*hess_i)[i][1][1] *= zfacs[i];
-				(*hess_i)[i][0][1] *= zfacs[i];
-				(*hess_i)[i][1][0] *= zfacs[i];
-
-				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-
-				jac_tot[0][0] += (*hess_i)[i][0][0];
-				jac_tot[1][1] += (*hess_i)[i][1][1];
-				jac_tot[1][0] += (*hess_i)[i][1][0];
-				jac_tot[0][1] += (*hess_i)[i][0][1];
-			}
-		} else {
-			jac_tot[0][0] = 0;
-			jac_tot[1][1] = 0;
-			jac_tot[0][1] = 0;
-			jac_tot[1][0] = 0;
-			(*def_tot)[0] = 0;
-			(*def_tot)[1] = 0;
-
-			if (nthreads==1) {
-				lensvector *def = &defs_i[0];
-				lensmatrix *hess = &hesses_i[0];
-				int j;
-				jac_tot[0][0] = 0;
-				jac_tot[1][1] = 0;
-				jac_tot[0][1] = 0;
-				jac_tot[1][0] = 0;
-				(*def_tot)[0] = 0;
-				(*def_tot)[1] = 0;
-				for (j=0; j < nlens; j++) {
-					lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
-					jac_tot[0][0] += (*hess)[0][0];
-					jac_tot[1][1] += (*hess)[1][1];
-					jac_tot[0][1] += (*hess)[0][1];
-					jac_tot[1][0] += (*hess)[1][0];
-					(*def_tot)[0] += (*def)[0];
-					(*def_tot)[1] += (*def)[1];
-				}
-			} else {
-				// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-				#pragma omp parallel
-				{
-					int thread2;
-#ifdef USE_OPENMP
-					thread2 = omp_get_thread_num();
-#else
-					thread2 = 0;
-#endif
-					lensvector *def = &defs_i[thread2];
-					lensmatrix *hess = &hesses_i[thread2];
-					double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
-					int j;
-					double kap;
-					#pragma omp for schedule(dynamic)
-					for (j=0; j < nlens; j++) {
-						lens_list[j]->potential_derivatives(x,y,(*def),(*hess));
-						hess00 += (*hess)[0][0];
-						hess11 += (*hess)[1][1];
-						hess01 += (*hess)[0][1];
-						def0 += (*def)[0];
-						def1 += (*def)[1];
-					}
-					#pragma omp critical
-					{
-						jac_tot[0][0] += hess00;
-						jac_tot[1][1] += hess11;
-						jac_tot[0][1] += hess01;
-						jac_tot[1][0] += hess01;
-						(*def_tot)[0] += def0;
-						(*def_tot)[1] += def1;
-					}
-				}
-			}
-			jac_tot[0][0] *= zfacs[0];
-			jac_tot[1][1] *= zfacs[0];
-			jac_tot[0][1] *= zfacs[0];
-			jac_tot[1][0] *= zfacs[0];
-			(*def_tot)[0] *= zfacs[0];
-			(*def_tot)[1] *= zfacs[0];
-		}
-	}
-	else {
-		(*def_tot) = defspline->deflection(x,y);
-		jac_tot = defspline->hessian(x,y);
-	}
-	srcpt[0] = x - (*def_tot)[0]; // this uses the lens equation, beta = theta - alpha
-	srcpt[1] = y - (*def_tot)[1];
-
-	jac_tot[0][0] = 1 - jac_tot[0][0];
-	jac_tot[1][1] = 1 - jac_tot[1][1];
-	jac_tot[0][1] = -jac_tot[0][1];
-	jac_tot[1][0] = -jac_tot[1][0];
-}
-*/
-
-inline void QLens::find_sourcept(const lensvector& x, lensvector& srcpt, const int& thread, double* zfacs, double** betafacs)
-{
-	deflection(x[0],x[1],srcpt,thread,zfacs,betafacs);
-	srcpt[0] = x[0] - srcpt[0]; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector alpha, which would be an extra memory operation)
-	srcpt[1] = x[1] - srcpt[1];
-}
-
-inline void QLens::find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int& thread, double* zfacs, double** betafacs)
-{
-	deflection(x[0],x[1],srcpt_x,srcpt_y,thread,zfacs,betafacs);
-	srcpt_x = x[0] - srcpt_x; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector alpha, which would be an extra memory operation)
-	srcpt_y = x[1] - srcpt_y;
-}
-
-inline double QLens::inverse_magnification(const lensvector& x, const int &thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *jac = &jacs[thread];
-	hessian(x[0],x[1],(*jac),thread,zfacs,betafacs);
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-	return determinant((*jac));
-}
-
-inline double QLens::magnification(const lensvector &x, const int &thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *jac = &jacs[thread];
-	hessian(x[0],x[1],(*jac),thread,zfacs,betafacs);
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-	return 1.0/determinant((*jac));
-}
-
-inline double QLens::shear(const lensvector &x, const int &thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *hess = &hesses[thread];
-	hessian(x[0],x[1],(*hess),thread,zfacs,betafacs);
-	double shear1, shear2;
-	shear1 = 0.5*((*hess)[0][0]-(*hess)[1][1]);
-	shear2 = (*hess)[0][1];
-	return sqrt(shear1*shear1+shear2*shear2);
-}
-
-inline void QLens::shear(const lensvector &x, double& shear_tot, double& angle, const int &thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *hess = &hesses[thread];
-	hessian(x[0],x[1],(*hess),thread,zfacs,betafacs);
-	double shear1, shear2;
-	shear1 = 0.5*((*hess)[0][0]-(*hess)[1][1]);
-	shear2 = (*hess)[0][1];
-	shear_tot = sqrt(shear1*shear1+shear2*shear2);
-	if (shear1==0) {
-		if (shear2 > 0) angle = M_HALFPI;
-		else angle = -M_HALFPI;
-	} else {
-		angle = atan(abs(shear2/shear1));
-		if (shear1 < 0) {
-			if (shear2 < 0)
-				angle = angle - M_PI;
-			else
-				angle = M_PI - angle;
-		} else if (shear2 < 0) {
-			angle = -angle;
-		}
-	}
-	angle = 0.5*radians_to_degrees(angle);
-}
-
-inline void QLens::reduced_shear_components(const lensvector &x, double& g1, double& g2, const int &thread, double* zfacs)
-{
-	lensmatrix *hess = &hesses[thread];
-	hessian_weak(x[0],x[1],(*hess),thread,zfacs);
-	double kap_denom = 1 - ((*hess)[0][0] + (*hess)[1][1])/2;
-	g1 = 0.5*((*hess)[0][0]-(*hess)[1][1]) / kap_denom;
-	g2 = (*hess)[0][1] / kap_denom;
-}
-
-// the following functions find the shear, kappa and magnification at the position where a perturber is placed;
-// this information is used to determine the optimal subgrid size and resolution
-
-inline void QLens::hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs)
-{
-	bool skip_lens_plane = false;
-	int skip_i = -1;
-	lensvector *x_i = &xvals_i[thread];
-	lensmatrix *A_i = &Amats_i[thread];
-	lensvector *def = &defs_i[thread];
-	lensvector **def_i = &defs_subtot[thread];
-	lensmatrix *hess = &hesses_i[thread];
-	lensmatrix **hess_i = &hesses_subtot[thread];
-
-	int i,j;
-	for (i=0; i < n_lens_redshifts; i++) {
-		if ((zlens_group_size[i]==1) and (exclude[zlens_group_lens_indx[i][0]])) {
-			skip_lens_plane = true;
-			skip_i = i;
-			// should allow for multiple redshifts to be excluded...fix later
-		}
-	}
-	hess_tot[0][0] = 0;
-	hess_tot[1][1] = 0;
-	hess_tot[0][1] = 0;
-	hess_tot[1][0] = 0;
-	if (n_lens_redshifts > 1) {
-		for (i=0; i < n_lens_redshifts; i++) {
-			if ((!skip_lens_plane) or (skip_i != i)) {
-				(*hess_i)[i][0][0] = 0;
-				(*hess_i)[i][1][1] = 0;
-				(*hess_i)[i][0][1] = 0;
-				(*hess_i)[i][1][0] = 0;
-				(*A_i)[0][0] = 1;
-				(*A_i)[1][1] = 1;
-				(*A_i)[0][1] = 0;
-				(*A_i)[1][0] = 0;
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << " " << (*def_i)[j][0] << " " << (*def_i)[j][1] << "...\n";
-					if ((!skip_lens_plane) or (skip_i != j)) {
-						(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-						(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-						(*A_i) -= (betafacs[i-1][j])*((*hess_i)[j]);
-					}
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					// if this is only lens in the lens plane, we still want to include in hessian/deflection until the very
-					// end when we add up hessian, because we want the nonlinear effects taken into account here
-					if (exclude[zlens_group_lens_indx[i][j]]) ;
-					else {
-						lens_list[zlens_group_lens_indx[i][j]]->hessian((*x_i)[0],(*x_i)[1],(*hess));
-						//std::cout << "lens " << zlens_group_lens_indx[i][j] << ", x=" << (*x_i)[0] << ", y=" << (*x_i)[1] << ", hess: " << (*hess)[0][0] << " " << (*hess)[1][1] << " " << (*hess)[0][1] << std::endl;
-						(*hess_i)[i][0][0] += (*hess)[0][0];
-						(*hess_i)[i][1][1] += (*hess)[1][1];
-						(*hess_i)[i][0][1] += (*hess)[0][1];
-						(*hess_i)[i][1][0] += (*hess)[1][0];
-						if (i < n_lens_redshifts-1) {
-							lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-							(*def_i)[i][0] += (*def)[0];
-							(*def_i)[i][1] += (*def)[1];
-						}
-					}
-				}
-				if (i < n_lens_redshifts-1) {
-					(*def_i)[i][0] *= zfacs[i];
-					(*def_i)[i][1] *= zfacs[i];
-				}
-				(*hess_i)[i][0][0] *= zfacs[i];
-				(*hess_i)[i][1][1] *= zfacs[i];
-				(*hess_i)[i][0][1] *= zfacs[i];
-				(*hess_i)[i][1][0] *= zfacs[i];
-
-				//std::cout << "lens plane " << i << ", hess before: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << std::endl;
-				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-				//std::cout << "lens plane " << i << ", hess after: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << std::endl;
-
-				hess_tot += (*hess_i)[i];
-			}
-		}
-	} else {
-		if (use_perturber_flags) {
-			for (i=0; i < nlens; i++) {
-				if ((!exclude[i]) and (lens_list[i]->perturber==false)) {
-					lens_list[i]->hessian(x,y,(*hess));
-					hess_tot[0][0] += (*hess)[0][0];
-					hess_tot[1][1] += (*hess)[1][1];
-					hess_tot[0][1] += (*hess)[0][1];
-					hess_tot[1][0] += (*hess)[1][0];
-				}
-			}
-		} else {
-			for (i=0; i < nlens; i++) {
-				if (!exclude[i]) {
-					lens_list[i]->hessian(x,y,(*hess));
-					hess_tot[0][0] += (*hess)[0][0];
-					hess_tot[1][1] += (*hess)[1][1];
-					hess_tot[0][1] += (*hess)[0][1];
-					hess_tot[1][0] += (*hess)[1][0];
-				}
-			}
-		}
-		hess_tot[0][0] *= zfacs[0];
-		hess_tot[1][1] *= zfacs[0];
-		hess_tot[0][1] *= zfacs[0];
-		hess_tot[1][0] *= zfacs[0];
-	}
-}
-
-inline double QLens::magnification_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-
-	return 1.0/determinant((*jac));
-}
-
-inline double QLens::inverse_magnification_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-
-	return determinant((*jac));
-}
-
-inline double QLens::shear_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-	double shear1, shear2;
-	shear1 = 0.5*((*jac)[1][1]-(*jac)[0][0]);
-	shear2 = -(*jac)[0][1];
-	return sqrt(shear1*shear1+shear2*shear2);
-}
-
-inline void QLens::shear_exclude(const lensvector &x, double &shear, double &angle, bool* exclude, const int& thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-	double shear1, shear2;
-	shear1 = 0.5*((*jac)[1][1]-(*jac)[0][0]);
-	shear2 = -(*jac)[0][1];
-	shear = sqrt(shear1*shear1+shear2*shear2);
-	if (shear1==0) {
-		if (shear2 > 0) angle = M_HALFPI;
-		else angle = -M_HALFPI;
-	} else {
-		angle = atan(abs(shear2/shear1));
-		if (shear1 < 0) {
-			if (shear2 < 0)
-				angle = angle - M_PI;
-			else
-				angle = M_PI - angle;
-		} else if (shear2 < 0) {
-			angle = -angle;
-		}
-	}
-	angle = 0.5*radians_to_degrees(angle);
-}
-
-inline double QLens::kappa_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs)
-{
-
-	double kappa;
-	if (n_lens_redshifts==1) {
-		int j;
-		kappa=0;
-		if (use_perturber_flags) {
-			for (j=0; j < nlens; j++) {
-				if ((!exclude[j]) and (lens_list[j]->perturber==false))
-					kappa += lens_list[j]->kappa(x[0],x[1]);
-			}
-		} else {
-			for (j=0; j < nlens; j++) {
-				if (!exclude[j])
-					kappa += lens_list[j]->kappa(x[0],x[1]);
-			}
-		}
-		kappa *= zfacs[0];
-	} else {
-		lensmatrix *jac = &jacs[0];
-		hessian_exclude(x[0],x[1],exclude,(*jac),0,zfacs,betafacs);
-		kappa = ((*jac)[0][0] + (*jac)[1][1])/2;
-	}
-	return kappa;
-}
-
-/*
-
-inline void QLens::hessian_exclude(const double& x, const double& y, const int& exclude_i, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs)
-{
-	bool skip_lens_plane = false;
-	int skip_i = -1;
-	lensvector *x_i = &xvals_i[thread];
-	lensmatrix *A_i = &Amats_i[thread];
-	lensvector *def = &defs_i[thread];
-	lensvector **def_i = &defs_subtot[thread];
-	lensmatrix *hess = &hesses_i[thread];
-	lensmatrix **hess_i = &hesses_subtot[thread];
-
-	int i,j;
-	for (i=0; i < n_lens_redshifts; i++) {
-		if ((zlens_group_size[i]==1) and (zlens_group_lens_indx[i][0] == exclude_i)) {
-			skip_lens_plane = true;
-			skip_i = i;
-		}
-	}
-	hess_tot[0][0] = 0;
-	hess_tot[1][1] = 0;
-	hess_tot[0][1] = 0;
-	hess_tot[1][0] = 0;
-	if (n_lens_redshifts > 1) {
-		for (i=0; i < n_lens_redshifts; i++) {
-			if ((!skip_lens_plane) or (skip_i != i)) {
-				(*hess_i)[i][0][0] = 0;
-				(*hess_i)[i][1][1] = 0;
-				(*hess_i)[i][0][1] = 0;
-				(*hess_i)[i][1][0] = 0;
-				(*A_i)[0][0] = 1;
-				(*A_i)[1][1] = 1;
-				(*A_i)[0][1] = 0;
-				(*A_i)[1][0] = 0;
-				(*def_i)[i][0] = 0;
-				(*def_i)[i][1] = 0;
-				(*x_i)[0] = x;
-				(*x_i)[1] = y;
-				for (j=0; j < i; j++) {
-					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << " " << (*def_i)[j][0] << " " << (*def_i)[j][1] << "...\n";
-					if ((!skip_lens_plane) or (skip_i != j)) {
-						(*x_i)[0] -= betafacs[i-1][j]*(*def_i)[j][0];
-						(*x_i)[1] -= betafacs[i-1][j]*(*def_i)[j][1];
-						(*A_i) -= (betafacs[i-1][j])*((*hess_i)[j]);
-					}
-				}
-				for (j=0; j < zlens_group_size[i]; j++) {
-					// if this is only lens in the lens plane, we still want to include in hessian/deflection until the very
-					// end when we add up hessian, because we want the nonlinear effects taken into account here
-					if (zlens_group_lens_indx[i][j] == exclude_i) ;
-					else {
-						lens_list[zlens_group_lens_indx[i][j]]->hessian((*x_i)[0],(*x_i)[1],(*hess));
-						//std::cout << "lens " << zlens_group_lens_indx[i][j] << ", x=" << (*x_i)[0] << ", y=" << (*x_i)[1] << ", hess: " << (*hess)[0][0] << " " << (*hess)[1][1] << " " << (*hess)[0][1] << std::endl;
-						(*hess_i)[i][0][0] += (*hess)[0][0];
-						(*hess_i)[i][1][1] += (*hess)[1][1];
-						(*hess_i)[i][0][1] += (*hess)[0][1];
-						(*hess_i)[i][1][0] += (*hess)[1][0];
-						if (i < n_lens_redshifts-1) {
-							lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
-							(*def_i)[i][0] += (*def)[0];
-							(*def_i)[i][1] += (*def)[1];
-						}
-					}
-				}
-				if (i < n_lens_redshifts-1) {
-					(*def_i)[i][0] *= zfacs[i];
-					(*def_i)[i][1] *= zfacs[i];
-				}
-				(*hess_i)[i][0][0] *= zfacs[i];
-				(*hess_i)[i][1][1] *= zfacs[i];
-				(*hess_i)[i][0][1] *= zfacs[i];
-				(*hess_i)[i][1][0] *= zfacs[i];
-
-				//std::cout << "lens plane " << i << ", hess before: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << std::endl;
-				(*hess)[0][0] = (*hess_i)[i][0][0]; // temporary storage for matrix multiplication
-				(*hess)[0][1] = (*hess_i)[i][0][1]; // temporary storage for matrix multiplication
-				(*hess_i)[i][0][0] = (*hess_i)[i][0][0]*(*A_i)[0][0] + (*hess_i)[i][1][0]*(*A_i)[0][1];
-				(*hess_i)[i][1][0] = (*hess)[0][0]*(*A_i)[1][0] + (*hess_i)[i][1][0]*(*A_i)[1][1];
-				(*hess_i)[i][0][1] = (*hess_i)[i][0][1]*(*A_i)[0][0] + (*hess_i)[i][1][1]*(*A_i)[0][1];
-				(*hess_i)[i][1][1] = (*hess)[0][1]*(*A_i)[1][0] + (*hess_i)[i][1][1]*(*A_i)[1][1];
-				//std::cout << "lens plane " << i << ", hess after: " << (*hess_i)[i][0][0] << " " << (*hess_i)[i][1][1] << " " << (*hess_i)[i][0][1] << std::endl;
-
-				hess_tot += (*hess_i)[i];
-			}
-		}
-	} else {
-		if (use_perturber_flags) {
-			for (i=0; i < nlens; i++) {
-				if ((i != exclude_i) and (lens_list[i]->perturber==false)) {
-					lens_list[i]->hessian(x,y,(*hess));
-					hess_tot[0][0] += (*hess)[0][0];
-					hess_tot[1][1] += (*hess)[1][1];
-					hess_tot[0][1] += (*hess)[0][1];
-					hess_tot[1][0] += (*hess)[1][0];
-				}
-			}
-		} else {
-			for (i=0; i < nlens; i++) {
-				if (i != exclude_i) {
-					lens_list[i]->hessian(x,y,(*hess));
-					hess_tot[0][0] += (*hess)[0][0];
-					hess_tot[1][1] += (*hess)[1][1];
-					hess_tot[0][1] += (*hess)[0][1];
-					hess_tot[1][0] += (*hess)[1][0];
-				}
-			}
-		}
-		hess_tot[0][0] *= zfacs[0];
-		hess_tot[1][1] *= zfacs[0];
-		hess_tot[0][1] *= zfacs[0];
-		hess_tot[1][0] *= zfacs[0];
-	}
-}
-
-inline double QLens::magnification_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfacs,betafacs);
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-
-	return 1.0/determinant((*jac));
-}
-
-inline double QLens::shear_exclude(const lensvector &x, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfacs,betafacs);
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-	double shear1, shear2;
-	shear1 = 0.5*((*jac)[1][1]-(*jac)[0][0]);
-	shear2 = -(*jac)[0][1];
-	return sqrt(shear1*shear1+shear2*shear2);
-}
-
-inline void QLens::shear_exclude(const lensvector &x, double &shear, double &angle, const int& exclude_i, const int& thread, double* zfacs, double** betafacs)
-{
-	lensmatrix *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude_i,(*jac),thread,zfacs,betafacs);
-	(*jac)[0][0] = 1 - (*jac)[0][0];
-	(*jac)[1][1] = 1 - (*jac)[1][1];
-	(*jac)[0][1] = -(*jac)[0][1];
-	(*jac)[1][0] = -(*jac)[1][0];
-	double shear1, shear2;
-	shear1 = 0.5*((*jac)[1][1]-(*jac)[0][0]);
-	shear2 = -(*jac)[0][1];
-	shear = sqrt(shear1*shear1+shear2*shear2);
-	if (shear1==0) {
-		if (shear2 > 0) angle = M_HALFPI;
-		else angle = -M_HALFPI;
-	} else {
-		angle = atan(abs(shear2/shear1));
-		if (shear1 < 0) {
-			if (shear2 < 0)
-				angle = angle - M_PI;
-			else
-				angle = M_PI - angle;
-		} else if (shear2 < 0) {
-			angle = -angle;
-		}
-	}
-	angle = 0.5*radians_to_degrees(angle);
-}
-
-inline double QLens::kappa_exclude(const lensvector &x, const int& exclude_i, double* zfacs, double** betafacs)
-{
-
-	double kappa;
-	if (n_lens_redshifts==1) {
-		int j;
-		kappa=0;
-		if (use_perturber_flags) {
-			for (j=0; j < nlens; j++) {
-				if ((j != exclude_i) and (lens_list[j]->perturber==false))
-					kappa += lens_list[j]->kappa(x[0],x[1]);
-			}
-		} else {
-			for (j=0; j < nlens; j++) {
-				if (j != exclude_i)
-					kappa += lens_list[j]->kappa(x[0],x[1]);
-			}
-		}
-		kappa *= zfacs[0];
-	} else {
-		
-		lensmatrix *jac = &jacs[0];
-		hessian_exclude(x[0],x[1],exclude_i,(*jac),0,zfacs,betafacs);
-		kappa = ((*jac)[0][0] + (*jac)[1][1])/2;
-	}
-	return kappa;
-}
-
-*/
-
-//static int comm_counter;
-//int MPI_Comm_split(MPI_Comm comm, int color, int key, MPI_Comm *newcomm);
-//int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm *newcomm);
-//int MPI_Comm_free(MPI_Comm *comm);
 
 #endif // QLENS_H

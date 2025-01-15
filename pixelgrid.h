@@ -125,19 +125,19 @@ class SourcePixel
 	void plot_surface_brightness(string root);
 	void output_fits_file(string fits_filename);
 	void get_grid_dimensions(double &xmin, double &xmax, double &ymin, double &ymax);
-	void plot_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y, ofstream& sb_outfile, ofstream& mag_outfile, ofstream& nimg_outfile);
+	void plot_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y, std::ofstream& sb_outfile, std::ofstream& mag_outfile, std::ofstream& nimg_outfile);
 	void store_surface_brightness_grid_data(string root);
-	void write_surface_brightness_to_file(ofstream &sb_outfile);
-	void read_surface_brightness_data(ifstream &sb_infile);
+	void write_surface_brightness_to_file(std::ofstream &sb_outfile);
+	void read_surface_brightness_data(std::ifstream &sb_infile);
 
 	void clear_subgrids();
 	void set_image_pixel_grid(ImagePixelGrid* image_pixel_ptr) { image_pixel_grid = image_pixel_ptr; }
-	void plot_corner_coordinates(ofstream &gridout);
+	void plot_corner_coordinates(std::ofstream &gridout);
 	void clear(void);
 	~SourcePixel();
 };
 
-class SourcePixelGrid : public SourcePixel
+class SourcePixelGrid : public SourcePixel, public SourceParams
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
@@ -150,7 +150,7 @@ class SourcePixelGrid : public SourcePixel
 	bool exclude_source_pixels_outside_fit_window;
 
 	int number_of_pixels; // this is the total number of pixels, including all subpixels
-	int u_split_initial, w_split_initial;
+	int npixels_x, npixels_y;
 	double min_cell_area;
 	int levels; // keeps track of the total number of grid cell levels
 	bool regrid;
@@ -164,10 +164,15 @@ class SourcePixelGrid : public SourcePixel
 	void print_indices();
 
 	public:
-	SourcePixelGrid(QLens* lens_in, const double x_min, const double x_max, const double y_min, const double y_max, const int usplit0, const int wsplit0);
-	//SourcePixelGrid(QLens* lens_in, SourcePixelGrid* input_pixel_grid);
-	SourcePixelGrid(QLens* lens_in, string pixel_data_fileroot, const double minarea_in);
+	SourcePixelGrid(QLens* lens_in);
+	void create_pixel_grid(QLens* lens_in, const double x_min, const double x_max, const double y_min, const double y_max, const int usplit0, const int wsplit0);
+	void create_pixel_grid(QLens* lens_in, string pixel_data_fileroot, const double minarea_in);
 	//void copy_source_pixel_grid(SourcePixelGrid* input_pixel_grid);
+	void copy_pixsrc_data(SourcePixelGrid* grid_in);
+	void setup_parameters(const bool initial_setup);
+
+	double regparam;
+	double pixel_fraction, srcgrid_size_scale, pixel_magnification_threshold;
 
 	void calculate_pixel_magnifications(const bool use_emask = false);
 	void adaptive_subgrid();
@@ -200,14 +205,14 @@ class SourcePixelGrid : public SourcePixel
 	//static ofstream bad_interps;
 
 	// for plotting the grid to a file:
-	ifstream sb_infile;
-	ofstream xgrid;
-	ofstream pixel_surface_brightness_file;
-	ofstream pixel_magnification_file;
-	ofstream pixel_n_image_file;
+	std::ifstream sb_infile;
+	std::ofstream xgrid;
+	std::ofstream pixel_surface_brightness_file;
+	std::ofstream pixel_magnification_file;
+	std::ofstream pixel_n_image_file;
 };
 
-class DelaunayGrid : public Sort
+class DelaunayGrid : public SourceParams, public Sort
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
@@ -259,9 +264,21 @@ class DelaunayGrid : public Sort
 	//double prod1, prod2, prod3;
 
 	public:
-	DelaunayGrid(QLens* lens_in, const int redshift_indx, double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0, const bool find_pixel_magnification = false);
+	DelaunayGrid(QLens* lens_in);
+	void copy_pixsrc_data(DelaunayGrid* grid_in);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
+	void create_pixel_grid(double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0, const bool find_pixel_magnification = false, const int redshift_indx = -1);
+
+	double regparam;
+	double kernel_correlation_length, matern_index;
+	double regparam_lsc, regparam_lum_index, distreg_rc;
+	double distreg_xcenter, distreg_ycenter, distreg_e1, distreg_e2; // for position-weighted regularization
+	double mag_weight_sc, mag_weight_index; // magnification-weighted regularization
+	double alpha_clus, beta_clus;
+
+	void setup_parameters(const bool initial_setup);
+
 	int search_grid(const int initial_srcpixel, const lensvector& pt, bool& inside_triangle);
 	bool test_if_inside(int &tri_number, const lensvector& pt, bool& inside_triangle);
 	bool test_if_inside(const int tri_number, const lensvector& pt);
@@ -293,7 +310,7 @@ class DelaunayGrid : public Sort
 	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
 	void generate_gmatrices(const bool interpolate);
 	void generate_hmatrices(const bool interpolate);
-	void generate_covariance_matrix(double *cov_matrix_packed, const double corr_length, const int kernel_type, const double matern_index = -1, double *lumfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
+	void generate_covariance_matrix(double *cov_matrix_packed, const int kernel_type, double *lumfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
 	double modified_bessel_function(const double x, const double nu);
 	void beschb(const double x, double& gam1, double& gam2, double& gampl, double& gammi);
 	double chebev(const double a, const double b, double* c, const int m, const double x);
@@ -359,11 +376,11 @@ class ImagePixelGrid : public Sort
 	double *psf_zvec; // for convolutions using FFT
 	int fft_imin, fft_jmin, fft_ni, fft_nj;
 #ifdef USE_FFTW
-	complex<double> *psf_transform;
-	complex<double> **Lmatrix_transform;
+	std::complex<double> *psf_transform;
+	std::complex<double> **Lmatrix_transform;
 	double **Lmatrix_imgs_rvec;
 	double *single_img_rvec;
-	complex<double> *img_transform;
+	std::complex<double> *img_transform;
 	fftw_plan fftplan;
 	fftw_plan fftplan_inverse;
 	fftw_plan *fftplans_Lmatrix;
@@ -380,6 +397,7 @@ class ImagePixelGrid : public Sort
 	int *masked_pixels_i, *masked_pixels_j, *emask_pixels_i, *emask_pixels_j, *masked_pixel_corner_i, *masked_pixel_corner_j, *masked_pixel_corner, *masked_pixel_corner_up;
 	int *extended_mask_subcell_i, *extended_mask_subcell_j, *extended_mask_subcell_index;
 	int **ncvals;
+
 
 	long int ntot_corners, ntot_cells, ntot_cells_emask;
 	long int ntot_subpixels;
@@ -420,6 +438,7 @@ class ImagePixelGrid : public Sort
 	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask = false, const int src_redshift_index = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
+	void update_zfactors_and_beta_factors();
 
 	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
 	void load_data(ImagePixelData& pixel_data);
@@ -461,7 +480,7 @@ class ImagePixelGrid : public Sort
 	void set_lens(QLens* lensptr) { lens = lensptr; }
 	void set_cartesian_srcgrid(SourcePixelGrid* source_pixel_ptr) { cartesian_srcgrid = source_pixel_ptr; }
 	void set_delaunay_srcgrid(DelaunayGrid* delaunayptr) { delaunay_srcgrid = delaunayptr; }
-	void find_optimal_sourcegrid_npixels(double pixel_fraction, double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
+	void find_optimal_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_surface_brightness(const bool foreground_only = false, const bool lensed_sources_only = false);
 	double plot_surface_brightness(string outfile_root, bool plot_residual = false, bool normalize_residuals = false, bool show_noise_thresh = false, bool plot_log = false);
@@ -510,7 +529,7 @@ struct ImagePixelData : public Sort
 	double emask_rmax; // used only when splining Fourier mode integrals for non-elliptical structure
 	string data_fits_filename;
 	string noise_map_fits_filename;
-	ostream* isophote_fit_out;
+	std::ostream* isophote_fit_out;
 	ImagePixelData()
 	{
 		surface_brightness = NULL;
@@ -543,7 +562,7 @@ struct ImagePixelData : public Sort
 	}
 	bool load_noise_map_fits(string fits_filename, const int hdu_indx = 1, const bool show_header = false);
 	void unload_noise_map();
-	void set_isofit_output_stream(ofstream *fitout) { isophote_fit_out = fitout; }
+	void set_isofit_output_stream(std::ofstream *fitout) { isophote_fit_out = fitout; }
 	void set_uniform_pixel_noise(const double noise)
 	{
 		if (noise_map != NULL) {
@@ -611,7 +630,7 @@ struct ImagePixelData : public Sort
 	void set_pixel_size(const double size) { pixel_size = size; }
 
 	bool fit_isophote(const double xi0, const double xistep, const int emode, const double qi, const double theta_i, const double xc_i, const double yc_i, const int max_it, IsophoteData& isophote_data, const bool use_polar_higher_harmonics = false, const bool verbose = true, SB_Profile* sbprofile = NULL, const int default_sampling_mode = 2, const int n_higher_harmonics = 2, const bool fix_center = false, const int max_xi_it = 10000, const double ximax_in = -1, const double rms_sbgrad_rel_threshold = 1.0, const double npts_frac = 0.5, const double rms_sbgrad_rel_transition = 0.3, const double npts_frac_zeroweight = 0.5);
-	double sample_ellipse(const bool show_warnings, const double xi, const double xistep, const double epsilon, const double theta, const double xc, const double yc, int& npts, int& npts_sample, const int emode, int& sampling_mode, const double pixel_noise, double* sbvals = NULL, double* sbgrad_wgts = NULL, SB_Profile* sbprofile = NULL, const bool fill_matrices = false, double* sb_residual = NULL, double* sb_weights = NULL, double** smatrix = NULL, const int ni = 1, const int nf = 2, const bool use_polar_higher_harmonics = false, const bool plot_ellipse = false, ofstream* ellout = NULL);
+	double sample_ellipse(const bool show_warnings, const double xi, const double xistep, const double epsilon, const double theta, const double xc, const double yc, int& npts, int& npts_sample, const int emode, int& sampling_mode, const double pixel_noise, double* sbvals = NULL, double* sbgrad_wgts = NULL, SB_Profile* sbprofile = NULL, const bool fill_matrices = false, double* sb_residual = NULL, double* sb_weights = NULL, double** smatrix = NULL, const int ni = 1, const int nf = 2, const bool use_polar_higher_harmonics = false, const bool plot_ellipse = false, std::ofstream* ellout = NULL);
 	bool Cholesky_dcmp(double** a, int n);
 	void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_fac_inverse(double** a, int n);

@@ -218,9 +218,6 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void plot_sb_profile(double rmin, double rmax, int steps, std::ofstream &sbout);
 	void print_parameters(const double zs = -1);
 	void print_vary_parameters();
-	void output_field_in_sci_notation(double* num, std::ofstream& scriptout, const bool space);
-	virtual void print_source_command(std::ofstream& scriptout, const bool use_limits);
-	virtual bool get_special_command_arg(std::string &arg);
 
 	// the following items MUST be redefined in all derived classes
 	virtual double sb_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
@@ -236,6 +233,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	virtual void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
 	virtual void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
 	virtual void update_amplitudes(double*& ampvec); // used by Shapelet subclass
+	virtual void get_regularization_param_ptr(double* regparam_ptr); // for source objects that are regularized
 	//virtual void get_amplitudes(double *ampvec); // used by Shapelet subclass
 	virtual void update_indxptr(const int newval);
 	virtual double surface_brightness_zeroth_order(double x, double y);
@@ -471,6 +469,7 @@ class Shapelet : public SB_Profile
 {
 	private:
 	double sig; // sig is the average dispersion of the (0,0) shapelet which is Gaussian
+	double regparam; // regularization parameter for shapelets (if using)
 	double sig_factor; // used in pmode=2; sigma is set using a scaling factor of the dispersion of the source SB, instead of sigma itself
 	double **amps; // shapelet amplitudes
 	int n_shapelets;
@@ -502,13 +501,13 @@ class Shapelet : public SB_Profile
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
 	void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
 	void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
+	void get_regularization_param_ptr(double* regparam_ptr);
 	double surface_brightness_zeroth_order(double x, double y);
 	void update_amplitudes(double*& ampvec);
 	//void get_amplitudes(double *ampvec);
 	double get_scale_parameter();
 	void update_scale_parameter(const double scale);
 	void update_indxptr(const int newval);
-	bool get_special_command_arg(std::string &arg);
 
 	double window_rmax();
 	double length_scale();

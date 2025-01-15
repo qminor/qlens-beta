@@ -2,7 +2,7 @@
 #define TRIRECTANGLE_H
 
 #include "lensvec.h"
-using namespace std;
+//using namespace std;
 
 class TriRectangleOverlap
 {
