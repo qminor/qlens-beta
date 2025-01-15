@@ -6871,6 +6871,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->lensmodel_fit_parameters = lensmodel_fit_parameters;
 	fitmodel->srcmodel_fit_parameters = srcmodel_fit_parameters;
 	fitmodel->pixsrc_fit_parameters = pixsrc_fit_parameters;
+	fitmodel->ptsrc_fit_parameters = ptsrc_fit_parameters;
 	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
 
 	if (open_chisq_logfile) {
@@ -8083,7 +8084,6 @@ bool QLens::setup_limits()
 
 	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + ptsrc_fit_parameters;
 	if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
-	//}
 	if (n_sourcepts_fit > 0) {
 		if (!use_analytic_bestfit_src) {
 			for (int i=0; i < n_sourcepts_fit; i++) {
