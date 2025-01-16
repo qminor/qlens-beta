@@ -1925,43 +1925,31 @@ bool QLens::get_imageset(const double src_x, const double src_y, PointSource& im
 vector<PointSource> QLens::get_fit_imagesets(bool &status, int min_dataset, int max_dataset, bool verbal)
 {
 	status = true;
-	if (n_sourcepts_fit==0) status = false;
-	if (max_dataset < 0) max_dataset = n_sourcepts_fit - 1;
+	if (n_ptsrc==0) status = false;
+	if (max_dataset < 0) max_dataset = n_ptsrc - 1;
 	if ((min_dataset < 0) or (min_dataset > max_dataset)) status = false;
 	vector<PointSource> image_sets;
 	image_sets.clear();
 	if (!status) return image_sets;
-	image_sets.resize(n_sourcepts_fit);
+	image_sets.resize(n_ptsrc);
 
-	double* srcflux = new double[n_sourcepts_fit];
-	lensvector *srcpts = new lensvector[n_sourcepts_fit];
-	if (include_flux_chisq) {
-		output_model_source_flux(srcflux);
-	} else {
-		for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-	}
+	if (analytic_source_flux) set_analytic_srcflux(false);
+	if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 
-	if (!analytic_source_flux) srcflux[0] = source_flux;
-	if (use_analytic_bestfit_src) {
-		find_analytic_srcpos(srcpts);
-	} else {
-		for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
-	}
-
+	int redshift_idx;
 	for (int i=min_dataset; i <= max_dataset; i++) {
-		if ((i == min_dataset) or (specific_ptsrc_zfactors[i] != specific_ptsrc_zfactors[i-1]))
-			create_grid(false,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
+		redshift_idx = ptsrc_redshift_idx[i];
+		if ((i == min_dataset) or (redshift_idx != ptsrc_redshift_idx[i-1])) {
+			create_grid(false,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+		}
 
-		source[0] = srcpts[i][0];
-		source[1] = srcpts[i][1];
-
+		source[0] = ptsrc_list[i]->pos[0];
+		source[1] = ptsrc_list[i]->pos[1];
 
 		find_images();
-		image_sets[i].copy_imageset(source,specific_ptsrc_redshifts[i],images_found,Grid::nfound,srcflux[i]);
+		image_sets[i].copy_imageset(source,ptsrc_redshifts[redshift_idx],images_found,Grid::nfound,ptsrc_list[i]->srcflux);
 	}
 	reset_grid();
-	delete[] srcpts;
-	delete[] srcflux;
 	return image_sets;
 }
 

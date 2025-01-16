@@ -140,6 +140,7 @@ class SourceParams
 	SourceParams() { param = NULL; }
 	void setup_parameter_arrays(const int npar);
 	virtual void setup_parameters(const bool initial_setup) {}  // don't need this, unless we want to work with SourceParams pointers in lens.cpp for parameter manipulation?
+	virtual void update_meta_parameters(const bool varied_only_fitparams) {}
 	void copy_param_data(SourceParams* params_in);
 	void update_active_params(const int id) {
 		setup_parameters(false);
@@ -169,8 +170,10 @@ class SourceParams
 	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL);
 	bool get_specific_parameter(const std::string name_in, double& value);
 	bool get_specific_varyflag(const string name_in, bool& flag);
+	bool get_varyflags(boolvector& flags);
 	void print_parameters();
 	void print_vary_parameters();
+	void set_include_limits(bool inc) { include_limits = inc; }
 	int get_n_vary_params() { return n_vary_params; }
 };
 
@@ -182,18 +185,23 @@ class PointSource : public SourceParams
 	lensvector pos;
 	lensvector shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
 	double zsrc, srcflux;
+	bool include_shift;
 	int n_images;
 	std::vector<image> images;
 
 	public:
 	PointSource() { lens = NULL; }
 	PointSource(QLens* lens_in);
+	PointSource(QLens* lens_in, const lensvector& sourcept, const double zsrc_in);
 	PointSource(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
 		copy_imageset(src_in, zsrc_in, images_in, nimg, srcflux_in);
 	}
 	void setup_parameters(const bool initial_setup);
+	void update_meta_parameters(const bool varied_only_fitparams);
+	void set_vary_source_coords();
 	void copy_ptsrc_data(PointSource* ptsrc_in);
 	void copy_imageset(const lensvector& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0);
+	void update_srcpos(const lensvector& srcpt);
 	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*srcflux); else return -1; }
 	void print(bool include_time_delays = false, bool show_labels = true) { print_to_file(include_time_delays,show_labels,NULL,NULL); }
 	void print_to_file(bool include_time_delays, bool show_labels, std::ofstream* srcfile, std::ofstream* imgfile);
@@ -473,6 +481,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int n_ptsrc;
 	PointSource **ptsrc_list;
 	int* ptsrc_redshift_idx;
+	std::vector<int> ptsrc_redshift_groups;
 
 	int n_derived_params;
 	DerivedParam** dparam_list;
@@ -486,10 +495,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	double *reference_zfactors;
 	double **default_zsrc_beta_factors;
-	double *specific_ptsrc_redshifts; // used for modeling source points
-	std::vector<int> ptsrc_redshift_groups;
-	double **specific_ptsrc_zfactors;
-	double ***specific_ptsrc_beta_factors;
 
 	int n_extended_src_redshifts;
 	double *extended_src_redshifts; // used for modeling extended sources 
@@ -500,7 +505,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double ***extended_src_beta_factors;
 
 	int n_ptsrc_redshifts;
-	double *ptsrc_redshifts; // used for modeling extended sources 
+	double *ptsrc_redshifts; // used for modeling point sources 
 	double **ptsrc_zfactors;
 	double ***ptsrc_beta_factors;
 
@@ -548,21 +553,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
 	bool use_ansi_characters;
-	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, srcpt_fit_parameters, ptsrc_fit_parameters, n_fit_parameters, n_sourcepts_fit;
+	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, ptsrc_fit_parameters, n_fit_parameters;
 	std::vector<string> fit_parameter_names, transformed_parameter_names;
 	std::vector<string> latex_parameter_names, transformed_latex_parameter_names;
-	//lensvector *sourcepts_fit;
-	//bool *vary_sourcepts_x;
-	//bool *vary_sourcepts_y;
-	//lensvector *sourcepts_lower_limit;
-	//lensvector *sourcepts_upper_limit;
-	std::vector<lensvector> sourcepts_fit;
-	std::vector<lensvector> sourcepts_lower_limit;
-	std::vector<lensvector> sourcepts_upper_limit;
 
-	std::vector<std::vector<image>> point_imgs; // this will store the point images from the first source point in sourcepts_fit when doing source pixel modeling, to generate quasar images
-	std::vector<bool> vary_sourcepts_x;
-	std::vector<bool> vary_sourcepts_y;
+	//std::vector<std::vector<image>> point_imgs; // this will store the point images from the first source point in sourcepts_fit when doing source pixel modeling, to generate quasar images
 	double *regparam_ptr; // points to regularization parameter for given source pixel grid or shapelet object
 	double matern_approx_source_size;
 	//bool vary_matern_scale;
@@ -661,14 +656,14 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	bool fits_format;
 	double data_pixel_size;
-	bool add_simulated_image_data(const lensvector &sourcept);
+	bool add_simulated_image_data(const lensvector &sourcept, const double srcflux = 1);
 	bool add_image_data_from_unlensed_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
-	bool add_fit_sourcept(const lensvector &sourcept, const double zsrc);
-	void write_image_data(string filename);
-	bool load_image_data(string filename);
+	//bool add_fit_sourcept(const lensvector &sourcept, const double zsrc);
+	void write_point_image_data(string filename);
+	bool load_point_image_data(string filename);
 	void sort_image_data_into_redshift_groups();
 	bool plot_srcpts_from_image_data(int dataset_number, std::ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux = -1);
-	void remove_image_data(int image_set);
+	//void remove_image_data(int image_set);
 	std::vector<ImageDataSet> export_to_ImageDataSet(); // for the Python wrapper
 
 	bool load_weak_lensing_data(string filename);
@@ -725,9 +720,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	int srcgrid_npixels_x, srcgrid_npixels_y;
 	bool auto_srcgrid_npixels;
 	bool auto_srcgrid_set_pixel_size;
-	double srcpt_xshift, srcpt_xshift_lower_limit, srcpt_xshift_upper_limit;
-	double srcpt_yshift, srcpt_yshift_lower_limit, srcpt_yshift_upper_limit;
-	bool vary_srcpt_xshift, vary_srcpt_yshift;
 	string psf_filename;
 	double psf_width_x, psf_width_y, background_pixel_noise;
 	bool simulate_pixel_noise;
@@ -1194,6 +1186,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void print_mask_assignments();
 	int add_new_ptsrc_redshift(const double zs, const int src_i);
 	void remove_old_ptsrc_redshift(const int znum);
+	void update_ptsrc_redshift_data();
 
 	void add_new_lens_entry(const double zl);
 	void set_primary_lens();
@@ -1236,7 +1229,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void reassign_sb_param_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
 	LensProfile* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }
-	void print_sourcept_list();
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
 	bool output_mass_r(const double r_arcsec, const int lensnum, const bool use_kpc);
@@ -1259,7 +1251,7 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	void find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& xavg, double& yavg);
 	void print_imggrid_list(bool show_vary_params);
 
-	void add_point_source(const double zsrc);
+	void add_point_source(const double zsrc, const lensvector& sourcept, const bool vary_source_coords = true);
 	void remove_point_source(int src_number);
 	void print_point_source_list(bool show_vary_params);
 
@@ -1320,7 +1312,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
 	bool get_ptsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
-	bool get_sourcept_parameter_numbers(const int lens_i, int& pi, int& pf); // DEPRECATED, replace with above
 	bool lookup_parameter_value(const string pname, double& pval);
 	void create_parameter_value_string(string &pvals);
 	bool output_parameter_values();
@@ -1349,11 +1340,9 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool include_imgpos_chisq, include_flux_chisq, include_time_delay_chisq;
 	bool include_weak_lensing_chisq;
 	bool use_analytic_bestfit_src;
+	bool include_ptsrc_shift;
 	bool n_images_penalty;
 	bool analytic_source_flux;
-	double source_flux;
-	bool vary_srcflux;
-	double srcflux_lower_limit, srcflux_upper_limit;
 	bool include_imgfluxes_in_inversion;
 	bool include_srcflux_in_inversion;
 
@@ -1399,9 +1388,10 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	double chisq_time_delays_from_model_imgs();
 	double chisq_weak_lensing();
 	bool output_weak_lensing_chivals(string filename);
-	void output_model_source_flux(double *bestfit_flux);
+	void find_analytic_srcflux(double *bestfit_flux);
 	void find_analytic_srcpos(lensvector *beta_i);
 	void set_analytic_sourcepts(const bool verbal = false);
+	void set_analytic_srcflux(const bool verbal = false);
 	double get_avg_ptsrc_dist(const int ptsrc_i);
 
 	//static bool respline_at_end;
@@ -1462,15 +1452,14 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 		fitmethod = fitmethod_in;
 		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(false);
+			for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->set_include_limits(false);
 			for (int i=0; i < n_sb; i++) sb_list[i]->set_include_limits(false);
+			for (int i=0; i < n_pixellated_src; i++) srcgrids[i]->set_include_limits(false);
 		} else {
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(true);
+			for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->set_include_limits(true);
 			for (int i=0; i < n_sb; i++) sb_list[i]->set_include_limits(true);
-		}
-		if ((n_sourcepts_fit > 0) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
-			if (sourcepts_lower_limit.empty()) sourcepts_lower_limit.resize(n_sourcepts_fit);
-			if (sourcepts_upper_limit.empty()) sourcepts_upper_limit.resize(n_sourcepts_fit);
-			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(true);
+			for (int i=0; i < n_pixellated_src; i++) srcgrids[i]->set_include_limits(true);
 		}
 	}
 	void transform_cube(double* params, double* Cube) {

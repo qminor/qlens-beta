@@ -165,10 +165,11 @@ class SourcePixelGrid : public SourcePixel, public SourceParams
 
 	public:
 	SourcePixelGrid(QLens* lens_in);
+	void copy_pixsrc_data(SourcePixelGrid* grid_in);
+	void update_meta_parameters(const bool varied_only_fitparams);
 	void create_pixel_grid(QLens* lens_in, const double x_min, const double x_max, const double y_min, const double y_max, const int usplit0, const int wsplit0);
 	void create_pixel_grid(QLens* lens_in, string pixel_data_fileroot, const double minarea_in);
 	//void copy_source_pixel_grid(SourcePixelGrid* input_pixel_grid);
-	void copy_pixsrc_data(SourcePixelGrid* grid_in);
 	void setup_parameters(const bool initial_setup);
 
 	double regparam;
@@ -266,6 +267,7 @@ class DelaunayGrid : public SourceParams, public Sort
 	public:
 	DelaunayGrid(QLens* lens_in);
 	void copy_pixsrc_data(DelaunayGrid* grid_in);
+	void update_meta_parameters(const bool varied_only_fitparams);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	void create_pixel_grid(double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0, const bool find_pixel_magnification = false, const int redshift_indx = -1);

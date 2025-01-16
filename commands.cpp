@@ -354,7 +354,7 @@ void QLens::process_commands(bool read_file)
 					if (nwords==2)
 						cout << "lens <lensmodel> <lens_parameter##> ... [z=#] [emode=#] [pmode=#]\n"
 							"lens update <lens_number> ...\n"
-							"lens changevary ...\n"
+							"lens vary ...\n"
 							"lens clear [lens_number]\n"
 							"lens savetab <lens_number> <filename>   (applies to 'tab' models only)\n\n"
 							"Creates (or updates) a lens from given model and parameters. If other lenses are present, the new\n"
@@ -366,8 +366,8 @@ void QLens::process_commands(bool read_file)
 							"Type 'lens' with no arguments to see a numbered list of the current lens models that have been\n"
 							"created, along with their parameter values. To remove a lens or delete the entire configuration,\n"
 							"type 'lens clear'. To update parameters of an existing lens, use 'lens update' (see 'help lens\n" 
-							"update' for usage info). To change the vary flags for an existing lens, use 'lens changevary\n"
-							"<lens_number>' (see 'help lens changevary' for usage info). Finally, it is possible to anchor the\n"
+							"update' for usage info). To change the vary flags for an existing lens, use 'lens vary\n"
+							"<lens_number>' (see 'help lens vary' for usage info). Finally, it is possible to anchor the\n"
 							"parameters of one lens to another lens; type 'help lens anchoring' for info on how to do this.\n\n"
 							"Available lens models:   (type 'help lens <lensmodel>' for usage information)\n\n"
 							"\033[4mElliptical mass models:\033[0m\n"  // ASCII codes are for underlining
@@ -446,15 +446,15 @@ void QLens::process_commands(bool read_file)
 							"lens update 0 b=5 q=0.8 theta=20\n\n"
 							"With the above command, qlens will update only the specific parameters above for lens 0, while leaving the\n"
 							"other parameters unchanged.\n";
-					else if (words[2]=="changevary")
-						cout << "lens changevary <lens_number> [none]\n"
-									"lens changevary [none]\n\n"
+					else if (words[2]=="vary")
+						cout << "lens vary <lens_number> [none]\n"
+									"lens vary [none]\n\n"
 							"Change the parameter vary flags for a specific lens model that has already been created. After specifying\n"
 							"the lens, on the next lens vary flags are entered just as you do when creating the lens model. Note that\n"
 							"the number of vary flags must exactly match the number of parameters for the given lens (except that vary\n"
 							"flags for the center coordinates can be omitted if the lens in question is anchored to another lens).\n"
 							"If the optional argument 'none' is given after the lens number, all vary flags are set to '0' for that\n"
-							"lens, and you will not be prompted to enter vary flags; if the lens number is omitted ('lens changevary\n"
+							"lens, and you will not be prompted to enter vary flags; if the lens number is omitted ('lens vary\n"
 							"none'), vary flags are set to '0' for all lenses.\n\n";
 					else if (words[2]=="savetab")
 						cout << "lens savetab <lens_number> <filename>\n\n"
@@ -719,7 +719,6 @@ void QLens::process_commands(bool read_file)
 							"fit params ...\n"
 							"fit priors ...\n"
 							"fit transform ...\n"
-							"fit vary_sourcept ...\n"
 							"fit regularization <method>\n"
 							"fit output_img_chivals (WRITE HELP DOCS)\n"
 							"fit output_wl_chivals  (WRITE HELP DOCS)\n\n"
@@ -1096,13 +1095,6 @@ void QLens::process_commands(bool read_file)
 							"xavg_s -- centroid x-coordinate derived from adaptive source grid; [param1] gives # of points sampled\n" 
 							"yavg_s -- centroid y-coordinate derived from adaptive source grid; [param1] gives # of points sampled\n" 
 							"\n";
-					else if (words[2]=="vary_sourcept")
-						cout << "fit vary_sourcept\n"
-							"fit vary_sourcept <vary_srcx> <vary_srcy>\n\n"
-							"Specify whether to vary each component of the source point being fit (0=fixed, 1=vary). If only one\n"
-							"source point is being fit to, the vary flags can be given as the third and fourth arguments. If\n"
-							"more than one source point is being fit to, type 'fit vary_sourcept' and you will be prompted for\n"
-							"the vary flags for each source point separately.\n";
 					else if (words[2]=="regularization")
 						cout << "fit regularization <method>\n\n"
 							"Specify the type of regularization that will be used when fitting to a surface brightness pixel\n"
@@ -1452,7 +1444,7 @@ void QLens::process_commands(bool read_file)
 					if (nwords==2)
 						cout << "source <sourcemodel> <source_parameter##> ... [emode=#]\n"
 							"source update <lens_number> ...\n"
-							"source changevary ...\n"
+							"source vary ...\n"
 							"source clear\n\n"
 							"Creates a source object from specified source surface brightness profile model and parameters.\n"
 							"If other sources are present, the new source will be superimposed with the others. If no arguments\n"
@@ -1474,15 +1466,15 @@ void QLens::process_commands(bool read_file)
 						cout << "source clear <#>\n\n"
 							"Remove source model # from the list (the list of source objects can be printed using the\n"
 							"'source' command). If no arguments given, delete entire source configuration and start over.\n";
-					else if (words[2]=="changevary")
-						cout << "source changevary <source_number> [none]\n"
-									"source changevary [none]\n\n"
+					else if (words[2]=="vary")
+						cout << "source vary <source_number> [none]\n"
+									"source evary [none]\n\n"
 							"Change the parameter vary flags for a specific source model that has already been created. After specifying\n"
 							"the source, on the next source vary flags are entered just as you do when creating the source model. Note that\n"
 							"the number of vary flags must exactly match the number of parameters for the given source (except that vary\n"
 							"flags for the center coordinates can be omitted if the source in question is anchored to another source).\n"
 							"If the optional argument 'none' is given after the source number, all vary flags are set to '0' for that\n"
-							"source, and you will not be prompted to enter vary flags; if the source number is omitted ('source changevary\n"
+							"source, and you will not be prompted to enter vary flags; if the source number is omitted ('source vary\n"
 							"none'), vary flags are set to '0' for all sourcees.\n\n";
 					else if (words[2]=="gaussian")
 						cout << "source gaussian <sbmax> <sigma> <q> [theta] [x-center] [y-center]\n\n"
@@ -2148,10 +2140,6 @@ void QLens::process_commands(bool read_file)
 					else cout << "data_pixel_size: " << data_pixel_size << endl;
 					cout << "bg_pixel_noise = " << background_pixel_noise << endl;
 					cout << "inversion_nthreads = " << inversion_nthreads << endl;
-					cout << "srcpt_xshift = " << srcpt_xshift << endl;
-					cout << "vary_srcpt_xshift: " << display_switch(vary_srcpt_xshift) << endl;
-					cout << "srcpt_yshift = " << srcpt_xshift << endl;
-					cout << "vary_srcpt_yshift: " << display_switch(vary_srcpt_yshift) << endl;
 					cout << "lum_weighted_regularization: " << display_switch(use_lum_weighted_regularization) << endl;
 					cout << "dist_weighted_regularization: " << display_switch(use_distance_weighted_regularization) << endl;
 					cout << "mag_weighted_regularization: " << display_switch(use_mag_weighted_regularization) << endl;
@@ -2187,7 +2175,6 @@ void QLens::process_commands(bool read_file)
 					cout << "chisq_imgplane_threshold = " << chisq_imgplane_substitute_threshold << endl;
 					cout << "nimg_penalty: " << display_switch(n_images_penalty) << endl;
 					cout << "chisqtol = " << chisq_tolerance << endl;
-					cout << "srcflux = " << source_flux << endl;
 					cout << "analytic_srcflux: " << display_switch(analytic_source_flux) << endl;
 					cout << "syserr_pos = " << syserr_pos << endl;
 					cout << "vary_syserr_pos: " << display_switch(vary_syserr_pos_parameter) << endl;
@@ -2863,7 +2850,7 @@ void QLens::process_commands(bool read_file)
 					reset_grid();
 				}
 			}
-			else if ((nwords > 1) and (words[1]=="changevary"))
+			else if ((nwords > 1) and ((words[1]=="vary") or (words[1]=="changevary")))
 			{
 				// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
 				// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
@@ -2893,7 +2880,7 @@ void QLens::process_commands(bool read_file)
 						set_lens_vary_parameters(lensnum,vary_flags);
 					}
 				} else {
-					if (nwords != 3) Complain("one argument required for 'lens changevary' (lens number)");
+					if (nwords != 3) Complain("one argument required for 'lens vary' (lens number)");
 					int lensnum;
 					if (!(ws[2] >> lensnum)) Complain("Invalid lens number to change vary parameters");
 					if (lensnum >= nlens) Complain("specified lens number does not exist");
@@ -5608,7 +5595,7 @@ void QLens::process_commands(bool read_file)
 					if ((sb_list[src_number]->sbtype==SHAPELET) and (fft_convolution)) cleanup_FFT_convolution_arrays(); // shapelet number of amp's may have changed, so redo FFT convolution setup
 				}
 			}
-			else if ((nwords > 1) and (words[1]=="changevary"))
+			else if ((nwords > 1) and ((words[1]=="vary") or (words[1]=="changevary")))
 			{
 				// At the moment, there is no error checking for changing vary flags of anchored parameters. This should be done from within
 				// set_lens_vary_parameters(...), and an integer error code should be returned so specific errors can be printed. Then you should
@@ -5637,7 +5624,7 @@ void QLens::process_commands(bool read_file)
 						set_sb_vary_parameters(srcnum,vary_flags);
 					}
 				} else {
-					if (nwords != 3) Complain("one argument required for 'src changevary' (src number)");
+					if (nwords != 3) Complain("one argument required for 'source vary' (src number)");
 					int srcnum;
 					if (!(ws[2] >> srcnum)) Complain("Invalid src number to change vary parameters");
 					if (srcnum >= n_sb) Complain("specified src number does not exist");
@@ -6754,7 +6741,7 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < n_updates; i++)
 						if (srcgrids[pixsrc_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in pixellated source " << pixsrc_number);
 				}
-			} else if ((nwords > 1) and (words[1]=="changevary")) {
+			} else if ((nwords > 1) and ((words[1]=="vary") or (words[1]=="changevary"))) {
 				bool set_vary_none = false;
 				bool set_vary_all = false;
 				if (words[nwords-1]=="none") {
@@ -6782,7 +6769,7 @@ void QLens::process_commands(bool read_file)
 						set_pixellated_src_vary_parameters(pixsrcnum,vary_flags);
 					}
 				} else {
-					if (nwords != 3) Complain("one argument required for 'pixsrc changevary' (pixsrc number)");
+					if (nwords != 3) Complain("one argument required for 'pixsrc vary' (pixsrc number)");
 					int pixsrcnum;
 					if (!(ws[2] >> pixsrcnum)) Complain("Invalid pixsrc number to change vary parameters");
 					if (pixsrcnum >= n_pixellated_src) Complain("specified pixsrc number does not exist");
@@ -6838,7 +6825,6 @@ void QLens::process_commands(bool read_file)
 							int n_active_params;
 							n_active_params = srcgrids[n_pixellated_src-1]->n_active_params;
 							int nvary=0;
-							bool enter_limits = true;
 							for (int i=0; i < n_active_params; i++) {
 								if (vary_flags[i]==true) nvary++;
 							}
@@ -6880,13 +6866,20 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			}
 		}
-		else if ((words[0]=="ptsrc") or ((words[0]=="fit") and (nwords > 1) and (words[1]=="ptsrc")))
+		else if ((words[0]=="ptsrc") or ((words[0]=="fit") and (nwords > 1) and ((words[1]=="ptsrc") or (words[1]=="sourcept")))) // "sourcept" is the old command, so included here for backwards compatibility
 		{
 			bool update_specific_parameters = false; // option for user to update one (or more) specific parameters rather than update all of them at once
 			bool vary_parameters = false;
 			vector<string> specific_update_params;
 			vector<double> specific_update_param_vals;
 			int ptsrc_number = -1;
+			bool lensed = true;
+			bool make_imgdata = false;
+			bool entered_varyflags = false;
+			bool added_new_ptsrc = false;
+			bool prompt_for_flags = true;
+			int nparams_to_vary = nwords;
+			boolvector vary_flags;
 
 			if (words[0]=="fit") {
 				vary_parameters = true;
@@ -6903,9 +6896,21 @@ void QLens::process_commands(bool read_file)
 				ws = new_ws;
 			}
 
+			vector<string> args;
+			if (extract_word_starts_with('-',2,nwords-1,args)==true)
+			{
+				int pos;
+				for (int i=0; i < args.size(); i++) {
+					if (args[i]=="-add_unlensed") { lensed = false; }
+					if (args[i]=="-limits") { prompt_for_flags = false; }
+					else if (args[i]=="-mkimgdata") { make_imgdata = true; }
+					else Complain("argument '" << args[i] << "' not recognized");
+				}
+			}
+
 			if ((nwords > 1) and (words[1]=="update")) update_specific_parameters = true;
 
-			double zsrc = source_redshift;
+			double zsrc = (lensed) ? source_redshift : lens_redshift;
 			for (int i=1; i < nwords; i++) {
 				int pos;
 				if ((pos = words[i].find("z=")) != string::npos) {
@@ -6938,7 +6943,8 @@ void QLens::process_commands(bool read_file)
 				} else Complain("must specify a ptsrc number to update, followed by parameters");
 			}
 
-			if (update_specific_parameters) {
+			if (make_imgdata) add_image_data_from_unlensed_sourcepts(false);
+			else if (update_specific_parameters) {
 				int pos, n_updates = 0;
 				double pval;
 				for (int i=2; i < nwords; i++) {
@@ -6955,7 +6961,8 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < n_updates; i++)
 						if (ptsrc_list[ptsrc_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in point source " << ptsrc_number);
 				}
-			} else if ((nwords > 1) and (words[1]=="changevary")) {
+			} else if ((nwords > 1) and ((words[1]=="vary") or (words[1]=="changevary"))) {
+				vary_parameters = true;
 				bool set_vary_none = false;
 				bool set_vary_all = false;
 				if (words[nwords-1]=="none") {
@@ -6968,44 +6975,50 @@ void QLens::process_commands(bool read_file)
 				}
 				if ((nwords==2) and (set_vary_none)) {
 					for (int ptsrcnum=0; ptsrcnum < n_ptsrc; ptsrcnum++) {
-						int npar;
-						npar = ptsrc_list[ptsrcnum]->n_active_params;
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = false;
+						nparams_to_vary = ptsrc_list[ptsrcnum]->n_active_params;
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
 						set_ptsrc_vary_parameters(ptsrcnum,vary_flags);
 					}
+					entered_varyflags = true;
+					ptsrc_number = -1; // so it prompts for limits for all point sources
 				} else if ((nwords==2) and (set_vary_all)) {
 					for (int ptsrcnum=0; ptsrcnum < n_ptsrc; ptsrcnum++) {
-						int npar;
-						npar = ptsrc_list[ptsrcnum]->n_active_params;
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = true;
+						nparams_to_vary = ptsrc_list[ptsrcnum]->n_active_params;
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = true;
 						set_ptsrc_vary_parameters(ptsrcnum,vary_flags);
 					}
+					entered_varyflags = true;
+					ptsrc_number = -1; // so it prompts for limits for all point sources
+				} else if (nwords==2) {
+					ptsrc_number = -1; // so it prompts for limits for all point sources
 				} else {
-					if (nwords != 3) Complain("one argument required for 'ptsrc changevary' (ptsrc number)");
-					int ptsrcnum;
-					if (!(ws[2] >> ptsrcnum)) Complain("Invalid ptsrc number to change vary parameters");
-					if (ptsrcnum >= n_ptsrc) Complain("specified ptsrc number does not exist");
-					int npar;
-					npar = ptsrc_list[ptsrcnum]->n_active_params;
+					if (nwords != 3) Complain("one argument required for 'ptsrc vary' (ptsrc number)");
+					if (!(ws[2] >> ptsrc_number)) Complain("Invalid ptsrc number to change vary parameters");
+					if (ptsrc_number >= n_ptsrc) Complain("specified ptsrc number does not exist");
+					nparams_to_vary = ptsrc_list[ptsrc_number]->n_active_params;
 
 					if ((!set_vary_none) and (!set_vary_all)) {
 						if (read_command(false)==false) return;
-						int nparams_to_vary = nwords;
-						boolvector vary_flags(nparams_to_vary);
+						int nparams_entered = nwords;
+						if (nparams_entered != nparams_to_vary) Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified ptsrc");
+						vary_flags.input(nparams_to_vary);
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
-						if (set_ptsrc_vary_parameters(ptsrcnum,vary_flags)==false) {
-							Complain("number of vary flags does not match number of parameters (" << npar << ") for specified ptsrc");
+						if (set_ptsrc_vary_parameters(ptsrc_number,vary_flags)==false) {
+							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified ptsrc");
 						}
+						entered_varyflags = true;
 					} else if (set_vary_none) {
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = false;
-						set_ptsrc_vary_parameters(ptsrcnum,vary_flags);
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
+						set_ptsrc_vary_parameters(ptsrc_number,vary_flags);
+						entered_varyflags = true;
 					} else if (set_vary_all) {
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = true;
-						set_ptsrc_vary_parameters(ptsrcnum,vary_flags);
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = true;
+						set_ptsrc_vary_parameters(ptsrc_number,vary_flags);
+						entered_varyflags = true;
 					}
 				}
 			} else if (nwords==1) {
@@ -7023,63 +7036,99 @@ void QLens::process_commands(bool read_file)
 						remove_point_source(ptsrc_number);
 					} else Complain("only one argument allowed for 'ptsrc clear' (number of point source to remove)");
 				}
+				else if (words[1]=="auto") {
+					if (nwords > 2) Complain("no arguments allowed to 'ptsrc auto'");
+					set_analytic_sourcepts(true);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(true);
+				}
 				else if (words[1]=="add") {
-					add_point_source(zsrc);
-					if (vary_parameters) {
-						if (read_command(false)==false) return;
-						int nparams_to_vary = nwords;
-						boolvector vary_flags(nparams_to_vary);
-						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
-						if (set_ptsrc_vary_parameters(n_ptsrc-1,vary_flags)==false) {
-							int npar;
-							npar = ptsrc_list[n_ptsrc-1]->n_active_params;
-							Complain("number of vary flags does not match number of parameters (" << npar << ") for specified ptsrc");
-						}
-						if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST)) {
-							int n_active_params;
-							n_active_params = ptsrc_list[n_ptsrc-1]->n_active_params;
-							int nvary=0;
-							bool enter_limits = true;
-							for (int i=0; i < n_active_params; i++) {
-								if (vary_flags[i]==true) nvary++;
-							}
-							if (nvary != 0) {
-								dvector lower(nvary), upper(nvary), lower_initial(nvary), upper_initial(nvary);
-								vector<string> paramnames;
-								ptsrc_list[n_ptsrc-1]->get_fit_parameter_names(paramnames);
-								int i,j;
-								for (i=0, j=0; j < n_active_params; j++) {
-									if (vary_flags[j]) {
-										if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
-										if (read_command(false)==false) { remove_point_source(n_ptsrc-1); Complain("parameter limits could not be read"); }
-										if (nwords >= 2) {
-											if (!(ws[0] >> lower[i])) { remove_point_source(n_ptsrc-1); Complain("invalid lower limit"); }
-											if (!(ws[1] >> upper[i])) { remove_point_source(n_ptsrc-1); Complain("invalid upper limit"); }
-											if (nwords == 2) {
-												lower_initial[i] = lower[i];
-												upper_initial[i] = upper[i];
-											} else if (nwords == 4) {
-												if (!(ws[2] >> lower_initial[i])) { remove_point_source(n_ptsrc-1); Complain("invalid initial lower limit"); }
-												if (!(ws[3] >> upper_initial[i])) { remove_point_source(n_ptsrc-1); Complain("invalid initial upper limit"); }
-											} else {
-												remove_point_source(n_ptsrc-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
-											}
-										} else {
-											remove_point_source(n_ptsrc-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
-										}
-										if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
-										if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
-										i++;
-									}
-								}
-								ptsrc_list[n_ptsrc-1]->set_limits(lower,upper,lower_initial,upper_initial);
-							}
-						}
-					}
+					lensvector srcpt;
+					if (nwords==2) {
+					srcpt[0] = 0; // add options to put in arguments for srcx, srcy
+					srcpt[1] = 0; // likewise
+					} else if (nwords==4) {
+						double xs, ys;
+						if (!(ws[2] >> xs)) Complain("Invalid x-coordinate for initial source point");
+						if (!(ws[3] >> ys)) Complain("Invalid y-coordinate for initial source point");
+						srcpt[0] = xs;
+						srcpt[1] = ys;
+					} else if (nwords==3) Complain("two source coordinates should be specified (xsrc,ysrc)");
+					else Complain("too many arguments to 'ptsrc add'; only source coordinates are required");
+					bool vary_source_coords = (use_analytic_bestfit_src) ? false : true;
+					add_point_source(zsrc,srcpt,vary_source_coords); // even if user is not specifying vary flags directly, assume source coords will be varied unless 'analytic_bestfit_src' is on
+					ptsrc_number = n_ptsrc-1; // for setting vary flags (below)
+					added_new_ptsrc = true;
 				}
 				else Complain("unrecognized argument to 'ptsrc'");
 				update_parameter_list();
 			}
+
+			if (vary_parameters) {
+				int nvary;
+				int ptsrcnum, ptsrcnum_i, ptsrcnum_f;
+				bool print_line_for_each_source = false;
+				if (ptsrc_number < 0) {
+					// in this case, prompt for limits for all point sources
+					ptsrcnum_i = 0;
+					ptsrcnum_f = n_ptsrc;
+					print_line_for_each_source = true;
+				} else {
+					ptsrcnum_i = ptsrc_number;
+					ptsrcnum_f = ptsrc_number+1;
+				}
+				for (ptsrcnum=ptsrcnum_i; ptsrcnum < ptsrcnum_f; ptsrcnum++) {
+					if ((prompt_for_flags) and (!entered_varyflags)) {
+						nparams_to_vary = ptsrc_list[ptsrcnum]->n_active_params;
+						if ((mpi_id==0) and (print_line_for_each_source)) cout << "Vary flags for point source " << ptsrcnum << ":" << endl;
+						if (read_command(false)==false) return;
+						int nparams_entered = nwords;
+						if (nparams_entered != nparams_to_vary) Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified ptsrc");
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
+						if (set_ptsrc_vary_parameters(ptsrcnum,vary_flags)==false) {
+							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified ptsrc");
+						}
+					}
+					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST)) {
+						nvary = ptsrc_list[ptsrcnum]->n_vary_params;
+						ptsrc_list[ptsrcnum]->get_varyflags(vary_flags);
+						if (nvary != 0) {
+							dvector lower(nvary), upper(nvary), lower_initial(nvary), upper_initial(nvary);
+							vector<string> paramnames;
+							ptsrc_list[ptsrcnum]->get_fit_parameter_names(paramnames);
+							int i,j;
+							for (i=0, j=0; j < nparams_to_vary; j++) {
+								if (vary_flags[j]) {
+									if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
+									if (read_command(false)==false) { if (added_new_ptsrc) remove_point_source(ptsrcnum); Complain("parameter limits could not be read"); }
+									if (nwords >= 2) {
+										if (!(ws[0] >> lower[i])) { if (added_new_ptsrc) remove_point_source(ptsrcnum); Complain("invalid lower limit"); }
+										if (!(ws[1] >> upper[i])) { if (added_new_ptsrc) remove_point_source(ptsrcnum); Complain("invalid upper limit"); }
+										if (nwords == 2) {
+											lower_initial[i] = lower[i];
+											upper_initial[i] = upper[i];
+										} else if (nwords == 4) {
+											if (!(ws[2] >> lower_initial[i])) { if (added_new_ptsrc) remove_point_source(ptsrcnum); Complain("invalid initial lower limit"); }
+											if (!(ws[3] >> upper_initial[i])) { if (added_new_ptsrc) remove_point_source(ptsrcnum); Complain("invalid initial upper limit"); }
+										} else {
+											if (added_new_ptsrc) remove_point_source(ptsrcnum);
+											Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+										}
+									} else {
+										if (added_new_ptsrc) remove_point_source(ptsrcnum);
+										Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+									}
+									if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
+									if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
+									i++;
+								}
+							}
+							ptsrc_list[ptsrcnum]->set_limits(lower,upper,lower_initial,upper_initial);
+						}
+					}
+				}
+			}
+
 		}
 		else if (words[0]=="fit")
 		{
@@ -7168,175 +7217,6 @@ void QLens::process_commands(bool read_file)
 						update_parameter_list();
 					} else Complain("invalid number of arguments; can only specify regularization method");
 				}
-				else if (words[1]=="sourcept")
-				{
-					bool add_to_image = false;
-					bool lensed = true;
-					bool make_imgdata = false;
-					vector<string> args;
-					if (extract_word_starts_with('-',2,nwords-1,args)==true)
-					{
-						int pos;
-						for (int i=0; i < args.size(); i++) {
-							if (args[i]=="-add") add_to_image = true;
-							else if (args[i]=="-add_unlensed") { add_to_image = true; lensed = false; }
-							else if (args[i]=="-mkimgdata") { make_imgdata = true; }
-							else Complain("argument '" << args[i] << "' not recognized");
-						}
-					}
-
-					if (((!add_to_image) or (make_imgdata)) and (n_sourcepts_fit==0)) Complain("No image data has been loaded");
-					if (make_imgdata) add_image_data_from_unlensed_sourcepts(false);
-					else if (nwords==2) {
-						print_sourcept_list();
-					}
-					else if ((nwords==3) and (words[2]=="auto")) {
-						if (nlens==0) Complain("No lens model has been defined; cannot determine optimal source point");
-						set_analytic_sourcepts();
-					}
-					else if ((nwords==3) and (words[2]=="clear")) {
-						clear_sourcepts();
-					}
-					else if (nwords==4)
-					{
-						double xs, ys;
-						if (!(ws[2] >> xs)) Complain("Invalid x-coordinate for initial source point");
-						if (!(ws[3] >> ys)) Complain("Invalid y-coordinate for initial source point");
-						if (add_to_image) {
-							lensvector srcpt; srcpt[0] = xs; srcpt[1] = ys;
-							double zsrc = (lensed) ? source_redshift : lens_redshift;
-							int srcpt_i = n_sourcepts_fit;
-							if (!add_fit_sourcept(srcpt,zsrc)) Complain("could not add source point");
-							if (!use_analytic_bestfit_src) {
-								set_sourcept_vary_parameters(srcpt_i,true,true);
-							}
-						} else {
-							if (n_sourcepts_fit > 1) Complain("with more than one source point, coordinates must be entered on separate lines after 'fit sourcept'");
-							sourcepts_fit[0][0] = xs;
-							sourcepts_fit[0][1] = ys;
-						}
-						if ((add_to_image) and (fitmethod != POWELL) and (fitmethod != SIMPLEX))
-						{
-							if (mpi_id==0) cout << "Limits for x-coordinate of source point:\n";
-							if (read_command(false)==false) return;
-							double xmin,xmax,ymin,ymax;
-							if (nwords != 2) Complain("Must specify two arguments for source point x-coordinate limits: xmin, xmax");
-							if (!(ws[0] >> xmin)) Complain("Invalid lower limit for x-coordinate of source point");
-							if (!(ws[1] >> xmax)) Complain("Invalid upper limit for x-coordinate of source point");
-							if (xmin > xmax) Complain("lower limit cannot be greater than upper limit");
-							if (mpi_id==0) cout << "Limits for y-coordinate of source point:\n";
-							if (read_command(false)==false) return;
-							if (nwords != 2) Complain("Must specify two arguments for source point y-coordinate limits: ymin, ymax");
-							if (!(ws[0] >> ymin)) Complain("Invalid lower limit for y-coordinate of source point");
-							if (!(ws[1] >> ymax)) Complain("Invalid upper limit for y-coordinate of source point");
-							if (ymin > ymax) Complain("lower limit cannot be greater than upper limit");
-							sourcepts_lower_limit[0][0] = xmin;
-							sourcepts_upper_limit[0][0] = xmax;
-							sourcepts_lower_limit[0][1] = ymin;
-							sourcepts_upper_limit[0][1] = ymax;
-						}
-						if (use_analytic_bestfit_src) {
-							if (mpi_id==0) warn(warnings,"with 'analytic_bestfit_src' turned on, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
-						}
-					} else if (nwords==3) {
-						int imin = 0, imax = n_sourcepts_fit;
-						if (words[2] != "update") {
-							int srcpt_num;
-							if (!(ws[2] >> srcpt_num)) Complain("Invalid index number for source point");
-							if ((srcpt_num >= n_sourcepts_fit) or (srcpt_num < 0)) Complain("Source point number " << srcpt_num << " does not exist");
-							imin=srcpt_num;
-							imax=srcpt_num+1;
-						}
-						double xs, ys;
-						for (int i=imin; i < imax; i++) {
-							if ((verbal_mode) and (mpi_id==0)) cout << "Source point " << i << ":\n";
-							if (read_command(false)==false) return;
-							if (nwords != 2) Complain("Must specify two coordinates for initial source point");
-							if (!(ws[0] >> xs)) Complain("Invalid x-coordinate for initial source point");
-							if (!(ws[1] >> ys)) Complain("Invalid y-coordinate for initial source point");
-							/*
-							if ((fitmethod != POWELL) and (fitmethod != SIMPLEX))
-							{
-								if (mpi_id==0) cout << "Limits for x-coordinate of source point " << i << ":\n";
-								if (read_command(false)==false) return;
-								double xmin,xmax,ymin,ymax;
-								if (nwords != 2) Complain("Must specify two arguments for source point x-coordinate limits: xmin, xmax");
-								if (!(ws[0] >> xmin)) Complain("Invalid lower limit for x-coordinate of source point");
-								if (!(ws[1] >> xmax)) Complain("Invalid upper limit for x-coordinate of source point");
-								if (mpi_id==0) cout << "Limits for y-coordinate of source point " << i << ":\n";
-								if (read_command(false)==false) return;
-								if (nwords != 2) Complain("Must specify two arguments for source point y-coordinate limits: ymin, ymax");
-								if (!(ws[0] >> ymin)) Complain("Invalid lower limit for y-coordinate of source point");
-								if (!(ws[1] >> ymax)) Complain("Invalid upper limit for y-coordinate of source point");
-								sourcepts_lower_limit[i][0] = xmin;
-								sourcepts_upper_limit[i][0] = xmax;
-								sourcepts_lower_limit[i][1] = ymin;
-								sourcepts_upper_limit[i][1] = ymax;
-							}
-							*/
-							sourcepts_fit[i][0] = xs;
-							sourcepts_fit[i][1] = ys;
-						}
-						if (use_analytic_bestfit_src) {
-							if (mpi_id==0) warn(warnings,"with 'analytic_bestfit_src' turned on, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
-						}
-					} else Complain("Must specify either zero or two arguments (sourcept_x, sourcept_y)");
-				}
-				else if (words[1]=="vary_sourcept")
-				{
-					bool changed_settings = false;
-					if (n_sourcepts_fit==0) Complain("No image data has been loaded");
-					if (nwords==4) {
-						bool vary_xs, vary_ys;
-						if (!(ws[2] >> vary_xs)) Complain("Invalid vary flag for source point");
-						if (!(ws[3] >> vary_ys)) Complain("Invalid vary flag for source point");
-						set_sourcept_vary_parameters(0,vary_xs,vary_ys);
-						changed_settings = true;
-					} else if (nwords==2) { 
-						bool vary_xs, vary_ys;
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if ((verbal_mode) and (mpi_id==0)) cout << "Source " << i << ":\n";
-							if (read_command(false)==false) return;
-							if (nwords != 2) Complain("Must specify two vary flags for source point");
-							if (!(ws[0] >> vary_xs)) Complain("Invalid vary flag for source point");
-							if (!(ws[1] >> vary_ys)) Complain("Invalid vary flag for source point");
-							set_sourcept_vary_parameters(i,vary_xs,vary_ys);
-						}
-						update_parameter_list();
-						changed_settings = true;
-					} else Complain("Invalid number of arguments for source vary flags");
-					if (changed_settings) {
-						if ((fitmethod != POWELL) and (fitmethod != SIMPLEX))
-						{
-							// The following code is repeated elsewhere in this file, and that is ugly. I HATE UGLINESS. Eliminate redundancies later!!
-							for (int i=0; i < n_sourcepts_fit; i++) {
-								if (vary_sourcepts_x[i]) {
-									if (mpi_id==0) cout << "Limits for x-coordinate of source point:\n";
-									if (read_command(false)==false) return;
-									double xmin,xmax;
-									if (nwords != 2) Complain("Must specify two arguments for source point x-coordinate limits: xmin, xmax");
-									if (!(ws[0] >> xmin)) Complain("Invalid lower limit for x-coordinate of source point");
-									if (!(ws[1] >> xmax)) Complain("Invalid upper limit for x-coordinate of source point");
-									if (xmin > xmax) Complain("lower limit cannot be greater than upper limit");
-									sourcepts_lower_limit[i][0] = xmin;
-									sourcepts_upper_limit[i][0] = xmax;
-								}
-								if (vary_sourcepts_y[i]) {
-									double ymin,ymax;
-									if (mpi_id==0) cout << "Limits for y-coordinate of source point:\n";
-									if (read_command(false)==false) return;
-									if (nwords != 2) Complain("Must specify two arguments for source point y-coordinate limits: ymin, ymax");
-									if (!(ws[0] >> ymin)) Complain("Invalid lower limit for y-coordinate of source point");
-									if (!(ws[1] >> ymax)) Complain("Invalid upper limit for y-coordinate of source point");
-									if (ymin > ymax) Complain("lower limit cannot be greater than upper limit");
-									sourcepts_lower_limit[i][1] = ymin;
-									sourcepts_upper_limit[i][1] = ymax;
-								}
-							}
-						}
-
-					}
-				}
 				else if (words[1]=="source_mode")
 				{
 					if (nwords==2) {
@@ -7375,8 +7255,7 @@ void QLens::process_commands(bool read_file)
 				{
 					bool show_all = true;
 					int dataset = 0;
-					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
+					if (n_ptsrc==0) Complain("No data source points have been specified");
 					if (nwords==3) {
 						// if using the "src=#" notation (as in 'fit plotimg'), remove the "src=" part
 						if (words[2].find("src=") == 0) {
@@ -7385,52 +7264,37 @@ void QLens::process_commands(bool read_file)
 							ws[2] << words[2];
 						}
 						if (!(ws[2] >> dataset)) Complain("invalid image dataset");
-						if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
+						if (dataset >= n_ptsrc) Complain("specified image dataset has not been loaded");
 						show_all = false;
 					} else if (nwords > 3) Complain("invalid number of arguments; can only specify sourcept number");
 
-					double* srcflux = new double[n_sourcepts_fit];
-					lensvector *srcpts = new lensvector[n_sourcepts_fit];
-					if (include_flux_chisq) {
-						output_model_source_flux(srcflux);
-						if (!analytic_source_flux) srcflux[0] = source_flux;
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-					}
-					if (use_analytic_bestfit_src) {
-						find_analytic_srcpos(srcpts);
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if (srcpt_xshift != 0) srcpts[i][0] += srcpt_xshift;
-							if (srcpt_yshift != 0) srcpts[i][1] += srcpt_yshift;
-						}
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
-					}
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 
 					if (mpi_id==0) cout << endl;
 					if (show_all) {
 						bool different_zsrc = false;
-						for (int i=0; i < n_sourcepts_fit; i++) if (specific_ptsrc_redshifts[i] != source_redshift) different_zsrc = true;
-						for (int i=0; i < n_sourcepts_fit; i++) {
+						for (int i=0; i < n_ptsrc; i++) if (ptsrc_redshifts[ptsrc_redshift_idx[i]] != source_redshift) different_zsrc = true;
+						for (int i=0; i < n_ptsrc; i++) {
 							if (different_zsrc) {
-								if ((i == 0) or (specific_ptsrc_redshifts[i] != specific_ptsrc_redshifts[i-1])) {
-									create_grid(false,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
+								if ((i == 0) or (ptsrc_redshifts[ptsrc_redshift_idx[i]] != ptsrc_redshifts[ptsrc_redshift_idx[i-1]])) {
+									create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 								}
 							}
 							if (mpi_id==0) cout << "# Source " << i << ":" << endl;
-							output_images_single_source(srcpts[i][0], srcpts[i][1], true, srcflux[i], true);
+							output_images_single_source(ptsrc_list[i]->pos[0], ptsrc_list[i]->pos[1], true, ptsrc_list[i]->srcflux, true);
 						}
 						if (different_zsrc) {
 							reset_grid();
 							//create_grid(false);
 						}
 					} else {
-						if (specific_ptsrc_redshifts[dataset] != source_redshift) {
+						if (ptsrc_redshifts[ptsrc_redshift_idx[dataset]] != source_redshift) {
 							reset_grid();
-							create_grid(false,specific_ptsrc_zfactors[dataset],specific_ptsrc_beta_factors[dataset]);
+							create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[dataset]]);
 						}
-						output_images_single_source(srcpts[dataset][0], srcpts[dataset][1], true, srcflux[dataset], true);
-						if (specific_ptsrc_redshifts[dataset] != source_redshift) {
+						output_images_single_source(ptsrc_list[dataset]->pos[0], ptsrc_list[dataset]->pos[1], true, ptsrc_list[dataset]->srcflux, true);
+						if (ptsrc_redshifts[dataset] != source_redshift) {
 							reset_grid();
 							//create_grid(false);
 						}
@@ -7444,45 +7308,27 @@ void QLens::process_commands(bool read_file)
 					// MAKE THIS UPGRADE LATER!!!!!!!!!!!
 					chisq_pos_image_plane_diagnostic(false,false,rms_err,nmatched);
 					if (mpi_id==0) cout << "# matched image pairs = " << nmatched << ", rms_imgpos_error = " << rms_err << endl << endl;
-					delete[] srcflux;
-					delete[] srcpts;
 				}
 				else if (words[1]=="data_imginfo")
 				{
 					if (nlens==0) Complain("No lens model has been specified");
-					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
+					if (n_ptsrc==0) Complain("No data source points have been specified");
 					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves");
 					if (nwords != 2) Complain("command 'fit imginfo' does not require any arguments");
-					double* srcflux = new double[n_sourcepts_fit];
-					lensvector *srcpts = new lensvector[n_sourcepts_fit];
-					if (include_flux_chisq) {
-						output_model_source_flux(srcflux);
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-					}
 
-					if (!analytic_source_flux) srcflux[0] = source_flux;
-					if (use_analytic_bestfit_src) {
-						find_analytic_srcpos(srcpts);
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
+					for (int i=0; i < n_ptsrc; i++) {
+						plot_srcpts_from_image_data(i,NULL,ptsrc_list[i]->pos[0],ptsrc_list[i]->pos[1],ptsrc_list[i]->srcflux);
 					}
-					if (mpi_id==0) cout << endl;
-					for (int i=0; i < n_sourcepts_fit; i++) {
-						plot_srcpts_from_image_data(i,NULL,srcpts[i][0],srcpts[i][1],srcflux[i]);
-					}
-					delete[] srcflux;
-					delete[] srcpts;
 				}
 				else if (words[1]=="plotsrc")
 				{
 					if (nlens==0) Complain("No lens model has been specified");
-					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
+					if (n_ptsrc==0) Complain("No data source points have been specified");
 					int dataset;
 					bool show_multiple = false;
-					int min_dataset = 0, max_dataset = n_sourcepts_fit - 1;
+					int min_dataset = 0, max_dataset = n_ptsrc - 1;
 					if (nwords==2) show_multiple = true;
 					else {
 						int pos0, pos;
@@ -7497,14 +7343,14 @@ void QLens::process_commands(bool read_file)
 								dmaxstream << dmaxstring;
 								if (!(dminstream >> min_dataset)) Complain("invalid dataset");
 								if (!(dmaxstream >> max_dataset)) Complain("invalid dataset");
-								if (max_dataset >= n_sourcepts_fit) Complain("specified max image dataset exceeds number of image sets in data");
+								if (max_dataset >= n_ptsrc) Complain("specified max image dataset exceeds number of image sets in data");
 								show_multiple = true;
 							} else {
 								string dstr = words[2].substr(4);
 								stringstream dstream;
 								dstream << dstr;
 								if (!(dstream >> dataset)) Complain("invalid dataset");
-								if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
+								if (dataset >= n_ptsrc) Complain("specified image dataset has not been loaded");
 							}
 							stringstream* new_ws = new stringstream[nwords-1];
 							new_ws[0] << words[0];
@@ -7524,24 +7370,14 @@ void QLens::process_commands(bool read_file)
 						create_grid(false,reference_zfactors,default_zsrc_beta_factors); // even though we're not finding images, still need to plot caustics
 					} else {
 						reset_grid();
-						create_grid(false,specific_ptsrc_zfactors[dataset],default_zsrc_beta_factors); // even though we're not finding images, still need to plot caustics
+						create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[dataset]]); // even though we're not finding images, still need to plot caustics
 					}
 					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves and caustics");
 					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotsrc' requires either zero or one argument (source_filename)");
-					double* srcflux = new double[n_sourcepts_fit];
-					lensvector *srcpts = new lensvector[n_sourcepts_fit];
-					if (include_flux_chisq) {
-						output_model_source_flux(srcflux);
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-					}
 
-					if (!analytic_source_flux) srcflux[0] = source_flux;
-					if (use_analytic_bestfit_src) {
-						find_analytic_srcpos(srcpts);
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
-					}
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
+
 					if (mpi_id==0) cout << endl;
 					string srcname="srcs.dat";
 					bool output_to_text_files = false;
@@ -7560,10 +7396,10 @@ void QLens::process_commands(bool read_file)
 							if (output_to_text_files) { srcfile << "# "; }
 							srcfile << "\"dataset " << dataset << "\"" << endl;
 						}
-						if (plot_srcpts_from_image_data(dataset,&srcfile,srcpts[dataset][0],srcpts[dataset][1],srcflux[dataset])==true) {
+						if (plot_srcpts_from_image_data(dataset,&srcfile,ptsrc_list[dataset]->pos[0],ptsrc_list[dataset]->pos[1],ptsrc_list[dataset]->srcflux)==true) {
 							if (mpi_id==0) {
-								srcfit << "\"fit srcpt " << dataset << " (z_{s}=" << specific_ptsrc_redshifts[dataset] << ")\"" << endl;
-								srcfit << srcpts[dataset][0] << "\t" << srcpts[dataset][1] << endl << endl << endl;
+								srcfit << "\"fit srcpt " << dataset << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[dataset]] << ")\"" << endl;
+								srcfit << ptsrc_list[dataset]->pos[0] << "\t" << ptsrc_list[dataset]->pos[1] << endl << endl << endl;
 								srcfile << endl << endl;
 							}
 						}
@@ -7572,12 +7408,12 @@ void QLens::process_commands(bool read_file)
 							if (mpi_id==0) {
 								if (output_to_text_files) { srcfile << "# "; }
 								srcfile << "\"dataset " << i << "\"" << endl;
-								srcfile << srcpts[i][0] << "\t" << srcpts[i][1] << " # from fit" << endl;
+								srcfile << ptsrc_list[i]->pos[0] << "\t" << ptsrc_list[i]->pos[1] << " # from fit" << endl;
 							}
-							if (plot_srcpts_from_image_data(i,&srcfile,srcpts[i][0],srcpts[i][1],srcflux[i])==true) {
+							if (plot_srcpts_from_image_data(i,&srcfile,ptsrc_list[i]->pos[0],ptsrc_list[i]->pos[1],ptsrc_list[i]->srcflux)==true) {
 								if (mpi_id==0) {
-									srcfit << "\"fit srcpt " << i << " (z_{s}=" << specific_ptsrc_redshifts[i] << ")\"" << endl;
-									srcfit << srcpts[i][0] << "\t" << srcpts[i][1] << endl << endl << endl;
+									srcfit << "\"fit srcpt " << i << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[i]] << ")\"" << endl;
+									srcfit << ptsrc_list[i]->pos[0] << "\t" << ptsrc_list[i]->pos[1] << endl << endl << endl;
 									srcfile << endl << endl;
 								}
 							}
@@ -7585,17 +7421,15 @@ void QLens::process_commands(bool read_file)
 					}
 					if (nwords==3) {
 						if (terminal != TEXT) {
-							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("srcptfits",words[2],"");
+							if ((show_multiple) and (n_ptsrc > 1)) run_plotter_file("srcptfits",words[2],"");
 							else run_plotter_file("srcptfit",words[2],"");
 						}
 					} else {
-						if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcptfits");
+						if ((show_multiple) and (n_ptsrc > 1)) run_plotter("srcptfits");
 						else run_plotter("srcptfit");
 					}
 					reset_grid();
 					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
-					delete[] srcflux;
-					delete[] srcpts;
 				}
 				else if (words[1]=="plotimg")
 				{
@@ -7603,8 +7437,7 @@ void QLens::process_commands(bool read_file)
 					// add up the total number of images, specify how many images are above the stated magnification threshold, etc.
 					// also, you should put this entire thing in a function -- also true for many commands in this file! Critical before public release.
 					if (nlens==0) Complain("No lens model has been specified");
-					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
+					if (n_ptsrc==0) Complain("No data source points have been specified");
 					bool omit_source = false;
 					bool omit_cc = false;
 					bool old_cc_setting = show_cc;
@@ -7639,7 +7472,7 @@ void QLens::process_commands(bool read_file)
 					int dataset;
 					bool show_multiple = false;
 					bool show_grid = false;
-					int min_dataset = 0, max_dataset = n_sourcepts_fit - 1;
+					int min_dataset = 0, max_dataset = n_ptsrc - 1;
 					if ((nwords > 2) and (words[nwords-1]=="grid")) {
 						show_grid = true;
 						remove_word(nwords-1);
@@ -7658,14 +7491,14 @@ void QLens::process_commands(bool read_file)
 								dmaxstream << dmaxstring;
 								if (!(dminstream >> min_dataset)) Complain("invalid dataset");
 								if (!(dmaxstream >> max_dataset)) Complain("invalid dataset");
-								if (max_dataset >= n_sourcepts_fit) Complain("specified max image dataset exceeds number of image sets in data");
+								if (max_dataset >= n_ptsrc) Complain("specified max image dataset exceeds number of image sets in data");
 								show_multiple = true;
 							} else {
 								string dstr = words[2].substr(4);
 								stringstream dstream;
 								dstream << dstr;
 								if (!(dstream >> dataset)) Complain("invalid dataset");
-								if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
+								if (dataset >= n_ptsrc) Complain("specified image dataset has not been loaded");
 							}
 							stringstream* new_ws = new stringstream[nwords-1];
 							new_ws[0] << words[0];
@@ -7686,33 +7519,17 @@ void QLens::process_commands(bool read_file)
 						reset_grid();
 						int zgroup = -1;
 						for (int k=0; k < ptsrc_redshift_groups.size()-1; k++) { if ((dataset >= ptsrc_redshift_groups[k]) and (dataset < ptsrc_redshift_groups[k+1])) zgroup = k; }
-						create_grid(false,specific_ptsrc_zfactors[dataset],specific_ptsrc_beta_factors[dataset],zgroup);
+						create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[dataset]],zgroup);
 						if (show_grid) plot_recursive_grid("xgrid.dat");
 						// Plot critical curves corresponding to the particular source redshift being plotted
 						if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves");
 					} else {
 						reset_grid();
-						create_grid(false,specific_ptsrc_zfactors[min_dataset],specific_ptsrc_beta_factors[min_dataset]);
+						create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[min_dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[min_dataset]]);
 					}
 					if ((nwords != 4) and (nwords != 2)) Complain("command 'fit plotimg' requires either zero or two arguments (source_filename, image_filename)");
-					double* srcflux = new double[n_sourcepts_fit];
-					lensvector *srcpts = new lensvector[n_sourcepts_fit];
-					if (include_flux_chisq) {
-						output_model_source_flux(srcflux);
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-					}
-
-					if (!analytic_source_flux) srcflux[0] = source_flux;
-					if (use_analytic_bestfit_src) {
-						find_analytic_srcpos(srcpts);
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if (srcpt_xshift != 0) srcpts[i][0] += srcpt_xshift;
-							if (srcpt_yshift != 0) srcpts[i][1] += srcpt_yshift;
-						}
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
-					}
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 					if (mpi_id==0) cout << endl;
 					string imgname="imgs.dat", srcname="srcs.dat";
 					bool output_to_text_files = false;
@@ -7736,9 +7553,9 @@ void QLens::process_commands(bool read_file)
 							imgfile << "\"image set " << dataset << "\"" << endl;
 							srcfile << "\"source " << dataset << "\"" << endl;
 						}
-						if (plot_images_single_source(srcpts[dataset][0], srcpts[dataset][1], verbal_mode, imgfile, srcfile, srcflux[dataset], true)==true) {
+						if (plot_images_single_source(ptsrc_list[dataset]->pos[0], ptsrc_list[dataset]->pos[1], verbal_mode, imgfile, srcfile, ptsrc_list[dataset]->srcflux, true)==true) {
 							if (mpi_id==0) {
-								imgout << "\"dataset " << dataset << " (z_{s}=" << specific_ptsrc_redshifts[dataset] << ")\"" << endl;
+								imgout << "\"dataset " << dataset << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[dataset]] << ")\"" << endl;
 								image_data[dataset].write_to_file(imgout);
 								imgout << endl << endl;
 								imgfile << endl << endl;
@@ -7748,16 +7565,16 @@ void QLens::process_commands(bool read_file)
 					} else {
 						reset_grid();
 						for (int i=min_dataset; i <= max_dataset; i++) {
-							if ((i == min_dataset) or (specific_ptsrc_zfactors[i] != specific_ptsrc_zfactors[i-1]))
-								create_grid(false,specific_ptsrc_zfactors[i],specific_ptsrc_beta_factors[i]);
+							if ((i == min_dataset) or (ptsrc_zfactors[ptsrc_redshift_idx[i]] != ptsrc_zfactors[ptsrc_redshift_idx[i-1]]))
+								create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 							if (mpi_id==0) {
 								if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
 								imgfile << "\"image set " << i << "\"" << endl;
 								srcfile << "\"source " << i << "\"" << endl;
 							}
-							if (plot_images_single_source(srcpts[i][0], srcpts[i][1], verbal_mode, imgfile, srcfile, srcflux[i], true)==true) {
+							if (plot_images_single_source(ptsrc_list[i]->pos[0], ptsrc_list[i]->pos[1], verbal_mode, imgfile, srcfile, ptsrc_list[i]->srcflux, true)==true) {
 								if (mpi_id==0) {
-									imgout << "\"dataset " << i << " (z_{s}=" << specific_ptsrc_redshifts[i] << ")\"" << endl;
+									imgout << "\"dataset " << i << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[i]] << ")\"" << endl;
 									image_data[i].write_to_file(imgout);
 									imgout << endl << endl;
 									imgfile << endl << endl;
@@ -7770,23 +7587,23 @@ void QLens::process_commands(bool read_file)
 					if (nwords==4) {
 						if (terminal != TEXT) {
 							if (show_cc) {
-								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("imgfits",words[3],range1);
+								if ((show_multiple) and (n_ptsrc > 1)) run_plotter_file("imgfits",words[3],range1);
 								else run_plotter_file("imgfit",words[3],range1);
 							}
 							else {
 								run_plotter_file("imgfit_nocc",words[3],range1);
 							}
 							if (plot_srcplane) {
-								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("srcfits",words[2],range2);
+								if ((show_multiple) and (n_ptsrc > 1)) run_plotter_file("srcfits",words[2],range2);
 								else run_plotter_file("srcfit",words[2],range2);
 							}
 						}
 					} else {
 						if (show_cc) {
-							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("imgfits",range1);
+							if ((show_multiple) and (n_ptsrc > 1)) run_plotter("imgfits",range1);
 							else run_plotter("imgfit",range1);
 							if (plot_srcplane) {
-								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",range2);
+								if ((show_multiple) and (n_ptsrc > 1)) run_plotter("srcfits",range2);
 								else run_plotter("srcfit",range2);
 							}
 						}
@@ -7797,8 +7614,6 @@ void QLens::process_commands(bool read_file)
 					show_imgsrch_grid = false;
 					reset_grid();
 					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
-					delete[] srcflux;
-					delete[] srcpts;
 					if (omit_source) plot_srcplane = old_plot_srcplane;
 					if (omit_cc) show_cc = old_cc_setting;
 					if (set_title) plot_title = "";
@@ -8584,7 +8399,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="imgdata")
 		{
 			if (nwords == 1) {
-				if (n_sourcepts_fit==0) Complain("no image data has been loaded");
+				if (n_ptsrc==0) Complain("no image data has been loaded");
 				print_image_data(true); // The boolean argument should be removed (it says to print errors...should ALWAYS print errors!)
 				// print the image data that is being used
 			} else if (nwords >= 2) {
@@ -8598,11 +8413,11 @@ void QLens::process_commands(bool read_file)
 						update_parameter_list();
 				} else if (words[1]=="read") {
 					if (nwords != 3) Complain("One argument required for 'imgdata read' (filename)");
-					if (load_image_data(words[2])==false) Complain("unable to load image data");
+					if (load_point_image_data(words[2])==false) Complain("unable to load image data");
 					update_parameter_list();
 				} else if (words[1]=="write") {
 					if (nwords != 3) Complain("One argument required for 'imgdata write' (filename)");
-					write_image_data(words[2]);
+					write_point_image_data(words[2]);
 				} else if (words[1]=="clear") {
 					if (nwords==2) {
 						clear_image_data();
@@ -8617,12 +8432,12 @@ void QLens::process_commands(bool read_file)
 							imgmaxstream << imgmaxstring;
 							if (!(imgminstream >> min_imgnumber)) Complain("invalid min image dataset number");
 							if (!(imgmaxstream >> max_imgnumber)) Complain("invalid max image dataset number");
-							if (max_imgnumber >= n_sourcepts_fit) Complain("specified max image dataset number exceeds number of data sets in list");
+							if (max_imgnumber >= n_ptsrc) Complain("specified max image dataset number exceeds number of data sets in list");
 							if ((min_imgnumber > max_imgnumber) or (min_imgnumber < 0)) Complain("specified min image dataset number cannot exceed max image dataset number");
-							for (int i=max_imgnumber; i >= min_imgnumber; i--) remove_image_data(i);
+							for (int i=max_imgnumber; i >= min_imgnumber; i--) remove_point_source(i);
 						} else {
 							if (!(ws[2] >> imgset_number)) Complain("invalid image dataset number");
-							remove_image_data(imgset_number);
+							remove_point_source(imgset_number);
 						}
 					} else Complain("'imgdata clear' command requires either one or zero arguments");
 				} else if (words[1]=="plot") {
@@ -8645,18 +8460,18 @@ void QLens::process_commands(bool read_file)
 					if (nwords==2) show_all = true;
 					else if (nwords==3) {
 						if (!(ws[2] >> dataset)) Complain("invalid image dataset");
-						if (dataset >= n_sourcepts_fit) Complain("specified image dataset has not been loaded");
+						if (dataset >= n_ptsrc) Complain("specified image dataset has not been loaded");
 					} else Complain("invalid number of arguments to 'imgdata plot'");
 					ofstream imgout;
 					open_output_file(imgout,"imgdat.dat");
 					if (show_all) {
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							imgout << "\"Dataset " << i << " (z_{s}=" << specific_ptsrc_redshifts[i] << ")\"" << endl;
+						for (int i=0; i < n_ptsrc; i++) {
+							imgout << "\"Dataset " << i << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[i]] << ")\"" << endl;
 							image_data[i].write_to_file(imgout);
 							imgout << endl << endl;
 						}
 					} else {
-						imgout << "\"Dataset " << dataset << " (z_{s}=" << specific_ptsrc_redshifts[dataset] << ")\"" << endl;
+						imgout << "\"Dataset " << dataset << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[dataset]] << ")\"" << endl;
 						image_data[dataset].write_to_file(imgout);
 						imgout << endl << endl;
 					}
@@ -8676,27 +8491,6 @@ void QLens::process_commands(bool read_file)
 						}
 						run_plotter_range("imgpixel_imgdat",range);
 					}
-				/*
-				} else if (words[1]=="add_from_centroid") {
-					if (nwords != 6) Complain("four arguments are required for 'imgdata add_from_centroid' (xmin,xmax,ymin,ymax)");
-					double xmin,xmax,ymin,ymax;
-					if (!(ws[2] >> xmin)) Complain("invalid minimum x-coordinate");
-					if (!(ws[3] >> xmax)) Complain("invalid maximum x-coordinate");
-					if (!(ws[4] >> ymin)) Complain("invalid minimum y-coordinate");
-					if (!(ws[5] >> ymax)) Complain("invalid maximum y-coordinate");
-					if (image_pixel_data==NULL) Complain("cannot add centroid image; image pixel data has not been loaded");
-					if (image_data==NULL) {
-						if (n_sourcepts_fit != 0) die("number of source points should be zero if image_data has not been allocated");
-						n_sourcepts_fit = 1;
-						lensvector zero; zero[0]=0; zero[1]=0;
-						sourcepts_fit.push_back(zero);
-						vary_sourcepts_x.push_back(true);
-						vary_sourcepts_y.push_back(true);
-						image_data = new ImageData[1];
-						update_parameter_list();
-					}
-					image_pixel_data->add_point_image_from_centroid(image_data+n_sourcepts_fit-1,xmin,xmax,ymin,ymax,sb_threshold,background_pixel_noise); // this assumes centroids are added to last dataset
-				*/
 				} else if (words[1]=="use_in_chisq") {
 					if ((nwords < 4) or (nwords > 5)) Complain("Two or three arguments are required for 'imgdata use_in_chisq' (imageset, image_number, on/off)");
 					if (image_data == NULL) Complain("no image data has been loaded");
@@ -8704,7 +8498,7 @@ void QLens::process_commands(bool read_file)
 					bool use_in_chisq;
 					if (!(ws[2] >> n_imgset)) Complain("invalid image set number");
 					if (!(ws[3] >> n_img)) Complain("invalid image number");
-					if (n_imgset >= n_sourcepts_fit) Complain("image set number has not been loaded");
+					if (n_imgset >= n_ptsrc) Complain("image set number has not been loaded");
 					if (nwords == 5) {
 						if (!(ws[4] >> setword)) Complain("invalid argument to 'use_in_chisq' command; must specify 'on' or 'off'");
 						set_switch(use_in_chisq,setword);
@@ -10349,7 +10143,7 @@ void QLens::process_commands(bool read_file)
 				bool show_all_pixels = false;
 				bool show_extended_mask = false;
 				bool show_foreground_mask = false;
-				bool exclude_ptimgs = false; // by default, we include point images if n_sourcepts_fit > 0
+				bool exclude_ptimgs = false; // by default, we include point images if n_ptsrc > 0
 				if (include_extended_mask_in_inversion) show_extended_mask = true; // no reason not to show emask if we're including it in the inversion
 				bool plot_fits = false;
 				bool omit_source_plot = true; // changed this to false because it's annoying to have the source plot come out when you really just want e.g. residuals.
@@ -10456,7 +10250,7 @@ void QLens::process_commands(bool read_file)
 				if ((replot) and (plot_fits)) Complain("Cannot use 'replot' option when plotting to fits files");
 
 				if (nlens==0) {
-					if ((n_sb==0) and (n_sourcepts_fit==0)) {
+					if ((n_sb==0) and (n_ptsrc==0)) {
 						Complain("must specify lens/source model first");
 					} else {
 						bool all_unlensed = true;
@@ -10861,7 +10655,7 @@ void QLens::process_commands(bool read_file)
 					optimize_regparam = true;
 				}
 				if (nlens==0) {
-					if ((n_sb==0) and (n_sourcepts_fit==0)) {
+					if ((n_sb==0) and (n_ptsrc==0)) {
 						Complain("must specify lens/source model first");
 					} else {
 						bool all_unlensed = true;
@@ -10870,8 +10664,8 @@ void QLens::process_commands(bool read_file)
 						}
 						if (!all_unlensed) Complain("background source objects have been defined, but no lens models have been defined");
 						all_unlensed = true;
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if (specific_ptsrc_redshifts[i] != lens_redshift) all_unlensed = false;
+						for (int i=0; i < n_ptsrc; i++) {
+							if (ptsrc_redshifts[ptsrc_redshift_idx[i]] != lens_redshift) all_unlensed = false;
 						}
 						if (!all_unlensed) Complain("background source points have been defined, but no lens models have been defined");
 					}
@@ -10892,7 +10686,7 @@ void QLens::process_commands(bool read_file)
 				if (source_fit_mode==Point_Source) Complain("cannot invert pixel image if source_mode is set to 'ptsource'");
 				if (use_saved_sbweights) Complain("cannot save sbweights if 'use_saved_sbweights' is also set to 'on'");
 				if (nlens==0) {
-					if ((n_sb==0) and (n_sourcepts_fit==0)) {
+					if ((n_sb==0) and (n_ptsrc==0)) {
 						Complain("must specify lens/source model first");
 					} else {
 						bool all_unlensed = true;
@@ -10901,8 +10695,8 @@ void QLens::process_commands(bool read_file)
 						}
 						if (!all_unlensed) Complain("background source objects have been defined, but no lens models have been defined");
 						all_unlensed = true;
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if (specific_ptsrc_redshifts[i] != lens_redshift) all_unlensed = false;
+						for (int i=0; i < n_ptsrc; i++) {
+							if (ptsrc_redshifts[ptsrc_redshift_idx[i]] != lens_redshift) all_unlensed = false;
 						}
 						if (!all_unlensed) Complain("background source points have been defined, but no lens models have been defined");
 					}
@@ -11567,7 +11361,40 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'analytic_bestfit_src' command; must specify 'on' or 'off'");
 				set_switch(use_analytic_bestfit_src,setword);
+				bool vary_source_coords = (use_analytic_bestfit_src) ? false : true;
+				// Automatically turn source coordinate parameters on/off accordingly
+				for (int i=0; i < n_ptsrc; i++) {
+					ptsrc_list[i]->update_specific_varyflag("xsrc",vary_source_coords);
+					ptsrc_list[i]->update_specific_varyflag("ysrc",vary_source_coords);
+				}
+				for (int i=0; i < n_ptsrc; i++) {
+					ptsrc_list[i]->update_active_params(mpi_id);
+				}
 				update_parameter_list();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="include_ptsrc_shift")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Allow shift parameters to correct the estimated source positions from analytic_bestfit_src: " << display_switch(include_ptsrc_shift) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'include_ptsrc_shift' command; must specify 'on' or 'off'");
+				bool old_setting = include_ptsrc_shift;
+				set_switch(include_ptsrc_shift,setword);
+				if (include_ptsrc_shift != old_setting) {
+					for (int i=0; i < n_ptsrc; i++) {
+						ptsrc_list[i]->update_active_params(mpi_id);
+					}
+					if ((include_ptsrc_shift==true) and (old_setting==false)) {
+						// Automatically turn source coordinate parameters on 
+						if (mpi_id==0) cout << "NOTE: Turning xshift, yshift vary flags on for all point sources" << endl;
+						for (int i=0; i < n_ptsrc; i++) {
+							ptsrc_list[i]->update_specific_varyflag("xshift",true);
+							ptsrc_list[i]->update_specific_varyflag("yshift",true);
+						}
+					}
+					update_parameter_list();
+				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="chisqmag")
@@ -11671,37 +11498,6 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'analytic_srcflux' command; must specify 'on' or 'off'");
 				set_switch(analytic_source_flux,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="srcflux")
-		{
-			double srcflux;
-			if (nwords == 2) {
-				if (!(ws[1] >> srcflux)) Complain("invalid source flux setting");
-				source_flux = srcflux;
-				if ((vary_srcflux) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
-					if (mpi_id==0) cout << "Limits for source flux:\n";
-					if (read_command(false)==false) return;
-					double smin,smax;
-					if (nwords != 2) Complain("Must specify two arguments for source flux limits: smin, smax");
-					if (!(ws[0] >> smin)) Complain("Invalid lower limit for source flux");
-					if (!(ws[1] >> smax)) Complain("Invalid upper limit for source flux");
-					if (smin > smax) Complain("lower limit cannot be greater than upper limit");
-					srcflux_lower_limit = smin;
-					srcflux_upper_limit = smax;
-				}
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "source flux = " << source_flux << endl;
-			} else Complain("must specify either zero or one argument (source flux)");
-		}
-		else if (words[0]=="vary_srcflux")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary source flux: " << display_switch(vary_srcflux) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcflux' command; must specify 'on' or 'off'");
-				set_switch(vary_srcflux,setword);
-				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="invert_imgflux")
@@ -12394,42 +12190,6 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("must specify one argument (firstlevel source pixel fraction)");
 		}
-		else if (words[0]=="srcpt_xshift")
-		{
-			double xsh, xsh_ll, xsh_ul;
- 			if (nwords == 4) {
- 				if (!(ws[1] >> xsh_ll)) Complain("invalid source srcpt_xshift lower limit");
- 				if (!(ws[2] >> xsh)) Complain("invalid source srcpt_xshift value");
- 				if (!(ws[3] >> xsh_ul)) Complain("invalid source srcpt_xshift upper limit");
- 				if ((xsh < xsh_ll) or (xsh > xsh_ul)) Complain("initial source srcpt_xshift should lie within specified prior limits");
- 				srcpt_xshift = xsh;
- 				srcpt_xshift_lower_limit = xsh_ll;
- 				srcpt_xshift_upper_limit = xsh_ul;
- 			} else if (nwords == 2) {
-				if (!(ws[1] >> xsh)) Complain("invalid srcpt_xshift");
-				srcpt_xshift = xsh;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "srcpt_xshift = " << srcpt_xshift << endl;
-			} else Complain("must specify one argument (srcpt_xshift)");
-		}
-		else if (words[0]=="srcpt_yshift")
-		{
-			double ysh, ysh_ll, ysh_ul;
- 			if (nwords == 4) {
- 				if (!(ws[1] >> ysh_ll)) Complain("invalid source srcpt_yshift lower limit");
- 				if (!(ws[2] >> ysh)) Complain("invalid source srcpt_yshift value");
- 				if (!(ws[3] >> ysh_ul)) Complain("invalid source srcpt_yshift upper limit");
- 				if ((ysh < ysh_ll) or (ysh > ysh_ul)) Complain("initial source srcpt_yshift should lie within specified prior limits");
- 				srcpt_yshift = ysh;
- 				srcpt_yshift_lower_limit = ysh_ll;
- 				srcpt_yshift_upper_limit = ysh_ul;
- 			} else if (nwords == 2) {
-				if (!(ws[1] >> ysh)) Complain("invalid srcpt_yshift");
-				srcpt_yshift = ysh;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "srcpt_yshift = " << srcpt_yshift << endl;
-			} else Complain("must specify one argument (srcpt_yshift)");
-		}
 		else if (words[0]=="srcgrid_scale")
 		{
 			double scale, scale_ll, scale_ul;
@@ -12487,26 +12247,6 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> ps)) Complain("invalid argument to 'data_pixel_size' command");
 				data_pixel_size = ps;
 			} else Complain("invalid number of arguments to 'data_pixel_size'");
-		}
-		else if (words[0]=="vary_srcpt_xshift")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary source point x-shift: " << display_switch(vary_srcpt_xshift) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcpt_xshift' command; must specify 'on' or 'off'");
-				set_switch(vary_srcpt_xshift,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="vary_srcpt_yshift")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary source point y-shift: " << display_switch(vary_srcpt_yshift) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcpt_yshift' command; must specify 'on' or 'off'");
-				set_switch(vary_srcpt_yshift,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="n_livepts")
 		{
@@ -13977,7 +13717,7 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Switch to Delaunay mode 0 for high S/N regions: " << display_switch(delaunay_high_sn_mode) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'delaunay_high_sn_mode' command; must specify 'on' or 'off'");
-				if ((!delaunay_high_sn_mode) and (setword=="on") and (n_sourcepts_fit > 0)) Complain("'delaunay_high_sn_mode' cannot be used if point sources are present, since the extended surface brightness cannot be obtained directly from the image data");
+				if ((!delaunay_high_sn_mode) and (setword=="on") and (n_ptsrc > 0)) Complain("'delaunay_high_sn_mode' cannot be used if point sources are present, since the extended surface brightness cannot be obtained directly from the image data");
 				set_switch(delaunay_high_sn_mode,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

@@ -167,6 +167,7 @@ void SourceParams::update_fit_parameters(const double* fitparams, int &index)
 				*(param[i]) = fitparams[index++];
 			}
 		}
+		update_meta_parameters(true);
 	}
 }
 
@@ -177,6 +178,7 @@ bool SourceParams::update_specific_parameter(const string name_in, const double&
 		if ((active_params[i]) and (paramnames[i]==name_in)) {
 			*(param[i]) = value;
 			found_match = true;
+			update_meta_parameters(false);
 			break;
 		}
 	}
@@ -353,6 +355,17 @@ bool SourceParams::get_specific_varyflag(const string name_in, bool& flag)
 	return found_match;
 }
 
+bool SourceParams::get_varyflags(boolvector& flags)
+{
+	flags.input(n_vary_params);
+	int index = 0;
+	for (int i=0; i < n_params; i++) {
+		if (active_params[i]) {
+			flags[index++] = vary_params[i];
+		}
+	}
+}
+
 bool SourceParams::get_limits(dvector& lower, dvector& upper, int &index)
 {
 	if (include_limits==false) return false;
@@ -425,6 +438,15 @@ PointSource::PointSource(QLens* lens_in) : SourceParams()
 	setup_parameters(true);
 }
 
+PointSource::PointSource(QLens* lens_in, const lensvector& sourcept, const double zsrc_in) : SourceParams()
+{
+	lens = lens_in;
+	setup_parameters(true);
+	zsrc = zsrc_in;
+	pos[0] = sourcept[0];
+	pos[1] = sourcept[1];
+}
+
 void PointSource::setup_parameters(const bool initial_setup)
 {
 	if (initial_setup) {
@@ -447,6 +469,9 @@ void PointSource::setup_parameters(const bool initial_setup)
 	}
 
 	int indx = 0;
+
+	include_shift = false;
+	if ((lens) and (lens->include_ptsrc_shift)) include_shift = true;
 
 	if (initial_setup) {
 		param[indx] = &pos[0];
@@ -479,6 +504,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
+		// NOTE! If you change the order of parameters, change update_meta_parameters() below because it refers to index 3 for zsrc!!
 		param[indx] = &zsrc;
 		paramnames[indx] = "zsrc"; latex_paramnames[indx] = "z"; latex_param_subscripts[indx] = "src";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
@@ -494,7 +520,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.01; scale_stepsize_by_param_value[indx] = false;
 	}
-	if ((lens) and (lens->use_analytic_bestfit_src)) {
+	if (include_shift) {
 		active_params[indx] = true; 
 		n_active_params++;
 	}
@@ -506,7 +532,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.01; scale_stepsize_by_param_value[indx] = false;
 	}
-	if ((lens) and (lens->use_analytic_bestfit_src)) {
+	if (include_shift) {
 		active_params[indx] = true; 
 		n_active_params++;
 	}
@@ -521,7 +547,23 @@ void PointSource::copy_ptsrc_data(PointSource* ptsrc_in)
 	zsrc=ptsrc_in->zsrc;
 	shift[0] = ptsrc_in->shift[0];
 	shift[1] = ptsrc_in->shift[1];
+	include_shift = ptsrc_in->include_shift;
 	copy_param_data(ptsrc_in);
+}
+
+void PointSource::update_meta_parameters(const bool varied_only_fitparams)
+{
+	// NOTE! This assumes zsrc is parameter 3. If you change the index for zsrc, change the index below accordingly!
+	if ((lens != NULL) and ((vary_params[3]) or (!varied_only_fitparams))) lens->update_ptsrc_redshift_data(); // just in case the source redshift was changed
+}
+
+void PointSource::set_vary_source_coords()
+{
+	// parameters 0 and 1 are the source position coordinates
+	if (!vary_params[0]) n_vary_params++;
+	vary_params[0] = true;
+	if (!vary_params[1]) n_vary_params++;
+	vary_params[1] = true;
 }
 
 void PointSource::copy_imageset(const lensvector& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in)
@@ -538,6 +580,16 @@ void PointSource::copy_imageset(const lensvector& pos_in, const double zsrc_in, 
 		images[i].mag = images_in[i].mag;
 		images[i].td = images_in[i].td;
 		images[i].parity = images_in[i].parity;
+	}
+}
+
+void PointSource::update_srcpos(const lensvector& srcpt)
+{
+	pos[0] = srcpt[0];
+	pos[1] = srcpt[1];
+	if (include_shift) {
+		pos[0] += shift[0];
+		pos[1] += shift[1];
 	}
 }
 
@@ -902,6 +954,11 @@ void SourcePixelGrid::copy_pixsrc_data(SourcePixelGrid* grid_in)
 	pixel_magnification_threshold = grid_in->pixel_magnification_threshold;
 	srcgrid_size_scale = grid_in->srcgrid_size_scale; // note, the source grid is scaled as xlength*(1+srcgrid_size_scale), etc.
 	copy_param_data(grid_in);
+}
+
+void SourcePixelGrid::update_meta_parameters(const bool varied_only_fitparams)
+{
+	return; // nothing meta to change
 }
 
 // ***NOTE: the following constructor should NOT be used because there are static variables (e.g. levels), so more than one source grid
@@ -4473,6 +4530,11 @@ void DelaunayGrid::copy_pixsrc_data(DelaunayGrid* grid_in)
 	kernel_correlation_length = grid_in->kernel_correlation_length;
 	matern_index = grid_in->matern_index;
 	copy_param_data(grid_in);
+}
+
+void DelaunayGrid::update_meta_parameters(const bool varied_only_fitparams)
+{
+	return; // nothing meta to change
 }
 
 void DelaunayGrid::find_pixel_magnifications()
@@ -11375,7 +11437,7 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 	sig = 1e30;
 	int npts=10000000, npts_old, iter=0;
 	//ofstream wtf("wtf.dat");
-	if ((verbal) and (lens->n_sourcepts_fit > 0) and ((lens->include_imgfluxes_in_inversion) or (lens->include_srcflux_in_inversion))) warn("estimated approx extended source size may be biased due to point source when 'invert_imgflux' is on");
+	if ((verbal) and (lens->n_ptsrc > 0) and ((lens->include_imgfluxes_in_inversion) or (lens->include_srcflux_in_inversion))) warn("estimated approx extended source size may be biased due to point source when 'invert_imgflux' is on");
 	xcavg = 0;
 	ycavg = 0;
 	do {
@@ -11393,7 +11455,7 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 				if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
 					if (pixel_in_mask==NULL) sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 					else sb = lens->image_pixel_data->surface_brightness[i][j] - foreground_surface_brightness[i][j];
-					if ((lens->n_sourcepts_fit > 0) and (!lens->include_imgfluxes_in_inversion) and (!lens->include_srcflux_in_inversion) and (lens->point_image_surface_brightness != NULL)) sb -= lens->point_image_surface_brightness[pixel_index[i][j]];
+					if ((lens->n_ptsrc > 0) and (!lens->include_imgfluxes_in_inversion) and (!lens->include_srcflux_in_inversion) and (lens->point_image_surface_brightness != NULL)) sb -= lens->point_image_surface_brightness[pixel_index[i][j]];
 					if (abs(sb) > 5*noise_map[i][j]) {
 						//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 						//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
@@ -13077,11 +13139,11 @@ bool QLens::assign_pixel_mappings(const int zsrc_i, const bool verbal)
 	image_pixel_grid->Lmatrix_src_npixels = source_npixels; // store the number of source pixels for each image pixel grid; useful later for cleaning up FFT convolution arrays
 	source_n_amps = source_npixels;
 	if (include_imgfluxes_in_inversion) {
-		for (int i=0; i < point_imgs.size(); i++) {
-			source_n_amps += point_imgs[i].size(); // in this case, source amplitudes include point image amplitudes as well as pixel values
+		for (int i=0; i < n_ptsrc; i++) {
+			source_n_amps += ptsrc_list[i]->images.size(); // in this case, source amplitudes include point image amplitudes as well as pixel values
 		}
 	} else if (include_srcflux_in_inversion) {
-		source_n_amps += point_imgs.size();
+		source_n_amps += n_ptsrc;
 	}
 
 	if (psf_supersampling) {
@@ -13282,10 +13344,10 @@ void QLens::initialize_pixel_matrices(const int zsrc_i, bool verbal)
 	Lmatrix = new double[Lmatrix_n_elements];
 	if (include_imgfluxes_in_inversion) {
 		int nimgs = 0;
-		for (int i=0; i < point_imgs.size(); i++) nimgs += point_imgs[i].size();
+		for (int i=0; i < n_ptsrc; i++) nimgs += ptsrc_list[i]->images.size();
 		Lmatrix_transpose_ptimg_amps.input(nimgs,image_npixels);
 	} else if (include_srcflux_in_inversion) {
-		Lmatrix_transpose_ptimg_amps.input(point_imgs.size(),image_npixels);
+		Lmatrix_transpose_ptimg_amps.input(n_ptsrc,image_npixels);
 	}
 
 	if ((mpi_id==0) and (verbal)) cout << "Creating Lmatrix...\n";
@@ -13315,11 +13377,11 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 	count_shapelet_npixels(zsrc_i);
 	source_n_amps = source_npixels;
 	if (include_imgfluxes_in_inversion) {
-		for (int i=0; i < point_imgs.size(); i++) {
-			source_n_amps += point_imgs[i].size(); // in this case, source amplitudes include point image amplitudes as well as pixel values
+		for (int i=0; i < n_ptsrc; i++) {
+			source_n_amps += ptsrc_list[i]->images.size(); // in this case, source amplitudes include point image amplitudes as well as pixel values
 		}
 	} else if (include_srcflux_in_inversion) {
-		source_n_amps += point_imgs.size();
+		source_n_amps += n_ptsrc;
 	}
 
 	point_image_surface_brightness = new double[image_npixels];
@@ -13349,10 +13411,10 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 	Lmatrix_dense = 0;
 	if (include_imgfluxes_in_inversion) {
 		int nimgs = 0;
-		for (int i=0; i < point_imgs.size(); i++) nimgs += point_imgs[i].size();
+		for (int i=0; i < n_ptsrc; i++) nimgs += ptsrc_list[i]->images.size();
 		Lmatrix_transpose_ptimg_amps.input(nimgs,image_npixels);
 	} else if (include_srcflux_in_inversion) {
-		Lmatrix_transpose_ptimg_amps.input(point_imgs.size(),image_npixels);
+		Lmatrix_transpose_ptimg_amps.input(n_ptsrc,image_npixels);
 	}
 
 	assign_Lmatrix_shapelets(zsrc_i,verbal);
@@ -13867,18 +13929,18 @@ void QLens::PSF_convolution_Lmatrix(const int zsrc_i, bool verbal)
 	if (include_imgfluxes_in_inversion) {
 		double *Lmatptr;
 		i=0;
-		for (j=0; j < point_imgs.size(); j++) {
-			for (k=0; k < point_imgs[j].size(); k++) {
+		for (j=0; j < n_ptsrc; j++) {
+			for (k=0; k < ptsrc_list[j]->images.size(); k++) {
 				Lmatptr = Lmatrix_transpose_ptimg_amps.subarray(i);
-				image_pixel_grid->generate_point_images(point_imgs[j], Lmatptr, false, -1, k);
+				image_pixel_grid->generate_point_images(ptsrc_list[j]->images, Lmatptr, false, -1, k);
 				i++;
 			}
 		}
 		int src_amp_i;
 		double *Lmatrix_transpose_line;
 		i=0;
-		for (j=0; j < point_imgs.size(); j++) {
-			for (k=0; k < point_imgs[j].size(); k++) {
+		for (j=0; j < n_ptsrc; j++) {
+			for (k=0; k < ptsrc_list[j]->images.size(); k++) {
 				src_amp_i = source_npixels + i;
 				Lmatrix_transpose_line = Lmatrix_transpose_ptimg_amps[i];
 				for (int img_index=0; img_index < image_npixels; img_index++) {
@@ -13894,13 +13956,13 @@ void QLens::PSF_convolution_Lmatrix(const int zsrc_i, bool verbal)
 		}
 	} else if (include_srcflux_in_inversion) {
 		double *Lmatptr;
-		for (j=0; j < point_imgs.size(); j++) {
+		for (j=0; j < n_ptsrc; j++) {
 			Lmatptr = Lmatrix_transpose_ptimg_amps.subarray(j);
-			image_pixel_grid->generate_point_images(point_imgs[j], Lmatptr, false, 1.0);
+			image_pixel_grid->generate_point_images(ptsrc_list[j]->images, Lmatptr, false, 1.0);
 		}
 		int src_amp_i;
 		double *Lmatrix_transpose_line;
-		for (j=0; j < point_imgs.size(); j++) {
+		for (j=0; j < n_ptsrc; j++) {
 			src_amp_i = source_npixels + j;
 			Lmatrix_transpose_line = Lmatrix_transpose_ptimg_amps[j];
 			for (int img_index=0; img_index < image_npixels; img_index++) {
@@ -14438,18 +14500,18 @@ void QLens::PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal)
 		int i,j,k;
 		double *Lmatptr;
 		i=0;
-		for (j=0; j < point_imgs.size(); j++) {
-			for (k=0; k < point_imgs[j].size(); k++) {
+		for (j=0; j < n_ptsrc; j++) {
+			for (k=0; k < ptsrc_list[j]->images.size(); k++) {
 				Lmatptr = Lmatrix_transpose_ptimg_amps.subarray(i);
-				image_pixel_grid->generate_point_images(point_imgs[j], Lmatptr, false, -1, k);
+				image_pixel_grid->generate_point_images(ptsrc_list[j]->images, Lmatptr, false, -1, k);
 				i++;
 			}
 		}
 		int src_amp_i;
 		double *Lmatrix_transpose_line;
 		i=0;
-		for (j=0; j < point_imgs.size(); j++) {
-			for (k=0; k < point_imgs[j].size(); k++) {
+		for (j=0; j < n_ptsrc; j++) {
+			for (k=0; k < ptsrc_list[j]->images.size(); k++) {
 				src_amp_i = source_npixels + i;
 				Lmatrix_transpose_line = Lmatrix_transpose_ptimg_amps[i];
 				for (int img_index=0; img_index < image_npixels; img_index++) {
@@ -14461,13 +14523,13 @@ void QLens::PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal)
 	} else if (include_srcflux_in_inversion) {
 		int j,k;
 		double *Lmatptr;
-		for (j=0; j < point_imgs.size(); j++) {
+		for (j=0; j < n_ptsrc; j++) {
 			Lmatptr = Lmatrix_transpose_ptimg_amps.subarray(j);
-			image_pixel_grid->generate_point_images(point_imgs[j], Lmatptr, false, 1.0);
+			image_pixel_grid->generate_point_images(ptsrc_list[j]->images, Lmatptr, false, 1.0);
 		}
 		int src_amp_i;
 		double *Lmatrix_transpose_line;
-		for (j=0; j < point_imgs.size(); j++) {
+		for (j=0; j < n_ptsrc; j++) {
 			src_amp_i = source_npixels + j;
 			Lmatrix_transpose_line = Lmatrix_transpose_ptimg_amps[j];
 			for (int img_index=0; img_index < image_npixels; img_index++) {
@@ -15116,7 +15178,7 @@ bool QLens::create_regularization_matrix(const int zsrc_i, const bool allow_lum_
 	bool covariance_kernel_regularization = false;
 	use_covariance_matrix = false; // if true, will use covariance matrix directly instead of Rmatrix
 	bool successful_Rmatrix = true;
-	if ((!find_covmatrix_inverse) and (n_sourcepts_fit > 0)) die("modeling point images is not currently compatible with 'find_cov_inverse off' setting"); // see notes in generate_Gmatrix function (this is where the problem is, I believe)...FIX LATER!!
+	if ((!find_covmatrix_inverse) and (n_ptsrc > 0)) die("modeling point images is not currently compatible with 'find_cov_inverse off' setting"); // see notes in generate_Gmatrix function (this is where the problem is, I believe)...FIX LATER!!
 	switch (reg_method) {
 		case Norm:
 			generate_Rmatrix_norm(); break;
@@ -15338,7 +15400,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 		pix_j = image_pixel_grid->active_image_pixel_j[i];
 		img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
 		sbcov = image_surface_brightness[i] - sbprofile_surface_brightness[img_index_fgmask];
-		if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_sourcepts_fit > 0)) sbcov -= point_image_surface_brightness[i];
+		if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_ptsrc > 0)) sbcov -= point_image_surface_brightness[i];
 		sbcov *= cov_inverse;
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
 			//Dvector[Lmatrix_index[j]] += Lmatrix[j]*(image_surface_brightness[i] - sbprofile_surface_brightness[i])/cov_inverse;
@@ -15758,7 +15820,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const bool verbal)
 				if ((zero_sb_extended_mask_prior) and (include_extended_mask_in_inversion) and (image_pixel_data->extended_mask[pix_i][pix_j]) and (!image_pixel_data->in_mask[pix_i][pix_j])) ; 
 				else {
 					sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
-					if (((vary_srcflux) and (!include_imgfluxes_in_inversion)) and (n_sourcepts_fit > 0)) sb_adj -= point_image_surface_brightness[j];
+					if (((vary_srcflux) and (!include_imgfluxes_in_inversion)) and (n_ptsrc > 0)) sb_adj -= point_image_surface_brightness[j];
 					Dvector[i] += Lmatrix_dense[j][i]*sb_adj*cov_inverse;
 					if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
 				}
@@ -15916,7 +15978,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 				if ((zero_sb_extended_mask_prior) and (include_extended_mask_in_inversion) and (image_pixel_data->extended_mask[assigned_mask[zsrc_i]][pix_i][pix_j]) and (!image_pixel_data->in_mask[assigned_mask[zsrc_i]][pix_i][pix_j])) ; 
 				else {
 					sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
-					if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_sourcepts_fit > 0)) sb_adj -= point_image_surface_brightness[j];
+					if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_ptsrc > 0)) sb_adj -= point_image_surface_brightness[j];
 					Dvector[i] += Lmatrix_dense[j][i]*sb_adj*covinv;
 					//if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
 				}
@@ -16247,7 +16309,7 @@ void QLens::setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatr
 		pix_j = image_pixel_grid->active_image_pixel_j[i];
 		img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
 		img_minus_sbprofile[i] = image_surface_brightness[i] - sbprofile_surface_brightness[img_index_fgmask];
-		if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_sourcepts_fit > 0)) img_minus_sbprofile[i] -= point_image_surface_brightness[i];
+		if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_ptsrc > 0)) img_minus_sbprofile[i] -= point_image_surface_brightness[i];
 	}
 
 	source_pixel_vector_minchisq = new double[source_n_amps];
@@ -16501,9 +16563,9 @@ void QLens::calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc
 	rc = srcgrid->distreg_rc;
 	if (auto_lumreg_center) {
 		if (lumreg_center_from_ptsource) {
-			if (n_sourcepts_fit==0) die("no source points have been defined");
-			xc = sourcepts_fit[0][0];
-			yc = sourcepts_fit[0][1];
+			if (n_ptsrc==0) die("no source points have been defined");
+			xc = ptsrc_list[0]->pos[0];
+			yc = ptsrc_list[0]->pos[1];
 		} else {
 			xc = xc_in;
 			yc = yc_in;
@@ -18122,17 +18184,17 @@ void QLens::update_source_amplitudes(const int zsrc_i, const bool verbal)
 	}
 	if (include_imgfluxes_in_inversion) {
 		index = source_npixels;
-		for (j=0; j < point_imgs.size(); j++) {
-			for (i=0; i < point_imgs[j].size(); i++) {
-				point_imgs[j][i].flux = source_pixel_vector[index++];
-				if ((mpi_id==0) and (verbal)) cout << "srcpt " << j << " (img " << i << "): flux=" << point_imgs[j][i].flux << endl;
+		for (j=0; j < n_ptsrc; j++) {
+			for (i=0; i < ptsrc_list[j]->images.size(); i++) {
+				ptsrc_list[j]->images[i].flux = source_pixel_vector[index++];
+				if ((mpi_id==0) and (verbal)) cout << "srcpt " << j << " (img " << i << "): flux=" << ptsrc_list[j]->images[i].flux << endl;
 			}
 		}
 	} else if (include_srcflux_in_inversion) {
 		index = source_npixels;
-		for (j=0; j < point_imgs.size(); j++) {
-			source_flux = source_pixel_vector[index++]; // need to have more than one srcflux parameter!!!!!!!! UPGRADE THIS
-			if ((mpi_id==0) and (verbal)) cout << "srcpt " << j << ": srcflux=" << source_flux << endl;
+		for (j=0; j < n_ptsrc; j++) {
+			ptsrc_list[j]->srcflux = source_pixel_vector[index++];
+			if ((mpi_id==0) and (verbal)) cout << "srcpt " << j << ": srcflux=" << ptsrc_list[j]->srcflux << endl;
 		}
 	}
 }
