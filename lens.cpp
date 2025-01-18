@@ -209,9 +209,7 @@ QLens::QLens() : UCMC()
 #endif
 
 	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
-	hubble = 0.7;
-	omega_matter = 0.3;
-	set_cosmology(omega_matter,0.04,hubble,2.215);
+	cosmo.set_cosmology(0.3,0.04,0.7,2.215); // defaults: omega_matter = 0.3, hubble = 0.7
 	lens_redshift = 0.5;
 	source_redshift = 2.0;
 	ellipticity_gradient = false;
@@ -236,14 +234,6 @@ QLens::QLens() : UCMC()
 	n_extended_src_redshifts = 0;
 	sbprofile_redshift_idx = NULL;
 	pixellated_src_redshift_idx = NULL;
-
-	vary_hubble_parameter = false;
-	hubble_lower_limit = 1e30; // These must be specified by user
-	hubble_upper_limit = 1e30; // These must be specified by user
-
-	vary_omega_matter_parameter = false;
-	omega_matter_lower_limit = 1e30; // These must be specified by user
-	omega_matter_upper_limit = 1e30; // These must be specified by user
 
 	vary_syserr_pos_parameter = false;
 	syserr_pos_lower_limit = 1e30; // These must be specified by user
@@ -607,11 +597,10 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	my_group = lens_in->my_group;
 #endif
 
-	hubble = lens_in->hubble;
-	omega_matter = lens_in->omega_matter;
 	syserr_pos = lens_in->syserr_pos;
 	wl_shear_factor = lens_in->wl_shear_factor;
-	set_cosmology(omega_matter,0.04,hubble,2.215);
+	cosmo.copy_cosmo_data(&lens_in->cosmo); 
+
 	lens_redshift = lens_in->lens_redshift;
 	source_redshift = lens_in->source_redshift;
 	ellipticity_gradient = lens_in->ellipticity_gradient;
@@ -636,14 +625,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	n_extended_src_redshifts = lens_in->n_extended_src_redshifts;
 	sbprofile_redshift_idx = NULL;
 	pixellated_src_redshift_idx = NULL;
-
-	vary_hubble_parameter = lens_in->vary_hubble_parameter;
-	hubble_lower_limit = lens_in->hubble_lower_limit; // These must be specified by user
-	hubble_upper_limit = lens_in->hubble_upper_limit; // These must be specified by user
-
-	vary_omega_matter_parameter = lens_in->vary_omega_matter_parameter;
-	omega_matter_lower_limit = lens_in->omega_matter_lower_limit; // These must be specified by user
-	omega_matter_upper_limit = lens_in->omega_matter_upper_limit; // These must be specified by user
 
 	vary_syserr_pos_parameter = lens_in->vary_syserr_pos_parameter;
 	syserr_pos_lower_limit = lens_in->syserr_pos_lower_limit; // These must be specified by user
@@ -1426,7 +1407,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 		new_lens_redshifts[znum] = zl;
 		new_zlens_group_lens_indx[znum] = new_zlens_group_lens_indx_col;
 		new_zlens_group_size[znum] = 1;
-		new_reference_zfactors[znum] = kappa_ratio(zl,source_redshift,reference_source_redshift);
+		new_reference_zfactors[znum] = cosmo.kappa_ratio(zl,source_redshift,reference_source_redshift);
 		for (i=znum; i < n_lens_redshifts; i++) {
 			new_lens_redshifts[i+1] = lens_redshifts[i];
 			new_zlens_group_lens_indx[i+1] = zlens_group_lens_indx[i];
@@ -1452,7 +1433,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 			for (i=1; i < n_lens_redshifts+1; i++) {
 				new_default_zsrc_beta_factors[i-1] = new double[i];
 				if (include_recursive_lensing) {
-					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo.cpp
+					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = cosmo.calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo.cpp
 				} else {
 					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = 0;
 				}
@@ -1477,7 +1458,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 				for (j=0; j < znum; j++) {
 					new_extsrc_zfactors[i][j] = extended_src_zfactors[i][j];
 				}
-				new_extsrc_zfactors[i][znum] = kappa_ratio(zl,extended_src_redshifts[i],reference_source_redshift);
+				new_extsrc_zfactors[i][znum] = cosmo.kappa_ratio(zl,extended_src_redshifts[i],reference_source_redshift);
 				for (j=znum; j < n_lens_redshifts; j++) {
 					new_extsrc_zfactors[i][j+1] = extended_src_zfactors[i][j];
 				}
@@ -1487,7 +1468,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 					for (j=1; j < n_lens_redshifts+1; j++) {
 						new_extsrc_beta_factors[i][j-1] = new double[j];
 						if (include_recursive_lensing) {
-							for (k=0; k < j; k++) new_extsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
+							for (k=0; k < j; k++) new_extsrc_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
 						} else {
 							for (k=0; k < j; k++) new_extsrc_beta_factors[i][j-1][k] = 0;
 						}
@@ -1524,7 +1505,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 				for (j=0; j < znum; j++) {
 					new_ptsrc_zfactors[i][j] = ptsrc_zfactors[i][j];
 				}
-				new_ptsrc_zfactors[i][znum] = kappa_ratio(zl,ptsrc_redshifts[i],reference_source_redshift);
+				new_ptsrc_zfactors[i][znum] = cosmo.kappa_ratio(zl,ptsrc_redshifts[i],reference_source_redshift);
 				for (j=znum; j < n_lens_redshifts; j++) {
 					new_ptsrc_zfactors[i][j+1] = ptsrc_zfactors[i][j];
 				}
@@ -1534,7 +1515,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 					for (j=1; j < n_lens_redshifts+1; j++) {
 						new_ptsrc_beta_factors[i][j-1] = new double[j];
 						if (include_recursive_lensing) {
-							for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+							for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
 						} else {
 							for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = 0;
 						}
@@ -1642,7 +1623,7 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 				for (i=1; i < n_lens_redshifts-1; i++) {
 					new_default_zsrc_beta_factors[i-1] = new double[i];
 					if (include_recursive_lensing) {
-						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo.cpp
+						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = cosmo.calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo.cpp
 					} else {
 						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = 0;
 					}
@@ -1695,7 +1676,7 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 						for (j=1; j < n_lens_redshifts-1; j++) {
 							new_beta_factors[i][j-1] = new double[j];
 							if (include_recursive_lensing) {
-								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
+								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
 							} else {
 								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 							}
@@ -1809,7 +1790,7 @@ int QLens::add_new_extended_src_redshift(const double zs, const int src_i, const
 			}
 			new_zfactors[znum] = new double[n_lens_redshifts];
 			for (j=0; j < n_lens_redshifts; j++) {
-				new_zfactors[znum][j] = kappa_ratio(lens_redshifts[j],zs,reference_source_redshift);
+				new_zfactors[znum][j] = cosmo.kappa_ratio(lens_redshifts[j],zs,reference_source_redshift);
 			}
 			for (i=znum; i < n_extended_src_redshifts; i++) {
 				new_zfactors[i+1] = new double[n_lens_redshifts];
@@ -1823,7 +1804,7 @@ int QLens::add_new_extended_src_redshift(const double zs, const int src_i, const
 					new_beta_factors[i][j-1] = new double[j];
 					if (include_recursive_lensing) {
 						// calculating all beta factors again, just to get it working quickly...fix it up later so it doesn't recalculate all of them over again
-						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
+						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
 					} else {
 						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 					}
@@ -1966,7 +1947,7 @@ void QLens::remove_old_extended_src_redshift(const int znum, const bool removing
 							for (j=1; j < n_lens_redshifts; j++) {
 								new_beta_factors[i][j-1] = new double[j];
 								if (include_recursive_lensing) {
-									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
+									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
 								} else {
 									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 								}
@@ -2056,7 +2037,7 @@ int QLens::add_new_ptsrc_redshift(const double zs, const int src_i)
 			}
 			new_zfactors[znum] = new double[n_lens_redshifts];
 			for (j=0; j < n_lens_redshifts; j++) {
-				new_zfactors[znum][j] = kappa_ratio(lens_redshifts[j],zs,reference_source_redshift);
+				new_zfactors[znum][j] = cosmo.kappa_ratio(lens_redshifts[j],zs,reference_source_redshift);
 			}
 			for (i=znum; i < n_ptsrc_redshifts; i++) {
 				new_zfactors[i+1] = new double[n_lens_redshifts];
@@ -2070,7 +2051,7 @@ int QLens::add_new_ptsrc_redshift(const double zs, const int src_i)
 					new_beta_factors[i][j-1] = new double[j];
 					if (include_recursive_lensing) {
 						// calculating all beta factors again, just to get it working quickly...fix it up later so it doesn't recalculate all of them over again
-						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
 					} else {
 						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 					}
@@ -2133,19 +2114,14 @@ void QLens::remove_old_ptsrc_redshift(const int znum)
 
 	if (remove_redshift) {
 		double *new_ptsrc_redshifts = new double[n_ptsrc_redshifts-1];
-		int *new_assigned_mask = new int[n_ptsrc_redshifts-1];
 		for (i=0; i < znum; i++) {
 			new_ptsrc_redshifts[i] = ptsrc_redshifts[i];
-			new_assigned_mask[i] = assigned_mask[i];
 		}
 		for (i=znum; i < n_ptsrc_redshifts-1; i++) {
 			new_ptsrc_redshifts[i] = ptsrc_redshifts[i+1];
-			new_assigned_mask[i] = assigned_mask[i+1];
 		}
 		if (ptsrc_redshifts != NULL) delete[] ptsrc_redshifts;
 		ptsrc_redshifts = new_ptsrc_redshifts;
-		if (assigned_mask != NULL) delete[] assigned_mask;
-		assigned_mask = new_assigned_mask;
 		
 		double **new_zfactors;
 		if (n_lens_redshifts > 0) {
@@ -2188,7 +2164,7 @@ void QLens::remove_old_ptsrc_redshift(const int znum)
 							for (j=1; j < n_lens_redshifts; j++) {
 								new_beta_factors[i][j-1] = new double[j];
 								if (include_recursive_lensing) {
-									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
 								} else {
 									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 								}
@@ -2244,7 +2220,7 @@ void QLens::print_mask_assignments()
 	}
 }
 
-void QLens::print_beta_matrices()
+void QLens::print_zfactors_and_beta_matrices()
 {
 	int i,j,k;
 	if (n_lens_redshifts > 1) {
@@ -2563,11 +2539,11 @@ void QLens::set_source_redshift(const double zsrc)
 		if (n_ptsrc_redshifts > 1) die("cannot have multiple point source redshifts and zsrc_scaling on--fix so this is forbidden");
 		if (n_ptsrc_redshifts==1) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				ptsrc_zfactors[0][j] = kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				ptsrc_zfactors[0][j] = cosmo.kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
 			}
 		}
 	} else {
-		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
+		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = cosmo.kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 	}
 	recalculate_beta_factors();
 	//reset_grid();
@@ -2579,12 +2555,19 @@ void QLens::set_reference_source_redshift(const double zsrc)
 	int i,j;
 	reference_source_redshift = zsrc;
 	if (auto_zsource_scaling==true) auto_zsource_scaling = false; // Now that zsrc_ref has been set explicitly, don't automatically change it if zsrc is changed
-	for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
+	for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = cosmo.kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 	reset_grid();
+	if (n_extended_src_redshifts > 0) {
+		for (i=0; i < n_extended_src_redshifts; i++) {
+			for (j=0; j < n_lens_redshifts; j++) {
+				extended_src_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],extended_src_redshifts[i],reference_source_redshift);
+			}
+		}
+	}
 	if (n_ptsrc_redshifts > 0) {
 		for (i=0; i < n_ptsrc_redshifts; i++) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				ptsrc_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
 			}
 		}
 	}
@@ -2596,7 +2579,7 @@ void QLens::recalculate_beta_factors()
 	if (n_lens_redshifts > 1) {
 		for (i=1; i < n_lens_redshifts; i++) {
 			if (include_recursive_lensing) {
-				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = cosmo.calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
 			} else {
 				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = 0;
 			}
@@ -2900,7 +2883,7 @@ void QLens::print_source_list(bool show_vary_params)
 
 void QLens::add_pixellated_source(const double zsrc)
 {
-	srcgrids = new SourceParams*[n_pixellated_src+1];
+	srcgrids = new ModelParams*[n_pixellated_src+1];
 	DelaunayGrid** newlist = new DelaunayGrid*[n_pixellated_src+1];
 	SourcePixelGrid** newlist2 = new SourcePixelGrid*[n_pixellated_src+1];
 	int* new_pixellated_src_redshift_idx = new int[n_pixellated_src+1];
@@ -2938,7 +2921,7 @@ void QLens::remove_pixellated_source(int src_number)
 	SourcePixelGrid** newlist2;
 	if (n_pixellated_src > 1) {
 		delete[] srcgrids;
-		srcgrids = new SourceParams*[n_pixellated_src-1];
+		srcgrids = new ModelParams*[n_pixellated_src-1];
 		newlist = new DelaunayGrid*[n_pixellated_src-1];
 		newlist2 = new SourcePixelGrid*[n_pixellated_src-1];
 	}
@@ -3796,7 +3779,7 @@ void QLens::plot_weak_lensing_shear_data(const bool include_model_shear, const s
 		y = weak_lensing_data.pos[i][1];
 		zsrc = weak_lensing_data.zsrc[i];
 		for (int i=0; i < n_lens_redshifts; i++) {
-			zfacs[i] = kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
+			zfacs[i] = cosmo.kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
 		}
 		shear1 = weak_lensing_data.reduced_shear1[i];
 		shear2 = weak_lensing_data.reduced_shear2[i];
@@ -3999,7 +3982,7 @@ void QLens::calculate_critical_curve_perturbation_radius(int lens_number, bool v
 	double zlsub, zlprim;
 	zlsub = lens_list[perturber_lens_number]->zlens;
 	zlprim = lens_list[0]->zlens;
-	double menc = avg_kappa*M_PI*SQR(rmax_numerical)*sigma_crit_kpc(zlsub,reference_source_redshift);
+	double menc = avg_kappa*M_PI*SQR(rmax_numerical)*cosmo.sigma_crit_kpc(zlsub,reference_source_redshift);
 
 	if (verbose) {
 		cout << "direction of maximum warping = " << radians_to_degrees(theta_shear) << endl;
@@ -4194,9 +4177,9 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 	//double ktilde_approx2 = 1 - alpha*(r_over_rc);
 		//double blergh2_approx = 1 - alpha*(delta_s_over_thetac + 2*r_over_rc);
 
-	double kpc_to_arcsec_sub = 206.264806/angular_diameter_distance(zlsub);
+	double kpc_to_arcsec_sub = 206.264806/cosmo.angular_diameter_distance(zlsub);
 	// the following quantities are scaled by 1/alpha
-	avg_sigma_enclosed = avg_kappa*sigma_crit_kpc(zlsub,reference_source_redshift);
+	avg_sigma_enclosed = avg_kappa*cosmo.sigma_crit_kpc(zlsub,reference_source_redshift);
 	mass_enclosed = avg_sigma_enclosed*M_PI*SQR(rmax_numerical/kpc_to_arcsec_sub);
 
 	double menc_scaled_to_primary_lensplane = 0;
@@ -4231,8 +4214,8 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 			kappa0_m = kappa_exclude(xm,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			shear_exclude(xm,shear_tot_m,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
-			double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
-			//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
+			double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
+			//double fac1 = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift));
 			//double fac2 = (1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
 			//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
 			menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
@@ -4257,7 +4240,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 			i1 = lens_redshift_idx[primary_lens_number];
 			i2 = lens_redshift_idx[perturber_lens_number];
 			double beta = default_zsrc_beta_factors[i2-1][i1];
-			double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
+			double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
 			menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
 			avgkap_scaled_to_primary_lensplane = avg_kappa*(1-beta*(kappa0+shear_tot));
 
@@ -4269,7 +4252,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 			//cout << "blergh=" << blergh2 << " approx=" << blergh2_approx << " better_approx=" << blergh2_approx0 << endl;
 		}
 	} else {
-		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z);
+		double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z);
 		menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
 		avgkap_scaled_to_primary_lensplane = avg_kappa;
 	}
@@ -4367,7 +4350,7 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 
 	double avg_kappa = reference_zfactors[lens_redshift_idx[lens_number]]*lens_list[lens_number]->kappa_avg_r(r);
 
-	double avg_sigma_enclosed = avg_kappa*sigma_crit_arcsec(zlsub,reference_source_redshift);
+	double avg_sigma_enclosed = avg_kappa*cosmo.sigma_crit_arcsec(zlsub,reference_source_redshift);
 	double mass_enclosed = avg_sigma_enclosed*M_PI*SQR(r0);
 
 	menc_scaled = 0;
@@ -4400,8 +4383,8 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 			kappa0_m = kappa_exclude(xm,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			shear_exclude(xm,shear_tot_m,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
-			double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(r0/r)*(1 - beta*(kappa0 + shear_tot + r0*k0deriv));
-			//double fac1 = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
+			double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(r0/r)*(1 - beta*(kappa0 + shear_tot + r0*k0deriv));
+			//double fac1 = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift));
 			//double fac2 = (1 - beta*(kappa0 + shear_tot + r0*k0deriv));
 			//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
 			menc_scaled = mass_enclosed*mass_scale_factor;
@@ -4417,12 +4400,12 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 			i1 = lens_redshift_idx[primary_lens_number];
 			i2 = lens_redshift_idx[lens_number];
 			double beta = default_zsrc_beta_factors[i2-1][i1];
-			double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
+			double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
 			menc_scaled = mass_enclosed*mass_scale_factor;
 			avgkap_scaled = avg_kappa*(1-beta*(kappa0+shear_tot));
 		}
 	} else {
-		double mass_scale_factor = (sigma_crit_kpc(zlprim,reference_source_redshift) / sigma_crit_kpc(zlsub,reference_source_redshift));
+		double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift));
 		menc_scaled = mass_enclosed*mass_scale_factor;
 		avgkap_scaled = avg_kappa;
 	}
@@ -4851,8 +4834,8 @@ void QLens::plot_total_kappa(double rmin, double rmax, int steps, const char *kn
 	if (kdname != NULL) kdout.open(kdname);
 	if (use_scientific_notation) kout << setiosflags(ios::scientific);
 	if (use_scientific_notation) kdout << setiosflags(ios::scientific);
-	double arcsec_to_kpc = angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
-	double sigma_cr_kpc = sigma_crit_kpc(lens_redshift, reference_source_redshift);
+	double arcsec_to_kpc = cosmo.angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_kpc = cosmo.sigma_crit_kpc(lens_redshift, reference_source_redshift);
 	double kap, kap2;
 	double theta, thetastep;
 	int thetasteps = 200;
@@ -4912,7 +4895,7 @@ void QLens::plot_total_kappa(double rmin, double rmax, int steps, const char *kn
 double QLens::einstein_radius_single_lens(const double src_redshift, const int lensnum)
 {
 	double re_avg,re_major,zfac;
-	zfac = kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
+	zfac = cosmo.kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
 	lens_list[lensnum]->get_einstein_radius(re_major,re_avg,zfac);
 	return re_avg;
 }
@@ -4930,7 +4913,7 @@ double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 	double z, r_arcsec = r;
 	if (lensnum==-1) z = lens_list[primary_lens_number]->get_redshift();
 	else z = lens_list[lensnum]->get_redshift();
-	if (use_kpc) r_arcsec *= 206.264806/angular_diameter_distance(z);
+	if (use_kpc) r_arcsec *= 206.264806/cosmo.angular_diameter_distance(z);
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
@@ -4964,7 +4947,7 @@ double QLens::total_dkappa(const double r, const int lensnum, const bool use_kpc
 	double z, r_arcsec = r;
 	if (lensnum==-1) z = lens_list[primary_lens_number]->get_redshift();
 	else z = lens_list[lensnum]->get_redshift();
-	if (use_kpc) r_arcsec *= 206.264806/angular_diameter_distance(z);
+	if (use_kpc) r_arcsec *= 206.264806/cosmo.angular_diameter_distance(z);
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
@@ -4998,8 +4981,8 @@ void QLens::plot_mass_profile(double rmin, double rmax, int rpts, const char *ma
 	int i;
 	ofstream mout(massname);
 	if (use_scientific_notation) mout << setiosflags(ios::scientific);
-	double arcsec_to_kpc = angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
-	double sigma_cr_arcsec = sigma_crit_arcsec(lens_redshift, reference_source_redshift);
+	double arcsec_to_kpc = cosmo.angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_arcsec = cosmo.sigma_crit_arcsec(lens_redshift, reference_source_redshift);
 	mout << "#radius(arcsec) mass(m_solar) radius(kpc)\n";
 	for (i=0, r=rmin; i < rpts; i++, r *= rstep) {
 		kavg = 0;
@@ -5035,8 +5018,8 @@ void QLens::plot_total_sbprofile(double rmin, double rmax, int steps, const char
 	ofstream sbout;
 	open_output_file(sbout,sbname);
 	if (use_scientific_notation) sbout << setiosflags(ios::scientific);
-	double arcsec_to_kpc = angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
-	double sigma_cr_kpc = sigma_crit_kpc(lens_redshift, reference_source_redshift);
+	double arcsec_to_kpc = cosmo.angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_kpc = cosmo.sigma_crit_kpc(lens_redshift, reference_source_redshift);
 	double sb;
 	double theta, thetastep;
 	int thetasteps = 200;
@@ -5299,7 +5282,7 @@ bool QLens::add_fit_sourcept(const lensvector &sourcept, const double zsrc)
 	if (n_lens_redshifts > 0) {
 		new_zfactors[n_sourcepts_fit] = new double[n_lens_redshifts];
 		for (j=0; j < n_lens_redshifts; j++) {
-			new_zfactors[n_sourcepts_fit][j] = kappa_ratio(lens_redshifts[j],zsrc,reference_source_redshift);
+			new_zfactors[n_sourcepts_fit][j] = cosmo.kappa_ratio(lens_redshifts[j],zsrc,reference_source_redshift);
 		}
 	}
 	if (n_lens_redshifts > 1) {
@@ -5307,7 +5290,7 @@ bool QLens::add_fit_sourcept(const lensvector &sourcept, const double zsrc)
 		for (j=1; j < n_lens_redshifts; j++) {
 			new_beta_factors[n_sourcepts_fit][j-1] = new double[j];
 			if (include_recursive_lensing) {
-				for (k=0; k < j; k++) new_beta_factors[n_sourcepts_fit][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],zsrc);
+				for (k=0; k < j; k++) new_beta_factors[n_sourcepts_fit][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],zsrc);
 			} else {
 				for (k=0; k < j; k++) new_beta_factors[n_sourcepts_fit][j-1][k] = 0;
 			}
@@ -5497,7 +5480,7 @@ bool QLens::load_point_image_data(string filename)
 				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = 1.0;
 			}
 			else {
-				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
+				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = cosmo.kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 			}
 		}
 		// if source redshifts are given in the datafile, turn off auto scaling of zsrc_ref so user can experiment with different zsrc values if desired (without changing zsrc_ref)
@@ -5675,7 +5658,7 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 		time_delays_mod = new double[n_srcpts];
 		double min_td_obs, min_td_mod;
 		double pot;
-		td_factor = time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[ptsrc_redshift_idx[dataset_number]]);
+		td_factor = cosmo.time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[ptsrc_redshift_idx[dataset_number]]);
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (i=0; i < n_srcpts; i++) {
@@ -5807,7 +5790,7 @@ bool QLens::load_weak_lensing_data(string filename)
 	//if (n_lens_redshifts > 0) {
 		//for (i=0; i < n_sourcepts_fit; i++) {
 			//for (j=0; j < n_lens_redshifts; j++) {
-				//weak_lensing_data.specific_ptsrc_zfactors[i][j] = kappa_ratio(lens_redshifts[j],specific_ptsrc_redshifts[i],reference_source_redshift);
+				//weak_lensing_data.specific_ptsrc_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],specific_ptsrc_redshifts[i],reference_source_redshift);
 			//}
 		//}
 	//}
@@ -5818,7 +5801,7 @@ bool QLens::load_weak_lensing_data(string filename)
 			//for (j=1; j < n_lens_redshifts; j++) {
 				//specific_ptsrc_beta_factors[i][j-1] = new double[j];
 				//if (include_recursive_lensing) {
-					//for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
+					//for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
 				//} else {
 					//for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = 0;
 				//}
@@ -5835,7 +5818,7 @@ void QLens::add_simulated_weak_lensing_data(const string id, lensvector &sourcep
 	double *zfacs = new double[n_lens_redshifts];
 
 	for (int i=0; i < n_lens_redshifts; i++) {
-		zfacs[i] = kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
+		zfacs[i] = cosmo.kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
 	}
 	double shear1, shear2;
 	reduced_shear_components(sourcept,shear1,shear2,0,zfacs);
@@ -6561,7 +6544,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 
 	fitmodel->n_pixellated_src = n_pixellated_src;
 	if (n_pixellated_src > 0) {
-		fitmodel->srcgrids = new SourceParams*[n_pixellated_src];
+		fitmodel->srcgrids = new ModelParams*[n_pixellated_src];
 		fitmodel->delaunay_srcgrids = new DelaunayGrid*[n_pixellated_src];
 		fitmodel->cartesian_srcgrids = new SourcePixelGrid*[n_pixellated_src];
 		fitmodel->pixellated_src_redshift_idx = new int[n_pixellated_src];
@@ -6676,6 +6659,40 @@ bool QLens::update_lens_centers_from_pixsrc_coords()
 	return updated;
 }
 
+void QLens::update_zfactors_and_betafactors()
+{
+	// This must be done anytime the cosmology has changed
+	int i,j,k;
+	if (n_lens_redshifts > 0) {
+		for (j=0; j < n_lens_redshifts; j++) reference_zfactors[j] = cosmo.kappa_ratio(lens_redshifts[j],source_redshift,reference_source_redshift);
+		for (j=0; j < n_lens_redshifts-1; j++) {
+			for (k=0; k < j+1; k++) default_zsrc_beta_factors[j][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j+1],source_redshift);
+		}
+	}
+
+	if (n_extended_src_redshifts > 0) {
+		for (i=0; i < n_extended_src_redshifts; i++) {
+			if (n_lens_redshifts > 0) {
+				for (j=0; j < n_lens_redshifts; j++) extended_src_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],extended_src_redshifts[i],reference_source_redshift);
+				for (j=0; j < n_lens_redshifts-1; j++) {
+					for (k=0; k < j+1; k++) extended_src_beta_factors[i][j][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j+1],extended_src_redshifts[i]);
+				}
+			}
+		}
+	}
+
+	if (n_ptsrc_redshifts > 0) {
+		for (i=0; i < n_ptsrc_redshifts; i++) {
+			if (n_lens_redshifts > 0) {
+				for (j=0; j < n_lens_redshifts; j++) ptsrc_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				for (j=0; j < n_lens_redshifts-1; j++) {
+					for (k=0; k < j+1; k++) ptsrc_beta_factors[i][j][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j+1],ptsrc_redshifts[i]);
+				}
+			}
+		}
+	}
+}
+
 double QLens::update_model(const double* params)
 {
 	bool status = true;
@@ -6695,16 +6712,15 @@ double QLens::update_model(const double* params)
 		ptsrc_list[i]->update_fit_parameters(params,index);
 	}
 
-	if (vary_hubble_parameter) {
-		hubble = params[index++];
-		if (hubble < 0) status = false; // do not allow negative Hubble parameter
-		set_cosmology(omega_matter,0.04,hubble,2.215);
+	cosmo.update_fit_parameters(params,index);
+	update_zfactors_and_betafactors();
+	// *NOTE*: Maybe consider putting the cosmological parameters at the very FRONT of the parameter list? Then the cosmology is updated before updating the lenses
+	if (cosmo.get_n_vary_params() > 0) {
+		for (i=0; i < nlens; i++) {
+			if ((!lens_list[i]->at_least_one_param_anchored) and (!lens_list[i]->anchor_special_parameter)) lens_list[i]->update_meta_parameters(); // if the cosmology has changed, update cosmology info and any parameters that depend on them (unless there are anchored parameters, in which case it will be done below)
+		}
 	}
-	if (vary_omega_matter_parameter) {
-		omega_matter = params[index++];
-		if (omega_matter < 0) status = false; // do not allow negative omega_matter parameter
-		set_cosmology(omega_matter,0.04,hubble,2.215);
-	}
+
 	if (vary_syserr_pos_parameter) {
 		syserr_pos = params[index++];
 		if (syserr_pos < 0) status = false; // do not allow negative syserr_pos parameter
@@ -6716,12 +6732,6 @@ double QLens::update_model(const double* params)
 	if ((ellipticity_gradient) and (contours_overlap)) {
 		log_penalty_prior += contour_overlap_log_penalty_prior;
 		//warn("contours overlap in ellipticity gradient model");
-	}
-	// *NOTE*: Maybe consider putting the cosmological parameters at the very FRONT of the parameter list? Then the cosmology is updated before updating the lenses
-	if ((vary_hubble_parameter) or (vary_omega_matter_parameter)) {
-		for (i=0; i < nlens; i++) {
-			if ((!lens_list[i]->at_least_one_param_anchored) and (!lens_list[i]->anchor_special_parameter)) lens_list[i]->update_meta_parameters(); // if the cosmology has changed, update cosmology info and any parameters that depend on them (unless there are anchored parameters, in which case it will be done below)
-		}
 	}
 	update_anchored_parameters_and_redshift_data();
 
@@ -7408,7 +7418,7 @@ double QLens::chisq_time_delays()
 	for (k=0, i=0; i < n_ptsrc; i++) {
 		specific_zfacs = ptsrc_zfactors[ptsrc_redshift_idx[i]];
 		specific_betafacs = ptsrc_beta_factors[ptsrc_redshift_idx[i]];
-		td_factor = time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[ptsrc_redshift_idx[i]]);
+		td_factor = cosmo.time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[ptsrc_redshift_idx[i]]);
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (j=0; j < image_data[i].n_images; j++) {
@@ -7566,7 +7576,7 @@ double QLens::chisq_weak_lensing()
 		#pragma omp for private(i,j,g1,g2) schedule(static) reduction(+:chisq)
 		for (i=0; i < nsrc; i++) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				zfacs[i][j] = kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
+				zfacs[i][j] = cosmo.kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
 			}
 			reduced_shear_components(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
 			chisq += SQR((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]) + SQR((wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i]);
@@ -7591,7 +7601,7 @@ bool QLens::output_weak_lensing_chivals(string filename)
 	}
 	for (i=0; i < nsrc; i++) {
 		for (j=0; j < n_lens_redshifts; j++) {
-			zfacs[i][j] = kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
+			zfacs[i][j] = cosmo.kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
 		}
 		reduced_shear_components(weak_lensing_data.pos[i],g1,g2,0,zfacs[i]);
 		chi1 = (wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i];
@@ -7635,9 +7645,8 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_stepsizes(stepsizes,index);
 	for (i=0; i < n_pixellated_src; i++) srcgrids[i]->get_auto_stepsizes(stepsizes,index);
 	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_stepsizes(stepsizes,index);
+	cosmo.get_auto_stepsizes(stepsizes,index);
 
-	if (vary_hubble_parameter) stepsizes[index++] = 0.1;
-	if (vary_omega_matter_parameter) stepsizes[index++] = 0.1;
 	if (vary_syserr_pos_parameter) stepsizes[index++] = 0.1;
 	if (vary_wl_shear_factor_parameter) stepsizes[index++] = 0.1;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes (%i vs %i)",index,n_fit_parameters);
@@ -7650,14 +7659,13 @@ void QLens::set_default_plimits()
 	dvector lower(n_fit_parameters), upper(n_fit_parameters);
 	int i, index=0;
 	for (i=0; i < n_fit_parameters; i++) use_penalty_limits[i] = false; // default
-	for (i=0; i < nlens; i++) {
-		lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	}
+
+	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	for (i=0; i < n_pixellated_src; i++) srcgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	if (vary_hubble_parameter) index++;
-	if (vary_omega_matter_parameter) index++;
+	cosmo.get_auto_ranges(use_penalty_limits,lower,upper,index);
+
 	if (vary_syserr_pos_parameter) index++;
 	if (vary_wl_shear_factor_parameter) index++;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default ranges (%i vs %i)",index,n_fit_parameters);
@@ -7678,22 +7686,14 @@ void QLens::get_n_fit_parameters(int &nparams)
 	nparams += pixsrc_fit_parameters;
 	for (int i=0; i < n_ptsrc; i++) ptsrc_fit_parameters += ptsrc_list[i]->get_n_vary_params();
 	nparams += ptsrc_fit_parameters;
+	nparams += cosmo.get_n_vary_params();
 
-	if (vary_hubble_parameter) nparams++;
-	if (vary_omega_matter_parameter) nparams++;
 	if (vary_syserr_pos_parameter) nparams++;
 	if (vary_wl_shear_factor_parameter) nparams++;
 }
 
 bool QLens::setup_fit_parameters(const bool ignore_limits)
 {
-	//if (source_fit_mode==Point_Source) {
-		//if (image_data==NULL) { warn("cannot do fit; image data points have not been loaded"); return false; }
-		//if (sourcepts_fit==NULL) { warn("cannot do fit; initial source parameters have not been defined"); return false; }
-	//} else if (source_fit_mode==Cartesian_Source) {
-		//if (image_pixel_data==NULL) { warn("cannot do fit; image pixel data has not been loaded"); return false; }
-	//}
-
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
@@ -7733,9 +7733,8 @@ bool QLens::setup_fit_parameters(const bool ignore_limits)
 	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_fit_parameters(fitparams,index);
 	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + ptsrc_fit_parameters;
 	if (index != expected_index) die("Index didn't go through all the lens+source model fit parameters (%i vs %i)",index,expected_index);
+	cosmo.get_fit_parameters(fitparams,index);
 
-	if (vary_hubble_parameter) fitparams[index++] = hubble;
-	if (vary_omega_matter_parameter) fitparams[index++] = omega_matter;
 	if (vary_syserr_pos_parameter) fitparams[index++] = syserr_pos;
 	if (vary_wl_shear_factor_parameter) fitparams[index++] = wl_shear_factor;
 
@@ -7749,12 +7748,7 @@ bool QLens::setup_fit_parameters(const bool ignore_limits)
 	transformed_latex_parameter_names.resize(n_fit_parameters);
 	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_parameter_names.data(),latex_parameter_names.data(),transformed_latex_parameter_names.data());
 
-	//cout << "SETTING UP FIT PARAMS" << endl;
 	if ((!ignore_limits) and (fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) return setup_limits();
-	//if (include_limits) {
-		//cout << "GONNA SET LIMITS" << endl;
-		//return setup_limits();
-	//}
 	return true;
 }
 
@@ -7783,22 +7777,8 @@ bool QLens::setup_limits()
 	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + ptsrc_fit_parameters;
 	if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
 
-	// The way cosmology limits are handled here is really ugly. The limits should just be handled in the a cosmology object (instead of inheriting Cosmo). IMPLEMENT THIS!!!!!!!!!!!
+	if ((cosmo.get_n_vary_params() > 0) and (cosmo.get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for cosmology parameters"); return false; }
 
-	if (vary_hubble_parameter) {
-		lower_limits[index] = hubble_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = hubble_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if (vary_omega_matter_parameter) {
-		lower_limits[index] = omega_matter_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = omega_matter_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
 	if (vary_syserr_pos_parameter) {
 		lower_limits[index] = syserr_pos_lower_limit;
 		lower_limits_initial[index] = lower_limits[index];
@@ -7849,6 +7829,7 @@ void QLens::get_parameter_names()
 	for (i=0; i < n_ptsrc; i++) {
 		ptsrc_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
+	cosmo.get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 
 	// find any parameters with matching names and number them so they can be distinguished
 	int count, n_names;
@@ -7885,16 +7866,6 @@ void QLens::get_parameter_names()
 	}
 	delete[] new_parameter_names;
 
-	if (vary_hubble_parameter) {
-		fit_parameter_names.push_back("h0");
-		latex_parameter_names.push_back("H");
-		latex_parameter_subscripts.push_back("0");
-	}
-	if (vary_omega_matter_parameter) {
-		fit_parameter_names.push_back("omega_m");
-		latex_parameter_names.push_back("\\Omega");
-		latex_parameter_subscripts.push_back("M");
-	}
 	if (vary_syserr_pos_parameter) {
 		fit_parameter_names.push_back("syserr_pos");
 		latex_parameter_names.push_back("\\sigma");
@@ -8170,28 +8141,9 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 	}
 #endif
 
-	//fitmodel->print_lens_list(true);
-	//fitmodel->param_settings->print_penalty_limits();
 	double chisqval = 2 * (this->*LogLikePtr)(fitparams.array());
-	//for (;;) {
-		//chisqval = 2 * (this->*LogLikePtr)(fitparams.array());
-	//}
-	//chisqval = 2 * (this->*LogLikePtr)(fitparams.array());
-	//chisqval = 2 * (this->*LogLikePtr)(fitparams.array());
-	//chisqval = 2 * (this->*LogLikePtr)(fitparams.array());
-	//chisqval = 2 * (this->*LogLikePtr)(fitparams.array());
-
-	//fitmodel->lens_list[0]->update_specific_parameter("mstar",3.5e11);
-	//fitparams[0] = 11.67;
-	//chisqval = 2 * (this->*LogLikePtr)(fitparams.array());
-	//fitparams[0] = 11.4;
-	//chisqval = 2 * (this->*LogLikePtr)(fitparams.array());
 	if (einstein_radius_prior) fitmodel->get_einstein_radius_prior(true); // just to show what the Re prior is returning
 	if (!show_status) display_chisq_status = default_display_status;
-	//if ((mpi_id==0) and (show_status)) {
-		//if (display_chisq_status) cout << endl;
-		//cout << "2*loglike: " << chisqval << endl;
-	//}
 	if ((chisqval >= 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 #ifdef USE_OPENMP
 	if ((show_wtime) or (show_total_wtime)) {
@@ -8202,13 +8154,7 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 	display_chisq_status = false;
 	if (show_diagnostics) chisq_diagnostic = false;
 
-	if (show_lensinfo) {
-		//fitmodel->print_lens_list(false);
-		//fitmodel->print_source_list(false);
-		//double chisq, chisq0;
-		//chisq = fitmodel->invert_surface_brightness_map_from_data(chisq0,true);
-		//if (mpi_id==0) cout << "chisq0=" << chisq0 << ", chisq_pix=" << chisq << endl;
-
+	if ((mpi_id==0) and (show_lensinfo)) {
 		cout << "lensing info:" << endl;
 		print_lensing_info_at_point(0.05,0.07);
 		cout << "fitmodel lensing info:" << endl;
@@ -8563,22 +8509,12 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 			cout << "Point sources:" << endl;
 			fitmodel->print_point_source_list(false);
 		}
-		//double testchisq = 2*(this->*loglikeptr)(fitparams.array());
-		//cout << "Final -2*loglike=" << testchisq << endl;
+		// Print cosmology params?
 
-		//if (include_flux_chisq) {
-			//double *bestfit_flux = new double[n_ptsrc];
-			//fitmodel->find_analytic_srcflux(bestfit_flux);
-			//// UPDATE SOURCE FLUXES
-			//delete[] bestfit_flux;
-		//}
-
-		if (vary_hubble_parameter) cout << "h0 = " << fitmodel->hubble << endl;
-		if (vary_omega_matter_parameter) cout << "omega_m = " << fitmodel->omega_matter << endl;
 		if (vary_syserr_pos_parameter) cout << "syserr_pos = " << fitmodel->syserr_pos << endl;
 		if (vary_wl_shear_factor_parameter) cout << "wl_shearfac = " << fitmodel->wl_shear_factor << endl;
 
-		if ((vary_hubble_parameter) or (vary_omega_matter_parameter) or (vary_syserr_pos_parameter) or (vary_wl_shear_factor_parameter)) cout << endl;
+		if ((vary_syserr_pos_parameter) or (vary_wl_shear_factor_parameter)) cout << endl;
 		if (calculate_parameter_errors) {
 			if (fisher_matrix_is_nonsingular) {
 				cout << "Marginalized 1-sigma errors from Fisher matrix:\n";
@@ -9979,8 +9915,8 @@ bool QLens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, 
 	double kavglo1, kavglo2, kavghi1, kavghi2;
 	double mavglo1, mavglo2, mavghi1, mavghi2;
 	ofstream outfile(kappa_filename.c_str());
-	double sigma_cr_arcsec = sigma_crit_arcsec(zl, reference_source_redshift);
-	double arcsec_to_kpc = angular_diameter_distance(zl)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_arcsec = cosmo.sigma_crit_arcsec(zl, reference_source_redshift);
+	double arcsec_to_kpc = cosmo.angular_diameter_distance(zl)/(1e-3*(180/M_PI)*3600);
 	double rval_kpc;
 	for (i=0; i < nbins; i++) {
 		kaplo1 = find_percentile(n_points, 0.02275, tot, kappa_r_pts[i], weights[i]);
@@ -10988,20 +10924,20 @@ void QLens::reassign_sb_param_pointers_and_names()
 void QLens::print_lens_cosmology_info(const int lmin, const int lmax)
 {
 	if (lmax >= nlens) return;
-	double sigma_cr = sigma_crit_kpc(lens_redshift,reference_source_redshift);
-	double dlens = angular_diameter_distance(lens_redshift);
-	cout << "H0 = " << hubble*100 << " km/s/Mpc" << endl;
-	cout << "omega_m = " << omega_matter << endl;
+	double sigma_cr = cosmo.sigma_crit_kpc(lens_redshift,reference_source_redshift);
+	double dlens = cosmo.angular_diameter_distance(lens_redshift);
+	cout << "H0 = " << cosmo.get_hubble()*100 << " km/s/Mpc" << endl;
+	cout << "omega_m = " << cosmo.get_omega_m() << endl;
 	//cout << "omega_lambda = " << 1-omega_matter << endl;
 	cout << "zlens = " << lens_redshift << endl;
 	cout << "zsrc = " << source_redshift << endl;
 	cout << "D_lens: " << dlens << " Mpc  (angular diameter distance to lens plane)" << endl;
-	double rhocrit = 1e-9*critical_density(lens_redshift);
+	double rhocrit = 1e-9*cosmo.critical_density(lens_redshift);
 	cout << "rho_crit(zlens): " << rhocrit << " M_sol/kpc^3" << endl;
 	cout << "Sigma_crit(zlens,zsrc_ref): " << sigma_cr << " M_sol/kpc^2" << endl;
-	double kpc_to_arcsec = 206.264806/angular_diameter_distance(lens_redshift);
+	double kpc_to_arcsec = 206.264806/cosmo.angular_diameter_distance(lens_redshift);
 	cout << "1 arcsec = " << (1.0/kpc_to_arcsec) << " kpc" << endl;
-	cout << "sigma8 = " << rms_sigma8() << endl;
+	cout << "sigma8 = " << cosmo.rms_sigma8() << endl;
 	cout << endl;
 	if (nlens > 0) {
 		for (int i=lmin; i <= lmax; i++) {
@@ -11016,8 +10952,8 @@ bool QLens::output_mass_r(const double r, const int lensnum, const bool use_kpc)
 	if (lensnum >= nlens) return false;
 	double zlens, sigma_cr, kpc_to_arcsec, r_arcsec, r_kpc, mass_r_2d, rho_r_3d, mass_r_3d;
 	double zl = lens_list[lensnum]->zlens;
-	sigma_cr = sigma_crit_arcsec(zl,reference_source_redshift);
-	kpc_to_arcsec = 206.264806/angular_diameter_distance(zl);
+	sigma_cr = cosmo.sigma_crit_arcsec(zl,reference_source_redshift);
+	kpc_to_arcsec = 206.264806/cosmo.angular_diameter_distance(zl);
 	if (!use_kpc) {
 		r_kpc = r/kpc_to_arcsec;
 		r_arcsec = r;
@@ -11045,9 +10981,9 @@ double QLens::mass2d_r(const double r, const int lensnum, const bool use_kpc)
 {
 	double sigma_cr, mass_r_2d, z;
 	z = lens_list[lensnum]->zlens;
-	double r_arcsec = (use_kpc) ? r*206.264806/angular_diameter_distance(z) : r;
+	double r_arcsec = (use_kpc) ? r*206.264806/cosmo.angular_diameter_distance(z) : r;
 
-	sigma_cr = sigma_crit_arcsec(z,reference_source_redshift);
+	sigma_cr = cosmo.sigma_crit_arcsec(z,reference_source_redshift);
 	mass_r_2d = sigma_cr*lens_list[lensnum]->mass_rsq(r_arcsec*r_arcsec);
 	return mass_r_2d;
 }
@@ -11056,8 +10992,8 @@ double QLens::mass3d_r(const double r, const int lensnum, const bool use_kpc)
 {
 	double sigma_cr, mass_r_3d, z;
 	z = lens_list[lensnum]->zlens;
-	double r_arcsec = (use_kpc) ? r*206.264806/angular_diameter_distance(z) : r;
-	sigma_cr = sigma_crit_arcsec(z,reference_source_redshift);
+	double r_arcsec = (use_kpc) ? r*206.264806/cosmo.angular_diameter_distance(z) : r;
+	sigma_cr = cosmo.sigma_crit_arcsec(z,reference_source_redshift);
 	mass_r_3d = sigma_cr*lens_list[lensnum]->calculate_scaled_mass_3d(r_arcsec);
 	return mass_r_3d;
 }
@@ -11065,7 +11001,7 @@ double QLens::mass3d_r(const double r, const int lensnum, const bool use_kpc)
 double QLens::calculate_average_log_slope(const int lensnum, const double rmin, const double rmax, const bool use_kpc)
 {
 	double z = lens_list[lensnum]->zlens;
-	double kpc_to_arcsec = 206.264806/angular_diameter_distance(z);
+	double kpc_to_arcsec = 206.264806/cosmo.angular_diameter_distance(z);
 	double rmin_arcsec = rmin, rmax_arcsec = rmax;
 	if (use_kpc) {
 		rmin_arcsec *= kpc_to_arcsec;
@@ -11107,22 +11043,6 @@ void QLens::print_fit_model()
 	if (n_ptsrc > 0) {
 		cout << "Point source list:" << endl;
 		print_point_source_list(true);
-	}
-	if (vary_hubble_parameter) {
-		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-			cout << "Hubble parameter: " << hubble << endl;
-		} else {
-			if ((hubble_lower_limit==1e30) or (hubble_upper_limit==1e30)) cout << "\nHubble parameter: lower/upper limits not given (these must be set by 'h0' command before fit)\n";
-			else cout << "Hubble parameter: [" << hubble_lower_limit << ":" << hubble << ":" << hubble_upper_limit << "]\n";
-		}
-	}
-	if (vary_omega_matter_parameter) {
-		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-			cout << "omega_m parameter: " << omega_matter << endl;
-		} else {
-			if ((omega_matter_lower_limit==1e30) or (omega_matter_upper_limit==1e30)) cout << "\nomega_m parameter: lower/upper limits not given (these must be set by 'omega_m' command before fit)\n";
-			else cout << "omega_m parameter: [" << omega_matter_lower_limit << ":" << omega_matter << ":" << omega_matter_upper_limit << "]\n";
-		}
 	}
 	if (vary_syserr_pos_parameter) {
 		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {

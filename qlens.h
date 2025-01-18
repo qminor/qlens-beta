@@ -1,6 +1,7 @@
 #ifndef QLENS_H
 #define QLENS_H
 
+#include "modelparams.h"
 #include "sort.h"
 #include "rand.h"
 #include "brent.h"
@@ -80,7 +81,7 @@ enum DerivedParamType {
 };
 
 class QLens;			// Defined after class Grid
-class SourceParams;
+class ModelParams;
 class SourcePixelGrid;
 class DelaunayGrid;
 class ImagePixelGrid;
@@ -117,67 +118,7 @@ struct ImageDataSet {
 	}
 };
 
-class SourceParams
-{
-	// This is the base class inherited by pixellated source and point source objects (lens/source analytic profiles
-	// use separate functions for handling parameters)
-	public:
-	double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
-	int n_params, n_vary_params, n_active_params;
-	boolvector vary_params;
-	boolvector active_params; // this keeps track of which parameters are actually being used, based on the mode of regularization, pixellation etc.
-	std::string model_name;
-	std::vector<std::string> paramnames;
-	std::vector<std::string> latex_paramnames, latex_param_subscripts;
-	boolvector set_auto_penalty_limits;
-	dvector penalty_upper_limits, penalty_lower_limits;
-	dvector stepsizes;
-	boolvector scale_stepsize_by_param_value;
-	bool include_limits;
-	dvector lower_limits, upper_limits;
-	dvector lower_limits_initial, upper_limits_initial;
-
-	SourceParams() { param = NULL; }
-	void setup_parameter_arrays(const int npar);
-	virtual void setup_parameters(const bool initial_setup) {}  // don't need this, unless we want to work with SourceParams pointers in lens.cpp for parameter manipulation?
-	virtual void update_meta_parameters(const bool varied_only_fitparams) {}
-	void copy_param_data(SourceParams* params_in);
-	void update_active_params(const int id) {
-		setup_parameters(false);
-		// check: if any parameters are no longer active, but they were being varied, turn off their vary flags
-		for (int i=0; i < n_params; i++) {
-			if ((!active_params[i]) and (vary_params[i])) {
-				if (id==0) std::cout << "Parameter " << paramnames[i] << " is no longer active, so its vary flag is being turned off" << std::endl;
-				vary_params[i] = false;
-				n_vary_params--;
-			}
-		}
-	}
-
-	void update_fit_parameters(const double* fitparams, int &index);
-	bool update_specific_parameter(const std::string name_in, const double& value);
-	bool set_varyflags(const boolvector& vary_in);
-	bool update_specific_varyflag(const string name_in, const bool& vary_in);
-	void set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init);
-	void set_limits(const dvector& lower, const dvector& upper) { set_limits(lower,upper,lower,upper); }
-	bool set_limits_specific_parameter(const string name_in, const double& lower, const double& upper);
-	bool get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index);
-	bool get_limits(dvector& lower, dvector& upper, int &index);
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
-
-	void get_fit_parameters(dvector& fitparams, int &index);
-	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL);
-	bool get_specific_parameter(const std::string name_in, double& value);
-	bool get_specific_varyflag(const string name_in, bool& flag);
-	bool get_varyflags(boolvector& flags);
-	void print_parameters();
-	void print_vary_parameters();
-	void set_include_limits(bool inc) { include_limits = inc; }
-	int get_n_vary_params() { return n_vary_params; }
-};
-
-class PointSource : public SourceParams
+class PointSource : public ModelParams
 {
 	friend class QLens;
 	QLens *lens;
@@ -404,7 +345,7 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 
 // There is too much inheritance going on here. Nearly all of these can be changed to simply objects that are created within the QLens
 // class; it's more transparent to do so, and more object-oriented.
-class QLens : public Cosmology, public Sort, public Powell, public Simplex, public UCMC
+class QLens : public Brent, public Sort, public Powell, public Simplex, public UCMC
 {
 	private:
 	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
@@ -474,9 +415,11 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	int n_pixellated_src;
 	int* pixellated_src_redshift_idx;
-	SourceParams **srcgrids; // this is the base class for Delaunay and cartesian source grids
+	ModelParams **srcgrids; // this is the base class for Delaunay and cartesian source grids
 	DelaunayGrid **delaunay_srcgrids;
 	SourcePixelGrid **cartesian_srcgrids;
+
+	Cosmology cosmo;
 
 	int n_ptsrc;
 	PointSource **ptsrc_list;
@@ -518,10 +461,6 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 	bool user_changed_zsource; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	bool auto_zsource_scaling; // this automatically sets zsrc_ref (for kappa scaling) equal to the default source redshift being used
 
-	bool vary_hubble_parameter, vary_omega_matter_parameter;
-	double hubble, omega_matter;
-	double hubble_lower_limit, hubble_upper_limit;
-	double omega_matter_lower_limit, omega_matter_upper_limit;
 	bool ellipticity_gradient, contours_overlap;
 	double contour_overlap_log_penalty_prior;
 	bool vary_syserr_pos_parameter;
@@ -1190,11 +1129,12 @@ class QLens : public Cosmology, public Sort, public Powell, public Simplex, publ
 
 	void add_new_lens_entry(const double zl);
 	void set_primary_lens();
-	void print_beta_matrices();
+	void print_zfactors_and_beta_matrices();
 	void set_source_redshift(const double zsrc);
 	double get_source_redshift() { return source_redshift; }
 	void set_reference_source_redshift(const double zsrc);
 	double get_reference_source_redshift() { return reference_source_redshift; }
+	void update_zfactors_and_betafactors();
 	void recalculate_beta_factors();
 	void set_sci_notation(const bool scinot) {
 		use_scientific_notation = scinot;

@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include "modelparams.h"
 #include "vector.h"
 #include "spline.h"
 #include "romberg.h"
@@ -19,6 +20,8 @@ const double Cosmology::default_neutrino_mass = 0.06; // in eV; this is the mini
 const double Cosmology::min_tophat_mass = 1e2;
 const double Cosmology::max_tophat_mass = 1e18;
 const double Cosmology::default_sigma8 = 0.82; // Only used if normalizing by sigma8 rather than A_s
+
+
 
 void CosmologyParams::remove_comments(string& instring)
 {
@@ -103,6 +106,63 @@ bool CosmologyParams::load_params(string filename)
 
 	A_s = A_s_num * 1e-9;
 	return true;
+}
+
+/***************************************** Cosmology class *****************************************/
+
+void Cosmology::setup_parameters(const bool initial_setup)
+{
+	if (initial_setup) {
+		// default initial values
+		omega_m = 0.3;
+		hubble = 0.7;
+
+		setup_parameter_arrays(2);
+	} else {
+		// always reset the active parameter flags, since the active ones will be determined below
+		// NOTE: if (initial_setup==true), active params are reset in setup_parameter_arrays(..) above
+		n_active_params = 0;
+		for (int i=0; i < n_params; i++) {
+			active_params[i] = false; // default
+		}
+	}
+
+	int indx = 0;
+
+	if (initial_setup) {
+		param[indx] = &hubble;
+		paramnames[indx] = "hubble"; latex_paramnames[indx] = "H"; latex_param_subscripts[indx] = "0";
+		set_auto_penalty_limits[indx] = false;
+		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
+	}
+	active_params[indx] = true; 
+	n_active_params++;
+	indx++;
+
+	if (initial_setup) {
+		param[indx] = &omega_m;
+		paramnames[indx] = "omega_m"; latex_paramnames[indx] = "\\Omega"; latex_param_subscripts[indx] = "M";
+		set_auto_penalty_limits[indx] = false;
+		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
+	}
+	active_params[indx] = true; 
+	n_active_params++;
+	indx++;
+}
+
+void Cosmology::copy_cosmo_data(Cosmology* cosmo_in)
+{
+	copy_param_data(cosmo_in);
+	hubble = cosmo_in->hubble;
+	omega_m = cosmo_in->omega_m;
+	omega_b = cosmo_in->omega_b;
+	A_s = cosmo_in->A_s;
+	set_cosmology(omega_m,omega_b,hubble,A_s);
+}
+
+void Cosmology::update_meta_parameters(const bool varied_only_fitparams)
+{
+	set_cosmology(omega_m,omega_b,hubble,A_s);
 }
 
 int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double n_massive_neutrinos, double omega_lamb, double hub, double A_s_in, bool normalize_by_sigma8)

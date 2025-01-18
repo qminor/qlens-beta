@@ -140,7 +140,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void update_meta_parameters_and_pointers();
 	void update_angle_meta_params();
 	void update_ellipticity_meta_parameters();
-	void update_cosmology_meta_parameters();
+	void update_cosmology_meta_parameters(const bool force_update = false);
 	virtual void update_meta_parameters()
 	{
 		update_cosmology_meta_parameters();

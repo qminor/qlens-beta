@@ -86,8 +86,8 @@ void LensProfile::setup_cosmology(QLens* qlens_in, const double zlens_in, const 
 	zlens = zlens_in;
 	zlens_current = zlens_in;
 	zsrc_ref = zsrc_in;
-	sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
+	sigma_cr = qlens->cosmo.sigma_crit_arcsec(zlens,zsrc_ref);
+	kpc_to_arcsec = 206.264806/qlens->cosmo.angular_diameter_distance(zlens);
 	//update_meta_parameters(); // a few lens models have parameters that are defined by the cosmology (e.g. masses), so update these
 }
 
@@ -1193,11 +1193,11 @@ bool LensProfile::output_cosmology_info(const int lens_number)
 	mass_converged = calculate_total_scaled_mass(mtot);
 	if (mass_converged) {
 		rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
-		sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
+		sigma_cr = qlens->cosmo.sigma_crit_arcsec(zlens,zsrc_ref);
 		mtot *= sigma_cr;
 		if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 		cout << "total mass: " << mtot << " M_sol" << endl;
-		//double kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
+		//double kpc_to_arcsec = 206.264806/qlens->cosmo.angular_diameter_distance(zlens);
 		if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 		cout << endl;
 	}
@@ -1650,11 +1650,11 @@ void LensProfile::set_angle_radians(const double &theta_in)
 	}
 }
 
-void LensProfile::update_cosmology_meta_parameters()
+void LensProfile::update_cosmology_meta_parameters(const bool force_update)
 {
-	if ((qlens != NULL) and ((zlens != zlens_current) or (qlens->vary_hubble_parameter) or (qlens->vary_omega_matter_parameter))) {
-		sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
-		kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
+	if ((qlens != NULL) and ((force_update) or (zlens != zlens_current) or (qlens->cosmo.get_n_vary_params() > 0))) {
+		sigma_cr = qlens->cosmo.sigma_crit_arcsec(zlens,zsrc_ref);
+		kpc_to_arcsec = 206.264806/qlens->cosmo.angular_diameter_distance(zlens);
 		if (zlens != zlens_current) zlens_current = zlens;
 	}
 }

@@ -2,6 +2,7 @@
 #define PIXELGRID_H
 
 #include "qlens.h"
+#include "modelparams.h"
 #include "rand.h"
 #include "lensvec.h"
 #include "egrad.h" // contains IsophoteData structure used for recording isophote fits
@@ -137,7 +138,7 @@ class SourcePixel
 	~SourcePixel();
 };
 
-class SourcePixelGrid : public SourcePixel, public SourceParams
+class SourcePixelGrid : public SourcePixel, public ModelParams
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
@@ -213,7 +214,7 @@ class SourcePixelGrid : public SourcePixel, public SourceParams
 	std::ofstream pixel_n_image_file;
 };
 
-class DelaunayGrid : public SourceParams, public Sort
+class DelaunayGrid : public ModelParams, public Sort
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
