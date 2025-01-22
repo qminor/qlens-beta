@@ -37,10 +37,16 @@ void ModelParams::setup_parameter_arrays(const int npar)
 
 void ModelParams::copy_param_data(ModelParams* params_in)
 {
+	// REMEMBER: you must still run setup_parameters() in the inherited class to initialize and assign the pointers before running this!
+	// note, we do not copy n_params, nor resize most of the vectors, because it is assumed that this has been setup already in setup_parameters()
 	n_vary_params = params_in->n_vary_params;
+	paramnames = params_in->paramnames;
+	latex_paramnames = params_in->latex_paramnames;
+	latex_param_subscripts = params_in->latex_param_subscripts;
 	include_limits = params_in->include_limits;
 	vary_params.input(params_in->vary_params);
 	stepsizes.input(params_in->stepsizes);
+	scale_stepsize_by_param_value.input(params_in->scale_stepsize_by_param_value);
 	set_auto_penalty_limits.input(params_in->set_auto_penalty_limits);
 	penalty_lower_limits.input(params_in->penalty_lower_limits);
 	penalty_upper_limits.input(params_in->penalty_upper_limits);
@@ -75,6 +81,30 @@ bool ModelParams::update_specific_parameter(const string name_in, const double& 
 	}
 	return found_match;
 }
+
+void ModelParams::get_parameter_number(const string name_in, int& paramnum)
+{
+	paramnum = -1;
+	for (int i=0; i < n_params; i++) {
+		if ((active_params[i]) and (paramnames[i]==name_in)) {
+			paramnum = i;
+			break;
+		}
+	}
+}
+
+void ModelParams::get_parameter_vary_index(const string name_in, int& index)
+{
+	index = 0;
+	for (int i=0; i < n_params; i++) {
+		if ((active_params[i]) and (paramnames[i]==name_in)) {
+			break;
+		}
+		if (vary_params[i]) index++;
+	}
+}
+
+
 
 bool ModelParams::set_varyflags(const boolvector& vary_in)
 {
@@ -167,7 +197,7 @@ void ModelParams::get_auto_stepsizes(dvector& stepsizes_in, int &index)
 {
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]) {
-			if (scale_stepsize_by_param_value[index]) {
+			if (scale_stepsize_by_param_value[i]) {
 				stepsizes_in[index++] = stepsizes[i]*(*(param[i]));
 			} else {
 				stepsizes_in[index++] = stepsizes[i];
@@ -270,18 +300,19 @@ bool ModelParams::get_limits(dvector& lower, dvector& upper, int &index)
 	return true;
 }
 
-void ModelParams::print_parameters()
+void ModelParams::print_parameters(const bool show_only_varying_params)
 {
 	if (n_active_params == 0) cout << "no active parameters";
 	else {
 		int j=0;
 		for (int i=0; i < n_params; i++) {
-			// I think we need an active_params[] array that is separate from vary_params[]. Because even if we're not varying regularization, we still want to see its value.
 			if (active_params[i]) {
+				if ((!show_only_varying_params) or (vary_params[i])) {
 				cout << paramnames[i] << "=";
 				cout << *(param[i]);
 				if (j != n_active_params-1) cout << ", ";
 				j++;
+				}
 			}
 		}
 	}

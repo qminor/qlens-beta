@@ -2877,8 +2877,6 @@ void SourcePixel::generate_gmatrices()
 						if (cell[i][j]->neighbor[k]) {
 							if (cell[i][j]->neighbor[k]->cell != NULL) {
 								cell[i][j]->neighbor[k]->find_nearest_two_cells(cellptr1,cellptr2,k);
-								//cout << "cell 1: " << cellptr1->center_pt[0] << " " << cellptr1->center_pt[1] << endl;
-								//cout << "cell 2: " << cellptr2->center_pt[0] << " " << cellptr2->center_pt[1] << endl;
 								if ((cellptr1==NULL) or (cellptr2==NULL)) die("Hmm, not getting back two cells");
 								if (k < 2) {
 									// interpolating surface brightness along x-direction
@@ -2931,8 +2929,6 @@ void SourcePixel::generate_gmatrices()
 										if (k < 2) alpha = abs((cell[i][j]->center_pt[1] - cellptr1->center_pt[1]) / (cellptr2->center_pt[1] - cellptr1->center_pt[1]));
 										else alpha = abs((cell[i][j]->center_pt[0] - cellptr1->center_pt[0]) / (cellptr2->center_pt[0] - cellptr1->center_pt[0]));
 										beta = 1-alpha;
-										//cout << alpha << " " << beta << " " << k << " " << l << " " << ii << " " << jj << " " << i << " " << j << endl;
-										//cout << cell[i][j]->center_pt[0] << " " << cellptr1->center_pt[0] << " " << cellptr1->center_pt[1] << " " << cellptr2->center_pt[0] << " " << cellptr2->center_pt[1] << endl;
 										if (cellptr1->active_pixel) {
 											if (!cellptr2->active_pixel) beta=1; // just in case the other point is no good
 											lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-beta/dxfac);
@@ -2947,13 +2943,6 @@ void SourcePixel::generate_gmatrices()
 											lens->gmatrix_row_nn[k][cell[i][j]->active_index]++;
 											lens->gmatrix_nn[k]++;
 										}
-
-										//lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-beta);
-										//lens->gmatrix_index_rows[k][cell[i][j]->active_index].push_back(cellptr1->active_index);
-										//lens->gmatrix_rows[k][cell[i][j]->active_index].push_back(-alpha);
-										//lens->gmatrix_index_rows[k][cell[i][j]->active_index].push_back(cellptr2->active_index);
-										//lens->gmatrix_row_nn[k][cell[i][j]->active_index] += 2;
-										//lens->gmatrix_nn[k] += 2;
 									}
 								}
 							}
@@ -3424,17 +3413,9 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 	covmatrix_factored.input(ntot);
 	Rmatrix_packed.input(ntot);
 	if (source_fit_mode==Delaunay_Source) {
-		//if ((use_distance_weighted_regularization) or ((kernel_type==0) and (use_matern_scale_parameter))) {
 		if (use_distance_weighted_regularization) {
 			sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx,verbal);
 			if ((verbal) and (mpi_id==0)) cout << "approx source size=" << sig << ", src_xc_approx=" << xc_approx << " src_yc_approx=" << yc_approx << endl;
-			//if (use_matern_scale_parameter) {
-				//matern_approx_source_size = sig/3;
-				//wtime0 = omp_get_wtime();
-				//set_corrlength_for_given_matscale();
-				//wtime = omp_get_wtime() - wtime0;
-				//if (mpi_id==0) cout << "Wall time for calculating corrlength: " << wtime << endl;
-			//}
 			if (fix_lumreg_sig) sig = lumreg_sig;
 			calculate_distreg_srcpixel_weights(zsrc_i,xc_approx,yc_approx,sig,verbal);
 		}
@@ -3442,9 +3423,6 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 
 		double *wgtfac = ((use_distance_weighted_regularization) or (use_mag_weighted_regularization) or ((allow_lum_weighting) and (use_lum_weighted_regularization))) ? reg_weight_factor : NULL;
 		image_pixel_grid->delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel_type,wgtfac);
-		//if (((allow_lum_weighting) or (use_distance_weighted_regularization)) and (use_second_covariance_kernel)) {
-			//delaunay_srcgrid->generate_covariance_matrix(covmatrix_packed.array(),kernel2_correlation_length,kernel_type,matern_index,reg_weight_factor2,true,kernel2_amplitude_ratio); // uses exponential kernel
-		//}
 	}
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
 #ifdef USE_OPENMP

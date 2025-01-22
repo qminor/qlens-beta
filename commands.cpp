@@ -88,11 +88,13 @@ void QLens::process_commands(bool read_file)
 						"write -- save command history to text file\n"
 						"settings -- display all settings (type 'help settings' for list of settings)\n"
 						"lens -- add a lens from the list of lens models (type 'help lens' for list of models)\n"
+						"source -- add an analytic extended source from the list of models ('help source' for list)\n"
+						"ptsrc -- add a point source to the model\n"
+						"pixsrc -- add a pixellated source to the model\n"
 						"fit -- commands for lens model fitting (type 'help fit' for list of subcommands)\n"
 						"imgdata -- commands for loading point image data ('help imgdata' for list of subcommands)\n"
 						"wldata -- commands for loading weak lensing data ('help wldata' for list of subcommands)\n"
 						"sbmap -- commands for surface brightness pixel maps ('help sbmap' for list of subcommands)\n"
-						"source -- add a source from the list of surface brightness models ('help source' for list)\n"
 						"cosmology -- display cosmological information, including physical properties of lenses\n"
 						"lensinfo -- display kappa, deflection, magnification, shear, and potential at a specific point\n"
 						"mass_r -- display both projected (2D) mass and 3D mass enclosed within a given radius\n"
@@ -2177,9 +2179,7 @@ void QLens::process_commands(bool read_file)
 					cout << "chisqtol = " << chisq_tolerance << endl;
 					cout << "analytic_srcflux: " << display_switch(analytic_source_flux) << endl;
 					cout << "syserr_pos = " << syserr_pos << endl;
-					cout << "vary_syserr_pos: " << display_switch(vary_syserr_pos_parameter) << endl;
 					cout << "wl_shearfac = " << wl_shear_factor << endl;
-					cout << "vary_wl_shearfac: " << display_switch(vary_wl_shear_factor_parameter) << endl;
 					cout << endl;
 					cout << "\033[4mOptimization and Monte Carlo sampler settings\033[0m\n";
 					cout << "fit method: " << ((fitmethod==POWELL) ? "powell\n" : (fitmethod==SIMPLEX) ? "simplex\n" : (fitmethod==NESTED_SAMPLING) ? "nest\n" : (fitmethod==TWALK) ? "twalk" : (fitmethod==POLYCHORD) ? "polychord" : (fitmethod==MULTINEST) ? "multinest" : "Unknown fitmethod\n");
@@ -6673,10 +6673,15 @@ void QLens::process_commands(bool read_file)
 			vector<string> specific_update_params;
 			vector<double> specific_update_param_vals;
 			int pixsrc_number = -1;
+			bool entered_varyflags = false;
+			bool added_new_pixsrc = false;
+			bool prompt_for_flags = true;
+			int nparams_to_vary = nwords;
+			boolvector vary_flags;
 
 			if (words[0]=="fit") {
 				vary_parameters = true;
-				// now remove the "fit" word from the line so we can add lenses the same way,
+				// now remove the "fit" word from the line so we can add sources the same way,
 				// but with vary_parameters==true so we'll prompt for an extra line to vary parameters
 				stringstream* new_ws = new stringstream[nwords-1];
 				for (int i=0; i < nwords-1; i++) {
@@ -6742,6 +6747,7 @@ void QLens::process_commands(bool read_file)
 						if (srcgrids[pixsrc_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in pixellated source " << pixsrc_number);
 				}
 			} else if ((nwords > 1) and ((words[1]=="vary") or (words[1]=="changevary"))) {
+				vary_parameters = true;
 				bool set_vary_none = false;
 				bool set_vary_all = false;
 				if (words[nwords-1]=="none") {
@@ -6754,44 +6760,49 @@ void QLens::process_commands(bool read_file)
 				}
 				if ((nwords==2) and (set_vary_none)) {
 					for (int pixsrcnum=0; pixsrcnum < n_pixellated_src; pixsrcnum++) {
-						int npar;
-						npar = srcgrids[pixsrcnum]->n_active_params;
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = false;
+						nparams_to_vary = srcgrids[pixsrcnum]->n_active_params;
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
 						set_pixellated_src_vary_parameters(pixsrcnum,vary_flags);
 					}
+					entered_varyflags = true;
+					pixsrc_number = -1; // so it prompts for limits for all point sources
 				} else if ((nwords==2) and (set_vary_all)) {
 					for (int pixsrcnum=0; pixsrcnum < n_pixellated_src; pixsrcnum++) {
-						int npar;
-						npar = srcgrids[pixsrcnum]->n_active_params;
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = true;
+						nparams_to_vary = srcgrids[pixsrcnum]->n_active_params;
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = true;
 						set_pixellated_src_vary_parameters(pixsrcnum,vary_flags);
 					}
+					entered_varyflags = true;
+					pixsrc_number = -1; // so it prompts for limits for all point sources
+				} else if (nwords==2) {
+					pixsrc_number = -1; // so it prompts for limits for all point sources
 				} else {
 					if (nwords != 3) Complain("one argument required for 'pixsrc vary' (pixsrc number)");
-					int pixsrcnum;
-					if (!(ws[2] >> pixsrcnum)) Complain("Invalid pixsrc number to change vary parameters");
-					if (pixsrcnum >= n_pixellated_src) Complain("specified pixsrc number does not exist");
-					int npar;
-					npar = srcgrids[pixsrcnum]->n_active_params;
-
+					if (!(ws[2] >> pixsrc_number)) Complain("Invalid pixsrc number to change vary parameters");
+					if (pixsrc_number >= n_pixellated_src) Complain("specified pixsrc number does not exist");
+					nparams_to_vary = srcgrids[pixsrc_number]->n_active_params;
 					if ((!set_vary_none) and (!set_vary_all)) {
 						if (read_command(false)==false) return;
-						int nparams_to_vary = nwords;
-						boolvector vary_flags(nparams_to_vary);
+						int nparams_entered = nwords;
+						if (nparams_entered != nparams_to_vary) Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified ptsrc");
+						vary_flags.input(nparams_to_vary);
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
-						if (set_pixellated_src_vary_parameters(pixsrcnum,vary_flags)==false) {
-							Complain("number of vary flags does not match number of parameters (" << npar << ") for specified pixsrc");
+						if (set_pixellated_src_vary_parameters(pixsrc_number,vary_flags)==false) {
+							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified pixsrc");
 						}
+						entered_varyflags = true;
 					} else if (set_vary_none) {
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = false;
-						set_pixellated_src_vary_parameters(pixsrcnum,vary_flags);
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
+						set_pixellated_src_vary_parameters(pixsrc_number,vary_flags);
+						entered_varyflags = true;
 					} else if (set_vary_all) {
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = true;
-						set_pixellated_src_vary_parameters(pixsrcnum,vary_flags);
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = true;
+						set_pixellated_src_vary_parameters(pixsrc_number,vary_flags);
+						entered_varyflags = true;
 					}
 				}
 			} else if (nwords==1) {
@@ -6811,59 +6822,77 @@ void QLens::process_commands(bool read_file)
 				}
 				else if (words[1]=="add") {
 					add_pixellated_source(zsrc);
-					if (vary_parameters) {
-						if (read_command(false)==false) return;
-						int nparams_to_vary = nwords;
-						boolvector vary_flags(nparams_to_vary);
-						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
-						if (set_pixellated_src_vary_parameters(n_pixellated_src-1,vary_flags)==false) {
-							int npar;
-							npar = srcgrids[n_pixellated_src-1]->n_active_params;
-							Complain("number of vary flags does not match number of parameters (" << npar << ") for specified pixsrc");
-						}
-						if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST)) {
-							int n_active_params;
-							n_active_params = srcgrids[n_pixellated_src-1]->n_active_params;
-							int nvary=0;
-							for (int i=0; i < n_active_params; i++) {
-								if (vary_flags[i]==true) nvary++;
-							}
-							if (nvary != 0) {
-								dvector lower(nvary), upper(nvary), lower_initial(nvary), upper_initial(nvary);
-								vector<string> paramnames;
-								srcgrids[n_pixellated_src-1]->get_fit_parameter_names(paramnames);
-								int i,j;
-								for (i=0, j=0; j < n_active_params; j++) {
-									if (vary_flags[j]) {
-										if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
-										if (read_command(false)==false) { remove_pixellated_source(n_pixellated_src-1); Complain("parameter limits could not be read"); }
-										if (nwords >= 2) {
-											if (!(ws[0] >> lower[i])) { remove_pixellated_source(n_pixellated_src-1); Complain("invalid lower limit"); }
-											if (!(ws[1] >> upper[i])) { remove_pixellated_source(n_pixellated_src-1); Complain("invalid upper limit"); }
-											if (nwords == 2) {
-												lower_initial[i] = lower[i];
-												upper_initial[i] = upper[i];
-											} else if (nwords == 4) {
-												if (!(ws[2] >> lower_initial[i])) { remove_pixellated_source(n_pixellated_src-1); Complain("invalid initial lower limit"); }
-												if (!(ws[3] >> upper_initial[i])) { remove_pixellated_source(n_pixellated_src-1); Complain("invalid initial upper limit"); }
-											} else {
-												remove_pixellated_source(n_pixellated_src-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
-											}
-										} else {
-											remove_pixellated_source(n_pixellated_src-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
-										}
-										if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
-										if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
-										i++;
-									}
-								}
-								srcgrids[n_pixellated_src-1]->set_limits(lower,upper,lower_initial,upper_initial);
-							}
-						}
-					}
+					pixsrc_number = n_pixellated_src-1; // for setting vary flags (below)
+					added_new_pixsrc = true;
+
 				}
 				else Complain("unrecognized argument to 'pixsrc'");
 				update_parameter_list();
+			}
+			if (vary_parameters) {
+				int nvary;
+				int pixsrcnum, pixsrcnum_i, pixsrcnum_f;
+				bool print_line_for_each_source = false;
+				if (pixsrc_number < 0) {
+					// in this case, prompt for limits for all point sources
+					pixsrcnum_i = 0;
+					pixsrcnum_f = n_pixellated_src;
+					print_line_for_each_source = true;
+				} else {
+					pixsrcnum_i = pixsrc_number;
+					pixsrcnum_f = pixsrc_number+1;
+				}
+				for (pixsrcnum=pixsrcnum_i; pixsrcnum < pixsrcnum_f; pixsrcnum++) {
+					if ((prompt_for_flags) and (!entered_varyflags)) {
+						nparams_to_vary = srcgrids[pixsrcnum]->n_active_params;
+						if ((mpi_id==0) and (print_line_for_each_source)) cout << "Vary flags for pixellated source " << pixsrcnum << ":" << endl;
+						if (read_command(false)==false) return;
+						int nparams_entered = nwords;
+						if (nparams_entered != nparams_to_vary) Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified pixsrc");
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
+						if (set_pixellated_src_vary_parameters(pixsrcnum,vary_flags)==false) {
+							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified pixsrc");
+						}
+					}
+					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST)) {
+						nvary = srcgrids[pixsrcnum]->n_vary_params;
+						srcgrids[pixsrcnum]->get_varyflags(vary_flags);
+						if (nvary != 0) {
+							dvector lower(nvary), upper(nvary), lower_initial(nvary), upper_initial(nvary);
+							vector<string> paramnames;
+							srcgrids[pixsrcnum]->get_fit_parameter_names(paramnames);
+							int i,j;
+							for (i=0, j=0; j < nparams_to_vary; j++) {
+								if (vary_flags[j]) {
+									if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
+									if (read_command(false)==false) { if (added_new_pixsrc) remove_pixellated_source(pixsrcnum); Complain("parameter limits could not be read"); }
+									if (nwords >= 2) {
+										if (!(ws[0] >> lower[i])) { if (added_new_pixsrc) remove_pixellated_source(pixsrcnum); Complain("invalid lower limit"); }
+										if (!(ws[1] >> upper[i])) { if (added_new_pixsrc) remove_pixellated_source(pixsrcnum); Complain("invalid upper limit"); }
+										if (nwords == 2) {
+											lower_initial[i] = lower[i];
+											upper_initial[i] = upper[i];
+										} else if (nwords == 4) {
+											if (!(ws[2] >> lower_initial[i])) { if (added_new_pixsrc) remove_pixellated_source(pixsrcnum); Complain("invalid initial lower limit"); }
+											if (!(ws[3] >> upper_initial[i])) { if (added_new_pixsrc) remove_pixellated_source(pixsrcnum); Complain("invalid initial upper limit"); }
+										} else {
+											if (added_new_pixsrc) remove_pixellated_source(pixsrcnum);
+											Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+										}
+									} else {
+										if (added_new_pixsrc) remove_pixellated_source(pixsrcnum);
+										Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+									}
+									if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
+									if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
+									i++;
+								}
+							}
+							srcgrids[pixsrcnum]->set_limits(lower,upper,lower_initial,upper_initial);
+						}
+					}
+				}
 			}
 		}
 		else if ((words[0]=="ptsrc") or ((words[0]=="fit") and (nwords > 1) and ((words[1]=="ptsrc") or (words[1]=="sourcept")))) // "sourcept" is the old command, so included here for backwards compatibility
@@ -6883,7 +6912,7 @@ void QLens::process_commands(bool read_file)
 
 			if (words[0]=="fit") {
 				vary_parameters = true;
-				// now remove the "fit" word from the line so we can add lenses the same way,
+				// now remove the "fit" word from the line so we can add sources the same way,
 				// but with vary_parameters==true so we'll prompt for an extra line to vary parameters
 				stringstream* new_ws = new stringstream[nwords-1];
 				for (int i=0; i < nwords-1; i++) {
@@ -7213,9 +7242,8 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="sqexp_kernel") regularization_method = Squared_Exponential_Kernel;
 						else Complain("invalid argument to 'fit regularization' command; must specify valid regularization method");
 						for (int i=0; i < n_pixellated_src; i++) {
-							srcgrids[i]->update_active_params(mpi_id);
+							update_pixsrc_active_parameters(i);
 						}
-						update_parameter_list();
 					} else Complain("invalid number of arguments; can only specify regularization method");
 				}
 				else if (words[1]=="source_mode")
@@ -7238,7 +7266,7 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="shapelet") source_fit_mode = Shapelet_Source;
 						else Complain("invalid argument; must specify valid source mode (ptsource, cartesian, delaunay, sbprofile, shapelet)");
 						for (int i=0; i < n_pixellated_src; i++) {
-							srcgrids[i]->update_active_params(mpi_id);
+							update_pixsrc_active_parameters(i);
 						}
 						update_parameter_list();
 
@@ -11365,11 +11393,11 @@ void QLens::process_commands(bool read_file)
 				bool vary_source_coords = (use_analytic_bestfit_src) ? false : true;
 				// Automatically turn source coordinate parameters on/off accordingly
 				for (int i=0; i < n_ptsrc; i++) {
-					ptsrc_list[i]->update_specific_varyflag("xsrc",vary_source_coords);
-					ptsrc_list[i]->update_specific_varyflag("ysrc",vary_source_coords);
+					update_ptsrc_varyflag(i,"xsrc",vary_source_coords);
+					update_ptsrc_varyflag(i,"ysrc",vary_source_coords);
 				}
 				for (int i=0; i < n_ptsrc; i++) {
-					ptsrc_list[i]->update_active_params(mpi_id);
+					update_ptsrc_active_parameters(i);
 				}
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -11384,14 +11412,14 @@ void QLens::process_commands(bool read_file)
 				set_switch(include_ptsrc_shift,setword);
 				if (include_ptsrc_shift != old_setting) {
 					for (int i=0; i < n_ptsrc; i++) {
-						ptsrc_list[i]->update_active_params(mpi_id);
+						update_ptsrc_active_parameters(i);
 					}
 					if ((include_ptsrc_shift==true) and (old_setting==false)) {
 						// Automatically turn source coordinate parameters on 
 						if (mpi_id==0) cout << "NOTE: Turning xshift, yshift vary flags on for all point sources" << endl;
 						for (int i=0; i < n_ptsrc; i++) {
-							ptsrc_list[i]->update_specific_varyflag("xshift",true);
-							ptsrc_list[i]->update_specific_varyflag("yshift",true);
+							update_ptsrc_varyflag(i,"xshift",true);
+							update_ptsrc_varyflag(i,"yshift",true);
 						}
 					}
 					update_parameter_list();
@@ -11658,7 +11686,7 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_hubble' command; must specify 'on' or 'off'");
 				set_switch(vary_hub,setword);
-				cosmo.update_specific_varyflag("hubble",vary_hub);
+				update_cosmo_varyflag("hubble",vary_hub);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -11735,17 +11763,19 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_omega_m' command; must specify 'on' or 'off'");
 				set_switch(vary_om,setword);
-				cosmo.update_specific_varyflag("omega_m",vary_om);
+				update_cosmo_varyflag("omega_m",vary_om);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="syserr_pos")
 		{
 			double syserrparam;
+			bool vary_syserr_pos;
 			if (nwords == 2) {
 				if (!(ws[1] >> syserrparam)) Complain("invalid syserr_pos setting");
-				syserr_pos = syserrparam;
-				if ((vary_syserr_pos_parameter) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
+				update_specific_parameter("syserr_pos",syserrparam);
+				get_specific_varyflag("syserr_pos",vary_syserr_pos);
+				if ((vary_syserr_pos) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
 					if (mpi_id==0) cout << "Limits for systematic error parameter:\n";
 					if (read_command(false)==false) return;
 					double sigmin,sigmax;
@@ -11753,8 +11783,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[0] >> sigmin)) Complain("Invalid lower limit for systematic error parameter");
 					if (!(ws[1] >> sigmax)) Complain("Invalid upper limit for systematic error parameter");
 					if (sigmin > sigmax) Complain("lower limit cannot be greater than upper limit");
-					syserr_pos_lower_limit = sigmin;
-					syserr_pos_upper_limit = sigmax;
+					set_limits_specific_parameter("syserr_pos",sigmin,sigmax);
 				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "systematic error parameter = " << syserr_pos << endl;
@@ -11762,30 +11791,34 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="vary_syserr_pos")
 		{
+			bool vary_syserr_pos = false;
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary systematic error parameter: " << display_switch(vary_syserr_pos_parameter) << endl;
+				get_specific_varyflag("syserr_pos",vary_syserr_pos);
+				if (mpi_id==0) cout << "Vary systematic error parameter: " << display_switch(vary_syserr_pos) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_syserr_pos' command; must specify 'on' or 'off'");
-				set_switch(vary_syserr_pos_parameter,setword);
+				set_switch(vary_syserr_pos,setword);
+				update_misc_varyflag("syserr_pos",vary_syserr_pos);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="wl_shearfac")
 		{
-			double syserrparam;
+			double wlshearfac;
+			bool vary_wlshearfac;
 			if (nwords == 2) {
-				if (!(ws[1] >> syserrparam)) Complain("invalid wl_shearfac setting");
-				wl_shear_factor = syserrparam;
-				if ((vary_wl_shear_factor_parameter) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
+				if (!(ws[1] >> wlshearfac)) Complain("invalid wl_shearfac setting");
+				update_specific_parameter("wl_shearfac",wlshearfac);
+				get_specific_varyflag("wl_shearfac",vary_wlshearfac);
+				if ((vary_wlshearfac) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
 					if (mpi_id==0) cout << "Limits for weak lensing scale factor parameter:\n";
 					if (read_command(false)==false) return;
-					double sigmin,sigmax;
-					if (nwords != 2) Complain("Must specify two arguments for weak lensing scale factor parameter limits: sigmin, sigmax");
-					if (!(ws[0] >> sigmin)) Complain("Invalid lower limit for weak lensing scale factor parameter");
-					if (!(ws[1] >> sigmax)) Complain("Invalid upper limit for weak lensing scale factor parameter");
-					if (sigmin > sigmax) Complain("lower limit cannot be greater than upper limit");
-					wl_shear_factor_lower_limit = sigmin;
-					wl_shear_factor_upper_limit = sigmax;
+					double facmin,facmax;
+					if (nwords != 2) Complain("Must specify two arguments for weak lensing scale factor parameter limits: facmin, facmax");
+					if (!(ws[0] >> facmin)) Complain("Invalid lower limit for weak lensing scale factor parameter");
+					if (!(ws[1] >> facmax)) Complain("Invalid upper limit for weak lensing scale factor parameter");
+					if (facmin > facmax) Complain("lower limit cannot be greater than upper limit");
+					set_limits_specific_parameter("wl_shearfac",facmin,facmax);
 				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "weak lensing scale factor parameter = " << wl_shear_factor << endl;
@@ -11793,11 +11826,14 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="vary_wl_shearfac")
 		{
+			bool vary_wlshearfac = false;
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary weak lensing scale factor parameter: " << display_switch(vary_wl_shear_factor_parameter) << endl;
+				get_specific_varyflag("syserr_pos",vary_wlshearfac);
+				if (mpi_id==0) cout << "Vary weak lensing scale factor parameter: " << display_switch(vary_wlshearfac) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_wl_shearfac' command; must specify 'on' or 'off'");
-				set_switch(vary_wl_shear_factor_parameter,setword);
+				set_switch(vary_wlshearfac,setword);
+				update_misc_varyflag("wl_shearfac",vary_wlshearfac);
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -12061,7 +12097,7 @@ void QLens::process_commands(bool read_file)
 				if (!calculate_critical_curve_perturbation_radius_numerical(lens_number,true,rmax,avgsig,menc,rmax_z,menc_z,true)) Complain("could not calculate critical curve perturbation radius");
 			} else Complain("one argument required for 'subhalo_rmax' (lens number for subhalo)");
 		}
-		else if (words[0]=="print_betavals")
+		else if (words[0]=="print_zfactors")
 		{
 			print_zfactors_and_beta_matrices();
 		}
@@ -12591,9 +12627,8 @@ void QLens::process_commands(bool read_file)
 					add_pixellated_source(source_redshift);
 				}
 				for (int i=0; i < n_pixellated_src; i++) {
-					srcgrids[i]->update_specific_varyflag("regparam",vary_regparam);
+					update_pixellated_src_varyflag(i,"regparam",vary_regparam);
 				}
-				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="lum_weighted_regularization")
@@ -12611,7 +12646,7 @@ void QLens::process_commands(bool read_file)
 				}
 				set_switch(use_lum_weighted_regularization,setword);
 				for (int i=0; i < n_pixellated_src; i++) {
-					if (source_fit_mode==Delaunay_Source) delaunay_srcgrids[i]->update_active_params(mpi_id);
+					update_pixsrc_active_parameters(i);
 				}
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -12641,7 +12676,7 @@ void QLens::process_commands(bool read_file)
 				}
 				set_switch(use_distance_weighted_regularization,setword);
 				for (int i=0; i < n_pixellated_src; i++) {
-					if (source_fit_mode==Delaunay_Source) delaunay_srcgrids[i]->update_active_params(mpi_id);
+					update_pixsrc_active_parameters(i);
 				}
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -12656,7 +12691,7 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(use_mag_weighted_regularization,setword);
 				for (int i=0; i < n_pixellated_src; i++) {
-					if (source_fit_mode==Delaunay_Source) delaunay_srcgrids[i]->update_active_params(mpi_id);
+					update_pixsrc_active_parameters(i);
 				}
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -12672,7 +12707,7 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
 				set_switch(use_dist_weighted_srcpixel_clustering,setword);
 				for (int i=0; i < n_pixellated_src; i++) {
-					if (source_fit_mode==Delaunay_Source) delaunay_srcgrids[i]->update_active_params(mpi_id);
+					update_pixsrc_active_parameters(i);
 				}
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -12690,7 +12725,7 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
 				set_switch(use_lum_weighted_srcpixel_clustering,setword);
 				for (int i=0; i < n_pixellated_src; i++) {
-					if (source_fit_mode==Delaunay_Source) delaunay_srcgrids[i]->update_active_params(mpi_id);
+					update_pixsrc_active_parameters(i);
 				}
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -12873,7 +12908,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'auto_lumreg_center' command; must specify 'on' or 'off'");
 				set_switch(auto_lumreg_center,setword);
 				for (int i=0; i < n_pixellated_src; i++) {
-					if (source_fit_mode==Delaunay_Source) delaunay_srcgrids[i]->update_active_params(mpi_id);
+					update_pixsrc_active_parameters(i);
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -13182,8 +13217,7 @@ void QLens::process_commands(bool read_file)
 					add_pixellated_source(source_redshift);
 				}
 				for (int i=0; i < n_pixellated_src; i++) {
-					if (source_fit_mode==Delaunay_Source) delaunay_srcgrids[i]->update_specific_varyflag("corrlength",vary_corrlength);
-					// add a similar line for cartesian sources if in cartesian source mode
+					if (source_fit_mode==Delaunay_Source) update_pixellated_src_varyflag(i,"corrlength",vary_corrlength);
 				}
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -13254,8 +13288,7 @@ void QLens::process_commands(bool read_file)
 					add_pixellated_source(source_redshift);
 				}
 				for (int i=0; i < n_pixellated_src; i++) {
-					if (source_fit_mode==Delaunay_Source) delaunay_srcgrids[i]->update_specific_varyflag("matern_index",vary_matern_index);
-					// add a similar line for cartesian sources if in cartesian source mode
+					if (source_fit_mode==Delaunay_Source) update_pixellated_src_varyflag(i,"matern_index",vary_matern_index);
 				}
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
@@ -13661,7 +13694,7 @@ void QLens::process_commands(bool read_file)
 				set_switch(adaptive_subgrid,setword);
 				if (source_fit_mode==Cartesian_Source) {
 					for (int i=0; i < n_pixellated_src; i++) {
-						cartesian_srcgrids[i]->update_active_params(mpi_id);
+						update_pixsrc_active_parameters(i);
 					}
 				}
 				update_parameter_list();
@@ -14171,7 +14204,7 @@ void QLens::process_commands(bool read_file)
 				set_switch(auto_sourcegrid,setword);
 				if (source_fit_mode==Cartesian_Source) {
 					for (int i=0; i < n_pixellated_src; i++) {
-						cartesian_srcgrids[i]->update_active_params(mpi_id);
+						update_pixsrc_active_parameters(i);
 					}
 				}
 				update_parameter_list();
@@ -14186,7 +14219,7 @@ void QLens::process_commands(bool read_file)
 				set_switch(auto_srcgrid_npixels,setword);
 				if (source_fit_mode==Cartesian_Source) {
 					for (int i=0; i < n_pixellated_src; i++) {
-						cartesian_srcgrids[i]->update_active_params(mpi_id);
+						update_pixsrc_active_parameters(i);
 					}
 				}
 				update_parameter_list();
@@ -14249,7 +14282,7 @@ void QLens::process_commands(bool read_file)
 					if (vary_regparam) {
 						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam' to 'off' and updating parameters" << endl;
 						for (int i=0; i < n_pixellated_src; i++) {
-							srcgrids[i]->update_specific_varyflag("regparam",false);
+							update_pixellated_src_varyflag(i,"regparam",false);
 						}
 						update_parameter_list();
 					}
@@ -14258,7 +14291,7 @@ void QLens::process_commands(bool read_file)
 					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off' (to keep it on, consider using sbweights via 'lumreg_from_sbweights' and 'use_saved_sbweights))" << endl;
 					use_lum_weighted_regularization = false;
 					for (int i=0; i < n_pixellated_src; i++) {
-						if (source_fit_mode==Delaunay_Source) delaunay_srcgrids[i]->update_active_params(mpi_id);
+						if (source_fit_mode==Delaunay_Source) update_pixsrc_active_parameters(i);
 					}
 					update_parameter_list();
 				}
@@ -15611,6 +15644,8 @@ void QLens::process_commands(bool read_file)
 			//ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
 			//plot_shear_field(xmin,xmax,100,ymin,ymax,100);
 		*/
+		} else if (words[0]=="update_paramlist") {
+			update_parameter_list();
 		} else if (words[0]=="echo") {
 			bool add_endl = true;
 			for (int i=1; i < nwords; i++) {
@@ -15717,7 +15752,7 @@ bool QLens::check_vary_z()
 	else return true;
 }
 
-bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double &xiref, bool &linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots)
+bool QLens::read_egrad_params(const bool vary_pars, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double &xiref, bool &linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots)
 {
 	// NOTE: the parameter enter_params_and_varyflags will be plugged in as 'enter_prior_limits', because that's how it will be used for after calling this function
 	bool anchor_params = false;
@@ -15834,7 +15869,7 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 	}
 
 	nparams_to_vary += n_efunc_params - 2; // since q and theta no longer exist as parameters that can be varied
-	if (vary_params) {
+	if (vary_pars) {
 		int npar_old = varyflags.size();
 		int npar_new = npar_old + n_efunc_params - 2;
 		//cout << "OLD VARYFLAGS(np=" << npar_old << "): " << endl;
@@ -15929,7 +15964,7 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 	return true;
 }
 
-bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, const vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots)
+bool QLens::read_fgrad_params(const bool vary_pars, const int egrad_mode, const int n_fmodes, const vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots)
 {
 	bool anchor_params = false;
 	int n_fgrad_params;
@@ -15995,7 +16030,7 @@ bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, cons
 	}
 
 	nparams_to_vary += n_fgrad_params - 2*n_fmodes;
-	if (vary_params) {
+	if (vary_pars) {
 		int npar_old = varyflags.size();
 		int npar_new = npar_old + n_fgrad_params - n_fmodes*2;
 		//cout << "OLD VARYFLAGS(np=" << npar_old << "): " << endl;

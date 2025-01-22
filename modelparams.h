@@ -26,20 +26,30 @@ class ModelParams
 
 	ModelParams() { param = NULL; }
 	void setup_parameter_arrays(const int npar);
-	virtual void setup_parameters(const bool initial_setup) {}  // don't need this, unless we want to work with ModelParams pointers in lens.cpp for parameter manipulation?
+	virtual void setup_parameters(const bool initial_setup) {} 
 	virtual void update_meta_parameters(const bool varied_only_fitparams) {}
 	void copy_param_data(ModelParams* params_in);
 	void update_active_params(const int id) {
+		boolvector dummy;
+		update_active_params(id,dummy);
+	}
+	void update_active_params(const int id, boolvector& turned_off_params) {
+		turned_off_params.input(n_vary_params);
 		setup_parameters(false);
 		// check: if any parameters are no longer active, but they were being varied, turn off their vary flags
-		for (int i=0; i < n_params; i++) {
+		int i,j;
+		for (i=0,j=0; i < n_params; i++) {
 			if ((!active_params[i]) and (vary_params[i])) {
 				if (id==0) std::cout << "Parameter " << paramnames[i] << " is no longer active, so its vary flag is being turned off" << std::endl;
 				vary_params[i] = false;
 				n_vary_params--;
+				turned_off_params[j++] = true;
+			} else if (vary_params[i]) {
+				turned_off_params[j++] = false;
 			}
 		}
 	}
+
 
 	void update_fit_parameters(const double* fitparams, int &index);
 	bool update_specific_parameter(const std::string name_in, const double& value);
@@ -57,8 +67,11 @@ class ModelParams
 	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL);
 	bool get_specific_parameter(const std::string name_in, double& value);
 	bool get_specific_varyflag(const std::string name_in, bool& flag);
+	void get_parameter_number(const std::string name_in, int& paramnum);
+	void get_parameter_vary_index(const std::string name_in, int& index);
+
 	void get_varyflags(boolvector& flags);
-	void print_parameters();
+	void print_parameters(const bool show_only_varying_params = false);
 	void print_vary_parameters();
 	void set_include_limits(bool inc) { include_limits = inc; }
 	int get_n_vary_params() { return n_vary_params; }

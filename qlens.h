@@ -345,7 +345,7 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 
 // There is too much inheritance going on here. Nearly all of these can be changed to simply objects that are created within the QLens
 // class; it's more transparent to do so, and more object-oriented.
-class QLens : public Brent, public Sort, public Powell, public Simplex, public UCMC
+class QLens : public ModelParams, public Brent, public Sort, public Powell, public Simplex, public UCMC
 {
 	private:
 	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
@@ -463,10 +463,8 @@ class QLens : public Brent, public Sort, public Powell, public Simplex, public U
 
 	bool ellipticity_gradient, contours_overlap;
 	double contour_overlap_log_penalty_prior;
-	bool vary_syserr_pos_parameter;
-	double syserr_pos, syserr_pos_lower_limit, syserr_pos_upper_limit;
-	bool vary_wl_shear_factor_parameter;
-	double wl_shear_factor, wl_shear_factor_lower_limit, wl_shear_factor_upper_limit;
+	double syserr_pos;
+	double wl_shear_factor;
 
 	int Gauss_NN;	// for Gaussian quadrature
 	double romberg_accuracy, integral_tolerance; // for Romberg integration, Gauss-Patterson quadrature
@@ -492,7 +490,7 @@ class QLens : public Brent, public Sort, public Powell, public Simplex, public U
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
 	bool use_ansi_characters;
-	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, ptsrc_fit_parameters, n_fit_parameters;
+	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, ptsrc_fit_parameters, cosmo_fit_parameters, n_fit_parameters;
 	std::vector<string> fit_parameter_names, transformed_parameter_names;
 	std::vector<string> latex_parameter_names, transformed_latex_parameter_names;
 
@@ -982,6 +980,8 @@ class QLens : public Brent, public Sort, public Powell, public Simplex, public U
 	friend class SB_Profile;
 	QLens();
 	QLens(QLens *lens_in);
+	void setup_parameters(const bool initial_setup); 
+	void update_meta_parameters(const bool varied_only_fitparams) {}
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	~QLens();
@@ -1063,8 +1063,8 @@ class QLens : public Brent, public Sort, public Powell, public Simplex, public U
 	void process_commands(bool read_file);
 	bool read_command(bool show_prompt);
 	bool check_vary_z();
-	bool read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double& xiref, bool& linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots);
-	bool read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, const std::vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots);
+	bool read_egrad_params(const bool vary_par, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double& xiref, bool& linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots);
+	bool read_fgrad_params(const bool vary_par, const int egrad_mode, const int n_fmodes, const std::vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots);
 	void run_plotter(string plotcommand, string extra_command = "");
 	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "", string extra_command2 = "");
 	void run_plotter_range(string plotcommand, string range, string extra_command = "", string extra_command2 = "");
@@ -1160,6 +1160,10 @@ class QLens : public Brent, public Sort, public Powell, public Simplex, public U
 	bool set_pixellated_src_vary_parameters(const int src_number, boolvector &vary_flags);
 	bool set_sourcept_vary_parameters(const int sptnumber, const bool vary_x, const bool vary_y); // old--replace with below
 	bool set_ptsrc_vary_parameters(const int src_number, boolvector &vary_flags);
+	bool update_pixellated_src_varyflag(const int src_number, const string name, const bool flag);
+	bool update_ptsrc_varyflag(const int src_number, const string name, const bool flag);
+	bool update_cosmo_varyflag(const string name, const bool flag);
+	bool update_misc_varyflag(const string name, const bool flag);
 
 	void update_parameter_list();
 	void update_anchored_parameters_and_redshift_data();
@@ -1247,16 +1251,21 @@ class QLens : public Brent, public Sort, public Powell, public Simplex, public U
 	bool setup_fit_parameters(const bool ignore_limits = false);
 	bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
-	void get_parameter_names();
+	void get_all_parameter_names();
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
 	bool get_ptsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
+	bool get_cosmo_parameter_numbers(int& pi, int& pf);
+	bool get_misc_parameter_numbers(int& pi, int& pf);
 	bool lookup_parameter_value(const string pname, double& pval);
 	void create_parameter_value_string(string &pvals);
 	bool output_parameter_values();
 	bool output_parameter_prior_ranges();
 	bool update_parameter_value(const int param_num, const double param_val);
+	void update_pixsrc_active_parameters(const int src_number);
+	void update_ptsrc_active_parameters(const int src_number);
+	void update_active_parameters(ModelParams* param_object, const int pi);
 
 	void get_automatic_initial_stepsizes(dvector& stepsizes);
 	void set_default_plimits();

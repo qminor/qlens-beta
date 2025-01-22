@@ -182,7 +182,7 @@ void QLens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in)
 #endif
 }
 
-QLens::QLens() : UCMC()
+QLens::QLens() : UCMC(), ModelParams()
 {
 	lens_parent = NULL; // this is only set if creating from another lens
 	random_seed = 10;
@@ -215,8 +215,6 @@ QLens::QLens() : UCMC()
 	ellipticity_gradient = false;
 	contours_overlap = false; // required for ellipticity gradient mode to check that contours don't overlap
 	contour_overlap_log_penalty_prior = 0;
-	syserr_pos = 0.0;
-	wl_shear_factor = 1.0;
 	user_changed_zsource = false; // keeps track of whether redshift has been manually changed; if so, then don't change it to redshift from data
 	auto_zsource_scaling = true; // this automatically sets the reference source redshift (for kappa scaling) equal to the source redshift being used
 	reference_source_redshift = 2.0; // this is the source redshift with respect to which the lens models are defined
@@ -234,14 +232,6 @@ QLens::QLens() : UCMC()
 	n_extended_src_redshifts = 0;
 	sbprofile_redshift_idx = NULL;
 	pixellated_src_redshift_idx = NULL;
-
-	vary_syserr_pos_parameter = false;
-	syserr_pos_lower_limit = 1e30; // These must be specified by user
-	syserr_pos_upper_limit = 1e30; // These must be specified by user
-
-	vary_wl_shear_factor_parameter = false;
-	wl_shear_factor_lower_limit = 1e30; // These must be specified by user
-	wl_shear_factor_upper_limit = 1e30; // These must be specified by user
 
 	chisq_it=0;
 	raw_chisq = -1e30;
@@ -558,9 +548,10 @@ QLens::QLens() : UCMC()
 	include_recursive_lensing = true;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
 	DerivedParamPtr = static_cast<void (UCMC::*)(double*,double*)> (&QLens::fitmodel_calculate_derived_params);
+	setup_parameters(true); // this sets up the generic parameters in the qlens class (not including lens, source or cosmology parameters)
 }
 
-QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings as input lens; does NOT import the lens/source model configurations, however
+QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with same settings as input lens; does NOT import the lens/source model configurations, however
 {
 	lens_parent = lens_in;
 	verbal_mode = lens_in->verbal_mode;
@@ -597,8 +588,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	my_group = lens_in->my_group;
 #endif
 
-	syserr_pos = lens_in->syserr_pos;
-	wl_shear_factor = lens_in->wl_shear_factor;
 	cosmo.copy_cosmo_data(&lens_in->cosmo); 
 
 	lens_redshift = lens_in->lens_redshift;
@@ -625,14 +614,6 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	n_extended_src_redshifts = lens_in->n_extended_src_redshifts;
 	sbprofile_redshift_idx = NULL;
 	pixellated_src_redshift_idx = NULL;
-
-	vary_syserr_pos_parameter = lens_in->vary_syserr_pos_parameter;
-	syserr_pos_lower_limit = lens_in->syserr_pos_lower_limit; // These must be specified by user
-	syserr_pos_upper_limit = lens_in->syserr_pos_upper_limit; // These must be specified by user
-
-	vary_wl_shear_factor_parameter = lens_in->vary_wl_shear_factor_parameter;
-	wl_shear_factor_lower_limit = lens_in->wl_shear_factor_lower_limit; // These must be specified by user
-	wl_shear_factor_upper_limit = lens_in->wl_shear_factor_upper_limit; // These must be specified by user
 
 	terminal = lens_in->terminal;
 	show_wtime = lens_in->show_wtime;
@@ -959,6 +940,56 @@ QLens::QLens(QLens *lens_in) : UCMC() // creates lens object with same settings 
 	integral_tolerance = lens_in->integral_tolerance;
 	include_recursive_lensing = lens_in->include_recursive_lensing;
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
+
+	setup_parameters(true); // this sets up the generic parameters in the qlens class (not including lens, source or cosmology parameters)
+	syserr_pos = lens_in->syserr_pos;
+	wl_shear_factor = lens_in->wl_shear_factor;
+	copy_param_data(lens_in);
+	vary_params.input(n_vary_params);
+	vary_params[0] = lens_in->vary_params[0];
+	vary_params[1] = lens_in->vary_params[1];
+}
+
+void QLens::setup_parameters(const bool initial_setup)
+{
+	// this sets up the generic parameters (besides lens, source and cosmology parameters) that can be varied as model parameters during fitting
+	if (initial_setup) {
+		// default initial values
+		syserr_pos = 0.0;
+		wl_shear_factor = 1.0;
+
+		setup_parameter_arrays(2);
+	} else {
+		// always reset the active parameter flags, since the active ones will be determined below
+		// NOTE: if (initial_setup==true), active params are reset in setup_parameter_arrays(..) above
+		n_active_params = 0;
+		for (int i=0; i < n_params; i++) {
+			active_params[i] = false; // default
+		}
+	}
+
+	int indx = 0;
+
+	if (initial_setup) {
+		// systematic error in the position of point images (assumed to be not accounted for in the given position errors)
+		param[indx] = &syserr_pos;
+		paramnames[indx] = "syserr_pos"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = "sys";
+		set_auto_penalty_limits[indx] = false;
+		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
+	}
+	active_params[indx] = true; 
+	n_active_params++;
+	indx++;
+
+	if (initial_setup) {
+		param[indx] = &wl_shear_factor;
+		paramnames[indx] = "wl_shearfac"; latex_paramnames[indx] = "m"; latex_param_subscripts[indx] = "WL";
+		set_auto_penalty_limits[indx] = false;
+		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
+	}
+	active_params[indx] = true; 
+	n_active_params++;
+	indx++;
 }
 
 void QLens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
@@ -1542,9 +1573,6 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 		}
 
 		n_lens_redshifts++;
-		//for (i=0; i < n_lens_redshifts; i++) {
-			//cout << i << " " << lens_redshifts[i] << " " << reference_zfactors[i] << endl;
-		//}
 	} else {
 		int *new_zlens_group_lens_indx_col = new int[zlens_group_size[znum]+1];
 		for (i=0; i < zlens_group_size[znum]; i++) {
@@ -1638,64 +1666,117 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 			}
 		}
 
-		/*
-		// does this need to be switched to ptsrc_zfactors etc?
-		double **new_zfactors;
-		if (n_sourcepts_fit > 0) {
+		double **new_ptsrc_zfactors;
+		if (n_ptsrc_redshifts > 0) {
 			if (n_lens_redshifts==1) {
-				for (i=0; i < n_sourcepts_fit; i++) delete[] specific_ptsrc_zfactors[i];
-				delete[] specific_ptsrc_zfactors;
-				specific_ptsrc_zfactors = NULL;
+				for (i=0; i < n_ptsrc_redshifts; i++) delete[] ptsrc_zfactors[i];
+				delete[] ptsrc_zfactors;
+				ptsrc_zfactors = NULL;
 			} else {
-				new_zfactors = new double*[n_sourcepts_fit];
-				for (i=0; i < n_sourcepts_fit; i++) {
-					new_zfactors[i] = new double[n_lens_redshifts-1];
+				new_ptsrc_zfactors = new double*[n_ptsrc_redshifts];
+				for (i=0; i < n_ptsrc_redshifts; i++) {
+					new_ptsrc_zfactors[i] = new double[n_lens_redshifts-1];
 					for (j=0; j < znum; j++) {
-						new_zfactors[i][j] = specific_ptsrc_zfactors[i][j];
+						new_ptsrc_zfactors[i][j] = ptsrc_zfactors[i][j];
 					}
 					for (j=znum; j < n_lens_redshifts-1; j++) {
-						new_zfactors[i][j] = specific_ptsrc_zfactors[i][j+1];
+						new_ptsrc_zfactors[i][j] = ptsrc_zfactors[i][j+1];
 					}
 				}
-				for (i=0; i < n_sourcepts_fit; i++) delete[] specific_ptsrc_zfactors[i];
-				delete[] specific_ptsrc_zfactors;
-				specific_ptsrc_zfactors = new_zfactors;
+				for (i=0; i < n_ptsrc_redshifts; i++) delete[] ptsrc_zfactors[i];
+				delete[] ptsrc_zfactors;
+				ptsrc_zfactors = new_ptsrc_zfactors;
 
-				double ***new_beta_factors;
+				double ***new_ptsrc_beta_factors;
 				if (n_lens_redshifts==2) {
-					for (i=0; i < n_sourcepts_fit; i++) {
-						delete[] specific_ptsrc_beta_factors[i][0];
-						delete[] specific_ptsrc_beta_factors[i];
-						specific_ptsrc_beta_factors[i] = NULL;
+					for (i=0; i < n_ptsrc_redshifts; i++) {
+						delete[] ptsrc_beta_factors[i][0];
+						delete[] ptsrc_beta_factors[i];
+						ptsrc_beta_factors[i] = NULL;
 					}
 					default_zsrc_beta_factors = NULL;
 				} else {
-					new_beta_factors = new double**[n_sourcepts_fit];
-					for (i=0; i < n_sourcepts_fit; i++) {
-						new_beta_factors[i] = new double*[n_lens_redshifts-2];
+					new_ptsrc_beta_factors = new double**[n_ptsrc_redshifts];
+					for (i=0; i < n_ptsrc_redshifts; i++) {
+						new_ptsrc_beta_factors[i] = new double*[n_lens_redshifts-2];
 						for (j=1; j < n_lens_redshifts-1; j++) {
-							new_beta_factors[i][j-1] = new double[j];
+							new_ptsrc_beta_factors[i][j-1] = new double[j];
 							if (include_recursive_lensing) {
-								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
+								for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
 							} else {
-								for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
+								for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = 0;
 							}
 						}
 					}
-					if (specific_ptsrc_beta_factors != NULL) {
-						for (i=0; i < n_sourcepts_fit; i++) {
+					if (ptsrc_beta_factors != NULL) {
+						for (i=0; i < n_ptsrc_redshifts; i++) {
 							for (j=0; j < n_lens_redshifts-1; j++) {
-								delete[] specific_ptsrc_beta_factors[i][j];
+								delete[] ptsrc_beta_factors[i][j];
 							}
-							if (n_lens_redshifts > 1) delete[] specific_ptsrc_beta_factors[i];
+							if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
 						}
-						delete[] specific_ptsrc_beta_factors;
+						delete[] ptsrc_beta_factors;
 					}
-					specific_ptsrc_beta_factors = new_beta_factors;
+					ptsrc_beta_factors = new_ptsrc_beta_factors;
 				}
 			}
 		}
-		*/
+
+		double **new_extended_src_zfactors;
+		if (n_extended_src_redshifts > 0) {
+			if (n_lens_redshifts==1) {
+				for (i=0; i < n_extended_src_redshifts; i++) delete[] extended_src_zfactors[i];
+				delete[] extended_src_zfactors;
+				extended_src_zfactors = NULL;
+			} else {
+				new_extended_src_zfactors = new double*[n_extended_src_redshifts];
+				for (i=0; i < n_extended_src_redshifts; i++) {
+					new_extended_src_zfactors[i] = new double[n_lens_redshifts-1];
+					for (j=0; j < znum; j++) {
+						new_extended_src_zfactors[i][j] = extended_src_zfactors[i][j];
+					}
+					for (j=znum; j < n_lens_redshifts-1; j++) {
+						new_extended_src_zfactors[i][j] = extended_src_zfactors[i][j+1];
+					}
+				}
+				for (i=0; i < n_extended_src_redshifts; i++) delete[] extended_src_zfactors[i];
+				delete[] extended_src_zfactors;
+				extended_src_zfactors = new_extended_src_zfactors;
+
+				double ***new_extended_src_beta_factors;
+				if (n_lens_redshifts==2) {
+					for (i=0; i < n_extended_src_redshifts; i++) {
+						delete[] extended_src_beta_factors[i][0];
+						delete[] extended_src_beta_factors[i];
+						extended_src_beta_factors[i] = NULL;
+					}
+					default_zsrc_beta_factors = NULL;
+				} else {
+					new_extended_src_beta_factors = new double**[n_extended_src_redshifts];
+					for (i=0; i < n_extended_src_redshifts; i++) {
+						new_extended_src_beta_factors[i] = new double*[n_lens_redshifts-2];
+						for (j=1; j < n_lens_redshifts-1; j++) {
+							new_extended_src_beta_factors[i][j-1] = new double[j];
+							if (include_recursive_lensing) {
+								for (k=0; k < j; k++) new_extended_src_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
+							} else {
+								for (k=0; k < j; k++) new_extended_src_beta_factors[i][j-1][k] = 0;
+							}
+						}
+					}
+					if (extended_src_beta_factors != NULL) {
+						for (i=0; i < n_extended_src_redshifts; i++) {
+							for (j=0; j < n_lens_redshifts-1; j++) {
+								delete[] extended_src_beta_factors[i][j];
+							}
+							if (n_lens_redshifts > 1) delete[] extended_src_beta_factors[i];
+						}
+						delete[] extended_src_beta_factors;
+					}
+					extended_src_beta_factors = new_extended_src_beta_factors;
+				}
+			}
+		}
 
 		n_lens_redshifts--;
 	} else {
@@ -2226,7 +2307,7 @@ void QLens::print_zfactors_and_beta_matrices()
 	if (n_lens_redshifts > 1) {
 		for (i=0; i < nlens; i++) cout << "Lens " << i << " redshift index: " << lens_redshift_idx[i] << endl;
 	}
-	cout << "zfacs: ";
+	cout << endl << "reference zfactors: ";
 	for (i=0; i < n_lens_redshifts; i++) cout << reference_zfactors[i] << " ";
 	cout << endl;
 	if (n_lens_redshifts > 1) {
@@ -2236,6 +2317,7 @@ void QLens::print_zfactors_and_beta_matrices()
 			for (k=0; k < j+1; k++) cout << default_zsrc_beta_factors[j][k] << " ";
 			cout << endl;
 		}
+		cout << endl;
 	}
 
 	if (n_ptsrc > 0) {
@@ -2244,6 +2326,7 @@ void QLens::print_zfactors_and_beta_matrices()
 			for (j=0; j < n_lens_redshifts; j++) cout << ptsrc_zfactors[i][j] << " ";
 			cout << endl;
 		}
+		cout << endl;
 		if (n_lens_redshifts > 1) {
 			for (i=0; i < n_ptsrc_redshifts; i++) {
 				cout << "source " << i << " beta matrix:\n";
@@ -2263,6 +2346,7 @@ void QLens::print_zfactors_and_beta_matrices()
 			for (j=0; j < n_lens_redshifts; j++) cout << extended_src_zfactors[i][j] << " ";
 			cout << endl;
 		}
+		cout << endl;
 		if (n_lens_redshifts > 1) {
 			for (i=0; i < n_extended_src_redshifts; i++) {
 				cout << "source " << i << " beta matrix:\n";
@@ -2309,7 +2393,7 @@ bool QLens::register_lens_vary_parameters(const int lensnumber)
 	int pi, pf, nparams;
 	get_n_fit_parameters(nparams);
 	dvector stepsizes(nparams);
-	get_parameter_names();
+	get_all_parameter_names();
 	if (get_lens_parameter_numbers(lensnumber,pi,pf) == true) {
 		//cout << "Inserting parameters " << pi << " to " << pf << endl;
 		get_automatic_initial_stepsizes(stepsizes);
@@ -2336,7 +2420,7 @@ bool QLens::set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags)
 	if (pf > pi) param_settings->remove_params(pi,pf);
 	get_n_fit_parameters(nparams);
 	dvector stepsizes(nparams);
-	get_parameter_names();
+	get_all_parameter_names();
 	if (get_sb_parameter_numbers(sbnumber,pi,pf) == true) {
 		get_automatic_initial_stepsizes(stepsizes);
 		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
@@ -2350,6 +2434,29 @@ bool QLens::set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags)
 	return true;
 }
 
+bool QLens::update_pixellated_src_varyflag(const int src_number, const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf, nparams;
+	srcgrids[src_number]->get_parameter_vary_index(name,pnum);
+	get_pixsrc_parameter_numbers(src_number,pi,pf);
+	pnum += pi;
+	bool flag0;
+	srcgrids[src_number]->get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (srcgrids[src_number]->update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_settings->remove_params(pnum,pnum+1);
+	} else {
+		get_n_fit_parameters(nparams);
+		get_all_parameter_names();
+		dvector stepsizes(nparams);
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
+	}
+	return true;
+}
+
 bool QLens::set_pixellated_src_vary_parameters(const int src_number, boolvector &vary_flags)
 {
 	int pi, pf, nparams;
@@ -2358,8 +2465,8 @@ bool QLens::set_pixellated_src_vary_parameters(const int src_number, boolvector 
 	if (pf > pi) param_settings->remove_params(pi,pf);
 	get_n_fit_parameters(nparams);
 	dvector stepsizes(nparams);
-	get_parameter_names();
-	if (get_sb_parameter_numbers(src_number,pi,pf) == true) {
+	get_all_parameter_names();
+	if (get_pixsrc_parameter_numbers(src_number,pi,pf) == true) {
 		get_automatic_initial_stepsizes(stepsizes);
 		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
 		int index=0, npar = pf-pi;
@@ -2372,6 +2479,29 @@ bool QLens::set_pixellated_src_vary_parameters(const int src_number, boolvector 
 	return true;
 }
 
+bool QLens::update_ptsrc_varyflag(const int src_number, const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf, nparams;
+	ptsrc_list[src_number]->get_parameter_vary_index(name,pnum);
+	get_ptsrc_parameter_numbers(src_number,pi,pf);
+	pnum += pi;
+	bool flag0;
+	ptsrc_list[src_number]->get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (ptsrc_list[src_number]->update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_settings->remove_params(pnum,pnum+1);
+	} else {
+		get_n_fit_parameters(nparams);
+		get_all_parameter_names();
+		dvector stepsizes(nparams);
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
+	}
+	return true;
+}
+
 bool QLens::set_ptsrc_vary_parameters(const int src_number, boolvector &vary_flags)
 {
 	int pi, pf, nparams;
@@ -2380,8 +2510,8 @@ bool QLens::set_ptsrc_vary_parameters(const int src_number, boolvector &vary_fla
 	if (pf > pi) param_settings->remove_params(pi,pf);
 	get_n_fit_parameters(nparams);
 	dvector stepsizes(nparams);
-	get_parameter_names();
-	if (get_sb_parameter_numbers(src_number,pi,pf) == true) {
+	get_all_parameter_names();
+	if (get_ptsrc_parameter_numbers(src_number,pi,pf) == true) {
 		get_automatic_initial_stepsizes(stepsizes);
 		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
 		int index=0, npar = pf-pi;
@@ -2394,18 +2524,86 @@ bool QLens::set_ptsrc_vary_parameters(const int src_number, boolvector &vary_fla
 	return true;
 }
 
+bool QLens::update_cosmo_varyflag(const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf, nparams;
+	cosmo.get_parameter_vary_index(name,pnum);
+	get_cosmo_parameter_numbers(pi,pf);
+	pnum += pi;
+	bool flag0;
+	cosmo.get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (cosmo.update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_settings->remove_params(pnum,pnum+1);
+	} else {
+		get_n_fit_parameters(nparams);
+		get_all_parameter_names();
+		dvector stepsizes(nparams);
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
+	}
+	return true;
+}
+
+bool QLens::update_misc_varyflag(const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf, nparams;
+	get_parameter_vary_index(name,pnum);
+	get_misc_parameter_numbers(pi,pf);
+	pnum += pi;
+	bool flag0;
+	get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_settings->remove_params(pnum,pnum+1);
+	} else {
+		get_n_fit_parameters(nparams);
+		get_all_parameter_names();
+		dvector stepsizes(nparams);
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
+	}
+	return true;
+}
+
+void QLens::update_pixsrc_active_parameters(const int src_number)
+{
+	int pi,pf;
+	get_pixsrc_parameter_numbers(src_number,pi,pf);
+	update_active_parameters(srcgrids[src_number],pi);
+}
+
+void QLens::update_ptsrc_active_parameters(const int src_number)
+{
+	int pi,pf;
+	get_ptsrc_parameter_numbers(src_number,pi,pf);
+	update_active_parameters(ptsrc_list[src_number],pi);
+}
+
+void QLens::update_active_parameters(ModelParams* param_object, const int pi)
+{
+	boolvector turned_off_params;
+	param_object->update_active_params(mpi_id,turned_off_params);
+	int pnum;
+	for (int i=turned_off_params.size()-1; i >= 0; i--) {
+		if (turned_off_params[i]) {
+			pnum = pi+i;
+			param_settings->remove_params(pnum,pnum+1);
+		}
+	}
+}
 
 
 void QLens::update_parameter_list()
 {
-	// One slight issue that should be fixed: for the "extra" parameters like regularization, hubble constant, etc., the stepsizes
-	// and plimits are not preserved if one of the extra parameters is removed and it's not the last one on the list, or if a new
-	// parameter is inserted that's not at the end. There should be a more specific update such that just those parameters are
-	// removed or inserted (using remove_params(...) and insert_params(...))
 	get_n_fit_parameters(n_fit_parameters);
 	if (n_fit_parameters > 0) {
 		dvector stepsizes(n_fit_parameters);
-		get_parameter_names();
+		get_all_parameter_names();
 		get_automatic_initial_stepsizes(stepsizes);
 		param_settings->update_params(n_fit_parameters,fit_parameter_names,stepsizes.array());
 	} else {
@@ -2454,7 +2652,7 @@ void QLens::remove_lens(int lensnumber)
 
 	param_settings->remove_params(pi,pf);
 	update_parameter_list();
-	get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
+	get_all_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 	for (int i=n_derived_params-1; i >= 0; i--) {
 		if (dparam_list[i]->int_param==lensnumber) {
 			if (mpi_id==0) cout << "Removing derived param " << i << endl;
@@ -2524,7 +2722,7 @@ void QLens::clear_lenses()
 		n_lens_redshifts = 0;
 
 		reset_grid();
-		get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
+		get_all_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 		clear_derived_params();
 	}
 }
@@ -2812,7 +3010,7 @@ void QLens::remove_source_object(int sb_number)
 
 	param_settings->remove_params(pi,pf);
 	update_parameter_list();
-	get_parameter_names(); // parameter names must be updated whenever lens models are removed/added
+	get_all_parameter_names(); // parameter names must be updated whenever lens models are removed/added
 }
 
 void QLens::clear_source_objects()
@@ -2844,7 +3042,6 @@ void QLens::clear_source_objects()
 			}
 		}
 		update_parameter_list(); // this is necessary to keep the parameter priors, transforms preserved
-		get_parameter_names(); // parameter names must be updated whenever source models are removed/added
 		if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's may have changed, will need to redo FFT setup
 	}
 }
@@ -2868,17 +3065,6 @@ void QLens::print_source_list(bool show_vary_params)
 	else cout << "No source models have been specified" << endl;
 	cout << endl;
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
-
-	/*
-	if (n_sb > 0) {
-		SPLE_Lens* lens_spawn;
-		//lens_spawn = new SPLE_Lens(1.2, 1, 0, 0.8, 30, 0.01, 0.01);
-		sb_list[0]->spawn_lens_model(lens_spawn);
-		//lens_spawn->initialize_parameters(1.2, 1, 0, 0.8, 30, 0.01, 0.01);
-		cout << "LENS NAME: " << lens_spawn->get_model_name() << endl;
-		//add_lens(lens_spawn,lens_redshift,source_redshift);
-	}
-	*/
 }
 
 void QLens::add_pixellated_source(const double zsrc)
@@ -6605,6 +6791,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->srcmodel_fit_parameters = srcmodel_fit_parameters;
 	fitmodel->pixsrc_fit_parameters = pixsrc_fit_parameters;
 	fitmodel->ptsrc_fit_parameters = ptsrc_fit_parameters;
+	fitmodel->cosmo_fit_parameters = cosmo_fit_parameters;
 	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
 
 	if (open_chisq_logfile) {
@@ -6627,6 +6814,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	if ((source_fit_mode != Point_Source) and (!redo_lensing_calculations_before_inversion)) {
 		for (int i=0; i < n_extended_src_redshifts; i++) fitmodel->image_pixel_grids[i]->redo_lensing_calculations(); 
 	}
+
 	return true;
 }
 
@@ -6713,21 +6901,15 @@ double QLens::update_model(const double* params)
 	}
 
 	cosmo.update_fit_parameters(params,index);
-	update_zfactors_and_betafactors();
 	// *NOTE*: Maybe consider putting the cosmological parameters at the very FRONT of the parameter list? Then the cosmology is updated before updating the lenses
 	if (cosmo.get_n_vary_params() > 0) {
+		update_zfactors_and_betafactors();
 		for (i=0; i < nlens; i++) {
 			if ((!lens_list[i]->at_least_one_param_anchored) and (!lens_list[i]->anchor_special_parameter)) lens_list[i]->update_meta_parameters(); // if the cosmology has changed, update cosmology info and any parameters that depend on them (unless there are anchored parameters, in which case it will be done below)
 		}
 	}
 
-	if (vary_syserr_pos_parameter) {
-		syserr_pos = params[index++];
-		if (syserr_pos < 0) status = false; // do not allow negative syserr_pos parameter
-	}
-	if (vary_wl_shear_factor_parameter) {
-		wl_shear_factor = params[index++];
-	}
+	update_fit_parameters(params,index); // this is for the parameters that are part of the QLens class
 	if (status==false) log_penalty_prior = 1e30;
 	if ((ellipticity_gradient) and (contours_overlap)) {
 		log_penalty_prior += contour_overlap_log_penalty_prior;
@@ -7646,9 +7828,8 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	for (i=0; i < n_pixellated_src; i++) srcgrids[i]->get_auto_stepsizes(stepsizes,index);
 	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_stepsizes(stepsizes,index);
 	cosmo.get_auto_stepsizes(stepsizes,index);
+	get_auto_stepsizes(stepsizes,index);
 
-	if (vary_syserr_pos_parameter) stepsizes[index++] = 0.1;
-	if (vary_wl_shear_factor_parameter) stepsizes[index++] = 0.1;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes (%i vs %i)",index,n_fit_parameters);
 }
 
@@ -7665,9 +7846,8 @@ void QLens::set_default_plimits()
 	for (i=0; i < n_pixellated_src; i++) srcgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	cosmo.get_auto_ranges(use_penalty_limits,lower,upper,index);
+	get_auto_ranges(use_penalty_limits,lower,upper,index);
 
-	if (vary_syserr_pos_parameter) index++;
-	if (vary_wl_shear_factor_parameter) index++;
 	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default ranges (%i vs %i)",index,n_fit_parameters);
 	param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
 }
@@ -7678,6 +7858,7 @@ void QLens::get_n_fit_parameters(int &nparams)
 	srcmodel_fit_parameters = 0;
 	pixsrc_fit_parameters = 0;
 	ptsrc_fit_parameters = 0;
+	cosmo_fit_parameters = 0;
 	for (int i=0; i < nlens; i++) lensmodel_fit_parameters += lens_list[i]->get_n_vary_params();
 	nparams = lensmodel_fit_parameters;
 	for (int i=0; i < n_sb; i++) srcmodel_fit_parameters += sb_list[i]->get_n_vary_params();
@@ -7686,10 +7867,9 @@ void QLens::get_n_fit_parameters(int &nparams)
 	nparams += pixsrc_fit_parameters;
 	for (int i=0; i < n_ptsrc; i++) ptsrc_fit_parameters += ptsrc_list[i]->get_n_vary_params();
 	nparams += ptsrc_fit_parameters;
-	nparams += cosmo.get_n_vary_params();
-
-	if (vary_syserr_pos_parameter) nparams++;
-	if (vary_wl_shear_factor_parameter) nparams++;
+	cosmo_fit_parameters = cosmo.get_n_vary_params();
+	nparams += cosmo_fit_parameters;
+	nparams += n_vary_params; // generic parameters within qlens class
 }
 
 bool QLens::setup_fit_parameters(const bool ignore_limits)
@@ -7733,12 +7913,10 @@ bool QLens::setup_fit_parameters(const bool ignore_limits)
 	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_fit_parameters(fitparams,index);
 	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + ptsrc_fit_parameters;
 	if (index != expected_index) die("Index didn't go through all the lens+source model fit parameters (%i vs %i)",index,expected_index);
-	cosmo.get_fit_parameters(fitparams,index);
+	cosmo.get_fit_parameters(fitparams,index); // cosmology parameters
+	get_fit_parameters(fitparams,index); // generic parameters in qlens class
 
-	if (vary_syserr_pos_parameter) fitparams[index++] = syserr_pos;
-	if (vary_wl_shear_factor_parameter) fitparams[index++] = wl_shear_factor;
-
-	get_parameter_names();
+	get_all_parameter_names();
 	dvector stepsizes(n_fit_parameters);
 	get_automatic_initial_stepsizes(stepsizes);
 	param_settings->update_params(n_fit_parameters,fit_parameter_names,stepsizes.array());
@@ -7779,20 +7957,8 @@ bool QLens::setup_limits()
 
 	if ((cosmo.get_n_vary_params() > 0) and (cosmo.get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for cosmology parameters"); return false; }
 
-	if (vary_syserr_pos_parameter) {
-		lower_limits[index] = syserr_pos_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = syserr_pos_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
-	if (vary_wl_shear_factor_parameter) {
-		lower_limits[index] = wl_shear_factor_lower_limit;
-		lower_limits_initial[index] = lower_limits[index];
-		upper_limits[index] = wl_shear_factor_upper_limit;
-		upper_limits_initial[index] = upper_limits[index];
-		index++;
-	}
+	if ((n_vary_params > 0) and (get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for generic parameters"); return false; }
+
 	if (index != n_fit_parameters) die("index didn't go through all the fit parameters when setting upper/lower limits (%i expected, %i found)",n_fit_parameters,index);
 	param_settings->transform_limits(lower_limits.array(),upper_limits.array());
 	param_settings->transform_limits(lower_limits_initial.array(),upper_limits_initial.array());
@@ -7810,7 +7976,7 @@ bool QLens::setup_limits()
 	return true;
 }
 
-void QLens::get_parameter_names()
+void QLens::get_all_parameter_names()
 {
 	get_n_fit_parameters(n_fit_parameters);
 	fit_parameter_names.clear();
@@ -7830,6 +7996,7 @@ void QLens::get_parameter_names()
 		ptsrc_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
 	cosmo.get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+	get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 
 	// find any parameters with matching names and number them so they can be distinguished
 	int count, n_names;
@@ -7866,18 +8033,7 @@ void QLens::get_parameter_names()
 	}
 	delete[] new_parameter_names;
 
-	if (vary_syserr_pos_parameter) {
-		fit_parameter_names.push_back("syserr_pos");
-		latex_parameter_names.push_back("\\sigma");
-		latex_parameter_subscripts.push_back("sys");
-	}
-	if (vary_wl_shear_factor_parameter) {
-		fit_parameter_names.push_back("wl_shearfac");
-		latex_parameter_names.push_back("m");
-		latex_parameter_subscripts.push_back("WL");
-	}
-
-	if (fit_parameter_names.size() != n_fit_parameters) die("get_parameter_names() did not assign names to all the fit parameters (%i vs %i)",n_fit_parameters,fit_parameter_names.size());
+	if (fit_parameter_names.size() != n_fit_parameters) die("get_all_parameter_names() did not assign names to all the fit parameters (%i vs %i)",n_fit_parameters,fit_parameter_names.size());
 	for (i=0; i < n_fit_parameters; i++) {
 		if (latex_parameter_subscripts[i] != "") latex_parameter_names[i] += "_{" + latex_parameter_subscripts[i] + "}";
 	}
@@ -8050,6 +8206,30 @@ bool QLens::get_ptsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf)
 	pf = dummy.size();
 	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens, sb and pixsrc fit parameters come before the source params
 	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens, sb and pixsrc fit parameters come before the source params
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_cosmo_parameter_numbers(int& pi, int& pf)
+{
+	get_n_fit_parameters(n_fit_parameters);
+	vector<string> dummy, dummy2, dummy3;
+	cosmo.get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + ptsrc_fit_parameters; // since lens, sb, pixsrc and ptsrc fit parameters come before the source params
+	pf = pi + dummy.size();
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_misc_parameter_numbers(int& pi, int& pf)
+{
+	get_n_fit_parameters(n_fit_parameters);
+	vector<string> dummy, dummy2, dummy3;
+	get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + ptsrc_fit_parameters + cosmo_fit_parameters; // since lens, sb, pixsrc and ptsrc and cosmo fit parameters come before the source params
+	pf = pi + dummy.size();
 	if (pf==pi) return false;
 	return true;
 }
@@ -8509,12 +8689,7 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 			cout << "Point sources:" << endl;
 			fitmodel->print_point_source_list(false);
 		}
-		// Print cosmology params?
 
-		if (vary_syserr_pos_parameter) cout << "syserr_pos = " << fitmodel->syserr_pos << endl;
-		if (vary_wl_shear_factor_parameter) cout << "wl_shearfac = " << fitmodel->wl_shear_factor << endl;
-
-		if ((vary_syserr_pos_parameter) or (vary_wl_shear_factor_parameter)) cout << endl;
 		if (calculate_parameter_errors) {
 			if (fisher_matrix_is_nonsingular) {
 				cout << "Marginalized 1-sigma errors from Fisher matrix:\n";
@@ -8706,12 +8881,6 @@ void QLens::nested_sampling()
 	bestfitparams.input(fitparams);
 	chisq_bestfit = 2*(this->*LogLikePtr)(fitparams.array());
 
-	//if (display_chisq_status) {
-		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
-		//cout << endl;
-		//display_chisq_status = false;
-	//}
-
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wt = omp_get_wtime() - wt0;
@@ -8863,12 +9032,6 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	bestfitparams.input(n_fit_parameters);
 
 	use_ansi_characters = false;
-
-	//if (display_chisq_status) {
-		//for (int i=0; i < n_sourcepts_fit; i++) cout << endl; // to get past the status signs for image position chi-square
-		//cout << endl;
-		//display_chisq_status = false;
-	//}
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -11031,7 +11194,10 @@ void QLens::print_lens_list(bool show_vary_params)
 
 void QLens::print_fit_model()
 {
-	print_lens_list(true);
+	if (nlens > 0) {
+		cout << "Lenses:" << endl;
+		print_lens_list(true);
+	}
 	if (n_sb > 0) {
 		cout << "Source profile list:" << endl;
 		print_source_list(true);
@@ -11044,21 +11210,17 @@ void QLens::print_fit_model()
 		cout << "Point source list:" << endl;
 		print_point_source_list(true);
 	}
-	if (vary_syserr_pos_parameter) {
-		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-			cout << "Systematic error parameter: " << syserr_pos << endl;
-		} else {
-			if ((syserr_pos_lower_limit==1e30) or (syserr_pos_upper_limit==1e30)) cout << "\nsyserr_pos parameter: lower/upper limits not given (these must be set by 'syserr_pos' command before fit)\n";
-			else cout << "Systematic error parameter: [" << syserr_pos_lower_limit << ":" << syserr_pos << ":" << syserr_pos_upper_limit << "]\n";
-		}
+	if (cosmo.get_n_vary_params() > 0) {
+		cout << "Cosmology parameters:" << endl;
+		cosmo.print_parameters();
+		cosmo.print_vary_parameters();
+		cout << endl;
 	}
-	if (vary_wl_shear_factor_parameter) {
-		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
-			cout << "Weak lensing shear factor parameter: " << wl_shear_factor << endl;
-		} else {
-			if ((wl_shear_factor_lower_limit==1e30) or (wl_shear_factor_upper_limit==1e30)) cout << "\nwl_shearfac parameter: lower/upper limits not given (these must be set by 'wl_shear_factor' command before fit)\n";
-			else cout << "Weak lensing shear factor parameter: [" << wl_shear_factor_lower_limit << ":" << wl_shear_factor << ":" << wl_shear_factor_upper_limit << "]\n";
-		}
+	if (n_vary_params > 0) {
+		cout << "Miscellaneous parameters:" << endl;
+		print_parameters(true);
+		print_vary_parameters();
+		cout << endl;
 	}
 }
 
