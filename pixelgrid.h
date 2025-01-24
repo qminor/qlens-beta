@@ -321,6 +321,7 @@ class DelaunayGrid : public ModelParams, public Sort
 
 	void set_image_pixel_grid(ImagePixelGrid* image_pixel_ptr) { image_pixel_grid = image_pixel_ptr; }
 
+	void delete_arrays();
 	~DelaunayGrid();
 };
 

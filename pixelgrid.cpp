@@ -3722,36 +3722,7 @@ DelaunayGrid::DelaunayGrid(QLens* lens_in) : ModelParams()
 
 void DelaunayGrid::create_pixel_grid(double* srcpts_x, double* srcpts_y, const int n_srcpts_in, int *ivals_in, int *jvals_in, const int ni, const int nj, const bool find_pixel_magnification, const int redshift_indx)
 {
-	if (srcpts != NULL) {
-		delete[] srcpts;
-		delete[] triangle;
-		delete[] surface_brightness;
-		delete[] inv_magnification;
-		delete[] maps_to_image_pixel;
-		delete[] active_pixel;
-		delete[] active_index;
-		delete[] n_shared_triangles;
-		delete[] voronoi_area;
-		delete[] voronoi_length;
-		for (int i=0; i < n_srcpts; i++) {
-			delete[] voronoi_boundary_x[i];
-			delete[] voronoi_boundary_y[i];
-			delete[] shared_triangles[i];
-		}
-		delete[] voronoi_boundary_x;
-		delete[] voronoi_boundary_y;
-		delete[] shared_triangles;
-		if (imggrid_ivals != NULL) delete[] imggrid_ivals;
-		if (imggrid_jvals != NULL) delete[] imggrid_jvals;
-		delete[] adj_triangles[0];
-		delete[] adj_triangles[1];
-		delete[] adj_triangles[2];
-		delete[] adj_triangles[3];
-		if (img_index_ij != NULL) {
-			for (int i=0; i < img_ni; i++) delete[] img_index_ij[i];
-			delete[] img_index_ij;
-		}
-	}
+	if (srcpts != NULL) delete_arrays();
 
 	if ((redshift_indx >= 0) and (lens != NULL) and (lens->image_pixel_grids[redshift_indx] != NULL)) image_pixel_grid = lens->image_pixel_grids[redshift_indx];
 	else image_pixel_grid = NULL;
@@ -5745,9 +5716,8 @@ void DelaunayGrid::get_grid_points(vector<double>& xvals, vector<double>& yvals,
 	}
 }
 
-DelaunayGrid::~DelaunayGrid()
+void DelaunayGrid::delete_arrays()
 {
-	if (param != NULL) delete[] param;
 	delete[] srcpts;
 	delete[] triangle;
 	delete[] surface_brightness;
@@ -5776,6 +5746,13 @@ DelaunayGrid::~DelaunayGrid()
 		for (int i=0; i < img_ni; i++) delete[] img_index_ij[i];
 		delete[] img_index_ij;
 	}
+	srcpts = NULL; // just to show that arrays are no longer allocated
+}
+
+DelaunayGrid::~DelaunayGrid()
+{
+	if (param != NULL) delete[] param;
+	if (srcpts != NULL) delete_arrays();
 }
 
 /******************************** Functions in class ImagePixelData, and FITS file functions *********************************/
