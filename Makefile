@@ -54,7 +54,7 @@ objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o params.o mod
 mkdist_objects = mkdist.o
 mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
 cosmocalc_objects = cosmocalc.o
-cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
+cosmocalc_shared_objects = errors.o spline.o romberg.o modelparams.o cosmo.o brent.o
 
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 

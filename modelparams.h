@@ -2,6 +2,7 @@
 #define MODELPARAMS_H
 
 #include "vector.h"
+#include <vector>
 #include <string>
 
 class ModelParams
