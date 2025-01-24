@@ -13574,6 +13574,7 @@ void QLens::test_lens_functions()
 	clear_lenses();
 	load_point_image_data("alphafit.dat");
 
+	//
 	SPLE_Lens *A = new SPLE_Lens();
 	A->initialize_parameters(4.5,1,0,0.8,30,0.7,0.3);
 	boolvector flags(7);
