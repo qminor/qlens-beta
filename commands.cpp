@@ -6820,6 +6820,7 @@ void QLens::process_commands(bool read_file)
 				}
 			} else if (nwords==1) {
 				if (mpi_id==0) print_pixellated_source_list(vary_parameters);
+				vary_parameters = false; // don't make it prompt for vary flags if they only put 'fit pixsrc'
 			} else {
 				if (words[1]=="clear") {
 					if (nwords==2) {
@@ -7065,6 +7066,7 @@ void QLens::process_commands(bool read_file)
 				}
 			} else if (nwords==1) {
 				if (mpi_id==0) print_point_source_list(vary_parameters);
+				vary_parameters = false; // don't make it prompt for vary flags if they only put 'fit ptsrc'
 			} else {
 				if (words[1]=="clear") {
 					if (nwords==2) {
