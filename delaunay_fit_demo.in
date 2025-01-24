@@ -28,9 +28,9 @@ regparam_minlog -5
 shear_components on      # Uses gamma_1, gamma_2 as external shear parameters instead of (gamma,theta)
 
 # For reference, the following is the "true" model used to make the simulated data being fit here:
-fit lens alpha 1.3634 1.17163 0 0.963867 81.9 0.0102892 0.00358392 shear=0.0647257 -0.0575047
+#fit lens alpha 1.3634 1.17163 0 0.963867 81.9 0.0102892 0.00358392 shear=0.0647257 -0.0575047
 
-#fit lens alpha 1.35 1.1 0 0.85 90 0 0 shear=0.05 0            # input model
+fit lens alpha 1.35 1.1 0 0.85 90 0 0 shear=0.05 0            # input model
 1 1 0 1 1 1 1 1 1
 
 outside_sb_prior on        # Imposes a penalty if surface brightness is produced outside the pixel mask (type 'help sbmap_settings' for info)

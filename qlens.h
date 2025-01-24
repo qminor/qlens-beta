@@ -879,7 +879,7 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	Spline2D psf_spline;
 	double **supersampled_psf_matrix;
 	void generate_supersampled_PSF_matrix(const bool downsample = false, const int downsample_fac = 1);
-	bool load_psf_fits(string fits_filename, const bool supersampled, const bool verbal);
+	bool load_psf_fits(string fits_filename, const int hdu_indx, const bool supersampled, const bool show_header = false, const bool verbal = false);
 	bool save_psf_fits(string fits_filename, const bool supersampled = false);
 	int psf_npixels_x, psf_npixels_y;
 	int supersampled_psf_npixels_x, supersampled_psf_npixels_y;

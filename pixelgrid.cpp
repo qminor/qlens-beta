@@ -4987,6 +4987,7 @@ void DelaunayGrid::generate_hmatrices(const bool interpolate)
 
 	auto add_hmatrix_entry = [](QLens *lens, const int l, const int i, const int j, const double entry)
 	{
+		// l gives index for finite differencing (l=0: +y, l=1: -y, l=2: +x, l=3: -x)
 		int dup = false;
 		for (int k=0; k < lens->hmatrix_row_nn[l][i]; k++) {
 			if (lens->hmatrix_index_rows[l][i][k]==j) {
@@ -5119,6 +5120,7 @@ void DelaunayGrid::generate_gmatrices(const bool interpolate)
 
 	auto add_gmatrix_entry = [](QLens *lens, const int l, const int i, const int j, const double entry)
 	{
+		// l gives index for finite differencing (l=0: +y, l=1: -y, l=2: +x, l=3: -x)
 		int dup = false;
 		for (int k=0; k < lens->gmatrix_row_nn[l][i]; k++) {
 			if (lens->gmatrix_index_rows[l][i][k]==j) {
@@ -5541,29 +5543,7 @@ void DelaunayGrid::plot_surface_brightness(string root, const int npix, const bo
 		if (!plot_fits) pixel_output_file << endl;
 	}
 	if (!plot_fits) {
-		string srcpt_filename = root + "_srcpts.dat";
-		ofstream srcout; lens->open_output_file(srcout,srcpt_filename);
-		for (i=0; i < n_srcpts; i++) {
-			srcout << srcpts[i][0] << " " << srcpts[i][1] << endl;
-		}
-		string voronoi_filename = root + "_voronoi.dat";
-		ofstream vout; lens->open_output_file(vout,voronoi_filename);
-		for (i=0; i < n_srcpts; i++) {
-			for (j=0; j < n_shared_triangles[i]; j++) {
-				vout << voronoi_boundary_x[i][j] << " " << voronoi_boundary_y[i][j] << endl;
-			}
-			vout << voronoi_boundary_x[i][0] << " " << voronoi_boundary_y[i][0] << endl << endl;
-		}
-		string delaunay_filename = root + "_delaunay.dat";
-		ofstream delout; lens->open_output_file(delout,delaunay_filename);
-		for (i=0; i < n_triangles; i++) {
-			delout << triangle[i].vertex[0][0] << " " << triangle[i].vertex[0][1] << endl;
-			delout << triangle[i].vertex[1][0] << " " << triangle[i].vertex[1][1] << endl;
-			delout << triangle[i].vertex[2][0] << " " << triangle[i].vertex[2][1] << endl;
-			delout << triangle[i].vertex[0][0] << " " << triangle[i].vertex[0][1] << endl;
-			delout << endl;
-		}
-
+		plot_voronoi_grid(root);
 	}
 
 	if (plot_fits) {
@@ -5612,8 +5592,36 @@ void DelaunayGrid::plot_surface_brightness(string root, const int npix, const bo
 		delete[] sbvals;
 #endif
 	}
-
 }
+
+void DelaunayGrid::plot_voronoi_grid(string root)
+{
+	string srcpt_filename = root + "_srcpts.dat";
+	ofstream srcout; lens->open_output_file(srcout,srcpt_filename);
+	int i,j;
+	for (i=0; i < n_srcpts; i++) {
+		srcout << srcpts[i][0] << " " << srcpts[i][1] << endl;
+	}
+	string voronoi_filename = root + "_voronoi.dat";
+	ofstream vout; lens->open_output_file(vout,voronoi_filename);
+	for (i=0; i < n_srcpts; i++) {
+		for (j=0; j < n_shared_triangles[i]; j++) {
+			vout << voronoi_boundary_x[i][j] << " " << voronoi_boundary_y[i][j] << endl;
+		}
+		vout << voronoi_boundary_x[i][0] << " " << voronoi_boundary_y[i][0] << endl << endl;
+		//cout << "# length = " << voronoi_length[i] << endl;
+	}
+	string delaunay_filename = root + "_delaunay.dat";
+	ofstream delout; lens->open_output_file(delout,delaunay_filename);
+	for (i=0; i < n_triangles; i++) {
+		delout << triangle[i].vertex[0][0] << " " << triangle[i].vertex[0][1] << endl;
+		delout << triangle[i].vertex[1][0] << " " << triangle[i].vertex[1][1] << endl;
+		delout << triangle[i].vertex[2][0] << " " << triangle[i].vertex[2][1] << endl;
+		delout << triangle[i].vertex[0][0] << " " << triangle[i].vertex[0][1] << endl;
+		delout << endl;
+	}
+}
+
 
 double DelaunayGrid::find_moment(const int p, const int q, const int npix, const double xc, const double yc, const double b, const double a, const double phi)
 {
@@ -6011,7 +6019,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 	int hdutype;
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
-		 if (fits_movabs_hdu(fptr, hdu_indx, &hdutype, &status)) // move to HDU given by hdu_indx
+		if (fits_movabs_hdu(fptr, hdu_indx, &hdutype, &status)) // move to HDU given by hdu_indx
 			 return false;
 
 		if (xvals != NULL) delete[] xvals;
@@ -6060,7 +6068,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 			} else if (((pos = cardstring.find("mk: ")) != string::npos) or ((pos = cardstring.find("MK: ")) != string::npos)) {
 				reading_markers = true;
 				if (lens != NULL) lens->param_markers = cardstring.substr(pos+4);
-			} else if (cardstring.find("PXSIZE ") != string::npos) {
+			} else if ((cardstring.find("PXSIZE ") != string::npos) or (cardstring.find("PIXSCL ") != string::npos)) {
 				string pxsize_string = cardstring.substr(11);
 				stringstream pxsize_str;
 				pxsize_str << pxsize_string;
@@ -6111,7 +6119,12 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 		if (!fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status) )
 		{
 			if (naxis == 0) {
-				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+				warn("only 1D or 2D images are supported (dimension is %i for hdu=%i)\n",naxis,hdu_indx);
+				surface_brightness = NULL;
+				xvals = NULL;
+				yvals = NULL;
+				high_sn_pixel = NULL;
+				return false;
 			} else {
 				kk=0;
 				long fpixel[naxis];
@@ -6712,7 +6725,7 @@ bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground,
 #endif
 }
 
-bool QLens::load_psf_fits(string fits_filename, const bool supersampled, const bool verbal)
+bool QLens::load_psf_fits(string fits_filename, const int hdu_indx, const bool supersampled, const bool show_header, const bool verbal)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
@@ -6741,12 +6754,28 @@ bool QLens::load_psf_fits(string fits_filename, const bool supersampled, const b
 	double *pixels;
 	double peak_sb = -1e30;
 
+	char card[FLEN_CARD];   // Standard string lengths defined in fitsio.h
+	int hdutype;
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
 	{
+		if (fits_movabs_hdu(fptr, hdu_indx, &hdutype, &status)) // move to HDU given by hdu_indx
+			 return false;
+
+		int nkeys;
+		fits_get_hdrspace(fptr, &nkeys, NULL, &status); // get # of keywords
+		if (show_header) {
+			for (int ii = 1; ii <= nkeys; ii++) { // Read and print each keywords 
+				if (fits_read_record(fptr, ii, card, &status))break;
+				string cardstring(card);
+				cout << cardstring << endl;
+			}
+		}
+
 		if (!fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status) )
 		{
 			if (naxis == 0) {
-				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+				warn("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+				return false;
 			} else {
 				kk=0;
 				long fpixel[naxis];

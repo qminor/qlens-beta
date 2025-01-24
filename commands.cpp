@@ -1257,7 +1257,8 @@ void QLens::process_commands(bool read_file)
 							"sbmap plotsrc [output_file] [...]\n"  // UPDATE HELP DOCS FOR THIS COMMAND
 							"sbmap loadsrc <source_file>\n"
 							"sbmap loadimg <image_file>\n"
-							"sbmap loadpsf <psf_file>\n"        // WRITE HELP DOCS FOR THIS COMMAND
+							"sbmap loadpsf <psf_file>\n"
+							"sbmap load_noisemap <noisemap_file>\n"
 							"sbmap unloadpsf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap mkpsf [-spline]\n"                 // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap spline_psf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
@@ -1282,7 +1283,7 @@ void QLens::process_commands(bool read_file)
 							"arguments, shows the dimensions of current image/source surface brightness maps, if loaded.\n";
 					} else {
 						if (words[2]=="loadimg")
-							cout << "sbmap loadimg <image_filename> [-showhead]\n\n"
+							cout << "sbmap loadimg <image_filename> [-showhead] [-hdu=#]\n\n"
 								"Load an image surface brightness map from file <image_file>. If 'fits_format' is off, then\n"
 								"loads a text file with name '<image_filename>.dat' where pixel values are arranged in matrix\n"
 								"form. The x-values are loaded in from file '<image_filename>.x' and likewise for y-values.\n"
@@ -1291,7 +1292,19 @@ void QLens::process_commands(bool read_file)
 								"has been specified, than the grid dimensions specified by the 'grid' command are used to\n"
 								"set the pixel size. After loading the pixel image, the number of image pixels for plotting\n"
 								"(set by 'img_npixels') is automatically set to be identical to those of the data image.\n"
-								"To show the FITS header, add the argument '-showhead'.\n";
+								"To jump to a different header data unit (HDU), use '-hdu=#' where # is the HDU index.\n"
+								"To show the FITS header for the given HDU index, add the argument '-showhead'.\n";
+						else if (words[2]=="load_noisemap")
+							cout << "sbmap load_noisemap <noisemap_filename> [-showhead] [-hdu=#]\n\n"
+								"Load a noise map from FITS file <noisemap_file>. To jump to a different FITS header data unit\n"
+								"(HDU), use '-hdu=#' where # is the HDU index. To show the FITS header for the given HDU index,\n"
+								"add the argument '-showhead'.\n";
+						else if (words[2]=="loadpsf")
+							cout << "sbmap loadpsf <psf_filename> [-showhead] [-hdu=#] [-spline] [-supersampled]\n\n"
+								"Load PSF map from FITS file <psf_file>. By default, the PSF map will be truncated according to\n"
+								"the 'psf_threshold' setting, such that pixels whose brightness falls below the given threshold\n"
+								"are excluded. To jump to a different FITS header data unit (HDU), use '-hdu=#' where # is the\n"
+								"HDU index. To show the FITS header for the given HDU index, add the argument '-showhead'.\n";
 						else if (words[2]=="loadsrc")
 							cout << "sbmap loadsrc <source_filename>\n\n"
 								"Load a source surface brightness pixel map that was previously saved in qlens (using 'sbmap\n"
@@ -1430,7 +1443,7 @@ void QLens::process_commands(bool read_file)
 							cout << "sbmap set_posrg_pixels\n\n"
 								"Activate all pixels that have a positive radial gradient. This typically captures the inner part of\n"
 								"the lensed arcs in an image. (Note: the gradient is given by the difference in surface brightness\n"
-								"between pixel and its next neighbor along x/y; the dot product of r_hat gives the radial gradient).\n"
+								"between pixel and its next neighbor along x/y; its dot product with r_hat gives the radial gradient).\n"
 								"To mask all of the lensed arcs, one can follow up with 'trim mask_windows ...' to clean up the mask,\n"
 								"and then use 'sbmap set_neighbor_pixels -ext' until all of the lensed arcs are included in the mask.\n\n";
 						else if (words[2]=="find_noise")
@@ -9498,6 +9511,8 @@ void QLens::process_commands(bool read_file)
 				bool load_supersampled_psf = false;
 				bool cubic_spline = false;
 				bool specify_pixsize = false;
+				bool show_header = false;
+				int hdu_indx = 1;
 				bool downsample = false;
 				int downsample_fac = 1;
 				double psize = -1;
@@ -9506,7 +9521,15 @@ void QLens::process_commands(bool read_file)
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
 					for (int i=0; i < args.size(); i++) {
-						if (args[i]=="-spline") cubic_spline = true;
+						if (args[i]=="-showhead") show_header = true;
+						else if ((pos = args[i].find("-hdu=")) != string::npos) {
+							string hdustring = args[i].substr(pos+5);
+							stringstream hdustr;
+							hdustr << hdustring;
+							if (!(hdustr >> hdu_indx)) Complain("incorrect format for HDU index");
+							if (hdu_indx <= 0) Complain("HDU index cannot be zero or negative");
+						}
+						else if (args[i]=="-spline") cubic_spline = true;
 						else if (args[i]=="-supersampled") {
 							if (!psf_supersampling) Complain("psf_supersampling must be set to 'on' to load supersampled PSF");
 							else load_supersampled_psf = true;
@@ -9533,7 +9556,7 @@ void QLens::process_commands(bool read_file)
 				} else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
-				if (!load_psf_fits(filename,load_supersampled_psf,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
+				if (!load_psf_fits(filename,hdu_indx,load_supersampled_psf,show_header,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
 				if (!load_supersampled_psf) {
 					if (psf_spline.is_splined()) psf_spline.unspline();
 					if (cubic_spline) {
@@ -14649,6 +14672,7 @@ void QLens::process_commands(bool read_file)
 			sb_list[0]->set_limits(lower_limits,upper_limits);
 			*/
 		} else if (words[0]=="testpt") {
+			/*
 			if (nwords==4) {
 				double x,y;
 				int pix0;
@@ -14662,24 +14686,32 @@ void QLens::process_commands(bool read_file)
 					cout << "Triangle number = " << tri << endl;
 				} else Complain("delaunay grid hasn't been created");
 			} else Complain("need coords, pixel0");
-			/*
-			const int nn = 10;
-			double xin[nn] = { 1, 5, 9, 2, 12, 18, 3, 5, 8, 4 };
-			double yin[nn] = { 11, 2, 19, 9, 3, 10, 2, 12, 8, 7 };
-			DelaunayGrid delaunay_grid(this,xin,yin,nn);
-			lensvector pt(3.4,8.8);
-			int trinum = delaunay_grid.search_grid(0,pt);
-			lensvector vertex[3];
-			vertex[0] = delaunay_grid.triangle[trinum].vertex[0];
-			vertex[1] = delaunay_grid.triangle[trinum].vertex[1];
-			vertex[2] = delaunay_grid.triangle[trinum].vertex[2];
-			cout << "Found point in triangle " << trinum << endl;
-			cout << "Vertices:" << endl;
-			for (int i=0; i < 3; i++) {
-				cout << vertex[i][0] << " " << vertex[i][1] << endl;
-			}
-			cout << endl;
 			*/
+			//const int nn = 12;
+			//double xin[nn] = { 1, 5, 9, -1.2, 12, 18, 3, 5, 8, 4, 7.17, 10.9 };
+			//double yin[nn] = { 11, 2, 19, 9, 3, 10, 2, 12, 8, 7, 9.05, 16.9 };
+			const int nn = 16;
+			double xin[nn] = { 0.0000, 1.0000, 2.0000, 3.0000, 0.0001, 1.0001, 2.0001, 3.0001, 0.0002, 1.0002, 2.0002, 3.0002, 0.0003, 1.0003, 2.0003, 3.0003 };
+			double yin[nn] = { 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 3.0 };
+			DelaunayGrid delaunay_grid(this);
+			delaunay_grid.create_pixel_grid(xin,yin,nn);
+			for (int i=0; i < nn; i++) delaunay_grid.surface_brightness[i] = SQR(xin[i])+SQR(yin[i]);
+			delaunay_grid.plot_surface_brightness("test",100,true,false,false);
+			delaunay_grid.plot_voronoi_grid("test");
+			// For natural neighbor interpolation, there is a failure mode when points near the border of the grid are nearly colinear, resulting in sliver triangles. (Demonstrate in lines above.) Weird circles appear in the interpolated SB. Fix this at some point!!
+			//lensvector pt(3.4,8.8);
+			//bool inside;
+			//int trinum = delaunay_grid.search_grid(0,pt,inside);
+			//lensvector vertex[3];
+			//vertex[0] = delaunay_grid.triangle[trinum].vertex[0];
+			//vertex[1] = delaunay_grid.triangle[trinum].vertex[1];
+			//vertex[2] = delaunay_grid.triangle[trinum].vertex[2];
+			//cout << "Found point in triangle " << trinum << endl;
+			//cout << "Vertices:" << endl;
+			//for (int i=0; i < 3; i++) {
+				//cout << vertex[i][0] << " " << vertex[i][1] << endl;
+			//}
+			//cout << endl;
 
 			/*
          Delaunay *delaunay_triangles = new Delaunay(xin, yin, nn);
