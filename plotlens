@@ -688,6 +688,26 @@ then
 	#PLOTCOMMAND="plot $RANGE '$PLOTDIR/src_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' using 3:4 w lines lw $LINEWIDTH lc 0 t 'caustics', '$PLOTDIR/src_pixel_srcpts.dat' w dots lc 8 t 'delaunay pixels', 'centkm.dat' w dots pt 1 lc 15 t 'centroids'"
 	#PLOTCOMMAND="$PLOTCOMMAND, '$PLOTDIR/src.dat' w points pt $PTTYPE ps $PTSIZE lc 8 t 'image pts', '$PLOTDIR/upper_srcpts.dat' w points pt 7 ps 0.3 lc 4 t 'delaunay pixels (y>0.4)', '$PLOTDIR/lower_srcpts.dat' w points pt 7 ps 0.3 lc 8 t 'delaunay pixels (y<0.4)'"
 	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+elif [[ $COMMAND == "potpixel" ]]
+then
+	set -- $(head -2 $PLOTDIR/pot_pixel.x && head -2 $PLOTDIR/pot_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/pot_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image, '$PLOTDIR/crit.dat' w lines lw $LINEWIDTH lc 0 t 'critical curves'"
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
+elif [[ $COMMAND == "potpixel_nocc" ]]
+then
+	set -- $(head -2 $PLOTDIR/pot_pixel.x && head -2 $PLOTDIR/pot_pixel.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="plot $RANGE '$PLOTDIR/pot_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel_nocc" ]]
 then
 	set -- $(head -2 $PLOTDIR/img_pixel.x && head -2 $PLOTDIR/img_pixel.y)
@@ -703,7 +723,6 @@ then
 		STEPSHORT=`bc <<< "scale=3; (($MAX)-($MIN))/$NCONT"`
 		C0=`bc <<< "scale=15; $MIN+3*$STEP"`
 		Cf=`bc <<< "scale=15; $MAX-$STEP"`
-		echo 'crap'
 
 		PLOTCOMMAND="set contour\nunset surface\nset cntrparam cubicspline levels incr $C0,$STEP,$Cf\nset view map\nset dgrid3d 100,100 qnorm 4\nset table 'contour.txt'\nsplot '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"
 		PLOTCOMMAND="$PLOTCOMMAND\nunset contour\nset surface\nset table 'dgrid.txt'\nsplot '$PLOTDIR/img_pixel.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix\nunset table"

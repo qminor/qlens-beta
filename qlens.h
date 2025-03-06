@@ -3,7 +3,6 @@
 
 #include "modelparams.h"
 #include "sort.h"
-#include "rand.h"
 #include "brent.h"
 #include "spline.h"
 #include "profile.h"
@@ -14,10 +13,10 @@
 #include "simplex.h"
 #include "mcmchdr.h"
 #include "cosmo.h"
-#include "stdio.h"
 #ifdef USE_MUMPS
 #include "dmumps_c.h"
 #endif
+#include <cstdio>
 #include <string>
 #include <vector>
 #include <iostream>
@@ -83,9 +82,10 @@ enum DerivedParamType {
 class QLens;			// Defined after class Grid
 class ModelParams;
 class SourcePixelGrid;
-class DelaunayGrid;
+class LensPixelGrid;
+class DelaunaySourceGrid;
 class ImagePixelGrid;
-class DelaunayGrid;
+class DelaunaySourceGrid;
 struct ImageData;
 struct WeakLensingData;
 struct ImagePixelData;
@@ -149,7 +149,7 @@ class PointSource : public ModelParams
 	void reset_images() { n_images = 0; images.clear(); }
 };
 
-class Grid : public Brent
+class Grid : private Brent
 {
 	private:
 	// this constructor is only used by the top-level Grid to initialize the lower-level grids, so it's private
@@ -345,7 +345,7 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 
 // There is too much inheritance going on here. Nearly all of these can be changed to simply objects that are created within the QLens
 // class; it's more transparent to do so, and more object-oriented.
-class QLens : public ModelParams, public Brent, public Sort, public Powell, public Simplex, public UCMC
+class QLens : public ModelParams, public UCMC, private Brent, private Sort, private Powell, private Simplex
 {
 	private:
 	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
@@ -408,6 +408,7 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	int nlens;
 	LensProfile** lens_list;
 	std::vector<LensProfile*> lens_list_vec;
+	int *lens_redshift_idx;
 
 	int n_sb;
 	SB_Profile** sb_list;
@@ -416,8 +417,12 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	int n_pixellated_src;
 	int* pixellated_src_redshift_idx;
 	ModelParams **srcgrids; // this is the base class for Delaunay and cartesian source grids
-	DelaunayGrid **delaunay_srcgrids;
+	DelaunaySourceGrid **delaunay_srcgrids;
 	SourcePixelGrid **cartesian_srcgrids;
+
+	int n_pixellated_lens;
+	int* pixellated_lens_redshift_idx;
+	LensPixelGrid **lensgrids; // at the moment, the only kind of object is pixellated potential grids (used for first-order potential corrections to lens models)
 
 	Cosmology cosmo;
 
@@ -454,7 +459,6 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 
 	int n_lens_redshifts;
 	double *lens_redshifts;
-	int *lens_redshift_idx;
 	int *zlens_group_size;
 	int **zlens_group_lens_indx;
 
@@ -490,16 +494,14 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
 	bool use_ansi_characters;
-	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, ptsrc_fit_parameters, cosmo_fit_parameters, n_fit_parameters;
+	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, pixlens_fit_parameters, ptsrc_fit_parameters, cosmo_fit_parameters, n_fit_parameters;
 	std::vector<string> fit_parameter_names, transformed_parameter_names;
 	std::vector<string> latex_parameter_names, transformed_latex_parameter_names;
 
-	//std::vector<std::vector<image>> point_imgs; // this will store the point images from the first source point in sourcepts_fit when doing source pixel modeling, to generate quasar images
 	double *regparam_ptr; // points to regularization parameter for given source pixel grid or shapelet object
+	double *regparam_pot_ptr; // points to regularization parameter for potential of given lens pixel grid
 	double matern_approx_source_size;
-	//bool vary_matern_scale;
 	bool optimize_regparam;
-	//bool optimize_regparam_lhi;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
 	double regopt_chisqmin, regopt_logdet;
 	int max_regopt_iterations;
@@ -519,12 +521,6 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	bool get_lumreg_from_sbweights;
 
 	double *reg_weight_factor;
-	bool vary_regparam_lsc, vary_regparam_lum_index;
-	bool vary_mag_weight_sc, vary_mag_weight_index;
-	bool vary_lumreg_rc;
-
-	//double regparam_lsc2_lower_limit, regparam_lsc2_upper_limit;
-	//double regparam_lum_index2_lower_limit, regparam_lum_index2_upper_limit;
 
 	bool use_lum_weighted_srcpixel_clustering;
 	bool use_dist_weighted_srcpixel_clustering;
@@ -573,6 +569,8 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	bool use_dualtree_kmeans;
 	int n_src_clusters;
 	int n_cluster_iterations;
+	bool include_potential_perturbations;
+	bool first_order_sb_correction;
 	double delaunay_high_sn_sbfrac;
 	bool activate_unmapped_source_pixels;
 	double total_srcgrid_overlap_area, high_sn_srcgrid_overlap_area;
@@ -745,7 +743,7 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 
 	ImagePixelGrid **image_pixel_grids;
 	ImagePixelData *image_pixel_data;
-	int image_npixels, source_npixels, source_n_amps;
+	int image_npixels, source_npixels, lensgrid_npixels, source_and_lens_npixels, n_amps;
 	int image_n_subpixels; // for supersampling
 	int image_npixels_fgmask;
 
@@ -755,8 +753,8 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	double *point_image_surface_brightness;
 	double *sbprofile_surface_brightness;
 	double *img_minus_sbprofile;
-	double *source_pixel_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
-	double *source_pixel_vector;
+	double *amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
+	double *amplitude_vector;
 	double *source_pixel_n_images;
 
 	int *image_pixel_location_Lmatrix;
@@ -767,7 +765,7 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	std::vector<double> *Lmatrix_rows;
 	std::vector<int> *Lmatrix_index_rows;
 
-	bool assign_pixel_mappings(const int zsrc_i, const bool verbal=false);
+	bool assign_pixel_mappings(const int zsrc_i, const bool potential_perturbations=false, const bool verbal=false);
 	void assign_foreground_mappings(const int zsrc_i, const bool use_data = true);
 	double *Dvector;
 	double *Dvector_cov;
@@ -782,24 +780,31 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false
 	double covmatrix_epsilon; // fudge factor in covariance matrix diagonal to aid inversion
 	bool penalize_defective_covmatrix;
+
 	double *Rmatrix;
 	int *Rmatrix_index;
+
+	double *Rmatrix_pot;
+	int *Rmatrix_pot_index;
+
+	// The following are simply used as temporary arrays when constructing Rmatrix
 	double *Rmatrix_diag_temp;
 	std::vector<double> *Rmatrix_rows;
 	std::vector<int> *Rmatrix_index_rows;
 	int *Rmatrix_row_nn;
-	int Rmatrix_nn;
+
+
 #ifdef USE_MUMPS
 	static DMUMPS_STRUC_C *mumps_solver;
 #endif
 
 	void convert_Lmatrix_to_dense();
-	void assign_Lmatrix_shapelets(const int zsrc_, bool verbal=false);
+	void construct_Lmatrix_shapelets(const int zsrc_, bool verbal=false);
 	void PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal=false);
-	void create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const bool verbal=false);
+	void create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const bool potential_perturbations=false, const bool verbal=false);
 	void generate_Gmatrix();
-	void add_regularization_term_to_dense_Fmatrix(double *regparam_ptr);
-	double calculate_regularization_prior_term(double *regparam_ptr);
+	void add_regularization_term_to_dense_Fmatrix(double *regparam_ptr, const bool potential_perturbations=false);
+	double calculate_regularization_prior_term(double *regparam_ptr, const bool potential_perturbations=false);
 
 	bool optimize_regularization_parameter(const int zsrc_i, const bool dense_Fmatrix=false, const bool verbal=false, const bool pre_srcgrid = false);
 	void setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatrix=false);
@@ -809,9 +814,6 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	void load_pixel_sbweights(const int zsrc_i=-1);
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
-	//double chisq_regparam_it_lumreg_dense(const double logreg);
-	//double chisq_regparam_it_lumreg_dense_final(const bool verbal);
-	//double chisq_regparam_lumreg_dense();
 	void calculate_lumreg_srcpixel_weights(const int zsrc_i, const bool use_sbweights=false);
 	void calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
 	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
@@ -849,11 +851,18 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	dvector Fmatrix_stacked;
 	dvector Fmatrix_packed;
 	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
+
 	dvector covmatrix_stacked;
-	dvector covmatrix_stacked_copy; // used when optimizing the regularization parameter with luminosity weighting
 	dvector covmatrix_packed;
 	dvector covmatrix_factored;
 	dvector Rmatrix_packed;
+
+	dvector covmatrix_pot_stacked;
+	dvector covmatrix_pot_packed;
+	dvector covmatrix_pot_factored;
+	dvector Rmatrix_pot_packed;
+
+	dvector covmatrix_stacked_copy; // used when optimizing the regularization parameter with luminosity weighting
 	dvector temp_src; // used when optimizing the regularization parameter
 
 	double *gmatrix[4];
@@ -886,16 +895,16 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	double psf_threshold, psf_ptsrc_threshold;
 	int psf_ptsrc_nsplit; // allows for subpixel PSF
 
-	double Fmatrix_log_determinant, Rmatrix_log_determinant;
+	double Fmatrix_log_determinant, Rmatrix_log_determinant, Rmatrix_pot_log_determinant;
 	double Gmatrix_log_determinant;
-	void initialize_pixel_matrices(const int zsrc_i, bool verbal=false);
+	void initialize_pixel_matrices(const int zsrc_i, const bool potential_perturbations=false, bool verbal=false);
 	void initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal=false);
 	void count_shapelet_npixels(const int zsrc_i=-1);
-	void clear_pixel_matrices(const int zsrc_i=-1);
+	void clear_pixel_matrices(const bool include_foreground_sbprofile=true);
 	void clear_sparse_lensing_matrices();
 	double find_sbprofile_surface_brightness(lensvector &pt);
-	void assign_Lmatrix(const int zsrc_i, const bool delaunay=true, const bool verbal=false);
-	void assign_Lmatrix_supersampled(const int zsrc_i, const bool delaunay=true, const bool verbal=false);
+	void construct_Lmatrix(const int zsrc_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
+	void construct_Lmatrix_supersampled(const int zsrc_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
 	void PSF_convolution_Lmatrix(const int zsrc_i, bool verbal = false);
 	void PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground = false, const bool verbal = false, const bool use_fft = false);
 	void average_supersampled_image_surface_brightness(const int zsrc_i=-1);
@@ -908,24 +917,25 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	bool spline_PSF_matrix(const double xstep, const double ystep);
 	double interpolate_PSF_matrix(const double x, const double y, const bool supersampled);
 
-	bool create_regularization_matrix(const int zsrc_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool verbal = false);
-	void generate_Rmatrix_from_gmatrices(const int zsrc_i=-1, const bool interpolate = false);
-	void generate_Rmatrix_from_hmatrices(const int zsrc_i=-1, const bool interpolate = false);
-	void generate_Rmatrix_norm();
-	bool generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int kernel_type=0, const bool include_lum_weighting=false, const bool verbal = false);
-	double find_approx_source_size(const int zsrc_i, double& xc_approx, double& yc_approx, const bool verbal);
+	bool create_regularization_matrix(const int zsrc_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool potential_perturbations = false, const bool verbal = false);
+	void generate_Rmatrix_from_gmatrices(const int zsrc_i=-1, const bool interpolate = false, const bool potential_perturbations = false);
+	void generate_Rmatrix_from_hmatrices(const int zsrc_i=-1, const bool interpolate = false, const bool potential_perturbations = false);
+	void generate_Rmatrix_norm(const bool potential_perturbations = false);
+	bool generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int kernel_type=0, const bool include_lum_weighting=false, const bool potential_perturbations = false, const bool verbal = false);
+	void find_source_centroid(const int zsrc_i, double& xc_approx, double& yc_approx, const bool verbal);
 
-	void create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool dense_Fmatrix=false, const bool verbal=false);
+	void create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool dense_Fmatrix=false, const bool potential_perturbations=false, const bool verbal=false);
 	void invert_lens_mapping_dense(const int zsrc_i, bool verbal=false);
-	void invert_lens_mapping_MUMPS(const int zsrc_i, bool verbal, bool use_copy = false);
-	void invert_lens_mapping_UMFPACK(const int zsrc_i, bool verbal, bool use_copy = false);
+	void invert_lens_mapping_MUMPS(const int zsrc_i, double& logdet, bool verbal, bool use_copy = false);
+	void invert_lens_mapping_UMFPACK(const int zsrc_i, double& logdet, bool verbal, bool use_copy = false);
 	void convert_Rmatrix_to_dense();
-	void Rmatrix_determinant_MKL();
-	void Rmatrix_determinant_MUMPS();
-	void Rmatrix_determinant_UMFPACK();
-	void Rmatrix_determinant_dense();
+	void convert_Rmatrix_pot_to_dense();
+	void Rmatrix_determinant_MKL(const bool potential_perturbations);
+	void Rmatrix_determinant_MUMPS(const bool potential_perturbations);
+	void Rmatrix_determinant_UMFPACK(const bool potential_perturbations);
+	void Rmatrix_determinant_dense(const bool potential_perturbations);
 	void invert_lens_mapping_CG_method(const int zsrc_i, bool verbal);
-	void update_source_amplitudes(const int zsrc_i, const bool verbal=false);
+	void update_source_and_lensgrid_amplitudes(const int zsrc_i, const bool verbal=false);
 	void indexx(int* arr, int* indx, int nn);
 
 	double set_required_data_pixel_window(bool verbal);
@@ -940,7 +950,7 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	void vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root, const int zsrc_i=-1);
 	double invert_image_surface_brightness_map(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
-	double invert_image_surface_brightness_map_old(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
+	bool generate_and_invert_lensing_matrix(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
 
 	bool load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal, const bool zero_verbal = false);
@@ -956,17 +966,16 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	bool create_sourcegrid_delaunay(const int src_i, const bool use_mask, const bool verbal);
 	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int zsrc_i, const bool verbal=false);
 	void create_sourcegrid_from_imggrid_delaunay_old(const bool use_weighted_srcpixel_clustering, const bool verbal);
-	void create_random_delaunay_sourcegrid(const bool use_weighted_probability, const bool verbal);
-	void generate_random_regular_imgpts(double *imgpts_x, double *imgpts_y, double *srcpts_x, double *srcpts_y, int& n_imgpts, int *ivals, int *jvals, const bool use_lum_weighted_number_density, const bool verbal);
-	void load_source_surface_brightness_grid(string source_inputfile);
+	bool create_lensgrid_cartesian(const int zsrc_i, const int pixlens_i, const bool verbal, const bool use_mask = true);
+	//void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
-	bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool show_only_ptimgs = false, int specific_zsrc_i = -1, bool verbose = true);
+	//bool make_image_surface_brightness_data();
+	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool show_only_ptimgs = false, int specific_zsrc_i = -1, bool plot_log = false, bool plot_current_sb = false, bool verbose = true);
 
-	void plot_Lmatrix();
-	void check_Lmatrix_columns();
-	double temp_double;
-	void Swap(double& a, double& b) { temp_double = a; a = b; b = temp_double; }
+	//void plot_Lmatrix();
+	//void check_Lmatrix_columns();
+	//double temp_double;
+	//void Swap(double& a, double& b) { temp_double = a; a = b; b = temp_double; }
 
 	double wtime0, wtime; // for calculating wall time in parallel calculations
 	bool show_wtime;
@@ -1158,9 +1167,11 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	bool register_lens_vary_parameters(const int lensnumber);
 	bool set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags);
 	bool set_pixellated_src_vary_parameters(const int src_number, boolvector &vary_flags);
+	bool set_pixellated_lens_vary_parameters(const int pixlens_number, boolvector &vary_flags);
 	bool set_sourcept_vary_parameters(const int sptnumber, const bool vary_x, const bool vary_y); // old--replace with below
 	bool set_ptsrc_vary_parameters(const int src_number, boolvector &vary_flags);
 	bool update_pixellated_src_varyflag(const int src_number, const string name, const bool flag);
+	bool update_pixellated_lens_varyflag(const int src_number, const string name, const bool flag);
 	bool update_ptsrc_varyflag(const int src_number, const string name, const bool flag);
 	bool update_cosmo_varyflag(const string name, const bool flag);
 	bool update_misc_varyflag(const string name, const bool flag);
@@ -1193,7 +1204,10 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	void remove_pixellated_source(int src_number);
 	void print_pixellated_source_list(bool show_vary_params);
 	void find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& xavg, double& yavg);
-	void print_imggrid_list(bool show_vary_params);
+
+	bool add_pixellated_lens(const double zlens);
+	void remove_pixellated_lens(int pixlens_number);
+	void print_pixellated_lens_list(bool show_vary_params);
 
 	void add_point_source(const double zsrc, const lensvector& sourcept, const bool vary_source_coords = true);
 	void remove_point_source(int src_number);
@@ -1255,6 +1269,7 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
+	bool get_pixlens_parameter_numbers(const int pixlens_i, int& pi, int& pf);
 	bool get_ptsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
 	bool get_cosmo_parameter_numbers(int& pi, int& pf);
 	bool get_misc_parameter_numbers(int& pi, int& pf);
@@ -1264,6 +1279,7 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	bool output_parameter_prior_ranges();
 	bool update_parameter_value(const int param_num, const double param_val);
 	void update_pixsrc_active_parameters(const int src_number);
+	void update_pixlens_active_parameters(const int pixlens_number);
 	void update_ptsrc_active_parameters(const int src_number);
 	void update_active_parameters(ModelParams* param_object, const int pi);
 
@@ -1352,6 +1368,7 @@ class QLens : public ModelParams, public Brent, public Sort, public Powell, publ
 	bool isspherical();
 	void set_grid_corners(double xmin, double xmax, double ymin, double ymax);
 	void set_grid_from_pixels();
+	void set_img_npixels(const int npix_x, const int npix_y);
 
 	void set_gridsize(double xl, double yl);
 	void set_gridcenter(double xc, double yc);

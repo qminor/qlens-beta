@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
 	}
 
 	if ((mpi_id==0) and (verbal_mode==true)) {
-		cout << "QLens by Quinn Minor (2023)\n";
+		cout << "QLens by Quinn Minor (2025)\n";
 		cout << "Type 'help' for a list of commands, or 'demo1' or 'demo2' to see demos (or 'q' to quit).\n\n";
 	}
 
@@ -281,9 +281,9 @@ int main(int argc, char *argv[])
 	QLens::delete_mumps();
 #endif
 	Grid::deallocate_multithreaded_variables();
-	SourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
 	ImagePixelGrid::deallocate_multithreaded_variables();
 	DelaunayGrid::deallocate_multithreaded_variables();
+	SourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
 	QLens::deallocate_multithreaded_variables();
 
 #ifdef USE_MPI

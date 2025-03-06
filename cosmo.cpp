@@ -152,11 +152,11 @@ void Cosmology::setup_parameters(const bool initial_setup)
 
 void Cosmology::copy_cosmo_data(Cosmology* cosmo_in)
 {
-	copy_param_data(cosmo_in);
 	hubble = cosmo_in->hubble;
 	omega_m = cosmo_in->omega_m;
 	omega_b = cosmo_in->omega_b;
 	A_s = cosmo_in->A_s;
+	copy_param_arrays(cosmo_in);
 	set_cosmology(omega_m,omega_b,hubble,A_s);
 }
 

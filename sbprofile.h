@@ -19,7 +19,7 @@ class QLens;
 
 enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, dpie, nfw_SOURCE, SHAPELET, TOPHAT, SB_MULTIPOLE };
 
-class SB_Profile : public EllipticityGradient, UCMC, Simplex
+class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 {
 	friend class QLens;
 	friend class LensProfile;

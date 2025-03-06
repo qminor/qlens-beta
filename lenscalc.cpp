@@ -1,5 +1,6 @@
 #include "qlens.h"
 #include "mathexpr.h"
+#include "pixelgrid.h"
 
 double QLens::kappa(const double& x, const double& y, double* zfacs, double** betafacs)
 {
@@ -9,6 +10,9 @@ double QLens::kappa(const double& x, const double& y, double* zfacs, double** be
 		kappa=0;
 		for (j=0; j < nlens; j++) {
 			kappa += lens_list[j]->kappa(x,y);
+		}
+		for (j=0; j < n_pixellated_lens; j++) {
+			if (lensgrids[j]->include_in_lensing_calculations) kappa += lensgrids[j]->kappa(x,y,0);
 		}
 		kappa *= zfacs[0];
 	} else {
@@ -31,6 +35,9 @@ double QLens::potential(const double& x, const double& y, double* zfacs, double*
 			pot_subtot=0;
 			for (j=0; j < zlens_group_size[i]; j++) {
 				pot_subtot += lens_list[zlens_group_lens_indx[i][j]]->potential(x,y);
+			}
+			for (j=0; j < n_pixellated_lens; j++) {
+				if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) pot_subtot += lensgrids[j]->interpolate_potential(x,y,0);
 			}
 			pot += zfacs[i]*pot_subtot;
 		}
@@ -69,6 +76,13 @@ void QLens::deflection(const double& x, const double& y, lensvector& def_tot, co
 				(*def_i)[i][0] += (*def)[0];
 				(*def_i)[i][1] += (*def)[1];
 			}
+			for (j=0; j < n_pixellated_lens; j++) {
+				if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) {
+					lensgrids[j]->deflection((*x_i)[0],(*x_i)[1],(*def),thread);
+					(*def_i)[i][0] += (*def)[0];
+					(*def_i)[i][1] += (*def)[1];
+				}
+			}
 			//std::cout << "Lens redshift" << i << " (z=" << lens_redshifts[i] << "): xi=" << (*x_i)[0] << " " << (*x_i)[1] << std::endl;
 			(*def_i)[i][0] *= zfacs[i];
 			(*def_i)[i][1] *= zfacs[i];
@@ -103,6 +117,13 @@ void QLens::deflection(const double& x, const double& y, double& def_tot_x, doub
 				lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
 				(*def_i)[i][0] += (*def)[0];
 				(*def_i)[i][1] += (*def)[1];
+			}
+			for (j=0; j < n_pixellated_lens; j++) {
+				if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) {
+					lensgrids[j]->deflection((*x_i)[0],(*x_i)[1],(*def),thread);
+					(*def_i)[i][0] += (*def)[0];
+					(*def_i)[i][1] += (*def)[1];
+				}
 			}
 			(*def_i)[i][0] *= zfacs[i];
 			(*def_i)[i][1] *= zfacs[i];
@@ -154,6 +175,13 @@ void QLens::deflection_exclude(const double& x, const double& y, bool* exclude, 
 					(*def_i)[i][1] += (*def)[1];
 				}
 			}
+			for (j=0; j < n_pixellated_lens; j++) {
+				if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) {
+					lensgrids[j]->deflection((*x_i)[0],(*x_i)[1],(*def),thread);
+					(*def_i)[i][0] += (*def)[0];
+					(*def_i)[i][1] += (*def)[1];
+				}
+			}
 			(*def_i)[i][0] *= zfacs[i];
 			(*def_i)[i][1] *= zfacs[i];
 			def_tot_x += (*def_i)[i][0];
@@ -194,6 +222,13 @@ void QLens::map_to_lens_plane(const int& redshift_i, const double& x, const doub
 			lens_list[zlens_group_lens_indx[i][j]]->deflection((*x_i)[0],(*x_i)[1],(*def));
 			(*def_i)[i][0] += (*def)[0];
 			(*def_i)[i][1] += (*def)[1];
+		}
+		for (j=0; j < n_pixellated_lens; j++) {
+			if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) {
+				lensgrids[j]->deflection((*x_i)[0],(*x_i)[1],(*def),thread);
+				(*def_i)[i][0] += (*def)[0];
+				(*def_i)[i][1] += (*def)[1];
+			}
 		}
 		(*def_i)[i][0] *= zfacs[i];
 		(*def_i)[i][1] *= zfacs[i];
@@ -251,6 +286,21 @@ void QLens::hessian(const double& x, const double& y, lensmatrix& hess_tot, cons
 						(*def_i)[i][1] += (*def)[1];
 					}
 				}
+				for (j=0; j < n_pixellated_lens; j++) {
+					if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) {
+						lensgrids[j]->hessian((*x_i)[0],(*x_i)[1],(*hess),thread);
+						(*hess_i)[i][0][0] += (*hess)[0][0];
+						(*hess_i)[i][1][1] += (*hess)[1][1];
+						(*hess_i)[i][0][1] += (*hess)[0][1];
+						(*hess_i)[i][1][0] += (*hess)[1][0];
+						if (i < n_lens_redshifts-1) {
+							lensgrids[j]->deflection((*x_i)[0],(*x_i)[1],(*def),thread);
+							(*def_i)[i][0] += (*def)[0];
+							(*def_i)[i][1] += (*def)[1];
+						}
+					}
+				}
+
 				if (i < n_lens_redshifts-1) {
 					(*def_i)[i][0] *= zfacs[i];
 					(*def_i)[i][1] *= zfacs[i];
@@ -287,6 +337,16 @@ void QLens::hessian(const double& x, const double& y, lensmatrix& hess_tot, cons
 			hess_tot[0][1] += (*hess)[0][1];
 			hess_tot[1][0] += (*hess)[1][0];
 		}
+		for (j=0; j < n_pixellated_lens; j++) {
+			if (lensgrids[j]->include_in_lensing_calculations) {
+				lensgrids[j]->hessian(x,y,(*hess),thread);
+				hess_tot[0][0] += (*hess)[0][0];
+				hess_tot[1][1] += (*hess)[1][1];
+				hess_tot[0][1] += (*hess)[0][1];
+				hess_tot[1][0] += (*hess)[1][0];
+			}
+		}
+		//std::cout << "hess_00=" << hess_tot[0][0] << " hess11=" << hess_tot[1][1] << " hess01=" << hess_tot[0][1] << std::endl;
 		hess_tot[0][0] *= zfacs[0];
 		hess_tot[1][1] *= zfacs[0];
 		hess_tot[0][1] *= zfacs[0];
@@ -308,6 +368,15 @@ void QLens::hessian_weak(const double& x, const double& y, lensmatrix& hess_tot,
 		hess_tot[1][1] += (*hess)[1][1];
 		hess_tot[0][1] += (*hess)[0][1];
 		hess_tot[1][0] += (*hess)[1][0];
+	}
+	for (j=0; j < n_pixellated_lens; j++) {
+		if (lensgrids[j]->include_in_lensing_calculations) {
+			lensgrids[j]->hessian(x,y,(*hess),thread);
+			hess_tot[0][0] += (*hess)[0][0];
+			hess_tot[1][1] += (*hess)[1][1];
+			hess_tot[0][1] += (*hess)[0][1];
+			hess_tot[1][0] += (*hess)[1][0];
+		}
 	}
 	hess_tot[0][0] *= zfacs[0];
 	hess_tot[1][1] *= zfacs[0];
@@ -462,6 +531,20 @@ void QLens::hessian_exclude(const double& x, const double& y, bool* exclude, len
 						}
 					}
 				}
+				for (j=0; j < n_pixellated_lens; j++) {
+					if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) {
+						lensgrids[j]->hessian((*x_i)[0],(*x_i)[1],(*hess),thread);
+						(*hess_i)[i][0][0] += (*hess)[0][0];
+						(*hess_i)[i][1][1] += (*hess)[1][1];
+						(*hess_i)[i][0][1] += (*hess)[0][1];
+						(*hess_i)[i][1][0] += (*hess)[1][0];
+						if (i < n_lens_redshifts-1) {
+							lensgrids[j]->deflection((*x_i)[0],(*x_i)[1],(*def),thread);
+							(*def_i)[i][0] += (*def)[0];
+							(*def_i)[i][1] += (*def)[1];
+						}
+					}
+				}
 				if (i < n_lens_redshifts-1) {
 					(*def_i)[i][0] *= zfacs[i];
 					(*def_i)[i][1] *= zfacs[i];
@@ -503,6 +586,15 @@ void QLens::hessian_exclude(const double& x, const double& y, bool* exclude, len
 					hess_tot[0][1] += (*hess)[0][1];
 					hess_tot[1][0] += (*hess)[1][0];
 				}
+			}
+		}
+		for (j=0; j < n_pixellated_lens; j++) {
+			if (lensgrids[j]->include_in_lensing_calculations) {
+				lensgrids[j]->hessian(x,y,(*hess),thread);
+				hess_tot[0][0] += (*hess)[0][0];
+				hess_tot[1][1] += (*hess)[1][1];
+				hess_tot[0][1] += (*hess)[0][1];
+				hess_tot[1][0] += (*hess)[1][0];
 			}
 		}
 		hess_tot[0][0] *= zfacs[0];
@@ -597,6 +689,9 @@ double QLens::kappa_exclude(const lensvector &x, bool* exclude, double* zfacs, d
 					kappa += lens_list[j]->kappa(x[0],x[1]);
 			}
 		}
+		for (j=0; j < n_pixellated_lens; j++) {
+			if (lensgrids[j]->include_in_lensing_calculations) kappa += lensgrids[j]->kappa(x[0],x[1],0);
+		}
 		kappa *= zfacs[0];
 	} else {
 		lensmatrix *jac = &jacs[0];
@@ -658,6 +753,21 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt
 				(*def_i)[i][0] += (*def)[0];
 				(*def_i)[i][1] += (*def)[1];
 			}
+			for (j=0; j < n_pixellated_lens; j++) {
+				if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) {
+					lensgrids[j]->hessian((*x_i)[0],(*x_i)[1],(*hess),thread);
+					(*hess_i)[i][0][0] += (*hess)[0][0];
+					(*hess_i)[i][1][1] += (*hess)[1][1];
+					(*hess_i)[i][0][1] += (*hess)[0][1];
+					(*hess_i)[i][1][0] += (*hess)[1][0];
+					if (i < n_lens_redshifts-1) {
+						lensgrids[j]->deflection((*x_i)[0],(*x_i)[1],(*def),thread);
+						(*def_i)[i][0] += (*def)[0];
+						(*def_i)[i][1] += (*def)[1];
+					}
+				}
+			}
+
 			(*def_i)[i][0] *= zfacs[i];
 			(*def_i)[i][1] *= zfacs[i];
 			(*def_tot)[0] += (*def_i)[i][0];
@@ -711,6 +821,18 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt
 				(*def_tot)[0] += (*def)[0];
 				(*def_tot)[1] += (*def)[1];
 				kap_tot += kap;
+			}
+			for (j=0; j < n_pixellated_lens; j++) {
+				if (lensgrids[j]->include_in_lensing_calculations) {
+					lensgrids[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess),thread);
+					(*jac)[0][0] += (*hess)[0][0];
+					(*jac)[1][1] += (*hess)[1][1];
+					(*jac)[0][1] += (*hess)[0][1];
+					(*jac)[1][0] += (*hess)[1][0];
+					(*def_tot)[0] += (*def)[0];
+					(*def_tot)[1] += (*def)[1];
+					kap_tot += kap;
+				}
 			}
 		} else {
 			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
@@ -783,6 +905,23 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector& xvec, lensvector& srcpt
 			delete[] def0;
 			delete[] def1;
 			delete[] kapi;
+			if (n_pixellated_lens > 0) {
+				double kap;
+				lensvector *def = &defs_i[thread];
+				lensmatrix *hess = &hesses_i[thread];
+				for (int j=0; j < n_pixellated_lens; j++) {
+					if (lensgrids[j]->include_in_lensing_calculations) {
+						lensgrids[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess),thread);
+						(*jac)[0][0] += (*hess)[0][0];
+						(*jac)[1][1] += (*hess)[1][1];
+						(*jac)[0][1] += (*hess)[0][1];
+						(*jac)[1][0] += (*hess)[1][0];
+						(*def_tot)[0] += (*def)[0];
+						(*def_tot)[1] += (*def)[1];
+						kap_tot += kap;
+					}
+				}
+			}
 		}
 		//double defx = (*def_tot)[0];
 		//double defy = (*def_tot)[1];
@@ -859,6 +998,18 @@ void QLens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmat
 				(*def_i)[i][0] += (*def)[0];
 				(*def_i)[i][1] += (*def)[1];
 			}
+			for (j=0; j < n_pixellated_lens; j++) {
+				if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) {
+					lensgrids[j]->potential_derivatives((*x_i)[0],(*x_i)[1],(*def),(*hess),thread);
+					(*hess_i)[i][0][0] += (*hess)[0][0];
+					(*hess_i)[i][1][1] += (*hess)[1][1];
+					(*hess_i)[i][0][1] += (*hess)[0][1];
+					(*hess_i)[i][1][0] += (*hess)[1][0];
+					(*def_i)[i][0] += (*def)[0];
+					(*def_i)[i][1] += (*def)[1];
+				}
+			}
+
 			(*def_i)[i][0] *= zfacs[i];
 			(*def_i)[i][1] *= zfacs[i];
 			(*def_tot)[0] += (*def_i)[i][0];
@@ -907,6 +1058,17 @@ void QLens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmat
 				jac_tot[1][0] += (*hess)[1][0];
 				(*def_tot)[0] += (*def)[0];
 				(*def_tot)[1] += (*def)[1];
+			}
+			for (j=0; j < n_pixellated_lens; j++) {
+				if (lensgrids[j]->include_in_lensing_calculations) {
+					lensgrids[j]->potential_derivatives(x,y,(*def),(*hess),thread);
+					jac_tot[0][0] += (*hess)[0][0];
+					jac_tot[1][1] += (*hess)[1][1];
+					jac_tot[0][1] += (*hess)[0][1];
+					jac_tot[1][0] += (*hess)[1][0];
+					(*def_tot)[0] += (*def)[0];
+					(*def_tot)[1] += (*def)[1];
+				}
 			}
 		} else {
 			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
@@ -967,6 +1129,22 @@ void QLens::sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmat
 			delete[] hess01;
 			delete[] def0;
 			delete[] def1;
+			if (n_pixellated_lens > 0) {
+				double kap;
+				lensvector *def = &defs_i[thread];
+				lensmatrix *hess = &hesses_i[thread];
+				for (int j=0; j < n_pixellated_lens; j++) {
+					if (lensgrids[j]->include_in_lensing_calculations) {
+						lensgrids[j]->potential_derivatives(x,y,(*def),(*hess),thread);
+						jac_tot[0][0] += (*hess)[0][0];
+						jac_tot[1][1] += (*hess)[1][1];
+						jac_tot[0][1] += (*hess)[0][1];
+						jac_tot[1][0] += (*hess)[1][0];
+						(*def_tot)[0] += (*def)[0];
+						(*def_tot)[1] += (*def)[1];
+					}
+				}
+			}
 		}
 		jac_tot[0][0] *= zfacs[0];
 		jac_tot[1][1] *= zfacs[0];

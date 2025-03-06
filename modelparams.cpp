@@ -35,7 +35,7 @@ void ModelParams::setup_parameter_arrays(const int npar)
 	}
 }
 
-void ModelParams::copy_param_data(ModelParams* params_in)
+void ModelParams::copy_param_arrays(ModelParams* params_in)
 {
 	// REMEMBER: you must still run setup_parameters() in the inherited class to initialize and assign the pointers before running this!
 	// note, we do not copy n_params, nor resize most of the vectors, because it is assumed that this has been setup already in setup_parameters()

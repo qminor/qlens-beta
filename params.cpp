@@ -425,6 +425,7 @@ void ParamSettings::print_priors()
 
 bool ParamSettings::output_prior(const int i)
 {
+	if (priors[i]->prior==UNIFORM_PRIOR) ;
 	if (priors[i]->prior==UNIFORM_PRIOR) {
 		cout << "uniform prior";
 		if ((transforms[i]->transform != NONE) and (transforms[i]->include_jacobian)) {

@@ -1718,9 +1718,10 @@ void LensProfile::update_ellipticity_meta_parameters()
 
 void LensProfile::update_center_from_pixsrc_coords()
 {
-	double sig, xcs, ycs;
+	double xcs, ycs;
 	//cout << "lens " << lens_number << " finding approx source size... " << endl;
-	sig = qlens->find_approx_source_size(0,xcs,ycs,false);
+	// generalize this later so it can be anchored to an image_pixel_grid with the appropriate zsrc_i (doesn't have to be 0)
+	qlens->find_source_centroid(0,xcs,ycs,false);
 	//cout << "lens " << lens_number << " xcs,ycs: " << xcs << " " << ycs << endl;
 	x_center = xcs + xc_prime;
 	y_center = ycs + yc_prime;

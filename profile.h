@@ -52,7 +52,7 @@ enum LensProfileName
 struct LensIntegral;
 class QLens;
 
-class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson, public ClenshawCurtis, public EllipticityGradient
+class LensProfile : private Romberg, private GaussLegendre, private GaussPatterson, private ClenshawCurtis, public EllipticityGradient
 {
 	friend struct LensIntegral;
 	friend class QLens;
@@ -529,7 +529,6 @@ struct LensIntegral : public Romberg
 	double ileft_integrand(const double r);
 	double iright_integrand(const double u); // here, u = 1/r
 	double fourier_kappa_m(const double r, const double phi, const int mval_in, const double fourier_ival_in);
-
 };
 
 class SPLE_Lens : public LensProfile

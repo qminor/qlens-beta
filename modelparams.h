@@ -29,7 +29,7 @@ class ModelParams
 	void setup_parameter_arrays(const int npar);
 	virtual void setup_parameters(const bool initial_setup) {} 
 	virtual void update_meta_parameters(const bool varied_only_fitparams) {}
-	void copy_param_data(ModelParams* params_in);
+	void copy_param_arrays(ModelParams* params_in);
 	void update_active_params(const int id) {
 		boolvector dummy;
 		update_active_params(id,dummy);
