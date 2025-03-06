@@ -6771,67 +6771,103 @@ void ImagePixelData::load_data(string root)
 	assign_high_sn_pixels();
 }
 
-void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid, const double noise_in)
+void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid)
 {
 	int i,j,k;
-	if (xvals != NULL) delete[] xvals;
-	if (yvals != NULL) delete[] yvals;
-	if (pixel_xcvals != NULL) delete[] pixel_xcvals;
-	if (pixel_ycvals != NULL) delete[] pixel_ycvals;
-	if (surface_brightness != NULL) {
-		for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
-		delete[] surface_brightness;
-	}
-	if (noise_map != NULL) {
-		for (i=0; i < npixels_x; i++) delete[] noise_map[i];
-		delete[] noise_map;
-		noise_map = NULL;
-	}
-	if (covinv_map != NULL) {
-		for (i=0; i < npixels_x; i++) delete[] covinv_map[i];
-		delete[] covinv_map;
-		covinv_map = NULL;
-	}
-	if (high_sn_pixel != NULL) {
-		for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
-		delete[] high_sn_pixel;
-	}
-	if (n_mask_pixels != NULL) delete[] n_mask_pixels;
-	if (extended_mask_n_neighbors != NULL) delete[] extended_mask_n_neighbors;
-	if (in_mask != NULL) {
-		for (k=0; k < n_masks; k++) {
-			for (i=0; i < npixels_x; i++) delete[] in_mask[k][i];
-			delete[] in_mask[k];
+	if ((npixels_x != image_pixel_grid->x_N) or (npixels_y != image_pixel_grid->y_N)) {
+		if (xvals != NULL) delete[] xvals;
+		if (yvals != NULL) delete[] yvals;
+		if (pixel_xcvals != NULL) delete[] pixel_xcvals;
+		if (pixel_ycvals != NULL) delete[] pixel_ycvals;
+		if (surface_brightness != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] surface_brightness[i];
+			delete[] surface_brightness;
 		}
-		delete[] in_mask;
-	}
-	if (extended_mask != NULL) {
-		for (k=0; k < n_masks; k++) {
-			for (i=0; i < npixels_x; i++) delete[] extended_mask[k][i];
-			delete[] extended_mask[k];
+		if (noise_map != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] noise_map[i];
+			delete[] noise_map;
+			noise_map = NULL;
 		}
-		delete[] extended_mask;
-	}
-	if (foreground_mask != NULL) {
-		for (i=0; i < npixels_x; i++) delete[] foreground_mask[i];
-		delete[] foreground_mask;
-	}
-	if ((lens != NULL) and (lens->fft_convolution)) lens->cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
+		if (covinv_map != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] covinv_map[i];
+			delete[] covinv_map;
+			covinv_map = NULL;
+		}
+		if (high_sn_pixel != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] high_sn_pixel[i];
+			delete[] high_sn_pixel;
+		}
+		if (n_mask_pixels != NULL) delete[] n_mask_pixels;
+		if (extended_mask_n_neighbors != NULL) delete[] extended_mask_n_neighbors;
+		if (in_mask != NULL) {
+			for (k=0; k < n_masks; k++) {
+				for (i=0; i < npixels_x; i++) delete[] in_mask[k][i];
+				delete[] in_mask[k];
+			}
+			delete[] in_mask;
+		}
+		if (extended_mask != NULL) {
+			for (k=0; k < n_masks; k++) {
+				for (i=0; i < npixels_x; i++) delete[] extended_mask[k][i];
+				delete[] extended_mask[k];
+			}
+			delete[] extended_mask;
+		}
+		if (foreground_mask != NULL) {
+			for (i=0; i < npixels_x; i++) delete[] foreground_mask[i];
+			delete[] foreground_mask;
+		}
+		if ((lens != NULL) and (lens->fft_convolution)) lens->cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
 
-	npixels_x = image_pixel_grid->x_N;
-	npixels_y = image_pixel_grid->y_N;
+		npixels_x = image_pixel_grid->x_N;
+		npixels_y = image_pixel_grid->y_N;
+
+		xvals = new double[npixels_x+1];
+		yvals = new double[npixels_y+1];
+
+		pixel_xcvals = new double[npixels_x];
+		pixel_ycvals = new double[npixels_y];
+
+		surface_brightness = new double*[npixels_x];
+		high_sn_pixel = new bool*[npixels_x];
+		//n_masks = 1;
+		n_mask_pixels = new int[1];
+		extended_mask_n_neighbors = new int[1];
+
+		in_mask = new bool**[1];
+		in_mask[0] = new bool*[npixels_x];
+		extended_mask = new bool**[1];
+		extended_mask[0] = new bool*[npixels_x];
+		foreground_mask = new bool*[npixels_x];
+		noise_map = new double*[npixels_x];
+		covinv_map = new double*[npixels_x];
+		for (i=0; i < npixels_x; i++) {
+			surface_brightness[i] = new double[npixels_y];
+			high_sn_pixel[i] = new bool[npixels_y];
+			in_mask[0][i] = new bool[npixels_y];
+			extended_mask[0][i] = new bool[npixels_y];
+			foreground_mask[i] = new bool[npixels_y];
+			noise_map[i] = new double[npixels_y];
+			covinv_map[i] = new double[npixels_y];
+			for (j=0; j < npixels_y; j++) {
+				in_mask[0][i][j] = true;
+				extended_mask[0][i][j] = true;
+				foreground_mask[i][j] = true;
+				high_sn_pixel[i][j] = true;
+				noise_map[i][j] = 1e30; // since we don't have a noise map yet
+				covinv_map[i][j] = 0.0; // since we don't have a noise map yet
+			}
+		}
+	}
+
 	xmin = image_pixel_grid->xmin;
 	xmax = image_pixel_grid->xmax;
 	ymin = image_pixel_grid->ymin;
 	ymax = image_pixel_grid->ymax;
 
-	xvals = new double[npixels_x+1];
 	for (i=0; i <= npixels_x; i++) xvals[i] = image_pixel_grid->corner_pts[i][0][0];
-	yvals = new double[npixels_y+1];
 	for (i=0; i <= npixels_y; i++) yvals[i] = image_pixel_grid->corner_pts[0][i][1];
 
-	pixel_xcvals = new double[npixels_x];
-	pixel_ycvals = new double[npixels_y];
 	for (i=0; i < npixels_x; i++) {
 		pixel_xcvals[i] = (xvals[i]+xvals[i+1])/2;
 	}
@@ -6843,38 +6879,13 @@ void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid, cons
 	double ystep = pixel_ycvals[1] - pixel_ycvals[0];
 	pixel_size = dmin(xstep,ystep);
 
-	surface_brightness = new double*[npixels_x];
-	high_sn_pixel = new bool*[npixels_x];
-	n_masks = 1;
-	n_mask_pixels = new int[1];
 	n_mask_pixels[0] = npixels_x*npixels_y;
-	extended_mask_n_neighbors = new int[1];
 	extended_mask_n_neighbors[0] = -1; // this means all the pixels are included in the extended mask by default
 	n_high_sn_pixels = n_mask_pixels[0]; // this will be recalculated in assign_high_sn_pixels() function
-	in_mask = new bool**[1];
-	in_mask[0] = new bool*[npixels_x];
-	extended_mask = new bool**[1];
-	extended_mask[0] = new bool*[npixels_x];
-	foreground_mask = new bool*[npixels_x];
-	noise_map = new double*[npixels_x];
-	covinv_map = new double*[npixels_x];
-	double covinv = 1.0/(noise_in*noise_in);
 	for (i=0; i < npixels_x; i++) {
-		surface_brightness[i] = new double[npixels_y];
-		high_sn_pixel[i] = new bool[npixels_y];
-		in_mask[0][i] = new bool[npixels_y];
-		extended_mask[0][i] = new bool[npixels_y];
-		foreground_mask[i] = new bool[npixels_y];
-		noise_map[i] = new double[npixels_y];
-		covinv_map[i] = new double[npixels_y];
 		for (j=0; j < npixels_y; j++) {
-			in_mask[0][i][j] = true;
-			extended_mask[0][i][j] = true;
-			foreground_mask[i][j] = true;
 			high_sn_pixel[i][j] = true;
 			surface_brightness[i][j] = image_pixel_grid->surface_brightness[i][j];
-			noise_map[i][j] = noise_in;
-			covinv_map[i][j] = covinv;
 		}
 	}
 	find_extended_mask_rmax(); // used when splining integrals for deflection/hessian from Fourier modes
@@ -8520,7 +8531,7 @@ bool ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 		//}
 		//cout << "iteration " << k << ": npix=" << npix << endl;
 	}
-	find_extended_mask_rmax();
+	find_extended_mask_rmax(); // used when splining integrals for deflection/hessian from Fourier modes
 	for (i=0; i < npixels_x; i++) delete[] req[i];
 	delete[] req;
 	return true;
@@ -8683,7 +8694,7 @@ bool ImagePixelData::set_extended_mask_annulus(const double xc, const double yc,
 			}
 		}
 	}
-	find_extended_mask_rmax();
+	find_extended_mask_rmax(); // used when splining integrals for deflection/hessian from Fourier modes
 	if (pixels_in_mask) warn("some pixels in the annulus were in the primary (lensed image) mask, and therefore could not be removed from extended mask");
 	return true;
 }

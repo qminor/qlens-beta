@@ -15628,7 +15628,7 @@ void QLens::process_commands(bool read_file)
 					store_image_pixel_surface_brightness(0);
 					clear_pixel_matrices(0);
 					mockdata_t.set_lens(this);
-					mockdata_t.load_from_image_grid(image_pixel_grids[0],background_pixel_noise);
+					mockdata_t.load_from_image_grid(image_pixel_grids[0]);
 					mockdata_t.copy_mask(image_pixel_data);
 					//mockdata[i].plot_surface_brightness("data_pixel",true,false);
 					mockdata_t.fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata_mock_t,polar,false,NULL,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans);

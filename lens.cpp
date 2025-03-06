@@ -12807,7 +12807,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 			image_pixel_data->set_lens(this);
 		}
 		//if (image_pixel_data != NULL) delete image_pixel_data;
-		image_pixel_data->load_from_image_grid(image_pixel_grid,background_pixel_noise);
+		image_pixel_data->load_from_image_grid(image_pixel_grid);
 
 		// are the following lines really necessary??
 		double xmin,xmax,ymin,ymax;
@@ -13799,7 +13799,6 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 bool QLens::generate_and_invert_lensing_matrix(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal)
 {
-	int i;
 	if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
 	if (assign_pixel_mappings(zsrc_i,potential_perturbations,verbal)==false) {
 		clear_pixel_matrices();
@@ -13836,7 +13835,7 @@ bool QLens::generate_and_invert_lensing_matrix(const int zsrc_i, const int src_i
 		// Note that if image fluxes are included as linear parameters, we don't need to add point images to the SB separately because
 		// they will be included in the Lmatrix. Otherwise, we add them using the code below.
 		if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
-		for (i=0; i < n_ptsrc; i++) {
+		for (int i=0; i < n_ptsrc; i++) {
 			image_pixel_grids[zsrc_i]->generate_point_images(ptsrc_list[i]->images, point_image_surface_brightness, include_imgfluxes_in_inversion, ptsrc_list[i]->srcflux);
 		}
 	}
@@ -13907,7 +13906,7 @@ bool QLens::generate_and_invert_lensing_matrix(const int zsrc_i, const int src_i
 			store_foreground_pixel_surface_brightness(zsrc_i);
 		}
 		if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-			for (i=0; i < n_ptsrc; i++) {
+			for (int i=0; i < n_ptsrc; i++) {
 				image_pixel_grids[zsrc_i]->generate_point_images(ptsrc_list[i]->images, point_image_surface_brightness, include_imgfluxes_in_inversion, ptsrc_list[i]->srcflux);
 			}
 		}
@@ -13937,8 +13936,6 @@ bool QLens::generate_and_invert_lensing_matrix(const int zsrc_i, const int src_i
 
 	return true;
 }
-
-
 
 void QLens::create_output_directory()
 {
@@ -14000,14 +13997,14 @@ QLens::~QLens()
 	}
 
 	if (n_sb > 0) {
-		for (int i=0; i < n_sb; i++)
+		for (i=0; i < n_sb; i++)
 			delete sb_list[i];
 		delete[] sbprofile_redshift_idx;
 		delete[] sb_list;
 		n_sb = 0;
 	}
 	if (n_pixellated_src > 0) {
-		for (int i=0; i < n_pixellated_src; i++) {
+		for (i=0; i < n_pixellated_src; i++) {
 			if (delaunay_srcgrids[i] != NULL) delete delaunay_srcgrids[i];
 			if (cartesian_srcgrids[i] != NULL) delete cartesian_srcgrids[i];
 		}
@@ -14017,14 +14014,14 @@ QLens::~QLens()
 		delete[] srcgrids;
 	}
 	if (n_pixellated_lens > 0) {
-		for (int i=0; i < n_pixellated_lens; i++) {
+		for (i=0; i < n_pixellated_lens; i++) {
 			if (lensgrids[i] != NULL) delete lensgrids[i];
 		}
 		delete[] pixellated_lens_redshift_idx;
 		delete[] lensgrids;
 	}
 	if (n_ptsrc > 0) {
-		for (int i=0; i < n_ptsrc; i++) {
+		for (i=0; i < n_ptsrc; i++) {
 			if (ptsrc_list[i] != NULL) delete ptsrc_list[i];
 		}
 		delete[] ptsrc_redshift_idx;
@@ -14035,7 +14032,7 @@ QLens::~QLens()
 	delete param_settings;
 	if (fitmodel != NULL) delete fitmodel;
 	if (psf_matrix != NULL) {
-		for (int i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
+		for (i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
 		delete[] psf_matrix;
 	}
 

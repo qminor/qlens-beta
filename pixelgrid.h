@@ -677,6 +677,8 @@ struct ImagePixelData : private Sort
 	std::ostream* isophote_fit_out;
 	ImagePixelData()
 	{
+		npixels_x = 0;
+		npixels_y = 0;
 		surface_brightness = NULL;
 		noise_map = NULL;
 		covinv_map = NULL;
@@ -696,7 +698,7 @@ struct ImagePixelData : private Sort
 	}
 	~ImagePixelData();
 	void load_data(string root);
-	void load_from_image_grid(ImagePixelGrid* image_pixel_grid, const double noise_in);
+	void load_from_image_grid(ImagePixelGrid* image_pixel_grid);
 	bool load_data_fits(const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, string fits_filename, const int hdu_indx = 1, const bool show_header = false) {
 		xmin=xmin_in; xmax=xmax_in; ymin=ymin_in; ymax=ymax_in;
 		return load_data_fits(false,fits_filename,hdu_indx,show_header);
