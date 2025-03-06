@@ -13003,8 +13003,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	}
 
 	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in mask 0 : " << image_pixel_data->n_mask_pixels[0] << endl;
-#ifdef USE_OPENMP
 	double tot_wtime0, tot_wtime;
+#ifdef USE_OPENMP
 	if (show_wtime) {
 		tot_wtime0 = omp_get_wtime();
 	}

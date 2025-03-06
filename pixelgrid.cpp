@@ -16603,7 +16603,7 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 	Cholesky_dcmp_packed(covmatrix_factored_ptr->array(),n_amps);
 	Cholesky_logdet_lower_packed(covmatrix_factored_ptr->array(),(*Rmatrix_logdet_ptr),n_amps);
 	(*Rmatrix_logdet_ptr) = -(*Rmatrix_logdet_ptr); // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
-	repack_matrix_upper((*covmatrix_factored));
+	repack_matrix_upper((*covmatrix_factored_ptr));
 	//for (int i=0; i < ntot; i++) Rmatrix_packed[i] = covmatrix_factored[i];
 	//Cholesky_invert_upper_packed(Rmatrix_packed.array(),npixels); // invert the triangular matrix to get U_inverse
 	//upper_triangular_syrk(Rmatrix_packed.array(),npixels); // Now take U_inverse * U_inverse_transpose to get C_inverse (the regularization matrix)
