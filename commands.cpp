@@ -8204,7 +8204,7 @@ void QLens::process_commands(bool read_file)
 					else {
 						if (nwords != 3) Complain("a single filename must be specified after 'fit label'");
 						if (!(ws[2] >> label)) Complain("Invalid fit label");
-						set_fit_label(label);
+						set_fit_label(label); // this function is located in the header qlens.h
 					}
 				}
 				else if (words[1]=="params")
@@ -8693,7 +8693,6 @@ void QLens::process_commands(bool read_file)
 					if (nwords > 3) Complain("no more than one argument allowed for 'save_bestfit' command (filename)");
 					if (nwords==3) {
 						if (!(ws[2] >> fit_output_filename)) Complain("Invalid fit label");
-						if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
 					}
 					if (mpi_id==0) output_bestfit_model();
 				} else if (words[1]=="load_bestfit") {
@@ -8702,8 +8701,7 @@ void QLens::process_commands(bool read_file)
 						string filename_str;
 						if (nwords==3) {
 							custom_filename = true;
-							if (auto_fit_output_dir) filename_str = "chains_" + words[2] + "/" + words[2] + "_bf.in";
-							else filename_str = fit_output_dir + "/" + words[2] + "_bf.in";
+							filename_str = fit_output_dir + "/" + words[2] + "_bf.in";
 						}
 						if (load_bestfit_model(custom_filename,filename_str)==false) Complain("could not load model from best-fit point file");
 					} else Complain("at most one argument allowed for 'load_bestfit' (fit_label)");
