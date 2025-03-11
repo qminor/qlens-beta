@@ -12764,7 +12764,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				}
 			}
 
-			//clear_pixel_matrices();
+			clear_pixel_matrices();
 		}
 	}
 
