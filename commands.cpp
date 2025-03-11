@@ -7542,7 +7542,8 @@ void QLens::process_commands(bool read_file)
 #ifdef USE_MULTINEST
 							set_fitmethod(MULTINEST);
 #else
-							Complain("qlens code needs to be compiled with MultiNest to use this fit method");
+							warn("qlens has not been compiled with MultiNest; switching to 'nest'");
+							set_fitmethod(NESTED_SAMPLING);
 #endif
 						}
 						else Complain("invalid argument to 'fit method' command; must specify valid fit method");
