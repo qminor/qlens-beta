@@ -1249,6 +1249,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void chi_square_twalk();
 	bool add_dparams_to_chain(string file_ext);
 	bool adopt_bestfit_point_from_chain();
+	bool load_bestfit_model(const bool custom_filename=false, string fit_filename="");
+
 	bool adopt_point_from_chain(const unsigned long point_num);
 	bool adopt_point_from_chain_paramrange(const int paramnum, const double minval, const double maxval);
 	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);

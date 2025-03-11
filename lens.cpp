@@ -9781,6 +9781,10 @@ void QLens::output_bestfit_model()
 	if (fit_output_dir != ".") create_output_directory();
 
 	int i;
+	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+	ofstream pnumfile(pnumfile_str.c_str());
+	pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+	pnumfile.close();
 	string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 	ofstream pnamefile(pnamefile_str.c_str());
 	for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
@@ -10088,7 +10092,7 @@ bool QLens::adopt_bestfit_point_from_chain()
 	for (i=0; i <= line_num; i++) {
 		chain_file.getline(dataline,n_characters);
 	}
-	if (dataline[0]=='#') { warn("line from chain file is a comment line"); return false; }
+	if (dataline[0]=='#') { warn("line from chain file is a comment line"); delete[] params; return false; }
 	istringstream datastream(dataline);
 	datastream >> weight;
 	for (i=0; i < n_tot_parameters; i++) {
@@ -10102,6 +10106,38 @@ bool QLens::adopt_bestfit_point_from_chain()
 
 	dvector chain_params(params,n_fit_parameters);
 	adopt_model(chain_params);
+
+	delete[] params;
+	return true;
+}
+
+bool QLens::load_bestfit_model(const bool custom_filename, string fit_filename)
+{
+	if (!custom_filename) fit_filename = fit_output_filename;
+	int i, nparams;
+	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
+	ifstream pnumfile(pnumfile_str.c_str());
+	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
+	pnumfile >> nparams;
+	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in best-fit model file"); return false; }
+	pnumfile.close();
+
+	static const int n_characters = 5000;
+	char dataline[n_characters];
+	double *params = new double[n_fit_parameters];
+
+	string bf_str = fit_output_dir + "/" + fit_output_filename + ".bf";
+	ifstream bf_file(bf_str.c_str());
+
+	bf_file.getline(dataline,n_characters);
+	if (dataline[0]=='#') { warn("encountered a comment line in best-fit parameter file"); delete[] params; return false; }
+	istringstream datastream(dataline);
+	for (i=0; i < nparams; i++) {
+		datastream >> params[i];
+	}
+
+	dvector bf_params(params,n_fit_parameters);
+	adopt_model(bf_params);
 
 	delete[] params;
 	return true;
@@ -10131,7 +10167,7 @@ bool QLens::adopt_point_from_chain(const unsigned long line_num)
 		nlines++;
 	}
 	if (nlines < line_num) {
-		warn("number of points in chain (%i) is less than the point number requested (%i)",nlines,line_num); return false;
+		warn("number of points in chain (%i) is less than the point number requested (%i)",nlines,line_num); delete[] params; return false;
 	}
 
 	chain_file.close();
@@ -10139,7 +10175,7 @@ bool QLens::adopt_point_from_chain(const unsigned long line_num)
 	for (i=1; i <= line_num; i++) {
 		chain_file.getline(dataline,n_characters);
 	}
-	if (dataline[0]=='#') { warn("line from chain file is a comment line"); return false; }
+	if (dataline[0]=='#') { warn("line from chain file is a comment line"); delete[] params; return false; }
 	istringstream datastream(dataline);
 	double weight;
 	datastream >> weight;
@@ -10199,14 +10235,14 @@ bool QLens::adopt_point_from_chain_paramrange(const int paramnum, const double m
 		nline++;
 	}
 	//if (max_weight==-1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
-	if (minchisq==1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
+	if (minchisq==1e30) { warn("no points from chain fell within range min/max values for specified parameter"); delete[] params; return false; }
 
 	chain_file.close();
 	chain_file.open(chain_str.c_str());
 	for (i=0; i <= line_num; i++) {
 		chain_file.getline(dataline,n_characters);
 	}
-	if (dataline[0]=='#') { warn("line from chain file is a comment line"); return false; }
+	if (dataline[0]=='#') { warn("line from chain file is a comment line"); delete[] params; return false; }
 	istringstream datastream(dataline);
 	datastream >> weight;
 	for (i=0; i < n_tot_parameters; i++) {

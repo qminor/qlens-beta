@@ -8697,53 +8697,15 @@ void QLens::process_commands(bool read_file)
 					}
 					if (mpi_id==0) output_bestfit_model();
 				} else if (words[1]=="load_bestfit") {
-					// This is becoming obsolete, since loading parameters from chain is simpler ("fit adopt_chain_bestfit").
-					// We should extend that method to optimizations, and then eliminate "load_bestfit" altogether
 					if (nwords <= 3) {
-						string scriptfile_str;
+						bool custom_filename = false;
+						string filename_str;
 						if (nwords==3) {
-							if (auto_fit_output_dir) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf.in";
-							else scriptfile_str = fit_output_dir + "/" + words[2] + "_bf.in";
+							custom_filename = true;
+							if (auto_fit_output_dir) filename_str = "chains_" + words[2] + "/" + words[2] + "_bf.in";
+							else filename_str = fit_output_dir + "/" + words[2] + "_bf.in";
 						}
-						else {
-							if (auto_fit_output_dir) fit_output_dir = "chains_" + fit_output_filename;
-							scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf.in";
-						}
-						ifstream testbf(scriptfile_str.c_str());
-						if (!testbf.is_open()) Complain("best-fit lens model file '" << scriptfile_str << "' could not be opened");
-						string checklimits;
-						testbf >> checklimits;
-						if ((checklimits=="#limits") and ((fitmethod==SIMPLEX) or (fitmethod==POWELL))) {
-							if (nwords==3) {
-								if (auto_fit_output_dir) scriptfile_str = "chains_" + words[2] + "/" + words[2] + "_bf_nolimits.in";
-								else scriptfile_str = fit_output_dir + "/" + words[2] + "_bf_nolimits.in";
-							}
-							else scriptfile_str = fit_output_dir + "/" + fit_output_filename + "_bf_nolimits.in";
-						} else if ((checklimits=="#nolimits") and ((fitmethod != SIMPLEX) and (fitmethod != POWELL))) {
-							Complain("The best-fit model did not have parameter limits defined. Switch to simplex or powell and try again");
-						}
-						testbf.close();
-						// the following lines are redundant from the "read" command. Should be put in a separate function to reduce redundancies
-						if (infile->is_open()) {
-							if (n_infiles==10) Complain("cannot open more than 10 files at once");
-							infile++;
-						}
-						cout << scriptfile_str << endl;
-						infile->open(scriptfile_str.c_str());
-						if (infile->is_open()) {
-							if ((n_infiles > 0) and (!read_from_file)) paused_while_reading_file = true;
-							read_from_file = true;
-							n_infiles++;
-						}
-						else {
-							if (n_infiles > 0) infile--;
-							Complain("best-fit lens model file '" << scriptfile_str << "' could not be opened");
-						}
-						getline((*infile),line); // skip the first comment line
-						clear_lenses();
-						clear_source_objects();
-						update_parameter_list();
-						// Clear any existing lens models so the new one can be loaded in
+						if (load_bestfit_model(custom_filename,filename_str)==false) Complain("could not load model from best-fit point file");
 					} else Complain("at most one argument allowed for 'load_bestfit' (fit_label)");
 				} else if (words[1]=="add_chain_dparams") {
 					string file_ext = "";
