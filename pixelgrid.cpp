@@ -10812,16 +10812,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 		subpixel_index[i] = new int[max_subpixel_ny];
 	}
 	set_null_ray_tracing_arrays();
-
-	extended_mask_subcell_i = NULL;
-	extended_mask_subcell_j = NULL;
-	extended_mask_subcell_index = NULL;
-	defx_subpixel_centers = NULL;
-	defy_subpixel_centers = NULL;
-
-	mask_subcell_i = NULL;
-	mask_subcell_j = NULL;
-	mask_subcell_index = NULL;
+	set_null_subpixel_ray_tracing_arrays();
 
 	active_image_pixel_i = NULL;
 	active_image_pixel_j = NULL;
@@ -10859,17 +10850,19 @@ void ImagePixelGrid::set_null_ray_tracing_arrays()
 	masked_pixel_corner_j = NULL;
 	masked_pixel_corner = NULL;
 	masked_pixel_corner_up = NULL;
-	if (lens->split_imgpixels) {
-		extended_mask_subcell_i = NULL;
-		extended_mask_subcell_j = NULL;
-		extended_mask_subcell_index = NULL;
-		defx_subpixel_centers = NULL;
-		defy_subpixel_centers = NULL;
-		mask_subcell_i = NULL;
-		mask_subcell_j = NULL;
-		mask_subcell_index = NULL;
-	}
 	ncvals = NULL;
+}
+
+void ImagePixelGrid::set_null_subpixel_ray_tracing_arrays()
+{
+	extended_mask_subcell_i = NULL;
+	extended_mask_subcell_j = NULL;
+	extended_mask_subcell_index = NULL;
+	defx_subpixel_centers = NULL;
+	defy_subpixel_centers = NULL;
+	mask_subcell_i = NULL;
+	mask_subcell_j = NULL;
+	mask_subcell_index = NULL;
 }
 
 void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
@@ -10898,7 +10891,6 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
 				if ((i < x_N) and (j < y_N) and ((pixel_in_mask[i][j]) or (emask[i][j]))) ntot_cells_emask++;
 			}
 		}
-
 	}
 
 	if (defx_corners != NULL) delete_ray_tracing_arrays();
@@ -11021,21 +11013,13 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
 	ntot_subpixels = 0;
 	ntot_subpixels_in_mask = 0;
 
-	extended_mask_subcell_i = NULL;
-	extended_mask_subcell_j = NULL;
-	extended_mask_subcell_index = NULL;
-	defx_subpixel_centers = NULL;
-	defy_subpixel_centers = NULL;
-
-	mask_subcell_i = NULL;
-	mask_subcell_j = NULL;
-	mask_subcell_index = NULL;
-
 	//if ((lens->split_imgpixels) and (!lens->split_high_mag_imgpixels)) { 
 	if (lens->split_imgpixels) { 
 		// if split_high_mag_imgpixels is on, this part will be deferred until after the ray-traced pixel areas have been
 		// calculated (to get magnifications to use as criterion on whether to split or nit)
 		setup_subpixel_ray_tracing_arrays(verbal);
+	} else {
+		set_null_subpixel_ray_tracing_arrays();
 	}
 }
 
@@ -11057,9 +11041,7 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 		cout << "Total number of image pixels/subpixels (including emask): " << ntot_subpixels << endl;
 	}
 
-	if (extended_mask_subcell_i != NULL) delete[] extended_mask_subcell_i;
-	if (extended_mask_subcell_j != NULL) delete[] extended_mask_subcell_j;
-	if (extended_mask_subcell_index != NULL) delete[] extended_mask_subcell_index;
+	if (extended_mask_subcell_i != NULL) delete_subpixel_ray_tracing_arrays();
 
 	extended_mask_subcell_i = new int[ntot_subpixels];
 	extended_mask_subcell_j = new int[ntot_subpixels];
@@ -11095,10 +11077,6 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 		cout << "Total number of image pixels/subpixels in mask: " << ntot_subpixels_in_mask << endl;
 	}
 
-	if (mask_subcell_i != NULL) delete[] mask_subcell_i;
-	if (mask_subcell_j != NULL) delete[] mask_subcell_j;
-	if (mask_subcell_index != NULL) delete[] mask_subcell_index;
-
 	mask_subcell_i = new int[ntot_subpixels_in_mask];
 	mask_subcell_j = new int[ntot_subpixels_in_mask];
 	mask_subcell_index = new int[ntot_subpixels_in_mask];
@@ -11117,9 +11095,6 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 		}
 	}
 
-
-	if (defx_subpixel_centers != NULL) delete[] defx_subpixel_centers;
-	if (defy_subpixel_centers != NULL) delete[] defy_subpixel_centers;
 	defx_subpixel_centers = new double[ntot_subpixels];
 	defy_subpixel_centers = new double[ntot_subpixels];
 }
@@ -11160,7 +11135,23 @@ void ImagePixelGrid::delete_ray_tracing_arrays()
 	}
 	if (fft_convolution_is_setup) cleanup_FFT_convolution_arrays();
 	set_null_ray_tracing_arrays();
+	set_null_subpixel_ray_tracing_arrays();
 }
+
+void ImagePixelGrid::delete_subpixel_ray_tracing_arrays()
+{
+	if (extended_mask_subcell_i != NULL) delete[] extended_mask_subcell_i;
+	if (extended_mask_subcell_j != NULL) delete[] extended_mask_subcell_j;
+	if (extended_mask_subcell_index != NULL) delete[] extended_mask_subcell_index;
+	if (defx_subpixel_centers != NULL) delete[] defx_subpixel_centers;
+	if (defx_subpixel_centers != NULL) delete[] defy_subpixel_centers;
+	if (mask_subcell_i != NULL) delete[] mask_subcell_i;
+	if (mask_subcell_j != NULL) delete[] mask_subcell_j;
+	if (mask_subcell_index != NULL) delete[] mask_subcell_index;
+	set_null_subpixel_ray_tracing_arrays();
+}
+
+
 
 void ImagePixelGrid::update_grid_dimensions(const double xmin, const double xmax, const double ymin, const double ymax)
 {
@@ -11857,6 +11848,7 @@ bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytr
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
 			mapped_potpixels[i][j].clear();
+			//pixel_index[i][j] = 0;
 			for (k=0; k < nsubpix; k++) {
 				n_mapped_srcpixels[i][j][k] = 0;
 				n_mapped_potpixels[i][j][k] = 0;
@@ -11902,6 +11894,7 @@ void ImagePixelGrid::include_all_pixels()
 		}
 	}
 	if (lens) setup_ray_tracing_arrays();
+	if ((lens->nlens > 0) and (imggrid_zfactors != NULL)) calculate_sourcepts_and_areas(true);
 }
 
 void ImagePixelGrid::activate_extended_mask()
@@ -11951,6 +11944,25 @@ void ImagePixelGrid::activate_foreground_mask()
 }
 
 void ImagePixelGrid::deactivate_extended_mask()
+{
+	int i,j,k;
+	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
+	for (i=0; i < x_N; i++) {
+		for (j=0; j < y_N; j++) {
+			pixel_in_mask[i][j] = mask[i][j];
+			mapped_cartesian_srcpixels[i][j].clear();
+			mapped_delaunay_srcpixels[i][j].clear();
+			mapped_potpixels[i][j].clear();
+			for (k=0; k < nsubpix; k++) {
+				n_mapped_srcpixels[i][j][k] = 0;
+				n_mapped_potpixels[i][j][k] = 0;
+			}
+		}
+	}
+	if (lens) setup_ray_tracing_arrays();
+}
+
+void ImagePixelGrid::update_mask_values()
 {
 	int i,j,k;
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
@@ -12898,6 +12910,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 					}
 				}
 			} else {
+				ofstream hergls("hergls.dat");
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						//surface_brightness[i][j] = 0;
@@ -12905,6 +12918,8 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 							if (!foreground_only) {
 								if (source_fit_mode==Delaunay_Source) {
 									surface_brightness[i][j] = delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0);
+									if ((abs(center_sourcepts[i][j][0]) < 0.3) and (abs(center_sourcepts[i][j][1]) < 0.3)) cout << "HARG " << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << surface_brightness[i][j] << endl;
+									hergls << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << surface_brightness[i][j] << endl;
 									if (include_first_order_corrections) {
 										//lensvector S0_gradient;
 										//delaunay_srcgrid->find_source_gradient(center_sourcepts[i][j],S0_gradient,0);
@@ -13885,6 +13900,7 @@ ImagePixelGrid::~ImagePixelGrid()
 			delete[] subpixel_weights[i][j];
 			delete[] subpixel_source_gradient[i][j];
 			delete[] n_mapped_srcpixels[i][j];
+			delete[] n_mapped_potpixels[i][j];
 		}
 		delete[] subpixel_maps_to_srcpixel[i];
 		delete[] subpixel_center_pts[i];
@@ -13893,6 +13909,7 @@ ImagePixelGrid::~ImagePixelGrid()
 		delete[] subpixel_weights[i];
 		delete[] subpixel_source_gradient[i];
 		delete[] n_mapped_srcpixels[i];
+		delete[] n_mapped_potpixels[i];
 	}
 	int max_subpixel_nx = x_N*max_nsplit;
 	for (int i=0; i < max_subpixel_nx; i++) {
@@ -13920,6 +13937,7 @@ ImagePixelGrid::~ImagePixelGrid()
 	delete[] subpixel_weights;
 	delete[] subpixel_source_gradient;
 	delete[] n_mapped_srcpixels;
+	delete[] n_mapped_potpixels;
 	delete[] nsplits;
 	delete[] twist_status;
 	delete[] twist_pts;
@@ -13928,6 +13946,7 @@ ImagePixelGrid::~ImagePixelGrid()
 		delete[] pixel_in_mask;
 	}
 	delete_ray_tracing_arrays();
+	delete_subpixel_ray_tracing_arrays();
 
 	if (active_image_pixel_i != NULL) delete[] active_image_pixel_i;
 	if (active_image_pixel_j != NULL) delete[] active_image_pixel_j;
@@ -13938,7 +13957,6 @@ ImagePixelGrid::~ImagePixelGrid()
 	if (image_pixel_j_from_subcell_jj != NULL) delete[] image_pixel_j_from_subcell_jj;
 	if (active_image_pixel_i_fgmask != NULL) delete[] active_image_pixel_i_fgmask;
 	if (active_image_pixel_j_fgmask != NULL) delete[] active_image_pixel_j_fgmask;
-
 }
 
 /************************** Functions in class QLens that pertain to pixel mapping and inversion ****************************/
@@ -20042,7 +20060,7 @@ void QLens::vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_
 {
 	ImagePixelGrid *image_pixel_grid;
 	image_pixel_grid = image_pixel_grids[zsrc_i];
-	int i,j,k=0;
+	int i,j,k;
 	int subcell_index, nsubpix, image_subpixel_index=0;
 	if (use_mask) {
 		int n=0, nsub=0;
@@ -20069,31 +20087,27 @@ void QLens::vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_
 		image_pixel_grid->n_active_pixels = image_npixels;
 		if (psf_supersampling) image_n_subpixels = image_npixels*default_imgpixel_nsplit*default_imgpixel_nsplit;
 	}
-	if (image_pixel_grid->active_image_pixel_i == NULL) {
-		if (image_pixel_grid->active_image_pixel_i != NULL) delete[] image_pixel_grid->active_image_pixel_i;
-		if (image_pixel_grid->active_image_pixel_j != NULL) delete[] image_pixel_grid->active_image_pixel_j;
-		image_pixel_grid->active_image_pixel_i = new int[image_npixels];
-		image_pixel_grid->active_image_pixel_j = new int[image_npixels];
-	}
+	if (image_pixel_grid->active_image_pixel_i != NULL) delete[] image_pixel_grid->active_image_pixel_i;
+	if (image_pixel_grid->active_image_pixel_j != NULL) delete[] image_pixel_grid->active_image_pixel_j;
+	image_pixel_grid->active_image_pixel_i = new int[image_npixels];
+	image_pixel_grid->active_image_pixel_j = new int[image_npixels];
 	int ii,jj;
 	if (psf_supersampling) {
-		if (image_pixel_grid->active_image_pixel_i_ss == NULL) {
-			if (image_pixel_grid->active_image_pixel_i_ss != NULL) delete[] image_pixel_grid->active_image_pixel_i_ss;
-			if (image_pixel_grid->active_image_pixel_j_ss != NULL) delete[] image_pixel_grid->active_image_pixel_j_ss;
-			if (image_pixel_grid->active_image_subpixel_ss != NULL) delete[] image_pixel_grid->active_image_subpixel_ss;
-			if (image_pixel_grid->active_image_subpixel_ii != NULL) delete[] image_pixel_grid->active_image_subpixel_ii;
-			if (image_pixel_grid->active_image_subpixel_jj != NULL) delete[] image_pixel_grid->active_image_subpixel_jj;
-			if (image_pixel_grid->image_pixel_i_from_subcell_ii != NULL) delete[] image_pixel_grid->image_pixel_i_from_subcell_ii;
-			if (image_pixel_grid->image_pixel_j_from_subcell_jj != NULL) delete[] image_pixel_grid->image_pixel_j_from_subcell_jj;
+		if (image_pixel_grid->active_image_pixel_i_ss != NULL) delete[] image_pixel_grid->active_image_pixel_i_ss;
+		if (image_pixel_grid->active_image_pixel_j_ss != NULL) delete[] image_pixel_grid->active_image_pixel_j_ss;
+		if (image_pixel_grid->active_image_subpixel_ss != NULL) delete[] image_pixel_grid->active_image_subpixel_ss;
+		if (image_pixel_grid->active_image_subpixel_ii != NULL) delete[] image_pixel_grid->active_image_subpixel_ii;
+		if (image_pixel_grid->active_image_subpixel_jj != NULL) delete[] image_pixel_grid->active_image_subpixel_jj;
+		if (image_pixel_grid->image_pixel_i_from_subcell_ii != NULL) delete[] image_pixel_grid->image_pixel_i_from_subcell_ii;
+		if (image_pixel_grid->image_pixel_j_from_subcell_jj != NULL) delete[] image_pixel_grid->image_pixel_j_from_subcell_jj;
 
-			image_pixel_grid->active_image_pixel_i_ss = new int[image_n_subpixels];
-			image_pixel_grid->active_image_pixel_j_ss = new int[image_n_subpixels];
-			image_pixel_grid->active_image_subpixel_ss = new int[image_n_subpixels];
-			image_pixel_grid->active_image_subpixel_ii = new int[image_n_subpixels];
-			image_pixel_grid->active_image_subpixel_jj = new int[image_n_subpixels];
-			image_pixel_grid->image_pixel_i_from_subcell_ii = new int[image_pixel_grid->x_N*default_imgpixel_nsplit];
-			image_pixel_grid->image_pixel_j_from_subcell_jj = new int[image_pixel_grid->y_N*default_imgpixel_nsplit];
-		}
+		image_pixel_grid->active_image_pixel_i_ss = new int[image_n_subpixels];
+		image_pixel_grid->active_image_pixel_j_ss = new int[image_n_subpixels];
+		image_pixel_grid->active_image_subpixel_ss = new int[image_n_subpixels];
+		image_pixel_grid->active_image_subpixel_ii = new int[image_n_subpixels];
+		image_pixel_grid->active_image_subpixel_jj = new int[image_n_subpixels];
+		image_pixel_grid->image_pixel_i_from_subcell_ii = new int[image_pixel_grid->x_N*default_imgpixel_nsplit];
+		image_pixel_grid->image_pixel_j_from_subcell_jj = new int[image_pixel_grid->y_N*default_imgpixel_nsplit];
 		for (j=0; j < image_pixel_grid->y_N; j++) {
 			for (i=0; i < image_pixel_grid->x_N; i++) {
 				for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
@@ -20106,6 +20120,7 @@ void QLens::vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_
 		}
 	}
 
+	k=0;
 	for (j=0; j < image_pixel_grid->y_N; j++) {
 		for (i=0; i < image_pixel_grid->x_N; i++) {
 			if ((!use_mask) or (image_pixel_grid->pixel_in_mask==NULL) or (image_pixel_grid->pixel_in_mask[i][j])) {
@@ -20150,6 +20165,7 @@ void QLens::vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_
 		//// THERE SHOULD ALSO BE N_ACTIVE_SUBPIXELS, RIGHT? FOR PSF_SUPERSAMPLING
 	//}
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
+	if (imgpixel_covinv_vector != NULL) delete[] imgpixel_covinv_vector;
 	image_surface_brightness = new double[image_npixels];
 	imgpixel_covinv_vector = new double[image_npixels];
 

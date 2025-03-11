@@ -591,11 +591,15 @@ class ImagePixelGrid : private Sort
 	void activate_extended_mask();
 	void activate_foreground_mask();
 	void deactivate_extended_mask();
+	void update_mask_values();
+
 	void setup_pixel_arrays();
 	void set_null_ray_tracing_arrays();
+	void set_null_subpixel_ray_tracing_arrays();
 	void setup_ray_tracing_arrays(const bool verbal = false);
 	void setup_subpixel_ray_tracing_arrays(const bool verbal = false);
 	void delete_ray_tracing_arrays();
+	void delete_subpixel_ray_tracing_arrays();
 	void update_grid_dimensions(const double xmin, const double xmax, const double ymin, const double ymax);
 	void calculate_sourcepts_and_areas(const bool raytrace_pixel_centers = false, const bool verbal = false);
 	bool calculate_subpixel_source_gradient();

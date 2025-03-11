@@ -7542,7 +7542,7 @@ void QLens::process_commands(bool read_file)
 #ifdef USE_MULTINEST
 							set_fitmethod(MULTINEST);
 #else
-							warn("qlens has not been compiled with MultiNest; switching to 'nest'");
+							warn("qlens has not been compiled with MultiNest; switching to 'nest' (native nested sampling code)");
 							set_fitmethod(NESTED_SAMPLING);
 #endif
 						}
@@ -10220,6 +10220,7 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data->set_all_mask_pixels(mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="invert_mask")
 			{
@@ -10227,6 +10228,7 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data->invert_mask(mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="create_new_mask")
 			{
@@ -10258,6 +10260,7 @@ void QLens::process_commands(bool read_file)
 				if (mask_i >= image_pixel_data->n_masks) Complain("mask index has not been created");
 				for (int i=0; i < ntimes; i++) image_pixel_data->set_neighbor_pixels(interior,exterior,mask_i);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="unset_neighbor_pixels")
 			{
@@ -10272,6 +10275,7 @@ void QLens::process_commands(bool read_file)
 				for (int i=0; i < ntimes; i++) image_pixel_data->set_neighbor_pixels(false,false,mask_i);
 				image_pixel_data->invert_mask(mask_i);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="unset_low_sn_pixels")
 			{
@@ -10281,6 +10285,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[2] >> sbthresh)) Complain("invalid surface brightness threshold");
 				if (!image_pixel_data->unset_low_signal_pixels(sbthresh,mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="trim_mask_windows")
 			{
@@ -10294,6 +10299,7 @@ void QLens::process_commands(bool read_file)
 				}
 				if (!image_pixel_data->assign_mask_windows(noise_threshold,threshold_size,mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="set_data_annulus")
 			{
@@ -10315,6 +10321,7 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false,mask_i)) Complain("coult not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="unset_data_annulus")
 			{
@@ -10357,12 +10364,14 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,mask_i)) Complain("could not alter extended mask");
 				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data->get_size_of_extended_mask(mask_i) << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="remove_mask_overlap")
 			{
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				image_pixel_data->remove_overlapping_pixels_from_other_masks(mask_i);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="activate_partner_imgpixels")
 			{
@@ -10390,6 +10399,7 @@ void QLens::process_commands(bool read_file)
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true,mask_i)) Complain("could not alter extended mask");
 				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data->get_size_of_extended_mask(mask_i) << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="set_fgmask_to_primary")
 			{
@@ -10450,6 +10460,7 @@ void QLens::process_commands(bool read_file)
 					if (!image_pixel_data->set_mask_window(xmin,xmax,ymin,ymax,mask_i)) Complain("could not alter mask");
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap set_data_window'");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="unset_data_window")
 			{
@@ -10463,6 +10474,7 @@ void QLens::process_commands(bool read_file)
 					if (!image_pixel_data->set_mask_window(xmin,xmax,ymin,ymax,true,mask_i)) Complain("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap unset_data_window'");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="find_noise")
 			{

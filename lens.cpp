@@ -12606,6 +12606,13 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root,
 	return true;
 }
 
+void QLens::update_imggrid_mask_values(const int mask_i)
+{
+	for (int i=0; i < n_extended_src_redshifts; i++) {
+		if ((assigned_mask[i]==mask_i) and (image_pixel_grids != NULL) and (image_pixel_grids[i] != NULL)) image_pixel_grids[i]->update_mask_values();
+	}
+}
+
 bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_all_pixels, bool normalize_residuals, bool offload_to_data, bool show_extended_mask, bool show_foreground_mask, bool show_noise_thresh, bool exclude_ptimgs, bool only_ptimgs, int specific_zsrc_i, bool plot_log, bool plot_current_sb, bool verbose)
 {
 	// Note that if specific_zsrc_i is negative, it will plot images from *all* source redshifts
@@ -12654,7 +12661,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 			if (image_pixel_grids[zsrc_i] == NULL) {
 				// if it hasn't been created yet, create now
 				if (use_data) {
-					image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, -1, false);
+					image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);
 				}
 				else {
 					image_pixel_grids[zsrc_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,false,zsrc_i);
@@ -12757,7 +12764,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				}
 			}
 
-			clear_pixel_matrices();
+			//clear_pixel_matrices();
 		}
 	}
 
@@ -12809,7 +12816,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		for (int zsrc_i=zsrc_i_0; zsrc_i < zsrc_i_f; zsrc_i++) {
 			if ((changed_mask) or ((n_extended_src_redshifts > 1) and (zsrc_i==0) and (specific_zsrc_i < 0))) // explanation for the latter condition: if all the lensed images were combined in one plot, then masks were combined image_pixel_grid[0], so we should restore the original mask
 			{
-				if (!image_pixel_grid->set_fit_window((*image_pixel_data),false,assigned_mask[zsrc_i])) {
+				if (!image_pixel_grid->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i])) {
 					//delete image_pixel_grids; // so when you invert, it will load a new image grid based on the data
 					//image_pixel_grids = NULL;
 					return false;
@@ -13109,7 +13116,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	double loglike_reg = 0;
 	double regterms;
 
-	if (((n_image_prior) or (n_ptsrc > 0)) and (source_fit_mode != Cartesian_Source)) {
+	if (((n_image_prior) or (n_ptsrc > 0)) and (source_fit_mode != Cartesian_Source) and (source_fit_mode != Parameterized_Source)) {
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			int src_i = -1;
 			for (int i=0; i < n_pixellated_src; i++) {
@@ -13601,7 +13608,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	count = 0;
 
 	for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-		if ((n_image_prior) and (source_fit_mode != Cartesian_Source)) {
+		if ((n_image_prior) and (source_fit_mode != Cartesian_Source) and (source_fit_mode != Parameterized_Source)) {
 #ifdef USE_OPENMP
 			if (show_wtime) {
 				wtime0 = omp_get_wtime();
@@ -13688,7 +13695,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			}
 			if ((source_npixels > 0) and (regularization_method != None)) cout << " logdet(Rmatrix)=" << Rmatrix_log_determinant << endl;
 		}
-		if (n_image_prior) {
+		if ((n_image_prior) and (source_fit_mode != Parameterized_Source)) {
 			double chisq_penalty;
 			if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
 			if (pixel_avg_n_images < n_image_threshold) {
@@ -13700,7 +13707,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	}
 
 	bool sb_outside_window = false;
-	if (outside_sb_prior) {
+	if ((outside_sb_prior) and (source_fit_mode != Parameterized_Source)) {
 		bool supersampling_orig = psf_supersampling;
 		psf_supersampling = false; // since emask pixels may have fewer or no splittings, we cannot use supersampling for the outside_sb_prior
 		if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {

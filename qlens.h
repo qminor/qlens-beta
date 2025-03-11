@@ -1387,6 +1387,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 		use_analytic_bestfit_src = setting;
 		update_parameter_list();
 	}
+	void update_imggrid_mask_values(const int mask_i);
+
 
 	void set_warnings(bool setting) { warnings = setting; }
 	void get_warnings(bool &setting) { setting = warnings; }
