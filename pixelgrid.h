@@ -382,7 +382,7 @@ class LensPixelGrid : public DelaunayGrid, public ModelParams
 	int *cartesian_ivals;
 	int *cartesian_jvals;
 	int **cartesian_pixel_index;
-	double xmin_cartesian, xmax_cartesian, ymin_cartesian, ymax_cartesian;
+	double xmin_cartesian, xmax_cartesian, ymin_cartesian, ymax_cartesian; // these give the x/y coordinates of the *center* of the pixels on the edges of the grid (as opposed to lensgrid_xmin etc.)
 	double cartesian_pixel_xlength, cartesian_pixel_ylength;
 
 	// variables for Delaunay grid
@@ -398,7 +398,6 @@ class LensPixelGrid : public DelaunayGrid, public ModelParams
 	bool *active_pixel;
 	int *active_index;
 
-	double lenspixel_xmin, lenspixel_xmax, lenspixel_ymin, lenspixel_ymax;
 	double lensgrid_xmin, lensgrid_xmax, lensgrid_ymin, lensgrid_ymax; // for plotting
 
 	bool activate_unmapped_source_pixels;
@@ -629,8 +628,8 @@ class ImagePixelGrid : private Sort
 	void set_lensgrid(LensPixelGrid* gridptr) { lensgrid = gridptr; }
 	void find_optimal_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
-	void find_surface_brightness(const bool foreground_only = false, const bool lensed_sources_only = false, const bool include_first_order_corrections = false);
-	double plot_surface_brightness(string outfile_root, bool plot_residual = false, bool normalize_residuals = false, bool show_noise_thresh = false, bool plot_log = false);
+	void find_surface_brightness(const bool foreground_only = false, const bool lensed_sources_only = false, const bool include_first_order_corrections = false, const bool show_only_first_order_corrections = false);
+	double plot_surface_brightness(string outfile_root, bool plot_residual = false, bool normalize_sb = false, bool show_noise_thresh = false, bool plot_log = false);
 	void plot_sourcepts(string outfile_root, const bool show_subpixels = false);
 	void output_fits_file(string fits_filename, bool plot_residual = false);
 
@@ -699,6 +698,7 @@ struct ImagePixelData : private Sort
 		pixel_ycvals = NULL;
 		lens = NULL;
 		isophote_fit_out = &std::cout;
+		noise_map_fits_filename = "";
 	}
 	~ImagePixelData();
 	void load_data(string root);
@@ -712,6 +712,7 @@ struct ImagePixelData : private Sort
 		return load_data_fits(true,fits_filename, hdu_indx, show_header);
 	}
 	bool load_noise_map_fits(string fits_filename, const int hdu_indx = 1, const bool show_header = false);
+	bool save_noise_map_fits(string fits_filename);
 	void unload_noise_map();
 	void set_isofit_output_stream(std::ofstream *fitout) { isophote_fit_out = fitout; }
 	void set_uniform_pixel_noise(const double noise)

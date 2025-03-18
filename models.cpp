@@ -653,6 +653,7 @@ double dPIE_Lens::kapavg_spherical_rsq(const double rsq)
 double dPIE_Lens::potential_spherical_rsq(const double rsq)
 {
 	double tmp;
+	// might need to have a first order expansion for small s values
 	tmp = b*(sqrt(s*s+rsq) - s - sqrt(a*a+rsq) + a + a*log((a + sqrt(a*a+rsq))/(2.0*a)));
 	if (s != 0.0) tmp -= s*log((s + sqrt(s*s+rsq))/(2.0*s));
 	return tmp;
@@ -695,6 +696,7 @@ double dPIE_Lens::potential_elliptical(const double x, const double y)
 	psi2 = sqrt(qsq*(asq+x*x)+y*y);
 	u = sqrt(1-qsq);
 
+	// might need to have a first order expansion for small s values
 	double ans = (bprime*q/u)*(x*(atan(u*x/(psi+sprime)) - atan(u*x/(psi2+aprime)))+ y*(atanh(u*y/(psi+qsq*sprime))
 		- atanh(u*y/(psi2+qsq*aprime)))) + bprime*q*(-aprime*(-log(SQR(psi2+aprime) + SQR(u*x))/2 + log((1.0+q)*aprime)));
 	if (sprime != 0) ans += bprime*q*sprime*(-log(SQR(psi+sprime) + SQR(u*x))/2 + log((1.0+q)*sprime));

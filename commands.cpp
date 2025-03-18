@@ -1259,6 +1259,7 @@ void QLens::process_commands(bool read_file)
 							"sbmap loadimg <image_file>\n"
 							"sbmap loadpsf <psf_file>\n"
 							"sbmap load_noisemap <noisemap_file>\n"
+							"sbmap save_noisemap <noisemap_file>\n"
 							"sbmap unloadpsf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap mkpsf [-spline]\n"                 // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap spline_psf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
@@ -7137,30 +7138,45 @@ void QLens::process_commands(bool read_file)
 						grid_xmax = grid_xcenter + grid_xlength/2;
 						grid_ymin = grid_ycenter - grid_ylength/2;
 						grid_ymax = grid_ycenter + grid_ylength/2;
-						lensgrids[n_pixellated_lens-1]->create_cartesian_pixel_grid(grid_xmin,grid_xmax,grid_ymin,grid_ymax,source_redshift);
+						lensgrids[n_pixellated_lens-1]->create_cartesian_pixel_grid(grid_xmin,grid_xmax,grid_ymin,grid_ymax,0);
 						if (mpi_id==0) cout << "Created cartesian lens pixel grid" << endl;
 						//create_lensgrid_cartesian(0,0,true);
 					}
 					lensgrids[pixlens_num]->assign_potential_from_analytic_lens(lens_num,add_potential);
 				}
-				else if (words[1]=="plotpot") {
+				else if ((words[1]=="plotpot") or (words[1]=="plotkappa")) {
+					bool plot_kappa = false;
+					if (words[1]=="plotkappa") plot_kappa = true;
 					int pixlens_num = 0;
+					int npix = 600;
+					bool interpolate = false;
+					vector<string> args;
+					if (extract_word_starts_with('-',2,nwords-1,args)==true)
+					{
+						for (int i=0; i < args.size(); i++) {
+							if (args[i]=="-interp") interpolate = true;
+							else if (args[i]=="-p100") npix = 100;
+							else if (args[i]=="-p200") npix = 200;
+							else if (args[i]=="-p300") npix = 300;
+							else if (args[i]=="-p400") npix = 400;
+							else if (args[i]=="-p500") npix = 500;
+							else if (args[i]=="-p600") npix = 600;
+							else if (args[i]=="-p700") npix = 700;
+							else if (args[i]=="-p800") npix = 800;
+							else if (args[i]=="-p1000") npix = 1000;
+							else if (args[i]=="-p2000") npix = 2000;
+							else if (args[i]=="-p3000") npix = 3000;
+							else if (args[i]=="-p4000") npix = 4000;
+							else Complain("argument '" << args[i] << "' not recognized");
+						}
+					}
+
 					if (nwords==3) {
 						if (!(ws[2] >> pixlens_num)) Complain("invalid pixlens number");
 					}
 					if (pixlens_num >= n_pixellated_lens) Complain("specified pixlens has not been created");
-					lensgrids[pixlens_num]->plot_potential("pot_pixel",600,true,false,false);
-					string range = "";
-					if (show_cc) run_plotter_range("potpixel","",range);
-					else run_plotter_range("potpixel_nocc","",range);
-				}
-				else if (words[1]=="plotkappa") {
-					int pixlens_num = 0;
-					if (nwords==3) {
-						if (!(ws[2] >> pixlens_num)) Complain("invalid pixlens number");
-					}
-					if (pixlens_num >= n_pixellated_lens) Complain("specified pixlens has not been created");
-					lensgrids[pixlens_num]->plot_potential("pot_pixel",600,true,true,false);
+					if (!plot_kappa) lensgrids[pixlens_num]->plot_potential("pot_pixel",npix,interpolate,false,false);
+					else lensgrids[pixlens_num]->plot_potential("pot_pixel",npix,interpolate,true,false);
 					string range = "";
 					if (show_cc) run_plotter_range("potpixel","",range);
 					else run_plotter_range("potpixel_nocc","",range);
@@ -9783,6 +9799,18 @@ void QLens::process_commands(bool read_file)
 				if (!image_pixel_data->load_noise_map_fits(filename,hdu_indx,show_header)) Complain("could not load noise map fits file '" << filename << "'");
 				use_noise_map = true;
 			}
+			else if (words[1]=="save_noisemap")
+			{
+				string filename;
+				vector<string> args;
+				if (nwords==2) {
+					Complain("filename for noise map in FITS format is required (e.g. 'sbmap save_noisemap file.fits')");
+				} else if (nwords==3) {
+					if (!(ws[2] >> filename)) Complain("invalid filename for noise map");
+				} else Complain("too many arguments to 'sbmap save_noisemap'");
+				if (!image_pixel_data) Complain("image data/noise map has not been loaded or generated");
+				if (!image_pixel_data->save_noise_map_fits(filename)) Complain("noise map has not been loaded or generated");
+			}
 			else if (words[1]=="generate_uniform_noisemap")
 			{
 				if (background_pixel_noise <= 0) Complain("bg_pixel_noise should be set to a positive nonzero value to generate uniform noise map");
@@ -10497,7 +10525,7 @@ void QLens::process_commands(bool read_file)
 			{
 				bool replot = false;
 				bool plot_residual = false;
-				bool normalize_residuals = false;
+				bool normalize_sb = false;
 				bool plot_foreground_only = false;
 				bool omit_foreground = false;
 				bool show_all_pixels = false;
@@ -10520,6 +10548,9 @@ void QLens::process_commands(bool read_file)
 				bool show_only_ptimgs = false;
 				bool show_current_sb = false; // if true, will plot the surface brightness that is currently stored in the image_pixel_grids
 				bool include_imgpts = false; // this is to overlay additional lensed points from "mksrcgal" or "mksrctab" command
+				bool show_only_first_order = false;
+				bool no_first_order_potential_corrections = false;
+				bool old_first_order_sb_correction = first_order_sb_correction;
 				bool simulate_noise_setting = simulate_pixel_noise;
 				string cbstring = "";
 				double pnoise = 0;
@@ -10554,15 +10585,15 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-replot") replot = true;
 						else if ((args[i]=="-res") or (args[i]=="-residual")) plot_residual = true;
-						else if (args[i]=="-nres") { plot_residual = true; normalize_residuals = true; }
-						else if (args[i]=="-nres6") { plot_residual = true; normalize_residuals = true; cbstring = "cb6"; }
-						else if (args[i]=="-nres5") { plot_residual = true; normalize_residuals = true; cbstring = "cb5"; }
-						else if (args[i]=="-nres4") { plot_residual = true; normalize_residuals = true; cbstring = "cb4"; }
-						else if (args[i]=="-nres3") { plot_residual = true; normalize_residuals = true; cbstring = "cb3"; }
+						else if (args[i]=="-nres") { plot_residual = true; normalize_sb = true; }
+						else if (args[i]=="-nres6") { plot_residual = true; normalize_sb = true; cbstring = "cb6"; }
+						else if (args[i]=="-nres5") { plot_residual = true; normalize_sb = true; cbstring = "cb5"; }
+						else if (args[i]=="-nres4") { plot_residual = true; normalize_sb = true; cbstring = "cb4"; }
+						else if (args[i]=="-nres3") { plot_residual = true; normalize_sb = true; cbstring = "cb3"; }
 						//else if (args[i]=="-resns") { plot_residual = true; omit_source_plot = true; } // shortcut argument to plot residuals but not source
-						//else if (args[i]=="-nresns") { plot_residual = true; normalize_residuals = true; omit_source_plot = true; } // shortcut argument to plot residuals but not source
+						//else if (args[i]=="-nresns") { plot_residual = true; normalize_sb = true; omit_source_plot = true; } // shortcut argument to plot residuals but not source
 						else if (args[i]=="-current") show_current_sb = true;
-						else if (args[i]=="-norm") normalize_residuals = true;
+						else if (args[i]=="-norm") normalize_sb = true;
 						else if (args[i]=="-thresh") show_noise_thresh = true;
 						else if (args[i]=="-log") plot_log = true;
 						else if (args[i]=="-fg") plot_foreground_only = true;
@@ -10574,6 +10605,8 @@ void QLens::process_commands(bool read_file)
 						else if ((args[i]=="-showsrc") or (args[i]=="-showsrcplot")) omit_source_plot = false;
 						else if (args[i]=="-noptsrc") exclude_ptimgs = true;
 						else if (args[i]=="-onlyptsrc") show_only_ptimgs = true;
+						else if (args[i]=="-no1storder") no_first_order_potential_corrections = true;
+						else if (args[i]=="-only1storder") show_only_first_order = true;
 						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
 						else if (args[i]=="-mkdata") offload_to_data = true;
 						else if (args[i]=="-subcomp") subcomp = true;
@@ -10614,6 +10647,15 @@ void QLens::process_commands(bool read_file)
 				if ((replot) and (plot_fits)) Complain("Cannot use 'replot' option when plotting to fits files");
 
 				if ((show_current_sb) and (outside_sb_prior)) Complain("cannot use '-current' option if outside_sb_prior is set to 'on'");
+
+				if ((first_order_sb_correction) and (no_first_order_potential_corrections)) {
+					first_order_sb_correction = false;
+					if ((n_pixellated_lens > 0) and (lensgrids)) {
+						for (int i=0; i < n_pixellated_lens; i++) {
+							lensgrids[i]->include_in_lensing_calculations = true; // now allow for potential corrections to be included in ray-tracing, rather than using first order approximation
+						}
+					}
+				}
 
 				if (nlens==0) {
 					if ((n_sb==0) and (n_ptsrc==0)) {
@@ -10708,7 +10750,7 @@ void QLens::process_commands(bool read_file)
 					if (set_title) plot_title = temp_title;
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,plot_log,show_current_sb)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
 							//if ((subcomp) and (show_cc)) {
 								//if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
 							//}
@@ -10752,9 +10794,9 @@ void QLens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if ((terminal==TEXT) or (plot_fits)) {
-							if (!replot) plot_lensed_surface_brightness(words[2],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,plot_log,show_current_sb);
+							if (!replot) plot_lensed_surface_brightness(words[2],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,plot_log,show_current_sb)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range2,contstring,cbstring);
 								else if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural",words[2],range2,contstring,cbstring);
@@ -10767,11 +10809,11 @@ void QLens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if ((terminal==TEXT) or (plot_fits)) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,plot_log,show_current_sb);
+								plot_lensed_surface_brightness(words[3],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
 								if ((plotted_src) and (mpi_id==0) and (src_i >= 0)) cartesian_srcgrids[src_i]->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,plot_log,show_current_sb)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
 							if ((!replot) and (plotted_src) and (mpi_id==0) and (src_i >= 0)) { cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring,cbstring);
@@ -10795,6 +10837,16 @@ void QLens::process_commands(bool read_file)
 				}
 				if (omit_source_plot) plot_srcplane = old_plot_srcplane;
 				if (omit_cc) show_cc = old_cc_setting;
+				if (no_first_order_potential_corrections) {
+					first_order_sb_correction = old_first_order_sb_correction;
+					if (first_order_sb_correction) {
+						if ((n_pixellated_lens > 0) and (lensgrids)) {
+							for (int i=0; i < n_pixellated_lens; i++) {
+								lensgrids[i]->include_in_lensing_calculations = false;
+							}
+						}
+					}
+				}
 				if (set_title) plot_title = "";
 			}
 			else if (words[1]=="plotsrc")
@@ -11895,6 +11947,12 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'potential_perturbations' command; must specify 'on' or 'off'");
 				set_switch(include_potential_perturbations,setword);
+				if ((n_pixellated_lens > 0) and (lensgrids)) {
+					for (int i=0; i < n_pixellated_lens; i++) {
+						if ((first_order_sb_correction) or (!include_potential_perturbations)) lensgrids[i]->include_in_lensing_calculations = false;
+						else lensgrids[i]->include_in_lensing_calculations = true;
+					}
+				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="first_order_sb_correction")
@@ -11906,11 +11964,30 @@ void QLens::process_commands(bool read_file)
 				set_switch(first_order_sb_correction,setword);
 				if ((n_pixellated_lens > 0) and (lensgrids)) {
 					for (int i=0; i < n_pixellated_lens; i++) {
-						if (first_order_sb_correction) lensgrids[i]->include_in_lensing_calculations = false;
+						if ((first_order_sb_correction) or (!include_potential_perturbations)) lensgrids[i]->include_in_lensing_calculations = false;
 						else lensgrids[i]->include_in_lensing_calculations = true;
 					}
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="adopt_final_sbgrad")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Adopt final source SB gradient for first-order SB corrections: " << display_switch(adopt_final_sbgrad) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'adopt_final_sbgrad' command; must specify 'on' or 'off'");
+				set_switch(adopt_final_sbgrad,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="potential_corr_it")
+		{
+			int iter;
+			if (nwords == 2) {
+				if (!(ws[1] >> iter)) Complain("invalid potential_corr_it setting");
+				potential_correction_iterations = iter;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "number of iterations for potential corrections = " << potential_correction_iterations << endl;
+			} else Complain("must specify either zero or one argument (number of iterations)");
 		}
 		else if (words[0]=="chisq_parity")
 		{

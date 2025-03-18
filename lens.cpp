@@ -271,8 +271,8 @@ QLens::QLens() : UCMC(), ModelParams()
 	open_chisq_logfile = false;
 	psf_convolution_mpi = false;
 	use_input_psf_matrix = false;
-	psf_threshold = 0.01;
-	psf_ptsrc_threshold = 1e-2;
+	psf_threshold = 0.0; // no truncation by default
+	psf_ptsrc_threshold = 0.0; // no truncation by default
 	ignore_foreground_in_chisq = false;
 	psf_ptsrc_nsplit = 5; // for subpixel evaluation of point source PSF
 	fft_convolution = false;
@@ -462,7 +462,9 @@ QLens::QLens() : UCMC(), ModelParams()
 	supersampled_psf_matrix = NULL;
 	inversion_nthreads = 1;
 	include_potential_perturbations = false;
+	potential_correction_iterations = 1;
 	first_order_sb_correction = false;
+	adopt_final_sbgrad = false;
 	adaptive_subgrid = false;
 	base_srcpixel_imgpixel_ratio = 0.8; // for lowest mag source pixel, this sets fraction of image pixel area covered by it (when mapped to image plane)
 	exclude_source_pixels_beyond_fit_window = true;
@@ -850,7 +852,9 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	Lmatrix = NULL;
 	inversion_nthreads = lens_in->inversion_nthreads;
 	include_potential_perturbations = lens_in->include_potential_perturbations;
+	potential_correction_iterations = lens_in->potential_correction_iterations;
 	first_order_sb_correction = lens_in->first_order_sb_correction;
+	adopt_final_sbgrad = lens_in->adopt_final_sbgrad;
 	adaptive_subgrid = lens_in->adaptive_subgrid;
 	base_srcpixel_imgpixel_ratio = lens_in->base_srcpixel_imgpixel_ratio; // for lowest mag source pixel, this sets fraction of image pixel area covered by it (when mapped to image plane)
 	exclude_source_pixels_beyond_fit_window = lens_in->exclude_source_pixels_beyond_fit_window;
@@ -11572,7 +11576,8 @@ void QLens::plot_logkappa_map(const int x_N, const int y_N, const string filenam
 					negkap = true;
 					kap = abs(kap);
 				}
-				logkapout << log(kap)/log(10) << " ";
+				//logkapout << log(kap)/log(10) << " ";
+				logkapout << kap << " ";
 			}
 		}
 		logkapout << endl;
@@ -12613,7 +12618,7 @@ void QLens::update_imggrid_mask_values(const int mask_i)
 	}
 }
 
-bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_all_pixels, bool normalize_residuals, bool offload_to_data, bool show_extended_mask, bool show_foreground_mask, bool show_noise_thresh, bool exclude_ptimgs, bool only_ptimgs, int specific_zsrc_i, bool plot_log, bool plot_current_sb, bool verbose)
+bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, bool plot_residual, bool plot_foreground_only, bool omit_foreground, bool show_all_pixels, bool normalize_residuals, bool offload_to_data, bool show_extended_mask, bool show_foreground_mask, bool show_noise_thresh, bool exclude_ptimgs, bool only_ptimgs, int specific_zsrc_i, bool show_only_first_order_corrections, bool plot_log, bool plot_current_sb, bool verbose)
 {
 	// Note that if specific_zsrc_i is negative, it will plot images from *all* source redshifts
 	// You need to simplify the code in this function. It's too convoluted!!!
@@ -12704,7 +12709,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 
 			if ((at_least_one_lensed_src_object) or (n_sb > 0)) {
 				if ((!plot_foreground_only) and (at_least_one_lensed_src_object)) {
-					image_pixel_grid->find_surface_brightness(false,true,include_potential_perturbations and first_order_sb_correction);
+					image_pixel_grid->find_surface_brightness(false,true,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections);
 					if ((!omit_foreground) and (at_least_one_foreground_src_included)) {
 						assign_foreground_mappings(zsrc_i,use_data);
 						calculate_foreground_pixel_surface_brightness(zsrc_i,false); // PSF convolution of foreground is done within this functions
@@ -13424,15 +13429,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				if (include_potential_perturbations) {
 					clear_sparse_lensing_matrices();
 					clear_pixel_matrices(false); 
-					//optimize_regparam = false;
-					//if (generate_and_invert_lensing_matrix(zsrc_i,src_i,true,true,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
-					//clear_sparse_lensing_matrices();
-					//clear_pixel_matrices(false); 
-					//if (generate_and_invert_lensing_matrix(zsrc_i,src_i,true,true,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
-					//clear_sparse_lensing_matrices();
-					//clear_pixel_matrices(false); 
-					//if (generate_and_invert_lensing_matrix(zsrc_i,src_i,true,true,tot_wtime,tot_wtime0,verbal)==false) return 2e30; // choose false for 4th arg if you want to reproduce the same first-order SB corrections (meaning it uses SB_grad from previous iteration in first order term)
-					if (generate_and_invert_lensing_matrix(zsrc_i,src_i,true,false,tot_wtime,tot_wtime0,verbal)==false) return 2e30; // choose false for 4th arg if you want to reproduce the same first-order SB corrections (meaning it uses SB_grad from previous iteration in first order term)
+					for (int it=0; it < potential_correction_iterations; it++) {
+						if (generate_and_invert_lensing_matrix(zsrc_i,src_i,true,true,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
+						clear_sparse_lensing_matrices();
+						clear_pixel_matrices(false); 
+					}
+					if (generate_and_invert_lensing_matrix(zsrc_i,src_i,true,adopt_final_sbgrad,tot_wtime,tot_wtime0,verbal)==false) return 2e30; // choose false for 4th arg if you want to reproduce the same first-order SB corrections (meaning it uses SB_grad from previous iteration in first order term)
 
 				}
 

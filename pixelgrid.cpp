@@ -5048,9 +5048,13 @@ void DelaunaySourceGrid::find_source_gradient(const lensvector& input_pt, lensve
 {
 	double interval;
 	lensvector pt_p, pt_m;
-//	interval = interpolate_voronoi_length(input_pt,thread) / 3.0;
-	interval = interpolate_voronoi_length(input_pt,thread) / 100.0;
-	if (interval > 0.5) warn("HUGE INTERVAL! %g (at x=%g,y=%g)",interval,input_pt[0],input_pt[1]);
+	interval = interpolate_voronoi_length(input_pt,thread) / 4.0;
+	//interval = 1e-4;
+	//interval = interpolate_voronoi_length(input_pt,thread) / 100.0;
+	if (interval > 0.5) {
+		warn("HUGE INTERVAL! %g (at x=%g,y=%g)",interval,input_pt[0],input_pt[1]); // this is generally only an issue at the borders
+		interval = 0.05;
+	}
 	//cout << "interval=" << interval << endl;
 	pt_p[0] = input_pt[0] + interval;
 	pt_p[1] = input_pt[1];
@@ -5411,7 +5415,7 @@ void LensPixelGrid::create_cartesian_pixel_grid(const double xmin, const double 
 	ymin_cartesian = ymin+cartesian_pixel_ylength/2;
 	ymax_cartesian = ymax-cartesian_pixel_ylength/2;
 
-	if ((src_redshift_indx >= 0) and (lens != NULL) and (lens->image_pixel_grids[src_redshift_indx] != NULL)) image_pixel_grid = lens->image_pixel_grids[src_redshift_indx];
+	if ((src_redshift_indx >= 0) and (lens != NULL) and (lens->image_pixel_grids != NULL) and (lens->image_pixel_grids[src_redshift_indx] != NULL)) image_pixel_grid = lens->image_pixel_grids[src_redshift_indx];
 	else image_pixel_grid = NULL;
 
 	potential = new double[n_gridpts];
@@ -5945,7 +5949,7 @@ double LensPixelGrid::first_order_surface_brightness_correction(const lensvector
 {
 	int npts,n_halfpts;
 	if (grid_type==CartesianPixelGrid) {
-		find_interpolation_weights_cartesian(input_pt, npts, 1, thread);
+		find_interpolation_weights_cartesian(input_pt, npts, 1, thread); // the '1' tells it to find the weights for the deflection
 	} else {
 		bool inside_triangle;
 		bool on_vertex;
@@ -5983,6 +5987,25 @@ double LensPixelGrid::kappa(const double x, const double y, const int thread)
 {
 	lensmatrix hess;
 	hessian(x,y,hess,thread);
+
+	// check!
+	/*
+	lensvector def,defp,defm;
+	double hesscheck0, hesscheck1, kapcheck;
+	double h = 1e-4;
+	deflection(x-h,y,defm,thread);
+	deflection(x+h,y,defp,thread);
+	hesscheck0 = (defp[0] - defm[0])/(2*h);
+	deflection(x,y-h,defm,thread);
+	deflection(x,y+h,defp,thread);
+	hesscheck1 = (defp[1] - defm[1])/(2*h);
+	kapcheck = (hesscheck0 + hesscheck1)/2;
+
+	double kap = (hess[0][0] + hess[1][1])/2;
+	cout << "KAPCHECK: " << kapcheck << " " << kap << endl;
+	//return kapcheck;
+*/
+
 	return (hess[0][0] + hess[1][1])/2;
 }
 
@@ -6010,8 +6033,8 @@ void LensPixelGrid::find_interpolation_weights_cartesian(const lensvector &input
 	//double idoub, jdoub;
 	//idoub  = ((input_pt[0]-xmin_cartesian) / cartesian_pixel_xlength);
 	//jdoub  = ((input_pt[1]-ymin_cartesian) / cartesian_pixel_ylength);
-	ii  = (int) ((input_pt[0]-xmin_cartesian) / cartesian_pixel_xlength);
-	jj  = (int) ((input_pt[1]-ymin_cartesian) / cartesian_pixel_ylength);
+	ii = (int) ((input_pt[0]-xmin_cartesian) / cartesian_pixel_xlength); // NOTE: this does not find the pixel we're in, but rather, the lower left-hand pixel of the interpolation that will be used (note that xmin_cartesian is actually the x-coordinate of the CENTER of the left-most pixel)
+	jj = (int) ((input_pt[1]-ymin_cartesian) / cartesian_pixel_ylength); // NOTE: same note as above, but for y-coordinate
 	//cout << "ii before fixing: " << ii << endl;
 	//cout << "jj before fixing: " << jj << endl;
 	//if (ii==-1) die("negative ii");
@@ -6559,19 +6582,25 @@ void LensPixelGrid::plot_potential(string root, const int npix, const bool inter
 		pt[1] = y;
 		for (i=0, x=lensgrid_xmin+pixel_xlength/2; i < npts_x; i++, x += pixel_xlength) {
 			pt[0] = x;
-			if ((interpolate_pot) or (grid_type==CartesianPixelGrid)) {
-				if (plot_convergence) pot = kappa(x,y,0);
-				else pot = interpolate_potential(x,y);
+			if (interpolate_pot) {
+				if (!plot_convergence) pot = interpolate_potential(x,y);
+				else pot = kappa(x,y,0);
 			} else {
 				// The following lines will plot the Voronoi cells that are dual to the Delaunay triangulation. Note however, that when SB interpolation is
 				// performed during ray-tracing, we use the vertices of the triangle that a point lands in, which may not include the closest vertex (i.e. the
 				// Voronoi cell it lies in). Thus, the Voronoi cells are for visualization only, and do not directly show what the ray-traced SB will look like.
-				bool inside_triangle;
-				trinum = search_grid(0,pt,inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
-				pt_i = find_closest_vertex(trinum,pt);
-				//if (plot_convergence) BLAAKSLDJFKLASDJFKLJL...implement this later
-				//else
-				pot = potential[pt_i];
+				if (grid_type==CartesianPixelGrid) {
+					int ii,jj;
+					ii = (int) ((pt[0]-lensgrid_xmin) / cartesian_pixel_xlength);
+					jj = (int) ((pt[1]-lensgrid_ymin) / cartesian_pixel_ylength);
+					pt_i = cartesian_pixel_index[ii][jj];
+				} else {
+					bool inside_triangle;
+					trinum = search_grid(0,pt,inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
+					pt_i = find_closest_vertex(trinum,pt);
+				}
+				if (!plot_convergence) pot = potential[pt_i];
+				else pot = kappa(gridpts[pt_i][0],gridpts[pt_i][1],0);
 			}
 			if (plot_fits) potvals[i][j] = pot;
 			//cout << x << " " << y << " " << lensgridpts[pt_i][0] << " " << lensgridpts[pt_i][1] << endl;
@@ -7321,6 +7350,57 @@ bool ImagePixelData::load_noise_map_fits(string fits_filename, const int hdu_ind
 #endif
 }
 
+bool ImagePixelData::save_noise_map_fits(string fits_filename)
+{
+#ifndef USE_FITS
+	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return;
+#else
+	if (noise_map == NULL) {
+		warn("no noise map has been loaded or generated; cannot save noise map to FITS file");
+		return false;
+	}
+
+	int i,j,kk;
+	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
+	int status = 0;   // CFITSIO status value MUST be initialized to zero!
+	int bitpix = -64, naxis = 2;
+	long naxes[2] = {npixels_x,npixels_y};
+	double *pixels;
+	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
+
+	if (!fits_create_file(&outfptr, fits_filename_overwrite.c_str(), &status))
+	{
+		if (!fits_create_img(outfptr, bitpix, naxis, naxes, &status))
+		{
+			if (naxis == 0) {
+				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+			} else {
+				kk=0;
+				long fpixel[naxis];
+				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
+				pixels = new double[npixels_x];
+
+				for (fpixel[1]=1, j=0; fpixel[1] < naxes[1]; fpixel[1]++, j++)
+				{
+					for (i=0, kk=0; i < npixels_x; i++, kk++) {
+						pixels[kk] = noise_map[i][j];
+					}
+					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+				}
+				delete[] pixels;
+			}
+			if (lens->data_pixel_size > 0)
+				fits_write_key(outfptr, TDOUBLE, "PXSIZE", &lens->data_pixel_size, "length of square pixels (in arcsec)", &status);
+		}
+		fits_close_file(outfptr, &status);
+	} 
+
+	if (status) fits_report_error(stderr, status); // print any error message
+	noise_map_fits_filename = fits_filename;
+	return true;
+#endif
+}
+
 void ImagePixelData::unload_noise_map()
 {
 	int i;
@@ -7334,8 +7414,6 @@ void ImagePixelData::unload_noise_map()
 	}
 	noise_map_fits_filename = "";
 }
-
-
 
 void ImagePixelData::get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy)
 {
@@ -10867,6 +10945,14 @@ void ImagePixelGrid::set_null_subpixel_ray_tracing_arrays()
 
 void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
 {
+	// NOTE: a few arrays that involve the image pixels are not initialized here, specifically:
+	//       active_image_pixel_i, active_image_pixel_j, image_surface_brightness, and imgpixel_covinv_vector
+	//       (along with possibly the supersampled counterparts of these). These arrays are initialized in
+	//       the function assign_pixel_mappings() and/or vectorize_image_pixel_surface_brightness(), because
+	//       certain image pixels that don't map to any source pixel (labeled "inactive") may not be included
+	//       in the inversion. Likewise, the number of active image pixels (image_npixels) is calculated in
+	//       those functions, not here.
+	
 	int i,j,k,n,n_cell,n_corner;
 
 	if ((!pixel_in_mask) or (emask == NULL)) {
@@ -11663,7 +11749,7 @@ void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
 	}
 }
 
-double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool normalize_residuals, bool show_noise_thresh, bool plot_log)
+double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool normalize_sb, bool show_noise_thresh, bool plot_log)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -11690,13 +11776,22 @@ double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_re
 			if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
 				if (!plot_residual) {
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
+					if (normalize_sb) {
+						if (lens->use_noise_map) {
+							if (lens->image_pixel_data != NULL) {
+								sb /= lens->image_pixel_data->noise_map[i][j];
+							} else warn("image pixel data not loaded; could not use noise map to normalize plot");
+						} else {
+							if (lens->background_pixel_noise > 0) residual /= lens->background_pixel_noise;
+						}
+					}
 					//if (sb*0.0 != 0.0) die("WTF %g %g",surface_brightness[i][j],foreground_surface_brightness[i][j]);
 					if (!plot_log) pixel_image_file << sb;
 					else pixel_image_file << log(abs(sb));
 				} else {
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
 					residual = lens->image_pixel_data->surface_brightness[i][j] - sb;
-					if (normalize_residuals) {
+					if (normalize_sb) {
 						if (lens->use_noise_map) {
 							if (lens->image_pixel_data != NULL) {
 								residual /= lens->image_pixel_data->noise_map[i][j];
@@ -12806,7 +12901,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 	}
 }
 
-void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const bool lensed_sources_only, const bool include_first_order_corrections)
+void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const bool lensed_sources_only, const bool include_first_order_corrections, const bool show_only_first_order_corrections)
 {
 	bool supersampling = lens->psf_supersampling;
 	double noise;
@@ -12891,11 +12986,53 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 								for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
 									if (!foreground_only) {
 										if (source_fit_mode==Delaunay_Source) {
-											sb = delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread);
+											if (!show_only_first_order_corrections) {
+												sb = delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread);
+											} else {
+												sb = 0;
+											}
 											if ((include_first_order_corrections) and (lensgrid)) {
 												//lensvector S0_gradient;
 												//delaunay_srcgrid->find_source_gradient(center_sourcepts[i][j],S0_gradient,thread);
 												//sb += lensgrid->first_order_surface_brightness_correction(center_srcpt[subcell_index],S0_gradient,thread);
+
+												/*
+												double unperturbed_sb = sb;
+												lensvector defl;
+												lensgrid->deflection(center_pt[subcell_index][0],center_pt[subcell_index][1],defl,thread);
+												lensvector new_srcpt = center_srcpt[subcell_index] - defl;
+												double SB_check = delaunay_srcgrid->find_lensed_surface_brightness(new_srcpt,i,j,thread);
+												double sb_pert0 = SB_check - sb;
+
+												double sb_pert1 = lensgrid->first_order_surface_brightness_correction(center_pt[subcell_index],subpixel_source_gradient[i][j][subcell_index],thread);
+
+												double interval = 1e-4;
+												lensvector ptp = center_srcpt[subcell_index];
+												ptp[0] += interval;
+												lensvector ptm = center_srcpt[subcell_index];
+												ptm[0] -= interval;
+												//double sbgrad_x = (delaunay_srcgrid->find_lensed_surface_brightness(ptp,i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(ptm,i,j,thread)) / (2*interval);
+												double sbgrad_xp = (delaunay_srcgrid->find_lensed_surface_brightness(ptp,i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread)) / interval;
+												double sbgrad_xm = (delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(ptm,i,j,thread)) / interval;
+												lensvector ptpy = center_srcpt[subcell_index];
+												ptpy[1] += interval;
+												lensvector ptmy = center_srcpt[subcell_index];
+												ptmy[1] -= interval;
+												//double sbgrad_y = (delaunay_srcgrid->find_lensed_surface_brightness(ptpy,i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(ptmy,i,j,thread)) / (2*interval);
+												double sbgrad_yp = (delaunay_srcgrid->find_lensed_surface_brightness(ptpy,i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread)) / interval;
+												double sbgrad_ym = (delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(ptmy,i,j,thread)) / interval;
+												double sbgrad_x = (defl[0] < 0) ? sbgrad_xp : sbgrad_xm;
+												double sbgrad_y = (defl[1] < 0) ? sbgrad_yp : sbgrad_ym;
+												double sbcheck2 = unperturbed_sb - sbgrad_x*defl[0] - sbgrad_y*defl[1];
+												double pert = -sbgrad_x*defl[0] - sbgrad_y*defl[1];
+												//sb += lensgrid->first_order_surface_brightness_correction(center_pt[subcell_index],S0_gradient,thread);
+
+												if (unperturbed_sb > 0.13) cout << "SB_CHECK: S0=" << unperturbed_sb << " SBpert_1st=" << sb_pert1 << " SBpert_def=" << sb_pert0 << " pertcheck=" << pert << " sbgradc_x=" << sbgrad_x << " sbgradc_y=" << sbgrad_y << " sbgrad_x=" << subpixel_source_gradient[i][j][subcell_index][0] << " sbgrad_y=" << subpixel_source_gradient[i][j][subcell_index][1] << " def: " << defl[0] << " " << defl[1] << endl;
+												//lensvector SBgrad(sbgrad_x,sbgrad_y);
+												//sb += lensgrid->first_order_surface_brightness_correction(center_pt[subcell_index],SBgrad,thread);
+												//sb = SB_check;
+												*/
+
 												sb += lensgrid->first_order_surface_brightness_correction(center_pt[subcell_index],subpixel_source_gradient[i][j][subcell_index],thread);
 											}
 										}
@@ -12910,18 +13047,22 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 					}
 				}
 			} else {
-				ofstream hergls("hergls.dat");
+				//ofstream hergls("hergls.dat");
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						//surface_brightness[i][j] = 0;
 						if ((pixel_in_mask == NULL) or (pixel_in_mask[i][j])) {
 							if (!foreground_only) {
 								if (source_fit_mode==Delaunay_Source) {
-									surface_brightness[i][j] = delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0);
-									if ((abs(center_sourcepts[i][j][0]) < 0.3) and (abs(center_sourcepts[i][j][1]) < 0.3)) cout << "HARG " << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << surface_brightness[i][j] << endl;
-									hergls << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << surface_brightness[i][j] << endl;
+									if (!show_only_first_order_corrections) {
+										surface_brightness[i][j] = delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0);
+									} else {
+										surface_brightness[i][j] = 0;
+									}
+									//if ((abs(center_sourcepts[i][j][0]) < 0.3) and (abs(center_sourcepts[i][j][1]) < 0.3)) cout << "HARG " << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << surface_brightness[i][j] << endl;
+									//hergls << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << surface_brightness[i][j] << endl;
 									if (include_first_order_corrections) {
-										//lensvector S0_gradient;
+									//lensvector S0_gradient;
 										//delaunay_srcgrid->find_source_gradient(center_sourcepts[i][j],S0_gradient,0);
 										//
 										//double S0_check2 = delaunay_srcgrid->interpolate_surface_brightness(center_sourcepts[i][j],false,0);
@@ -12932,24 +13073,26 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 										/*
 										double unperturbed_sb = surface_brightness[i][j];
 										lensvector defl;
-										//defl[0] = 1e-3;
-										//defl[1] = 0;
-										//defl[1] = 5e-4;
 										lensgrid->deflection(center_pts[i][j][0],center_pts[i][j][1],defl,0);
 										lensvector new_srcpt = center_sourcepts[i][j] - defl;
 										double SB_check = delaunay_srcgrid->find_lensed_surface_brightness(new_srcpt,i,j,0);
-										double interval = 5e-3;
+										double sb_pert0 = SB_check - surface_brightness[i][j];
 
+										double sb_pert1 = lensgrid->first_order_surface_brightness_correction(center_pts[i][j],subpixel_source_gradient[i][j][0],0);
+
+										double interval = 1e-4;
 										lensvector ptp = center_sourcepts[i][j];
 										ptp[0] += interval;
 										lensvector ptm = center_sourcepts[i][j];
 										ptm[0] -= interval;
+										//double sbgrad_x = (delaunay_srcgrid->find_lensed_surface_brightness(ptp,i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(ptm,i,j,0)) / (2*interval);
 										double sbgrad_xp = (delaunay_srcgrid->find_lensed_surface_brightness(ptp,i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0)) / interval;
 										double sbgrad_xm = (delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(ptm,i,j,0)) / interval;
 										lensvector ptpy = center_sourcepts[i][j];
 										ptpy[1] += interval;
 										lensvector ptmy = center_sourcepts[i][j];
 										ptmy[1] -= interval;
+										//double sbgrad_y = (delaunay_srcgrid->find_lensed_surface_brightness(ptpy,i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(ptmy,i,j,0)) / (2*interval);
 										double sbgrad_yp = (delaunay_srcgrid->find_lensed_surface_brightness(ptpy,i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0)) / interval;
 										double sbgrad_ym = (delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(ptmy,i,j,0)) / interval;
 										double sbgrad_x = (defl[0] < 0) ? sbgrad_xp : sbgrad_xm;
@@ -12957,8 +13100,13 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 										double sbcheck2 = unperturbed_sb - sbgrad_x*defl[0] - sbgrad_y*defl[1];
 										double pert = -sbgrad_x*defl[0] - sbgrad_y*defl[1];
 										//surface_brightness[i][j] += lensgrid->first_order_surface_brightness_correction(center_pts[i][j],S0_gradient,0);
+
+										cout << "SB_CHECK: S0=" << unperturbed_sb << " SBpert_1st=" << sb_pert1 << " SBpert_def=" << sb_pert0 << " pertcheck=" << pert << " sbgradc_x=" << sbgrad_x << " sbgradc_y=" << sbgrad_y << " sbgrad_x=" << subpixel_source_gradient[i][j][0][0] << " sbgrad_y=" << subpixel_source_gradient[i][j][0][1] << " def: " << defl[0] << " " << defl[1] << endl;
 										*/
 										surface_brightness[i][j] += lensgrid->first_order_surface_brightness_correction(center_pts[i][j],subpixel_source_gradient[i][j][0],0);
+										//lensvector SBgrad(sbgrad_x,sbgrad_y);
+										//surface_brightness[i][j] += lensgrid->first_order_surface_brightness_correction(center_pts[i][j],SBgrad,0);
+										//surface_brightness[i][j] = unperturbed_sb + pert;
 
 /*
 										double smin = -defl.norm()*2;

@@ -571,6 +571,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int n_cluster_iterations;
 	bool include_potential_perturbations;
 	bool first_order_sb_correction;
+	bool adopt_final_sbgrad;
+	int potential_correction_iterations;
 	double delaunay_high_sn_sbfrac;
 	bool activate_unmapped_source_pixels;
 	double total_srcgrid_overlap_area, high_sn_srcgrid_overlap_area;
@@ -970,7 +972,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	//void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
 	//bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool show_only_ptimgs = false, int specific_zsrc_i = -1, bool plot_log = false, bool plot_current_sb = false, bool verbose = true);
+	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool show_only_ptimgs = false, int specific_zsrc_i = -1, bool show_only_first_order_corrections = false, bool plot_log = false, bool plot_current_sb = false, bool verbose = true);
 
 	//void plot_Lmatrix();
 	//void check_Lmatrix_columns();
