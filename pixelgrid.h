@@ -264,7 +264,7 @@ class DelaunayGrid : private Sort
 	static void deallocate_multithreaded_variables();
 	void create_pixel_grid(double* gridpts_x, double* gridpts_y, const int n_gridpts);
 
-	int search_grid(const int initial_srcpixel, const lensvector& pt, bool& inside_triangle);
+	int search_grid(int initial_srcpixel, const lensvector& pt, bool& inside_triangle);
 	bool test_if_inside(int &tri_number, const lensvector& pt, bool& inside_triangle);
 	bool test_if_inside(const int tri_number, const lensvector& pt);
 	void record_adjacent_triangles_xy();
@@ -338,7 +338,6 @@ class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
 	bool find_containing_triangle_with_imgpix(const lensvector &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	double interpolate_surface_brightness(const lensvector &input_pt, const bool interp_mag = false, const int thread = 0);
 	double interpolate_voronoi_length(const lensvector &input_pt, const int thread = 0);
-
 
 	bool assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex);
 	void record_srcpixel_mappings();

@@ -3295,6 +3295,7 @@ void DelaunayGrid::create_pixel_grid(double* gridpts_x, double* gridpts_y, const
 	*/
 
 	avg_area = 0;
+	
 	for (n=0; n < n_triangles; n++) {
 		shared_triangles_unsorted[triangle[n].vertex_index[0]].push_back(n);
 		shared_triangles_unsorted[triangle[n].vertex_index[1]].push_back(n);
@@ -3312,6 +3313,18 @@ void DelaunayGrid::create_pixel_grid(double* gridpts_x, double* gridpts_y, const
 	//double totarea = 0;
 	for (n=0; n < n_gridpts; n++) {
 		n_boundary_pts = shared_triangles_unsorted[n].size();
+		// NOTE: for extreme configurations, occasionally a point gets excluded from the Delaunay triangulation; not sure why this happens,
+		//       but as long as the grid is regularized, it shouldn't cause qlens to crash.
+		if (n_boundary_pts==0) {
+			warn("Point was excluded from Delaunay triangulation (n=%i) located at (%g,%g)",n,gridpts[n][0],gridpts[n][1]);
+			n_shared_triangles[n] = 0;
+			voronoi_boundary_x[n] = NULL;
+			voronoi_boundary_y[n] = NULL;
+			shared_triangles[n] = NULL;
+			voronoi_length[n] = 3*avg_tri_length; // just to avoid possible numerical issues; this is really only a problem for border pixels
+			voronoi_area[n] = SQR(voronoi_length[n]);
+			continue;
+		}
 		voronoi_boundary_x[n] = new double[n_boundary_pts];
 		voronoi_boundary_y[n] = new double[n_boundary_pts];
 		shared_triangles[n] = new int[n_boundary_pts];
@@ -3450,9 +3463,12 @@ void DelaunayGrid::record_adjacent_triangles_xy()
 	}
 }
 
-int DelaunayGrid::search_grid(const int initial_srcpixel, const lensvector& pt, bool& inside_triangle)
+int DelaunayGrid::search_grid(int initial_srcpixel, const lensvector& pt, bool& inside_triangle)
 {
-	if (n_shared_triangles[initial_srcpixel]==0) die("something is really wrong! This vertex doesn't share any triangle sides (vertex %i, ntot=%i)",initial_srcpixel,n_gridpts);
+	if (n_shared_triangles[initial_srcpixel]==0) {
+		if (++initial_srcpixel == n_gridpts) initial_srcpixel = 0;
+		//die("something is really wrong! This vertex doesn't share any triangle sides (vertex %i, ntot=%i)",initial_srcpixel,n_gridpts);
+	}
 	int n, triangle_num = shared_triangles[initial_srcpixel][0]; // there might be a better way to discern which shared triangle to start with, but we can optimize this later
 	if ((pt[0]==gridpts[initial_srcpixel][0]) and (pt[1]==gridpts[initial_srcpixel][1])) {
 		inside_triangle = true;
@@ -4103,17 +4119,19 @@ void DelaunayGrid::delete_grid_arrays()
 	if (gridpts != NULL) delete[] gridpts;
 	if (triangle != NULL) {
 		delete[] triangle;
-		delete[] n_shared_triangles;
 		delete[] voronoi_area;
 		delete[] voronoi_length;
 		for (int i=0; i < n_gridpts; i++) {
-			delete[] voronoi_boundary_x[i];
-			delete[] voronoi_boundary_y[i];
-			delete[] shared_triangles[i];
+			if (n_shared_triangles[i] > 0) {
+				delete[] voronoi_boundary_x[i];
+				delete[] voronoi_boundary_y[i];
+				delete[] shared_triangles[i];
+			}
 		}
 		delete[] voronoi_boundary_x;
 		delete[] voronoi_boundary_y;
 		delete[] shared_triangles;
+		delete[] n_shared_triangles;
 		delete[] adj_triangles[0];
 		delete[] adj_triangles[1];
 		delete[] adj_triangles[2];
