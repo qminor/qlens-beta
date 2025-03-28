@@ -3252,7 +3252,6 @@ void DelaunayGrid::create_pixel_grid(double* gridpts_x, double* gridpts_y, const
 	for (n=0; n < n_gridpts; n++) {
 		gridpts[n][0] = gridpts_x[n];
 		gridpts[n][1] = gridpts_y[n];
-		//cout << "Sourcept " << n << ": " << gridpts_x[n] << " " << gridpts_y[n] << endl;
 		adj_triangles[0][n] = -1; // +x direction
 		adj_triangles[1][n] = -1; // -x direction
 		adj_triangles[2][n] = -1; // +y direction
@@ -3274,26 +3273,6 @@ void DelaunayGrid::create_pixel_grid(double* gridpts_x, double* gridpts_y, const
 	triangle = new Triangle[n_triangles];
 	delaunay_triangles->store_triangles(triangle);
 
-	//cout << "THERE ARE " << n_triangles << " TRIANGLES " << endl;
-
-	/*
-	string srcpt_filename = "test_gridpts.dat";
-	ofstream srcout; lens->open_output_file(srcout,srcpt_filename);
-	for (int i=0; i < n_gridpts; i++) {
-		srcout << gridpts[i][0] << " " << gridpts[i][1] << endl;
-	}
-
-	string delaunay_filename = "test_delaunay.dat";
-	ofstream delout; lens->open_output_file(delout,delaunay_filename);
-	for (int i=0; i < n_triangles; i++) {
-		delout << triangle[i].vertex[0][0] << " " << triangle[i].vertex[0][1] << endl;
-		delout << triangle[i].vertex[1][0] << " " << triangle[i].vertex[1][1] << endl;
-		delout << triangle[i].vertex[2][0] << " " << triangle[i].vertex[2][1] << endl;
-		delout << triangle[i].vertex[0][0] << " " << triangle[i].vertex[0][1] << endl;
-		delout << endl;
-	}
-	*/
-
 	avg_area = 0;
 	
 	for (n=0; n < n_triangles; n++) {
@@ -3302,15 +3281,14 @@ void DelaunayGrid::create_pixel_grid(double* gridpts_x, double* gridpts_y, const
 		shared_triangles_unsorted[triangle[n].vertex_index[2]].push_back(n);
 		avg_area += triangle[n].area;
 	}
+
 	avg_area /= n_triangles;
 	double avg_tri_length = sqrt(avg_area);
 	int n_boundary_pts;
 	Triangle *triptr;
 	int i;
 	lensvector midpoint;
-	//int** tricheck = new int*[n_gridpts];
 	lensvector vec1,vec2;
-	//double totarea = 0;
 	for (n=0; n < n_gridpts; n++) {
 		n_boundary_pts = shared_triangles_unsorted[n].size();
 		// NOTE: for extreme configurations, occasionally a point gets excluded from the Delaunay triangulation; not sure why this happens,
@@ -3328,19 +3306,16 @@ void DelaunayGrid::create_pixel_grid(double* gridpts_x, double* gridpts_y, const
 		voronoi_boundary_x[n] = new double[n_boundary_pts];
 		voronoi_boundary_y[n] = new double[n_boundary_pts];
 		shared_triangles[n] = new int[n_boundary_pts];
-		//tricheck[n] = new int[n_boundary_pts];
 		double *angles = new double[n_boundary_pts];
 		double *midpt_angles = new double[n_boundary_pts];
 		for (i=0; i < n_boundary_pts; i++) {
 			shared_triangles[n][i] = shared_triangles_unsorted[n][i];
-			//tricheck[n][i] = shared_triangles_unsorted[n][i];
 			triptr = &triangle[shared_triangles_unsorted[n][i]];
 			voronoi_boundary_x[n][i] = triptr->circumcenter[0];
 			voronoi_boundary_y[n][i] = triptr->circumcenter[1];
 			double comp1,comp2,angle;
 			comp1 = voronoi_boundary_x[n][i] - gridpts[n][0];
 			comp2 = voronoi_boundary_y[n][i] - gridpts[n][1];
-			//cout << "COMPS: " << comp1 << " " << comp2 << endl;
 			if (comp1==0) {
 				if (comp2 > 0) angle = M_HALFPI;
 				else if (comp2==0) angle = 0.0;
@@ -3363,7 +3338,6 @@ void DelaunayGrid::create_pixel_grid(double* gridpts_x, double* gridpts_y, const
 			midpoint = 0.33333333333333*(triptr->vertex[0] + triptr->vertex[1] + triptr->vertex[2]);
 			comp1 = midpoint[0] - gridpts[n][0];
 			comp2 = midpoint[1] - gridpts[n][1];
-			//cout << "COMPS: " << comp1 << " " << comp2 << endl;
 			if (comp1==0) {
 				if (comp2 > 0) angle = M_HALFPI;
 				else if (comp2==0) angle = 0.0;
@@ -3387,7 +3361,6 @@ void DelaunayGrid::create_pixel_grid(double* gridpts_x, double* gridpts_y, const
 		//sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n],shared_triangles[n]); // I don't think sorting by circumcenters will work well, because circumcenters may lie outside the triangles and orders might get reversed 
 		sort(n_boundary_pts,angles,voronoi_boundary_x[n],voronoi_boundary_y[n]);
 		sort(n_boundary_pts,midpt_angles,shared_triangles[n]);
-		//delete[] tricheck[n];
 		delete[] angles;
 		delete[] midpt_angles;
 		vec2[0] = voronoi_boundary_x[n][0] - gridpts[n][0];
@@ -3399,16 +3372,12 @@ void DelaunayGrid::create_pixel_grid(double* gridpts_x, double* gridpts_y, const
 			vec2[1] = voronoi_boundary_y[n][i+1] - gridpts[n][1];
 			voronoi_area[n] += abs((vec1[0]*vec2[1] - vec1[1]*vec2[0])/2);
 		}
-		//totarea += voronoi_length[n];
 		voronoi_length[n] = sqrt(voronoi_area[n]);
 		if (voronoi_length[n] > 100*avg_tri_length) {
 			//warn("CRAZY long voronoi length! (length=%g) setting voronoi length to 3*average value to avoid numerical issues",voronoi_length[n]);
 			voronoi_length[n] = 3*avg_tri_length; // just to avoid possible numerical issues; this is really only a problem for border pixels
 		}
 	}
-
-	//cout << "TOTAL AREA: " << totarea << endl;
-	//delete[] tricheck;
 
 	delete[] shared_triangles_unsorted;
 	delete delaunay_triangles;
@@ -4123,9 +4092,9 @@ void DelaunayGrid::delete_grid_arrays()
 		delete[] voronoi_length;
 		for (int i=0; i < n_gridpts; i++) {
 			if (n_shared_triangles[i] > 0) {
+				delete[] shared_triangles[i];
 				delete[] voronoi_boundary_x[i];
 				delete[] voronoi_boundary_y[i];
-				delete[] shared_triangles[i];
 			}
 		}
 		delete[] voronoi_boundary_x;
@@ -7341,6 +7310,7 @@ bool ImagePixelData::load_noise_map_fits(string fits_filename, const int hdu_ind
 
 						for (i=0; i < naxes[0]; i++) {
 							noise_map[i][j] = pixels[i];
+							//cout << "NOISE(" << i << "," << j << ")=" << pixels[i] << endl;
 							if (pixels[i] < noise_bg) noise_bg = pixels[i];
 						}
 					}
@@ -7398,7 +7368,7 @@ bool ImagePixelData::save_noise_map_fits(string fits_filename)
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 				pixels = new double[npixels_x];
 
-				for (fpixel[1]=1, j=0; fpixel[1] < naxes[1]; fpixel[1]++, j++)
+				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
 				{
 					for (i=0, kk=0; i < npixels_x; i++, kk++) {
 						pixels[kk] = noise_map[i][j];
