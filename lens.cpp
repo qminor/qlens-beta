@@ -2288,7 +2288,7 @@ void QLens::print_mask_assignments()
 {
 	if (n_extended_src_redshifts==0) cout << "No source redshifts have been created yet" << endl;
 	for (int i=0; i < n_extended_src_redshifts; i++) {
-		cout << i << ": z=" << extended_src_redshifts[i] << ", mask=" << assigned_mask[i] << endl;
+		cout << i << ": zsrc=" << extended_src_redshifts[i] << ", mask=" << assigned_mask[i] << endl;
 	}
 }
 

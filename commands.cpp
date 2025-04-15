@@ -9814,7 +9814,8 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="generate_uniform_noisemap")
 			{
 				if (background_pixel_noise <= 0) Complain("bg_pixel_noise should be set to a positive nonzero value to generate uniform noise map");
-				if ((image_pixel_data != NULL)) image_pixel_data->set_uniform_pixel_noise(background_pixel_noise);
+				if (image_pixel_data == NULL) Complain("must load pixel data before generating noise map");
+				image_pixel_data->set_uniform_pixel_noise(background_pixel_noise);
 				use_noise_map = true;
 			}
 			else if (words[1]=="unload_noisemap")

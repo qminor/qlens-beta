@@ -6846,7 +6846,7 @@ void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid)
 
 		surface_brightness = new double*[npixels_x];
 		high_sn_pixel = new bool*[npixels_x];
-		//n_masks = 1;
+		n_masks = 1;
 		n_mask_pixels = new int[1];
 		extended_mask_n_neighbors = new int[1];
 
@@ -11848,7 +11848,7 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 	long naxes[2] = {x_N,y_N};
 	double *pixels;
 	if (lens->fit_output_dir != ".") lens->create_output_directory(); // in case it hasn't been created already
-	string filename = lens->fit_output_dir + "/" + fits_filename;
+	string filename = "!" + lens->fit_output_dir + "/" + fits_filename; // ensures that it overwrites an existing file of the same name
 
 	if (!fits_create_file(&outfptr, filename.c_str(), &status))
 	{
