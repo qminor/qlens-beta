@@ -12706,6 +12706,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 			} else if (source_fit_mode==Delaunay_Source) {
 				at_least_one_lensed_src_object = true;
 			}
+			if ((!at_least_one_lensed_src_object) and (at_least_one_foreground_src_included)) plot_foreground_only = true;
 
 			if ((at_least_one_lensed_src_object) or (n_sb > 0)) {
 				if ((!plot_foreground_only) and (at_least_one_lensed_src_object)) {
@@ -12719,7 +12720,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 					image_pixel_grid->find_surface_brightness(true); // plot foreground sources only
 				}
 			}
-			if ((omit_foreground) or (!at_least_one_foreground_src_included)) {
+			if ((omit_foreground) or (plot_foreground_only) or (!at_least_one_foreground_src_included)) { 
 				vectorize_image_pixel_surface_brightness(zsrc_i,true); // note that in this case, the image pixel vector does NOT contain the foreground; the foreground PSF convolution was done separately above
 				PSF_convolution_pixel_vector(zsrc_i,false,verbose,fft_convolution);
 				store_image_pixel_surface_brightness(zsrc_i);

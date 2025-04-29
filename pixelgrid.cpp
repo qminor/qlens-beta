@@ -7774,6 +7774,12 @@ bool QLens::load_psf_fits(string fits_filename, const int hdu_indx, const bool s
 		return false;
 	}
 	int imid, jmid, imin, imax, jmin, jmax;
+	cout << "nx=" << nx << ", ny=" << ny << endl;
+	bool centered_psf = true;
+	if ((nx % 2 == 0) or (ny % 2 == 0)) {
+		centered_psf = false;
+		warn("PSF dimensions are even (PSF not centered); convolutions will be asymmetric");
+	}
 	imid = nx/2;
 	jmid = ny/2;
 	imin = imid;
@@ -7804,13 +7810,20 @@ bool QLens::load_psf_fits(string fits_filename, const int hdu_indx, const bool s
 		npix_x = &supersampled_psf_npixels_x;
 		npix_y = &supersampled_psf_npixels_y;
 	}
-	(*npix_x) = 2*nx_half+1;
-	(*npix_y) = 2*ny_half+1;
+	if (centered_psf) {
+		(*npix_x) = 2*nx_half+1;
+		(*npix_y) = 2*ny_half+1;
+	} else {
+		(*npix_x) = 2*nx_half;
+		(*npix_y) = 2*ny_half;
+	}
+	cout << "np_x=" << (*npix_x) << " np_y=" << (*npix_y) << endl;
 	(*psf) = new double*[(*npix_x)];
 	for (i=0; i < (*npix_x); i++) (*psf)[i] = new double[(*npix_y)];
 	int ii,jj;
 	for (ii=0, i=imid-nx_half; ii < (*npix_x); i++, ii++) {
 		for (jj=0, j=jmid-ny_half; jj < (*npix_y); j++, jj++) {
+			if (ii>99) cout << "i=" << i << ", j=" << j << endl;
 			(*psf)[ii][jj] = input_psf_matrix[i][j];
 		}
 	}

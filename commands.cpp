@@ -1256,7 +1256,8 @@ void QLens::process_commands(bool read_file)
 							"sbmap savesrc [output_file]\n"
 							"sbmap plotsrc [output_file] [...]\n"  // UPDATE HELP DOCS FOR THIS COMMAND
 							"sbmap loadsrc <source_file>\n"
-							"sbmap loadimg <image_file>\n"
+							"sbmap loadimg <image_data_file>\n"
+							"sbmap saveimg <image_data_file> [...]\n"
 							"sbmap loadpsf <psf_file>\n"
 							"sbmap load_noisemap <noisemap_file>\n"
 							"sbmap save_noisemap <noisemap_file>\n"
@@ -9699,7 +9700,7 @@ void QLens::process_commands(bool read_file)
 						if (!(ws[5] >> ymin)) Complain("invalid ymin argument for 'sbmap saveimg'");
 						if (!(ws[6] >> ymax)) Complain("invalid ymax argument for 'sbmap saveimg'");
 						image_pixel_data->save_data_fits(filename,true,xmin,xmax,ymin,ymax);
-					} else Complain("too many arguments to 'sbmap loadimg'");
+					} else Complain("too many arguments to 'sbmap saveimg'");
 				}
 			}
 			else if (words[1]=="loadmask")
