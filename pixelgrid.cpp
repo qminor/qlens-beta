@@ -7552,15 +7552,23 @@ bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, cons
 							if (pixels[i] == 0.0) {
 								if (!add_mask_pixels) foreground_mask[iprime][jprime] = false;
 								else if (foreground_mask[iprime][jprime]==true) n_maskpixels++;
+								// Don't allow the primary mask to include pixels that the foreground mask doesn't.
+								if (in_mask[mask_k][iprime][jprime] == true) {
+									in_mask[mask_k][iprime][jprime] = false;
+									n_mask_pixels[mask_k]--;
+								}
+								if (extended_mask[mask_k][iprime][jprime] == true) {
+									extended_mask[mask_k][iprime][jprime] = false;
+								}
 							}
 							else {
 								foreground_mask[iprime][jprime] = true;
 								n_maskpixels++;
+								if (new_mask) {
+									in_mask[mask_k][iprime][jprime] = true; // if new mask was created, then mask contains all the pixels by default
+									extended_mask[mask_k][iprime][jprime] = true; // if new mask was created, then extended mask contains all the pixels by default
+								}
 								//cout << pixels[iprime] << endl;
-							}
-							if (new_mask) {
-								in_mask[mask_k][iprime][jprime] = true; // if new mask was created, then mask contains all the pixels by default
-								extended_mask[mask_k][iprime][jprime] = true; // if new mask was created, then extended mask contains all the pixels by default
 							}
 						} else if (emask) {
 							if (pixels[i] == 0.0) {
