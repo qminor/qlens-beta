@@ -12708,22 +12708,21 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 			}
 			if ((!at_least_one_lensed_src_object) and (at_least_one_foreground_src_included)) plot_foreground_only = true;
 
-			if ((at_least_one_lensed_src_object) or (n_sb > 0)) {
-				if ((!plot_foreground_only) and (at_least_one_lensed_src_object)) {
-					image_pixel_grid->find_surface_brightness(false,true,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections);
-					if ((!omit_foreground) and (at_least_one_foreground_src_included)) {
-						assign_foreground_mappings(zsrc_i,use_data);
-						calculate_foreground_pixel_surface_brightness(zsrc_i,false); // PSF convolution of foreground is done within this functions
-						store_foreground_pixel_surface_brightness(zsrc_i);
-					}
-				} else {
-					image_pixel_grid->find_surface_brightness(true); // plot foreground sources only
-				}
-			}
-			if ((omit_foreground) or (plot_foreground_only) or (!at_least_one_foreground_src_included)) { 
+			if ((!plot_foreground_only) and (at_least_one_lensed_src_object)) {
+				image_pixel_grid->find_surface_brightness(false,true,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections);
 				vectorize_image_pixel_surface_brightness(zsrc_i,true); // note that in this case, the image pixel vector does NOT contain the foreground; the foreground PSF convolution was done separately above
 				PSF_convolution_pixel_vector(zsrc_i,false,verbose,fft_convolution);
 				store_image_pixel_surface_brightness(zsrc_i);
+			} else {
+				image_pixel_grids[zsrc_i]->set_zero_lensed_surface_brightness();
+			}
+
+			if ((!omit_foreground) and (at_least_one_foreground_src_included)) {
+				assign_foreground_mappings(zsrc_i,use_data);
+				calculate_foreground_pixel_surface_brightness(zsrc_i,false); // PSF convolution of foreground is done within this functions
+				store_foreground_pixel_surface_brightness(zsrc_i);
+			} else {
+				image_pixel_grids[zsrc_i]->set_zero_foreground_surface_brightness();
 			}
 
 			if (only_ptimgs) {
@@ -13067,7 +13066,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 	// the foreground surface brightness includes foreground, but can also include additional (analytic) lensed sources if in pixel mode
 	// Note that if only parameterized sources are used, a separate foreground sb array is not needed
-	bool include_foreground_sb_array = false;
+	bool include_foreground_sb = false;
 	bool at_least_one_foreground_src = false;
 	bool at_least_one_lensed_src = false;
 	bool at_least_one_lensed_nonshapelet_src = false;
@@ -13080,10 +13079,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			if (sb_list[k]->sbtype!=SHAPELET) at_least_one_lensed_nonshapelet_src = true;
 		}
 	}
-	if (source_fit_mode != Parameterized_Source) { // if using only parameterized sources, any foreground sources are added to the image_surface_brightness array
-		if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) include_foreground_sb_array = true;
-		else if ((!at_least_one_foreground_src) and ((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb_array = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
-	}
+	if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) include_foreground_sb = true;
+	else if ((!at_least_one_foreground_src) and ((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
 
 #ifdef USE_OPENMP
 	double fspline_wtime0;
@@ -13478,12 +13475,25 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		}
 #endif
 	} else if (source_fit_mode == Parameterized_Source) {
-		bool foreground_only = (nlens==0) ? true : false;
+		//bool foreground_only = (nlens==0) ? true : false;
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-			image_pixel_grids[zsrc_i]->find_surface_brightness(foreground_only);
-			vectorize_image_pixel_surface_brightness(zsrc_i,true);
-			PSF_convolution_pixel_vector(zsrc_i,false,verbal,fft_convolution);
-			store_image_pixel_surface_brightness(zsrc_i);
+			if (at_least_one_lensed_src) {
+				image_pixel_grids[zsrc_i]->find_surface_brightness(false,true);
+				vectorize_image_pixel_surface_brightness(zsrc_i,true);
+				PSF_convolution_pixel_vector(zsrc_i,false,verbal,fft_convolution);
+				store_image_pixel_surface_brightness(zsrc_i);
+			} else {
+				image_pixel_grids[zsrc_i]->set_zero_lensed_surface_brightness();
+			}
+			if (at_least_one_foreground_src) {
+				assign_foreground_mappings(zsrc_i,true);
+				if (!ignore_foreground_in_chisq) {
+					calculate_foreground_pixel_surface_brightness(zsrc_i,false);
+					store_foreground_pixel_surface_brightness(zsrc_i);
+				}
+			} else {
+				image_pixel_grids[zsrc_i]->set_zero_foreground_surface_brightness();
+			}
 		}
 		if (save_sbweights_during_inversion) calculate_subpixel_sbweights(true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
 		if (n_ptsrc > 0) {
@@ -13497,10 +13507,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		// Shapelet_Source mode
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
-			assign_foreground_mappings(zsrc_i);
-			if (!ignore_foreground_in_chisq) {
-				calculate_foreground_pixel_surface_brightness(zsrc_i);
-				store_foreground_pixel_surface_brightness(zsrc_i);
+			if (at_least_one_foreground_src) {
+				assign_foreground_mappings(zsrc_i);
+				if (!ignore_foreground_in_chisq) {
+					calculate_foreground_pixel_surface_brightness(zsrc_i);
+					store_foreground_pixel_surface_brightness(zsrc_i);
+				}
 			}
 			int i_shapelet = -1;
 			if ((n_sb > 0) and ((auto_shapelet_scaling) or (auto_shapelet_center))) {
@@ -13636,12 +13648,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		chisq0_zsrc = 0;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if ((image_pixel_grid->pixel_in_mask[i][j]) or ((include_foreground_sb_array) and (image_pixel_data->foreground_mask[i][j]))) {
+				if ((image_pixel_grid->pixel_in_mask[i][j]) or ((include_foreground_sb) and (image_pixel_data->foreground_mask[i][j]))) {
 					n_data_pixels++;
 					if (use_noise_map) cov_inverse = image_pixel_data->covinv_map[i][j];
 					if ((image_pixel_grid->pixel_in_mask[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 						//img_index = image_pixel_grid->pixel_index[i][j]; // we won't need this anymore (I think), but leaving here just in case
-						if (include_foreground_sb_array) {
+						if (include_foreground_sb) {
 							chisq0_zsrc += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 							//if (chisq0_zsrc*0.0 != 0.0) die("chisq0_zsrc has NaN value");
 							foreground_count++;
@@ -13651,7 +13663,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 						count++;
 					} else {
 						// NOTE that if a pixel is not in the foreground mask, the foreground_surface_brightness has already been set to zero for that pixel
-						if (include_foreground_sb_array) {
+						if (include_foreground_sb) {
 							chisq0_zsrc += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse;
 							foreground_count++;
 						}
@@ -13664,7 +13676,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		loglike_times_two += chisq0_zsrc; // loglike_times_two includes the prior terms
 
 		int n_tot_pixels;
-		if (include_foreground_sb_array) n_tot_pixels = image_npixels_fgmask;
+		if (include_foreground_sb) n_tot_pixels = image_npixels_fgmask;
 		else n_tot_pixels = image_pixel_data->n_mask_pixels[assigned_mask[zsrc_i]];
 		if (group_id==0) {
 			if (logfile.is_open()) {
@@ -13832,7 +13844,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 
 	if ((mpi_id==0) and (verbal)) {
 		cout << "total number of image pixels included in loglike = " << count << endl;
-		if (include_foreground_sb_array) cout << "total number of foreground image pixels included in loglike = " << foreground_count << endl;
+		if (include_foreground_sb) cout << "total number of foreground image pixels included in loglike = " << foreground_count << endl;
 	}
 
 	chisq_it++;

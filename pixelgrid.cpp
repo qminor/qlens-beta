@@ -6901,7 +6901,7 @@ void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid)
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
 			high_sn_pixel[i][j] = true;
-			surface_brightness[i][j] = image_pixel_grid->surface_brightness[i][j];
+			surface_brightness[i][j] = image_pixel_grid->foreground_surface_brightness[i][j] + image_pixel_grid->surface_brightness[i][j];
 		}
 	}
 	find_extended_mask_rmax(); // used when splining integrals for deflection/hessian from Fourier modes
@@ -7823,7 +7823,6 @@ bool QLens::load_psf_fits(string fits_filename, const int hdu_indx, const bool s
 	int ii,jj;
 	for (ii=0, i=imid-nx_half; ii < (*npix_x); i++, ii++) {
 		for (jj=0, j=jmid-ny_half; jj < (*npix_y); j++, jj++) {
-			if (ii>99) cout << "i=" << i << ", j=" << j << endl;
 			(*psf)[ii][jj] = input_psf_matrix[i][j];
 		}
 	}
@@ -12142,16 +12141,16 @@ double ImagePixelGrid::calculate_signal_to_noise(double& total_signal)
 	int i,j;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if (surface_brightness[i][j] > sbmax) sbmax = surface_brightness[i][j];
+			if (surface_brightness[i][j] > sbmax) sbmax = foreground_surface_brightness[i][j] + surface_brightness[i][j];
 		}
 	}
 	double signal_mean=0,sn_mean=0;
 	int npixels=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if (surface_brightness[i][j] > signal_threshold_frac*sbmax) {
-				signal_mean += surface_brightness[i][j];
-				sn_mean += surface_brightness[i][j]/noise_map[i][j];
+			if ((foreground_surface_brightness[i][j] + surface_brightness[i][j]) > signal_threshold_frac*sbmax) {
+				signal_mean += foreground_surface_brightness[i][j] + surface_brightness[i][j];
+				sn_mean += (foreground_surface_brightness[i][j] + surface_brightness[i][j])/noise_map[i][j];
 				npixels++;
 			}
 		}
@@ -12899,6 +12898,26 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 		}
 
 		if (trouble_with_starting_vertex) warn(lens->warnings,"could not find good starting vertices for Delaunay grid; started with vertex 0 when searching for enclosing triangles");
+	}
+}
+
+void ImagePixelGrid::set_zero_lensed_surface_brightness()
+{
+	int i,j;
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			surface_brightness[i][j] = 0;
+		}
+	}
+}
+
+void ImagePixelGrid::set_zero_foreground_surface_brightness()
+{
+	int i,j;
+	for (j=0; j < y_N; j++) {
+		for (i=0; i < x_N; i++) {
+			foreground_surface_brightness[i][j] = 0;
+		}
 	}
 }
 
@@ -15187,6 +15206,7 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 
 void QLens::cleanup_FFT_convolution_arrays()
 {
+	cout << "WTF" << endl;
 	if (image_pixel_grids == NULL) return;
 	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 		if (image_pixel_grids[zsrc_i]->fft_convolution_is_setup) image_pixel_grids[zsrc_i]->cleanup_FFT_convolution_arrays();
@@ -15614,6 +15634,8 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 #ifndef USE_FFTW
 		for (i=0; i < nzvec; i++) img_zvec[i] = 0;
 #endif
+		int npix_conv = image_pixel_grid->fft_ni*image_pixel_grid->fft_nj;
+		for (i=0; i < npix_conv; i++) image_pixel_grid->single_img_rvec[i] = 0;
 		for (img_index=0; img_index < npix; img_index++)
 		{
 			ii = pixel_map_ii[img_index];
@@ -15651,7 +15673,7 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 		fftw_execute(image_pixel_grid->fftplan);
 		for (i=0; i < ncomplex; i++) {
 			image_pixel_grid->img_transform[i] = image_pixel_grid->img_transform[i]*image_pixel_grid->psf_transform[i];
-			image_pixel_grid->img_transform[i] /= (image_pixel_grid->fft_ni*image_pixel_grid->fft_nj);
+			image_pixel_grid->img_transform[i] /= npix_conv;
 		}
 		fftw_execute(image_pixel_grid->fftplan_inverse);
 #else

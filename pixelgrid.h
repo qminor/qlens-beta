@@ -628,6 +628,9 @@ class ImagePixelGrid : private Sort
 	void find_optimal_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_surface_brightness(const bool foreground_only = false, const bool lensed_sources_only = false, const bool include_first_order_corrections = false, const bool show_only_first_order_corrections = false);
+	void set_zero_lensed_surface_brightness();
+	void set_zero_foreground_surface_brightness();
+
 	double plot_surface_brightness(string outfile_root, bool plot_residual = false, bool normalize_sb = false, bool show_noise_thresh = false, bool plot_log = false);
 	void plot_sourcepts(string outfile_root, const bool show_subpixels = false);
 	void output_fits_file(string fits_filename, bool plot_residual = false);
