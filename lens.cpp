@@ -13513,6 +13513,8 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					calculate_foreground_pixel_surface_brightness(zsrc_i);
 					store_foreground_pixel_surface_brightness(zsrc_i);
 				}
+			} else {
+				image_pixel_grids[zsrc_i]->set_zero_lensed_surface_brightness();
 			}
 			int i_shapelet = -1;
 			if ((n_sb > 0) and ((auto_shapelet_scaling) or (auto_shapelet_center))) {

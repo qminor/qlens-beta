@@ -15627,6 +15627,8 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 
 #ifdef USE_FFTW
 		int ncomplex = image_pixel_grid->fft_nj*(image_pixel_grid->fft_ni/2+1);
+		int npix_conv = image_pixel_grid->fft_ni*image_pixel_grid->fft_nj;
+		for (i=0; i < npix_conv; i++) image_pixel_grid->single_img_rvec[i] = 0;
 #else
 		int nzvec = 2*image_pixel_grid->fft_ni*image_pixel_grid->fft_nj;
 		double *img_zvec = new double[nzvec];
@@ -15642,8 +15644,6 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 #ifndef USE_FFTW
 		for (i=0; i < nzvec; i++) img_zvec[i] = 0;
 #endif
-		int npix_conv = image_pixel_grid->fft_ni*image_pixel_grid->fft_nj;
-		for (i=0; i < npix_conv; i++) image_pixel_grid->single_img_rvec[i] = 0;
 		for (img_index=0; img_index < npix; img_index++)
 		{
 			ii = pixel_map_ii[img_index];
