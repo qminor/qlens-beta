@@ -9725,6 +9725,12 @@ void QLens::process_commands(bool read_file)
 				} else Complain("too many arguments to 'sbmap loadmask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (image_pixel_data->load_mask_fits(mask_i,filename,foreground_mask,emask,add_mask)==false) Complain("could not load mask file");
+				if (foreground_mask) {
+					if (fgmask_padding > 0) {
+						image_pixel_data->expand_foreground_mask(fgmask_padding);
+						if (mpi_id==0) cout << "Padding foreground mask by " << fgmask_padding << " neighbors (for convolutions)" << endl;
+					}
+				}
 				if (mpi_id==0) {
 					if (!foreground_mask) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
 					else {
@@ -13909,6 +13915,16 @@ void QLens::process_commands(bool read_file)
 					cout << "number of pixels in extended mask: " << npix << endl;
 				}
 			} else Complain("must specify either zero or one argument for emask_n_neighbors");
+		}
+		else if (words[0]=="fgmask_padding")
+		{
+			double padding;
+			if (nwords == 2) {
+				if (!(ws[1] >> padding)) Complain("invalid number of neighbor pixels for padding foreground mask");
+				fgmask_padding = padding;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "# of neighbor pixels for padding foreground mask = " << fgmask_padding << endl;
+			} else Complain("must specify either zero or one argument for fgmask_padding");
 		}
 		else if (words[0]=="include_emask_in_chisq")
 		{

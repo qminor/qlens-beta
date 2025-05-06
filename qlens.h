@@ -386,6 +386,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool psf_convolution_mpi;
 	bool fft_convolution;
 	bool use_mumps_subcomm;
+	int fgmask_padding;
 	bool n_image_prior;
 	int auxiliary_srcgrid_npixels;
 	double n_image_threshold;

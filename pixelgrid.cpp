@@ -6769,16 +6769,19 @@ void ImagePixelData::load_data(string root)
 	extended_mask = new bool**[1];
 	extended_mask[0] = new bool*[npixels_x];
 	foreground_mask = new bool*[npixels_x];
+	foreground_mask_data = new bool*[npixels_x];
 	for (i=0; i < npixels_x; i++) {
 		surface_brightness[i] = new double[npixels_y];
 		high_sn_pixel[i] = new bool[npixels_y];
 		in_mask[0][i] = new bool[npixels_y];
 		extended_mask[0][i] = new bool[npixels_y];
 		foreground_mask[i] = new bool[npixels_y];
+		foreground_mask_data[i] = new bool[npixels_y];
 		for (j=0; j < npixels_y; j++) {
 			in_mask[0][i][j] = true;
 			extended_mask[0][i][j] = true;
 			foreground_mask[i][j] = true;
+			foreground_mask_data[i][j] = true;
 			high_sn_pixel[i][j] = true;
 			sbfile >> surface_brightness[i][j];
 		}
@@ -6855,6 +6858,7 @@ void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid)
 		extended_mask = new bool**[1];
 		extended_mask[0] = new bool*[npixels_x];
 		foreground_mask = new bool*[npixels_x];
+		foreground_mask_data = new bool*[npixels_x];
 		noise_map = new double*[npixels_x];
 		covinv_map = new double*[npixels_x];
 		for (i=0; i < npixels_x; i++) {
@@ -6863,12 +6867,14 @@ void ImagePixelData::load_from_image_grid(ImagePixelGrid* image_pixel_grid)
 			in_mask[0][i] = new bool[npixels_y];
 			extended_mask[0][i] = new bool[npixels_y];
 			foreground_mask[i] = new bool[npixels_y];
+			foreground_mask_data[i] = new bool[npixels_y];
 			noise_map[i] = new double[npixels_y];
 			covinv_map[i] = new double[npixels_y];
 			for (j=0; j < npixels_y; j++) {
 				in_mask[0][i][j] = true;
 				extended_mask[0][i][j] = true;
 				foreground_mask[i][j] = true;
+				foreground_mask_data[i][j] = true;
 				high_sn_pixel[i][j] = true;
 				noise_map[i][j] = 1e30; // since we don't have a noise map yet
 				covinv_map[i][j] = 0.0; // since we don't have a noise map yet
@@ -7060,6 +7066,10 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 						for (i=0; i < npixels_x; i++) delete[] foreground_mask[i];
 						delete[] foreground_mask;
 					}
+					if (foreground_mask_data != NULL) {
+						for (i=0; i < npixels_x; i++) delete[] foreground_mask_data[i];
+						delete[] foreground_mask_data;
+					}
 					if (noise_map != NULL) {
 						for (i=0; i < npixels_x; i++) delete[] noise_map[i];
 						delete[] noise_map;
@@ -7125,6 +7135,7 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 					extended_mask[0] = new bool*[npixels_x];
 
 					foreground_mask = new bool*[npixels_x];
+					foreground_mask_data = new bool*[npixels_x];
 					noise_map = new double*[npixels_x];
 					covinv_map = new double*[npixels_x];
 				}
@@ -7135,12 +7146,14 @@ bool ImagePixelData::load_data_fits(bool use_pixel_size, string fits_filename, c
 						in_mask[0][i] = new bool[npixels_y];
 						extended_mask[0][i] = new bool[npixels_y];
 						foreground_mask[i] = new bool[npixels_y];
+						foreground_mask_data[i] = new bool[npixels_y];
 						noise_map[i] = new double[npixels_y];
 						covinv_map[i] = new double[npixels_y];
 						for (j=0; j < npixels_y; j++) {
 							in_mask[0][i][j] = true;
 							extended_mask[0][i][j] = true;
 							foreground_mask[i][j] = true;
+							foreground_mask_data[i][j] = true;
 						}
 					}
 					for (j=0; j < npixels_y; j++) {
@@ -7570,6 +7583,7 @@ bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, cons
 								}
 								//cout << pixels[iprime] << endl;
 							}
+							foreground_mask_data[iprime][jprime] = foreground_mask[iprime][jprime];
 						} else if (emask) {
 							if (pixels[i] == 0.0) {
 								if (!add_mask_pixels) extended_mask[mask_k][iprime][jprime] = false;
@@ -7677,7 +7691,7 @@ bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground,
 					for (i=0; i < npix_x; i++) {
 						iprime = i + offset_x;
 						if (foreground) {
-							if (foreground_mask[iprime][jprime]) pixels[i] = 1.0;
+							if (foreground_mask_data[iprime][jprime]) pixels[i] = 1.0;
 							else pixels[i] = 0.0;
 						} else if (emask) {
 							if (extended_mask[mask_k][iprime][jprime]) pixels[i] = 1.0;
@@ -7998,6 +8012,10 @@ ImagePixelData::~ImagePixelData()
 		for (int i=0; i < npixels_x; i++) delete[] foreground_mask[i];
 		delete[] foreground_mask;
 	}
+	if (foreground_mask_data != NULL) {
+		for (int i=0; i < npixels_x; i++) delete[] foreground_mask_data[i];
+		delete[] foreground_mask_data;
+	}
 }
 
 bool ImagePixelData::create_new_mask()
@@ -8069,8 +8087,8 @@ bool ImagePixelData::set_foreground_mask_to_primary_mask(const int mask_k)
 	int i,j;
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
-			if (in_mask[mask_k][i][j]) foreground_mask[i][j] = true;
-			else foreground_mask[i][j] = false;
+			if (in_mask[mask_k][i][j]) foreground_mask_data[i][j] = true;
+			else foreground_mask_data[i][j] = false;
 		}
 	}
 	return true;
@@ -8410,6 +8428,77 @@ bool ImagePixelData::set_neighbor_pixels(const bool only_interior_neighbors, con
 	for (i=0; i < npixels_x; i++) {
 		for (j=0; j < npixels_y; j++) {
 			in_mask[mask_k][i][j] = req[i][j];
+		}
+	}
+	for (i=0; i < npixels_x; i++) delete[] req[i];
+	delete[] req;
+	return true;
+}
+
+bool ImagePixelData::expand_foreground_mask(const int n_it)
+{
+	int ii,i,j;
+	double r0, r;
+	bool **req = new bool*[npixels_x];
+	for (i=0; i < npixels_x; i++) req[i] = new bool[npixels_y];
+	for (ii=0; ii < n_it; ii++ ) {
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				req[i][j] = foreground_mask[i][j];
+			}
+		}
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				if ((foreground_mask[i][j])) {
+					if ((i < npixels_x-1) and (!foreground_mask[i+1][j])) {
+						if (!req[i+1][j]) {
+							req[i+1][j] = true;
+							//n_foreground_mask_pixels++;
+						}
+					}
+					if ((i > 0) and (!foreground_mask[i-1][j])) {
+						if (!req[i-1][j]) {
+							req[i-1][j] = true;
+							//n_foreground_mask_pixels++;
+						}
+					}
+					if ((j < npixels_y-1) and (!foreground_mask[i][j+1])) {
+						if (!req[i][j+1]) {
+							req[i][j+1] = true;
+							//n_foreground_mask_pixels++;
+						}
+					}
+					if ((j > 0) and (!foreground_mask[i][j-1])) {
+						if (!req[i][j-1]) {
+							req[i][j-1] = true;
+							//n_foreground_mask_pixels++;
+						}
+					}
+				}
+			}
+		}
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				foreground_mask[i][j] = req[i][j];
+			}
+		}
+		// check for any lingering "holes" in the mask and activate them
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				if (!foreground_mask[i][j]) {
+					if (((i < npixels_x-1) and (foreground_mask[i+1][j])) and ((i > 0) and (foreground_mask[i-1][j])) and ((j < npixels_y-1) and (foreground_mask[i][j+1])) and ((j > 0) and (foreground_mask[i][j-1]))) {
+						if (!req[i][j]) {
+							req[i][j] = true;
+							//n_foreground_mask_pixels++;
+						}
+					}
+				}
+			}
+		}
+		for (i=0; i < npixels_x; i++) {
+			for (j=0; j < npixels_y; j++) {
+				foreground_mask[i][j] = req[i][j];
+			}
 		}
 	}
 	for (i=0; i < npixels_x; i++) delete[] req[i];
@@ -10679,7 +10768,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		}
 	}
 
-	if (setup_mask_and_data) setup_ray_tracing_arrays(verbal);
+	if (setup_mask_and_data) setup_ray_tracing_arrays(true,verbal);
 	else set_nsplits_from_lens_settings(); // still setup the subpixels, even if the ray tracing arrays aren't being set up
 }
 
@@ -10913,6 +11002,7 @@ void ImagePixelGrid::setup_pixel_arrays()
 	active_image_pixel_j_fgmask= NULL;
 
 	fft_convolution_is_setup = false;
+	fg_fft_convolution_is_setup = false;
 }
 
 void ImagePixelGrid::set_null_ray_tracing_arrays()
@@ -10951,7 +11041,7 @@ void ImagePixelGrid::set_null_subpixel_ray_tracing_arrays()
 	mask_subcell_index = NULL;
 }
 
-void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
+void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, const bool verbal)
 {
 	// NOTE: a few arrays that involve the image pixels are not initialized here, specifically:
 	//       active_image_pixel_i, active_image_pixel_j, image_surface_brightness, and imgpixel_covinv_vector
@@ -10987,7 +11077,9 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool verbal)
 		}
 	}
 
-	if (defx_corners != NULL) delete_ray_tracing_arrays();
+	if (defx_corners != NULL) {
+		delete_ray_tracing_arrays(include_fft_arrays);
+	}
 	// The following is used for the ray tracing
 	defx_corners = new double[ntot_corners];
 	defy_corners = new double[ntot_corners];
@@ -11193,7 +11285,7 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 	defy_subpixel_centers = new double[ntot_subpixels];
 }
 
-void ImagePixelGrid::delete_ray_tracing_arrays()
+void ImagePixelGrid::delete_ray_tracing_arrays(const bool delete_fft_arrays)
 {
 	if (defx_corners != NULL) delete[] defx_corners;
 	if (defy_corners != NULL) delete[] defy_corners;
@@ -11227,7 +11319,8 @@ void ImagePixelGrid::delete_ray_tracing_arrays()
 		for (int i=0; i < x_N+1; i++) delete[] ncvals[i];
 		delete[] ncvals;
 	}
-	if (fft_convolution_is_setup) cleanup_FFT_convolution_arrays();
+	if ((fft_convolution_is_setup) and (delete_fft_arrays)) cleanup_FFT_convolution_arrays();
+	if ((fg_fft_convolution_is_setup) and (delete_fft_arrays)) cleanup_foreground_FFT_convolution_arrays();
 	set_null_ray_tracing_arrays();
 	set_null_subpixel_ray_tracing_arrays();
 }
@@ -11931,7 +12024,7 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 #endif
 }
 
-bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytrace, const int mask_index)
+bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytrace, const int mask_index, const bool redo_fft)
 {
 	if ((x_N != pixel_data.npixels_x) or (y_N != pixel_data.npixels_y)) {
 		warn("Number of data pixels does not match specified number of image pixels; cannot activate fit window");
@@ -11970,13 +12063,13 @@ bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytr
 	//if ((lens) and (lens->mpi_id==0)) cout << "HACK: mask_min_r=" << mask_min_r << endl;
 
 	if (lens) {
-		setup_ray_tracing_arrays();
+		setup_ray_tracing_arrays(redo_fft);
 		if ((raytrace) or (lens->split_high_mag_imgpixels)) calculate_sourcepts_and_areas(true);
 	}
 	return true;
 }
 
-void ImagePixelGrid::include_all_pixels()
+void ImagePixelGrid::include_all_pixels(const bool redo_fft)
 {
 	int i,j,k;
 	if (pixel_in_mask==NULL) {
@@ -11996,11 +12089,11 @@ void ImagePixelGrid::include_all_pixels()
 			}
 		}
 	}
-	if (lens) setup_ray_tracing_arrays();
+	if (lens) setup_ray_tracing_arrays(redo_fft);
 	if ((lens->nlens > 0) and (imggrid_zfactors != NULL)) calculate_sourcepts_and_areas(true);
 }
 
-void ImagePixelGrid::activate_extended_mask()
+void ImagePixelGrid::activate_extended_mask(const bool redo_fft)
 {
 	int i,j,k;
 	if (pixel_in_mask==NULL) {
@@ -12020,10 +12113,10 @@ void ImagePixelGrid::activate_extended_mask()
 			}
 		}
 	}
-	if (lens) setup_ray_tracing_arrays();
+	if (lens) setup_ray_tracing_arrays(redo_fft);
 }
 
-void ImagePixelGrid::activate_foreground_mask()
+void ImagePixelGrid::activate_foreground_mask(const bool redo_fft)
 {
 	int i,j,k;
 	if (pixel_in_mask==NULL) {
@@ -12043,10 +12136,10 @@ void ImagePixelGrid::activate_foreground_mask()
 			}
 		}
 	}
-	if (lens) setup_ray_tracing_arrays();
+	if (lens) setup_ray_tracing_arrays(redo_fft);
 }
 
-void ImagePixelGrid::deactivate_extended_mask()
+void ImagePixelGrid::deactivate_extended_mask(const bool redo_fft)
 {
 	int i,j,k;
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
@@ -12062,7 +12155,7 @@ void ImagePixelGrid::deactivate_extended_mask()
 			}
 		}
 	}
-	if (lens) setup_ray_tracing_arrays();
+	if (lens) setup_ray_tracing_arrays(redo_fft);
 }
 
 void ImagePixelGrid::update_mask_values()
@@ -15064,8 +15157,9 @@ void QLens::convert_Lmatrix_to_dense()
 #endif
 }
 
-bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool verbal)
+bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool foreground, const bool verbal)
 {
+	if ((supersampling) and (foreground)) die("supersampling of PSF has not been implemented with foreground mask yet");
 #ifdef USE_OPENMP
 	if (lens->show_wtime) {
 		lens->wtime0 = omp_get_wtime();
@@ -15079,9 +15173,15 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 		psf = lens->psf_matrix;
 		psf_nx = lens->psf_npixels_x;
 		psf_ny = lens->psf_npixels_y;
-		npix = lens->image_npixels;
-		pixel_map_ii = active_image_pixel_i;
-		pixel_map_jj = active_image_pixel_j;
+		if (!foreground) {
+			npix = lens->image_npixels;
+			pixel_map_ii = active_image_pixel_i;
+			pixel_map_jj = active_image_pixel_j;
+		} else {
+			npix = lens->image_npixels_fgmask;
+			pixel_map_ii = active_image_pixel_i_fgmask;
+			pixel_map_jj = active_image_pixel_j_fgmask;
+		}
 	} else {
 		psf = lens->supersampled_psf_matrix;
 		psf_nx = lens->supersampled_psf_npixels_x;
@@ -15106,11 +15206,17 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 	nx_half = psf_nx/2;
 	ny_half = psf_ny/2;
 
+	int &ni = (foreground) ? fft_ni_fgmask : fft_ni;
+	int &nj = (foreground) ? fft_nj_fgmask : fft_nj;
+	int &imin = (foreground) ? fft_imin_fgmask : fft_imin;
+	int &jmin = (foreground) ? fft_jmin_fgmask : fft_jmin;
+
 	int i,j,ii,jj,k,img_index;
-	fft_ni = 1;
-	fft_nj = 1;
+	ni = 1;
+	nj = 1;
 	fft_imin = 50000;
 	fft_jmin = 50000;
+
 	int imax=-1,jmax=-1;
 	int il0, jl0;
 
@@ -15125,7 +15231,8 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 			i = ii;
 			j = jj;
 		}
-		if ((maps_to_source_pixel[i][j]) and ((pixel_in_mask==NULL) or (pixel_in_mask[i][j]))) {
+		if (((!foreground) and (maps_to_source_pixel[i][j]) and ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])))
+			      or ((foreground) and (lens->image_pixel_data->foreground_mask) and (lens->image_pixel_data->foreground_mask[i][j]))) {
 			if (ii > imax) imax = ii;
 			if (jj > jmax) jmax = jj;
 			if (ii < fft_imin) fft_imin = ii;
@@ -15136,23 +15243,34 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 	jl0 = 1+jmax-fft_jmin + psf_ny;
 
 #ifdef USE_FFTW
-	fft_ni = il0;
-	fft_nj = jl0;
-	if (fft_ni % 2 != 0) fft_ni++;
-	if (fft_nj % 2 != 0) fft_nj++;
-	int ncomplex = fft_nj*(fft_ni/2+1);
-	int npix_conv = fft_ni*fft_nj;
+	ni = il0;
+	nj = jl0;
+	if (ni % 2 != 0) ni++;
+	if (nj % 2 != 0) nj++;
+	int ncomplex = nj*(ni/2+1);
+	int npix_conv = ni*nj;
+	if (npix_conv < 0) die("negative ni and/or nk");
 	double *psf_rvec = new double[npix_conv];
-	psf_transform = new complex<double>[ncomplex];
-	fftw_plan fftplan_psf = fftw_plan_dft_r2c_2d(fft_nj,fft_ni,psf_rvec,reinterpret_cast<fftw_complex*>(psf_transform),FFTW_MEASURE);
-	for (i=0; i < npix_conv; i++) psf_rvec[i] = 0;
-	single_img_rvec = new double[npix_conv];
-	img_transform = new complex<double>[ncomplex];
-	fftplan = fftw_plan_dft_r2c_2d(fft_nj,fft_ni,single_img_rvec,reinterpret_cast<fftw_complex*>(img_transform),FFTW_MEASURE);
-	fftplan_inverse = fftw_plan_dft_c2r_2d(fft_nj,fft_ni,reinterpret_cast<fftw_complex*>(img_transform),single_img_rvec,FFTW_MEASURE);
-	for (i=0; i < npix_conv; i++) single_img_rvec[i] = 0;
+	if (foreground) psf_transform_fgmask = new complex<double>[ncomplex];
+	else psf_transform = new complex<double>[ncomplex];
+	complex<double> *psf_transform_ptr = (foreground) ? psf_transform_fgmask : psf_transform;
 
-	if (Lmatrix_src_npixels > 0) {
+	fftw_plan fftplan_psf = fftw_plan_dft_r2c_2d(nj,ni,psf_rvec,reinterpret_cast<fftw_complex*>(psf_transform_ptr),FFTW_MEASURE);
+	for (i=0; i < npix_conv; i++) psf_rvec[i] = 0;
+	if (foreground) single_img_rvec_fgmask = new double[npix_conv];
+	else single_img_rvec = new double[npix_conv];
+	double *single_img_rvec_ptr = (foreground) ? single_img_rvec_fgmask : single_img_rvec;
+	fftw_plan& fftplan_ref = (foreground) ? fftplan_fgmask : fftplan;
+	fftw_plan& fftplan_inverse_ref = (foreground) ? fftplan_inverse_fgmask : fftplan_inverse;
+	if (foreground) img_transform_fgmask = new complex<double>[ncomplex];
+	else img_transform = new complex<double>[ncomplex];
+	complex<double> *img_transform_ptr = (foreground) ? img_transform_fgmask : img_transform;
+
+	fftplan_ref = fftw_plan_dft_r2c_2d(nj,ni,single_img_rvec_ptr,reinterpret_cast<fftw_complex*>(img_transform_ptr),FFTW_MEASURE);
+	fftplan_inverse_ref = fftw_plan_dft_c2r_2d(nj,ni,reinterpret_cast<fftw_complex*>(img_transform_ptr),single_img_rvec_ptr,FFTW_MEASURE);
+	for (i=0; i < npix_conv; i++) single_img_rvec_ptr[i] = 0;
+
+	if ((!foreground) and (Lmatrix_src_npixels > 0)) {
 		Lmatrix_imgs_rvec = new double*[Lmatrix_src_npixels];
 		Lmatrix_transform = new complex<double>*[Lmatrix_src_npixels];
 		fftplans_Lmatrix = new fftw_plan[Lmatrix_src_npixels];
@@ -15160,16 +15278,18 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 		for (i=0; i < Lmatrix_src_npixels; i++) {
 			Lmatrix_imgs_rvec[i] = new double[npix_conv];
 			Lmatrix_transform[i] = new complex<double>[ncomplex];
-			fftplans_Lmatrix[i] = fftw_plan_dft_r2c_2d(fft_nj,fft_ni,Lmatrix_imgs_rvec[i],reinterpret_cast<fftw_complex*>(Lmatrix_transform[i]),FFTW_MEASURE);
-			fftplans_Lmatrix_inverse[i] = fftw_plan_dft_c2r_2d(fft_nj,fft_ni,reinterpret_cast<fftw_complex*>(Lmatrix_transform[i]),Lmatrix_imgs_rvec[i],FFTW_MEASURE);
+			fftplans_Lmatrix[i] = fftw_plan_dft_r2c_2d(nj,ni,Lmatrix_imgs_rvec[i],reinterpret_cast<fftw_complex*>(Lmatrix_transform[i]),FFTW_MEASURE);
+			fftplans_Lmatrix_inverse[i] = fftw_plan_dft_c2r_2d(nj,ni,reinterpret_cast<fftw_complex*>(Lmatrix_transform[i]),Lmatrix_imgs_rvec[i],FFTW_MEASURE);
 			for (j=0; j < npix_conv; j++) Lmatrix_imgs_rvec[i][j] = 0;
 		}
 	}
 #else
-	while (fft_ni < il0) fft_ni *= 2; // need multiple of 2 to do FFT (note, this is only necessary with native code; it is not necessary with FFTW)
-	while (fft_nj < jl0) fft_nj *= 2; // need multiple of 2 to do FFT (note, this is only necessary with native code; it is not necessary with FFTW)
-	psf_zvec = new double[2*fft_ni*fft_nj];
-	for (i=0; i < 2*fft_ni*fft_nj; i++) psf_zvec[i] = 0;
+	while (ni < il0) ni *= 2; // need multiple of 2 to do FFT (note, this is only necessary with native code; it is not necessary with FFTW)
+	while (nj < jl0) nj *= 2; // need multiple of 2 to do FFT (note, this is only necessary with native code; it is not necessary with FFTW)
+	if (foreground) psf_zvec_fgmask = new double[2*ni*nj];
+	else psf_zvec = new double[2*ni*nj];
+	double *psf_zvec = (foreground) ? psf_zvec_fgmask : psf_zvec;
+	for (i=0; i < 2*ni*nj; i++) psf_zvec_ptr[i] = 0;
 #endif
 	int zpsf_i, zpsf_j;
 	int l;
@@ -15177,14 +15297,14 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 		for (j=-ny_half; j < psf_ny - ny_half; j++) {
 			zpsf_i=i;
 			zpsf_j=j;
-			if (zpsf_i < 0) zpsf_i += fft_ni;
-			if (zpsf_j < 0) zpsf_j += fft_nj;
+			if (zpsf_i < 0) zpsf_i += ni;
+			if (zpsf_j < 0) zpsf_j += nj;
 #ifdef USE_FFTW
-			l = zpsf_j*fft_ni + zpsf_i;
+			l = zpsf_j*ni + zpsf_i;
 			psf_rvec[l] = psf[nx_half+i][ny_half+j];
 #else
-			k = 2*(zpsf_j*fft_ni + zpsf_i);
-			psf_zvec[k] = psf[nx_half+i][ny_half+j];
+			k = 2*(zpsf_j*ni + zpsf_i);
+			psf_zvec_ptr[k] = psf[nx_half+i][ny_half+j];
 #endif
 		}
 	}
@@ -15195,9 +15315,9 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 	delete[] psf_rvec;
 #else
 	int nnvec[2];
-	nnvec[0] = fft_ni;
-	nnvec[1] = fft_nj;
-	lens->fourier_transform(psf_zvec,2,nnvec,1);
+	nnvec[0] = ni;
+	nnvec[1] = nj;
+	lens->fourier_transform(psf_zvec_ptr,2,nnvec,1);
 #endif
 #ifdef USE_OPENMP
 	if (lens->show_wtime) {
@@ -15208,16 +15328,18 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 	}
 #endif
 
-	fft_convolution_is_setup = true;
+	if (foreground) fg_fft_convolution_is_setup = true;
+	else fft_convolution_is_setup = true;
 	return true;
 }
 
 void QLens::cleanup_FFT_convolution_arrays()
 {
-	cout << "WTF" << endl;
 	if (image_pixel_grids == NULL) return;
 	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+		if (image_pixel_grids[zsrc_i] == NULL) continue;
 		if (image_pixel_grids[zsrc_i]->fft_convolution_is_setup) image_pixel_grids[zsrc_i]->cleanup_FFT_convolution_arrays();
+		if (image_pixel_grids[zsrc_i]->fg_fft_convolution_is_setup) image_pixel_grids[zsrc_i]->cleanup_foreground_FFT_convolution_arrays();
 	}
 }
 
@@ -15240,12 +15362,32 @@ void ImagePixelGrid::cleanup_FFT_convolution_arrays()
 	}
 	fftw_destroy_plan(fftplan);
 	fftw_destroy_plan(fftplan_inverse);
+	//fftw_destroy_plan(foreground_fftplan);
+	//fftw_destroy_plan(foreground_fftplan_inverse);
+
 #else
 	delete[] psf_zvec;
 #endif
 	fft_imin=fft_jmin=fft_ni=fft_nj=0;
+	//fg_fft_imin=fg_fft_jmin=fg_fft_ni=fg_fft_nj=0;
 	fft_convolution_is_setup = false;
 }
+
+void ImagePixelGrid::cleanup_foreground_FFT_convolution_arrays()
+{
+#ifdef USE_FFTW
+	delete[] psf_transform_fgmask;
+	psf_transform_fgmask = NULL;
+	fftw_destroy_plan(fftplan_fgmask);
+	fftw_destroy_plan(fftplan_inverse_fgmask);
+
+#else
+	delete[] psf_zvec_fgmask;
+#endif
+	fft_imin_fgmask=fft_jmin_fgmask=fft_ni_fgmask=fft_nj_fgmask=0;
+	fg_fft_convolution_is_setup = false;
+}
+
 
 void QLens::PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal)
 {
@@ -15288,7 +15430,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal)
 
 		if (fft_convolution) {
 			if (!image_pixel_grid->fft_convolution_is_setup) {
-				if (!image_pixel_grid->setup_FFT_convolution(psf_supersampling,verbal)) {
+				if (!image_pixel_grid->setup_FFT_convolution(psf_supersampling,false,verbal)) {
 					warn("PSF convolution FFT failed");
 					return;	
 				}
@@ -15613,24 +15755,36 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 	}
 
 	int i,j,ii,jj,k,img_index;
-	if ((!foreground) and (fft_convolution) and (use_fft)) {
-		if (!image_pixel_grid->fft_convolution_is_setup) {
-			if (!image_pixel_grid->setup_FFT_convolution(psf_supersampling,verbal)) {
+	if ((fft_convolution) and (use_fft)) {
+		bool fft_is_already_setup = false;
+		if ((foreground) and (image_pixel_grid->fg_fft_convolution_is_setup)) fft_is_already_setup = true;
+		else if ((!foreground) and (image_pixel_grid->fft_convolution_is_setup)) fft_is_already_setup = true;
+		if (!fft_is_already_setup) {
+			if (!image_pixel_grid->setup_FFT_convolution(psf_supersampling,foreground,verbal)) {
 				warn("PSF convolution FFT failed");
 				return;	
 			}
 		}
+
+		int &ni = (foreground) ? image_pixel_grid->fft_ni_fgmask : image_pixel_grid->fft_ni;
+		int &nj = (foreground) ? image_pixel_grid->fft_nj_fgmask : image_pixel_grid->fft_nj;
+		int &imin = (foreground) ? image_pixel_grid->fft_imin_fgmask : image_pixel_grid->fft_imin;
+		int &jmin = (foreground) ? image_pixel_grid->fft_jmin_fgmask : image_pixel_grid->fft_jmin;
+		complex<double> *psf_transform_ptr = (foreground) ? image_pixel_grid->psf_transform_fgmask : image_pixel_grid->psf_transform;
+		double *single_img_rvec_ptr = (foreground) ? image_pixel_grid->single_img_rvec_fgmask : image_pixel_grid->single_img_rvec;
+		complex<double> *img_transform_ptr = (foreground) ? image_pixel_grid->img_transform_fgmask : image_pixel_grid->img_transform;
+		double *psf_zvec = (foreground) ? image_pixel_grid->psf_zvec_fgmask : image_pixel_grid->psf_zvec;
 
 		//int *pixel_map_i, *pixel_map_j;
 		//pixel_map_i = image_pixel_grid->active_image_pixel_i;
 		//pixel_map_j = image_pixel_grid->active_image_pixel_j;
 
 #ifdef USE_FFTW
-		int ncomplex = image_pixel_grid->fft_nj*(image_pixel_grid->fft_ni/2+1);
-		int npix_conv = image_pixel_grid->fft_ni*image_pixel_grid->fft_nj;
-		for (i=0; i < npix_conv; i++) image_pixel_grid->single_img_rvec[i] = 0;
+		int ncomplex = nj*(ni/2+1);
+		int npix_conv = ni*nj;
+		for (i=0; i < npix_conv; i++) single_img_rvec_ptr[i] = 0;
 #else
-		int nzvec = 2*image_pixel_grid->fft_ni*image_pixel_grid->fft_nj;
+		int nzvec = 2*ni*nj;
 		double *img_zvec = new double[nzvec];
 #endif
 
@@ -15655,14 +15809,15 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 				i = ii;
 				j = jj;
 			}
-			if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->pixel_in_mask==NULL) or (image_pixel_grid->pixel_in_mask[i][j]))) {
-				ii -= image_pixel_grid->fft_imin;
-				jj -= image_pixel_grid->fft_jmin;
+			if (((!foreground) and (image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->pixel_in_mask==NULL) or (image_pixel_grid->pixel_in_mask[i][j])))
+						or ((foreground) and (image_pixel_data->foreground_mask) and (image_pixel_data->foreground_mask[i][j]))) {
+				ii -= imin;
+				jj -= jmin;
 #ifdef USE_FFTW
-				l = jj*image_pixel_grid->fft_ni + ii;
-				image_pixel_grid->single_img_rvec[l] = surface_brightness_vector[img_index];
+				l = jj*ni + ii;
+				single_img_rvec_ptr[l] = surface_brightness_vector[img_index];
 #else
-				k = 2*(jj*image_pixel_grid->fft_ni + ii);
+				k = 2*(jj*ni + ii);
 				img_zvec[k] = surface_brightness_vector[img_index];
 #endif
 			}
@@ -15671,29 +15826,32 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 		if (show_wtime) {
 			wtime = omp_get_wtime() - wtime0;
 			if (mpi_id==0) {
-				cout << "Wall time for setting up PSF convolution via FFT: " << wtime << endl;
+				cout << "Wall time for PSF convolution via FFT: " << wtime << endl;
 			}
 			wtime0 = omp_get_wtime();
 		}
 #endif
 
 #ifdef USE_FFTW
-		fftw_execute(image_pixel_grid->fftplan);
+		fftw_plan& fftplan_ref = (foreground) ? image_pixel_grid->fftplan_fgmask : image_pixel_grid->fftplan;
+		fftw_plan& fftplan_inverse_ref = (foreground) ? image_pixel_grid->fftplan_inverse_fgmask : image_pixel_grid->fftplan_inverse;
+
+		fftw_execute(fftplan_ref);
 		for (i=0; i < ncomplex; i++) {
-			image_pixel_grid->img_transform[i] = image_pixel_grid->img_transform[i]*image_pixel_grid->psf_transform[i];
-			image_pixel_grid->img_transform[i] /= npix_conv;
+			img_transform_ptr[i] = img_transform_ptr[i]*psf_transform_ptr[i];
+			img_transform_ptr[i] /= npix_conv;
 		}
-		fftw_execute(image_pixel_grid->fftplan_inverse);
+		fftw_execute(fftplan_inverse_ref);
 #else
 		int nnvec[2];
-		nnvec[0] = image_pixel_grid->fft_ni;
-		nnvec[1] = image_pixel_grid->fft_nj;
+		nnvec[0] = ni;
+		nnvec[1] = nj;
 		fourier_transform(img_zvec,2,nnvec,1);
 
 		double rtemp, itemp;
-		for (i=0,j=0; i < (image_pixel_grid->fft_ni*image_pixel_grid->fft_nj); i++, j += 2) {
-			rtemp = (img_zvec[j]*image_pixel_grid->psf_zvec[j] - img_zvec[j+1]*image_pixel_grid->psf_zvec[j+1]) / (image_pixel_grid->fft_ni*image_pixel_grid->fft_nj);
-			itemp = (img_zvec[j]*image_pixel_grid->psf_zvec[j+1] + img_zvec[j+1]*image_pixel_grid->psf_zvec[j]) / (image_pixel_grid->fft_ni*image_pixel_grid->fft_nj);
+		for (i=0,j=0; i < (ni*nj); i++, j += 2) {
+			rtemp = (img_zvec[j]*psf_zvec_ptr[j] - img_zvec[j+1]*psf_zvec_ptr[j+1]) / (ni*nj);
+			itemp = (img_zvec[j]*psf_zvec_ptr[j+1] + img_zvec[j+1]*psf_zvec_ptr[j]) / (ni*nj);
 			img_zvec[j] = rtemp;
 			img_zvec[j+1] = itemp;
 		}
@@ -15711,14 +15869,16 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 				i = ii;
 				j = jj;
 			}
-			if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->pixel_in_mask==NULL) or (image_pixel_grid->pixel_in_mask[i][j]))) {
-				ii -= image_pixel_grid->fft_imin;
-				jj -= image_pixel_grid->fft_jmin;
+			if (((!foreground) and (image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->pixel_in_mask==NULL) or (image_pixel_grid->pixel_in_mask[i][j])))
+						or ((foreground) and (image_pixel_data->foreground_mask) and (image_pixel_data->foreground_mask[i][j]))) {
+			//if ((image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->pixel_in_mask==NULL) or (image_pixel_grid->pixel_in_mask[i][j]))) {
+				ii -= imin;
+				jj -= jmin;
 #ifdef USE_FFTW
-				l = jj*image_pixel_grid->fft_ni + ii;
-				surface_brightness_vector[img_index] = image_pixel_grid->single_img_rvec[l];
+				l = jj*ni + ii;
+				surface_brightness_vector[img_index] = single_img_rvec_ptr[l];
 #else
-				k = 2*(jj*image_pixel_grid->fft_ni + ii);
+				k = 2*(jj*ni + ii);
 				surface_brightness_vector[img_index] = img_zvec[k];
 #endif
 			}
@@ -20196,7 +20356,7 @@ void QLens::calculate_foreground_pixel_surface_brightness(const int zsrc_i, cons
 		//cout << sbprofile_surface_brightness[img_index] << endl;
 	//}
 	//die();
-	PSF_convolution_pixel_vector(zsrc_i,true,false);
+	PSF_convolution_pixel_vector(zsrc_i,true,false,true);
 }
 
 void QLens::add_foreground_to_image_pixel_vector()

@@ -507,19 +507,27 @@ class ImagePixelGrid : private Sort
 	int *active_image_pixel_j_fgmask;
 
 	double *psf_zvec; // for convolutions using FFT
+	double *psf_zvec_fgmask; // for convolutions using FFT
 	int fft_imin, fft_jmin, fft_ni, fft_nj;
+	int fft_imin_fgmask, fft_jmin_fgmask, fft_ni_fgmask, fft_nj_fgmask;
 #ifdef USE_FFTW
 	std::complex<double> *psf_transform;
+	std::complex<double> *psf_transform_fgmask;
 	std::complex<double> **Lmatrix_transform;
 	double **Lmatrix_imgs_rvec;
 	double *single_img_rvec;
+	double *single_img_rvec_fgmask;
 	std::complex<double> *img_transform;
+	std::complex<double> *img_transform_fgmask;
 	fftw_plan fftplan;
 	fftw_plan fftplan_inverse;
+	fftw_plan fftplan_fgmask;
+	fftw_plan fftplan_inverse_fgmask;
 	fftw_plan *fftplans_Lmatrix;
 	fftw_plan *fftplans_Lmatrix_inverse;
 #endif
 	bool fft_convolution_is_setup;
+	bool fg_fft_convolution_is_setup;
 
 	int **twist_status;
 	lensvector **twist_pts;
@@ -584,19 +592,19 @@ class ImagePixelGrid : private Sort
 	void generate_and_add_point_images(const vector<image>& imgs, const bool include_imgfluxes, const double srcflux);
 	void find_point_images(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap, const bool is_lensed, const bool verbal);
 	//bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
-	bool set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false, const int mask_k = 0);
-	void include_all_pixels();
-	void activate_extended_mask();
-	void activate_foreground_mask();
-	void deactivate_extended_mask();
+	bool set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false, const int mask_k = 0, const bool redo_fft = true);
+	void include_all_pixels(const bool redo_fft = true);
+	void activate_extended_mask(const bool redo_fft = true);
+	void activate_foreground_mask(const bool redo_fft = true);
+	void deactivate_extended_mask(const bool redo_fft = true);
 	void update_mask_values();
 
 	void setup_pixel_arrays();
 	void set_null_ray_tracing_arrays();
 	void set_null_subpixel_ray_tracing_arrays();
-	void setup_ray_tracing_arrays(const bool verbal = false);
+	void setup_ray_tracing_arrays(const bool include_fft_arrays = true, const bool verbal = false);
 	void setup_subpixel_ray_tracing_arrays(const bool verbal = false);
-	void delete_ray_tracing_arrays();
+	void delete_ray_tracing_arrays(const bool delete_fft_arrays = true);
 	void delete_subpixel_ray_tracing_arrays();
 	void update_grid_dimensions(const double xmin, const double xmax, const double ymin, const double ymax);
 	void calculate_sourcepts_and_areas(const bool raytrace_pixel_centers = false, const bool verbal = false);
@@ -605,8 +613,9 @@ class ImagePixelGrid : private Sort
 	void set_nsplits_from_lens_settings();
 	void set_nsplits(const int default_nsplit, const int emask_nsplit, const bool split_pixels);
 	void setup_noise_map(QLens* lens_in);
-	bool setup_FFT_convolution(const bool supersampling, const bool verbal);
+	bool setup_FFT_convolution(const bool supersampling, const bool foreground, const bool verbal);
 	void cleanup_FFT_convolution_arrays();
+	void cleanup_foreground_FFT_convolution_arrays();
 
 	~ImagePixelGrid();
 	void redo_lensing_calculations(const bool verbal = false);
@@ -672,6 +681,7 @@ struct ImagePixelData : private Sort
 	bool ***in_mask;
 	bool ***extended_mask;
 	bool **foreground_mask;
+	bool **foreground_mask_data;
 	double *xvals, *yvals, *pixel_xcvals, *pixel_ycvals;
 	int n_high_sn_pixels;
 	double xmin, xmax, ymin, ymax;
@@ -694,6 +704,7 @@ struct ImagePixelData : private Sort
 		extended_mask = NULL;
 		extended_mask_n_neighbors = NULL;
 		foreground_mask = NULL;
+		foreground_mask_data = NULL;
 		xvals = NULL;
 		yvals = NULL;
 		pixel_xcvals = NULL;
@@ -748,6 +759,7 @@ struct ImagePixelData : private Sort
 	bool unset_low_signal_pixels(const double sb_threshold, const int mask_k = 0);
 	bool set_positive_radial_gradient_pixels(const int mask_k = 0);
 	bool set_neighbor_pixels(const bool only_interior_neighbors, const bool only_exterior_neighbors, const int mask_k = 0);
+	bool expand_foreground_mask(const int n_it);
 	bool set_mask_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false, const int mask_k = 0);
 	bool set_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false, const int mask_k = 0);
 	bool reset_extended_mask(const int mask_k = 0);

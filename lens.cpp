@@ -276,6 +276,7 @@ QLens::QLens() : UCMC(), ModelParams()
 	ignore_foreground_in_chisq = false;
 	psf_ptsrc_nsplit = 5; // for subpixel evaluation of point source PSF
 	fft_convolution = false;
+	fgmask_padding = 2; // padding the foreground mask to allow for convolution with neighboring pixels even if they're not included directly in the likelihood function
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	srcpixel_nimg_mag_threshold = 0.1; // this is the minimum magnification an image pixel must have to be counted when calculating source pixel n_images
@@ -640,6 +641,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	ignore_foreground_in_chisq = lens_in->ignore_foreground_in_chisq;
 	psf_ptsrc_nsplit = lens_in->psf_ptsrc_nsplit;
 	fft_convolution = lens_in->fft_convolution;
+	fgmask_padding = lens_in->fgmask_padding; // padding the foreground mask to allow for convolution with neighboring pixels even if they're not included directly in the likelihood function
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
 	srcpixel_nimg_mag_threshold = lens_in->srcpixel_nimg_mag_threshold; // this is the minimum magnification an image pixel must have to be counted when calculating source pixel n_images
@@ -12670,7 +12672,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				}
 				else {
 					image_pixel_grids[zsrc_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,false,zsrc_i);
-					image_pixel_grids[zsrc_i]->setup_ray_tracing_arrays(verbose);
+					image_pixel_grids[zsrc_i]->setup_ray_tracing_arrays(true,verbose);
 				}
 			}
 			image_pixel_grid = image_pixel_grids[zsrc_i];
@@ -13650,7 +13652,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		chisq0_zsrc = 0;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if ((image_pixel_grid->pixel_in_mask[i][j]) or ((include_foreground_sb) and (image_pixel_data->foreground_mask[i][j]))) {
+				if ((image_pixel_grid->pixel_in_mask[i][j]) or ((include_foreground_sb) and (image_pixel_data->foreground_mask_data[i][j]))) {
 					n_data_pixels++;
 					if (use_noise_map) cov_inverse = image_pixel_data->covinv_map[i][j];
 					if ((image_pixel_grid->pixel_in_mask[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
@@ -13729,7 +13731,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		psf_supersampling = false; // since emask pixels may have fewer or no splittings, we cannot use supersampling for the outside_sb_prior
 		if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
 			for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-				image_pixel_grids[zsrc_i]->activate_extended_mask(); 
+				image_pixel_grids[zsrc_i]->activate_extended_mask(false); 
 				image_pixel_grids[zsrc_i]->redo_lensing_calculations(false); // This shouldn't be necessary! FIX!!!
 				assign_pixel_mappings(zsrc_i,false,verbal);
 				initialize_pixel_matrices(zsrc_i,false,verbal);
@@ -13824,7 +13826,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				loglike_times_two += chisq_penalty;
 				if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << outside_sb_threshold << ") has been found outside the selected fit region at pixel (" << image_pixel_grids[zsrc_i]->center_pts[isb][jsb][0] << "," << image_pixel_grids[zsrc_i]->center_pts[isb][jsb][1] << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 			}
-			image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),false,assigned_mask[zsrc_i]);
+			image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),false,assigned_mask[zsrc_i],false);
 			psf_supersampling = supersampling_orig;
 		}
 	}
