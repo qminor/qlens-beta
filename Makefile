@@ -16,6 +16,7 @@
 	#$(F77) -c -o  $@ $<
 
 # Version without MUMPS
+#default: qlens mkdist cosmocalc 
 default: qlens mkdist cosmocalc 
 CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI

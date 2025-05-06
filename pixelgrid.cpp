@@ -7354,7 +7354,8 @@ bool ImagePixelData::load_noise_map_fits(string fits_filename, const int hdu_ind
 bool ImagePixelData::save_noise_map_fits(string fits_filename)
 {
 #ifndef USE_FITS
-	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return;
+	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n";
+	return false;
 #else
 	if (noise_map == NULL) {
 		warn("no noise map has been loaded or generated; cannot save noise map to FITS file");
@@ -15288,7 +15289,7 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 	while (nj < jl0) nj *= 2; // need multiple of 2 to do FFT (note, this is only necessary with native code; it is not necessary with FFTW)
 	if (foreground) psf_zvec_fgmask = new double[2*ni*nj];
 	else psf_zvec = new double[2*ni*nj];
-	double *psf_zvec = (foreground) ? psf_zvec_fgmask : psf_zvec;
+	double *psf_zvec_ptr = (foreground) ? psf_zvec_fgmask : psf_zvec;
 	for (i=0; i < 2*ni*nj; i++) psf_zvec_ptr[i] = 0;
 #endif
 	int zpsf_i, zpsf_j;
@@ -15770,20 +15771,22 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 		int &nj = (foreground) ? image_pixel_grid->fft_nj_fgmask : image_pixel_grid->fft_nj;
 		int &imin = (foreground) ? image_pixel_grid->fft_imin_fgmask : image_pixel_grid->fft_imin;
 		int &jmin = (foreground) ? image_pixel_grid->fft_jmin_fgmask : image_pixel_grid->fft_jmin;
-		complex<double> *psf_transform_ptr = (foreground) ? image_pixel_grid->psf_transform_fgmask : image_pixel_grid->psf_transform;
-		double *single_img_rvec_ptr = (foreground) ? image_pixel_grid->single_img_rvec_fgmask : image_pixel_grid->single_img_rvec;
-		complex<double> *img_transform_ptr = (foreground) ? image_pixel_grid->img_transform_fgmask : image_pixel_grid->img_transform;
-		double *psf_zvec = (foreground) ? image_pixel_grid->psf_zvec_fgmask : image_pixel_grid->psf_zvec;
 
 		//int *pixel_map_i, *pixel_map_j;
 		//pixel_map_i = image_pixel_grid->active_image_pixel_i;
 		//pixel_map_j = image_pixel_grid->active_image_pixel_j;
 
 #ifdef USE_FFTW
+		complex<double> *psf_transform_ptr = (foreground) ? image_pixel_grid->psf_transform_fgmask : image_pixel_grid->psf_transform;
+		double *single_img_rvec_ptr = (foreground) ? image_pixel_grid->single_img_rvec_fgmask : image_pixel_grid->single_img_rvec;
+		complex<double> *img_transform_ptr = (foreground) ? image_pixel_grid->img_transform_fgmask : image_pixel_grid->img_transform;
+
 		int ncomplex = nj*(ni/2+1);
 		int npix_conv = ni*nj;
 		for (i=0; i < npix_conv; i++) single_img_rvec_ptr[i] = 0;
 #else
+		double *psf_zvec_ptr = (foreground) ? image_pixel_grid->psf_zvec_fgmask : image_pixel_grid->psf_zvec;
+
 		int nzvec = 2*ni*nj;
 		double *img_zvec = new double[nzvec];
 #endif
