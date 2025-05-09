@@ -11578,8 +11578,8 @@ void QLens::plot_logkappa_map(const int x_N, const int y_N, const string filenam
 					negkap = true;
 					kap = abs(kap);
 				}
-				//logkapout << log(kap)/log(10) << " ";
-				logkapout << kap << " ";
+				logkapout << log(kap)/log(10) << " ";
+				//logkapout << kap << " ";
 			}
 		}
 		logkapout << endl;
