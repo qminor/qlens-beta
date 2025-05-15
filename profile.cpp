@@ -1378,7 +1378,7 @@ double LensProfile::calculate_scaled_mass_3d_from_kappa(const double r)
 			warn("Gauss-Patterson quadrature did not converge for R smaller than %g (tol=%g) (using NMAX=511 points)",convergence_beyond_radius,quadtolerance);
 		} else warn("Gauss-Patterson quadrature did not achieve desired convergence (tol=%g) for all r after NMAX=511 points",quadtolerance);
 	}
-	if (menc_converged==false) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",quadtolerance);
+	if ((integration_warnings) and (menc_converged==false)) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",quadtolerance);
 
 	return mass3d;
 }
@@ -1394,7 +1394,7 @@ double LensProfile::calculate_scaled_mass_3d_from_analytic_rho3d(const double r)
 	mptr = static_cast<double (GaussPatterson::*)(const double)> (&LensProfile::mass3d_r_integrand_analytic);
 	mass3d = 4*M_PI*AdaptiveQuad(mptr,0,r,menc_converged);
 	SetGaussPatterson(temppat,integration_warnings);
-	if (menc_converged==false) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",tolerance);
+	if ((integration_warnings) and (menc_converged==false)) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",tolerance);
 	return mass3d;
 }
 
