@@ -725,7 +725,7 @@ struct ImagePixelData : private Sort
 		return load_data_fits(true,fits_filename, hdu_indx, show_header);
 	}
 	bool load_noise_map_fits(string fits_filename, const int hdu_indx = 1, const bool show_header = false);
-	bool save_noise_map_fits(string fits_filename);
+	bool save_noise_map_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	void unload_noise_map();
 	void set_isofit_output_stream(std::ofstream *fitout) { isophote_fit_out = fitout; }
 	void set_uniform_pixel_noise(const double noise)
@@ -744,7 +744,7 @@ struct ImagePixelData : private Sort
 	bool load_data_fits(bool use_pixel_size, string fits_filename, const int hdu_indx, const bool show_header = false);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	bool load_mask_fits(const int mask_k, string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false);
-	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const int mask_k=0, const int reduce_nx=-1, const int reduce_ny=-1);
+	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const int mask_k=0, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	bool copy_mask(ImagePixelData* data, const int mask_k = 0);
 	void assign_high_sn_pixels();
 	double find_max_sb(const int mask_k = 0);

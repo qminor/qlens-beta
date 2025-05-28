@@ -2198,18 +2198,16 @@ void SB_Profile::print_parameters(const double zs)
 	cout << model_name;
 	bool parenthesis = false;
 	string divider = "(";
-	if (zs > 0) {
+	if (!is_lensed) {
+		cout << "(unlensed";
+		parenthesis = true;
+	} else if (zs > 0) {
 		stringstream zstr;
 		zstr << zs;
 		string zstring;
 		zstr >> zstring;
 		cout << "(zs=" << zstring;
 		parenthesis = true;
-	} else {
-		if (!is_lensed) {
-			cout << "(unlensed";
-			parenthesis = true;
-		}
 	}
 	if (parenthesis) divider = ",";
 	

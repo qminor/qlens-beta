@@ -1257,10 +1257,10 @@ void QLens::process_commands(bool read_file)
 							"sbmap plotsrc [output_file] [...]\n"  // UPDATE HELP DOCS FOR THIS COMMAND
 							"sbmap loadsrc <source_file>\n"
 							"sbmap loadimg <image_data_file>\n"
-							"sbmap saveimg <image_data_file> [...]\n"
+							"sbmap saveimg <image_data_file> [...]\n" // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap loadpsf <psf_file>\n"
 							"sbmap load_noisemap <noisemap_file>\n"
-							"sbmap save_noisemap <noisemap_file>\n"
+							"sbmap save_noisemap <noisemap_file> [...]\n" // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap unloadpsf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap mkpsf [-spline]\n"                 // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap spline_psf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
@@ -5238,6 +5238,7 @@ void QLens::process_commands(bool read_file)
 			bool update_specific_parameters = false; // option for user to update one (or more) specific parameters rather than update all of them at once
 			bool vary_parameters = false;
 			bool anchor_source_center = false;
+			bool anchor_center_to_lens = false;
 			int anchornum; // in case new source is being anchored to existing lens
 			int pmode = 0;
 			int emode = -1;
@@ -5797,7 +5798,15 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
+							} else if (words[6].find("anchor_lens_center=")==0) {
+								string anchorstr = words[6].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
 							}
+
 						} else if (nwords == 8) {
 							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model gaussian");
 							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model gaussian");
@@ -5832,6 +5841,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -5899,6 +5909,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
+							} else if (words[pi].find("anchor_lens_center=")==0) {
+								string anchorstr = words[pi].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
 							} else Complain("must specify both xc and yc, or 'anchor_center=#' if anchoring, for model Shapelet");
 						} else if (nwords == (pi+2)) {
 							if (!(ws[pi++] >> xc)) Complain("invalid x-center parameter for model shapelet");
@@ -5931,6 +5948,7 @@ void QLens::process_commands(bool read_file)
 					} else {
 						add_shapelet_source(is_lensed, zs_in, amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) {
 							if (set_sb_vary_parameters(n_sb-1,vary_flags)==false) Complain("could not vary parameters for model shapelet");
@@ -5960,6 +5978,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
+							} else if (words[7].find("anchor_lens_center=")==0) {
+								string anchorstr = words[7].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
 							}
 						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model sersic");
@@ -5996,6 +6021,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6036,6 +6062,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
+							} else if (words[10].find("anchor_lens_center=")==0) {
+								string anchorstr = words[10].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
 							}
 						} else if (nwords == 12) {
 							if (!(ws[10] >> xc)) Complain("invalid x-center parameter for model Csersic");
@@ -6072,6 +6105,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6110,6 +6144,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
+							} else if (words[8].find("anchor_lens_center=")==0) {
+								string anchorstr = words[8].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
 							}
 						} else if (nwords == 10) {
 							if (!(ws[8] >> xc)) Complain("invalid x-center parameter for model csersic");
@@ -6147,6 +6188,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6187,6 +6229,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
+							} else if (words[10].find("anchor_lens_center=")==0) {
+								string anchorstr = words[10].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
 							}
 						} else if (nwords == 12) {
 							if (!(ws[10] >> xc)) Complain("invalid x-center parameter for model dsersic");
@@ -6223,6 +6272,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6260,6 +6310,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
+							} else if (words[7].find("anchor_lens_center=")==0) {
+								string anchorstr = words[7].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
 							}
 						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model sple");
@@ -6296,6 +6353,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6333,6 +6391,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
+							} else if (words[7].find("anchor_lens_center=")==0) {
+								string anchorstr = words[7].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
 							}
 						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model dpie");
@@ -6369,6 +6434,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6405,6 +6471,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
+							} else if (words[6].find("anchor_lens_center=")==0) {
+								string anchorstr = words[6].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
 							}
 						} else if (nwords == 8) {
 							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model nfw");
@@ -6441,6 +6514,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -9750,30 +9824,26 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-fg") foreground_mask = true;
 						else if (args[i]=="-emask") emask = true;
-						else if (args[i].find("-reduce=")==0) {
-							string astr = args[i].substr(8);
-							int pos, lnum, pnum;
-							if ((pos = astr.find(",")) != string::npos) {
-								string npxstring, npystring;
-								npxstring = astr.substr(0,pos);
-								npystring = astr.substr(pos+1);
-								stringstream npxstr, npystr;
-								npxstr << npxstring;
-								if (!(npxstr >> reduce_npx)) Complain("incorrect format for reducing number of pixels; must enter '-reduce=<reduce_npx>,<reduce_npy>'");
-								npystr << npystring;
-								if (!(npystr >> reduce_npy)) Complain("incorrect format for reducing number of pixels; must enter '-reduce=<reduce_npx>,<reduce_npy>'");
-							} else Complain("incorrect format for reducing number of pixels; must enter '-reduce=<reduce_npx>,<reduce_npy>'");
-						}
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
-				if ((emask) and (foreground_mask)) Complain("cannot load both emask and foreground mask at the same time");
+				if ((emask) and (foreground_mask)) Complain("cannot save both emask and foreground mask at the same time");
 				string filename;
-				if (nwords==3) {
-					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
-				} else Complain("too many arguments to 'sbmap savemask'");
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (image_pixel_data->save_mask_fits(filename,foreground_mask,emask,mask_i,reduce_npx,reduce_npy)==false) Complain("mask could not be saved");
+				if (!image_pixel_data) Complain("no image pixel data has been loaded");
+				if (nwords==2) Complain("output FITS filename for mask is required");
+				else if (nwords>=3) {
+					if (!(ws[2] >> filename)) Complain("invalid filename for mask file");
+					if (nwords==3) {
+						image_pixel_data->save_mask_fits(filename,foreground_mask,emask,mask_i);
+					} else if (nwords==7) {
+						double xmin, xmax, ymin, ymax;
+						if (!(ws[3] >> xmin)) Complain("invalid xmin argument for 'sbmap savemask'");
+						if (!(ws[4] >> xmax)) Complain("invalid xmax argument for 'sbmap savemask'");
+						if (!(ws[5] >> ymin)) Complain("invalid ymin argument for 'sbmap savemask'");
+						if (!(ws[6] >> ymax)) Complain("invalid ymax argument for 'sbmap savemask'");
+						image_pixel_data->save_mask_fits(filename,foreground_mask,emask,mask_i,true,xmin,xmax,ymin,ymax);
+					} else Complain("too many arguments to 'sbmap savemask'");
+				}
 			}
 			else if (words[1]=="load_noisemap")
 			{
@@ -9810,13 +9880,21 @@ void QLens::process_commands(bool read_file)
 			{
 				string filename;
 				vector<string> args;
-				if (nwords==2) {
-					Complain("filename for noise map in FITS format is required (e.g. 'sbmap save_noisemap file.fits')");
-				} else if (nwords==3) {
-					if (!(ws[2] >> filename)) Complain("invalid filename for noise map");
-				} else Complain("too many arguments to 'sbmap save_noisemap'");
+				if (nwords==2) Complain("filename for noise map in FITS format is required (e.g. 'sbmap save_noisemap file.fits')");
 				if (!image_pixel_data) Complain("image data/noise map has not been loaded or generated");
-				if (!image_pixel_data->save_noise_map_fits(filename)) Complain("noise map has not been loaded or generated");
+				else if (nwords>=3) {
+					if (!(ws[2] >> filename)) Complain("invalid filename for noise map file");
+					if (nwords==3) {
+						if (!image_pixel_data->save_noise_map_fits(filename)) Complain("noise map has not been loaded or generated");
+					} else if (nwords==7) {
+						double xmin, xmax, ymin, ymax;
+						if (!(ws[3] >> xmin)) Complain("invalid xmin argument for 'sbmap save_noisemap'");
+						if (!(ws[4] >> xmax)) Complain("invalid xmax argument for 'sbmap save_noisemap'");
+						if (!(ws[5] >> ymin)) Complain("invalid ymin argument for 'sbmap save_noisemap'");
+						if (!(ws[6] >> ymax)) Complain("invalid ymax argument for 'sbmap save_noisemap'");
+						if (!image_pixel_data->save_noise_map_fits(filename,true,xmin,xmax,ymin,ymax)) Complain("noise map has not been loaded or generated");
+					} else Complain("too many arguments to 'sbmap save_noisemap'");
+				}
 			}
 			else if (words[1]=="generate_uniform_noisemap")
 			{

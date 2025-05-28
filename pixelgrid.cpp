@@ -7351,7 +7351,7 @@ bool ImagePixelData::load_noise_map_fits(string fits_filename, const int hdu_ind
 #endif
 }
 
-bool ImagePixelData::save_noise_map_fits(string fits_filename)
+bool ImagePixelData::save_noise_map_fits(string fits_filename, const bool subimage, const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n";
@@ -7366,6 +7366,21 @@ bool ImagePixelData::save_noise_map_fits(string fits_filename)
 	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
 	int status = 0;   // CFITSIO status value MUST be initialized to zero!
 	int bitpix = -64, naxis = 2;
+	int min_i=0, min_j=0, max_i=npixels_x-1, max_j=npixels_y-1;
+	if (subimage) {
+		min_i = (int) ((xmin_in-xmin) * npixels_x / (xmax-xmin));
+		if (min_i < 0) min_i = 0;
+		max_i = (int) ((xmax_in-xmin) * npixels_x / (xmax-xmin));
+		if (max_i > (npixels_x-1)) max_i = npixels_x-1;
+		min_j = (int) ((ymin_in-ymin) * npixels_y / (ymax-ymin));
+		if (min_j < 0) min_j = 0;
+		max_j = (int) ((ymax_in-ymin) * npixels_y / (ymax-ymin));
+		if (max_j > (npixels_y-1)) max_j = npixels_y-1;
+	}
+	int npix_x = max_i-min_i+1;
+	int npix_y = max_j-min_j+1;
+	cout << "imin=" << min_i << " imax=" << max_i << " jmin=" << min_j << " jmax=" << max_j << " npix_x=" << npix_x << " npix_y=" << npix_y << endl;
+
 	long naxes[2] = {npixels_x,npixels_y};
 	double *pixels;
 	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
@@ -7380,11 +7395,11 @@ bool ImagePixelData::save_noise_map_fits(string fits_filename)
 				kk=0;
 				long fpixel[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
-				pixels = new double[npixels_x];
+				pixels = new double[npix_x];
 
-				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
+				for (fpixel[1]=1, j=min_j; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
 				{
-					for (i=0, kk=0; i < npixels_x; i++, kk++) {
+					for (i=min_i, kk=0; i <= max_i; i++, kk++) {
 						pixels[kk] = noise_map[i][j];
 					}
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
@@ -7646,30 +7661,30 @@ bool ImagePixelData::copy_mask(ImagePixelData* data, const int mask_k)
 }
 
 
-bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground, const bool emask, const int mask_k, const int reduce_nx, const int reduce_ny)
+bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground, const bool emask, const int mask_k, const bool subimage, const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in)
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return false;
 #else
 	if (mask_k >= n_masks) { warn("mask with given index has not been created"); return false; }
-	int i,j,iprime,jprime,kk;
+	int i,j,kk;
 	fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
 	int status = 0;   // CFITSIO status value MUST be initialized to zero!
 	int bitpix = -64, naxis = 2;
-	int offset_x=0, offset_y=0;
-	int npix_x=npixels_x, npix_y=npixels_y;
-	if (reduce_nx > 0) {
-		if (reduce_nx > npixels_x) { warn("cannot reduce number of max pixels; reduced nx must be smaller than current number of pixels along x"); return false; }
-		npix_x = reduce_nx;
-		offset_x = (npixels_x-reduce_nx)/2;
-		offset_x--;
+	int min_i=0, min_j=0, max_i=npixels_x-1, max_j=npixels_y-1;
+	if (subimage) {
+		min_i = (int) ((xmin_in-xmin) * npixels_x / (xmax-xmin));
+		if (min_i < 0) min_i = 0;
+		max_i = (int) ((xmax_in-xmin) * npixels_x / (xmax-xmin));
+		if (max_i > (npixels_x-1)) max_i = npixels_x-1;
+		min_j = (int) ((ymin_in-ymin) * npixels_y / (ymax-ymin));
+		if (min_j < 0) min_j = 0;
+		max_j = (int) ((ymax_in-ymin) * npixels_y / (ymax-ymin));
+		if (max_j > (npixels_y-1)) max_j = npixels_y-1;
 	}
-	if (reduce_ny > 0) {
-		if (reduce_ny > npixels_y) { warn("cannot reduce number of max pixels; reduced nx must be smaller than current number of pixels along x"); return false; }
-		npix_y = reduce_ny;
-		offset_y = (npixels_y-reduce_ny)/2;
-		offset_y--;
-	}
+	int npix_x = max_i-min_i+1;
+	int npix_y = max_j-min_j+1;
+	cout << "imin=" << min_i << " imax=" << max_i << " jmin=" << min_j << " jmax=" << max_j << " npix_x=" << npix_x << " npix_y=" << npix_y << endl;
 	long naxes[2] = {npix_x,npix_y};
 	double *pixels;
 	string fits_filename_overwrite = "!" + fits_filename; // ensures that it overwrites an existing file of the same name
@@ -7686,20 +7701,18 @@ bool ImagePixelData::save_mask_fits(string fits_filename, const bool foreground,
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 				pixels = new double[npix_x];
 
-				for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
+				for (fpixel[1]=1, j=min_j; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
 				{
-					jprime = j + offset_y;
-					for (i=0; i < npix_x; i++) {
-						iprime = i + offset_x;
+					for (i=min_i, kk=0; i <= max_i; i++, kk++) {
 						if (foreground) {
-							if (foreground_mask_data[iprime][jprime]) pixels[i] = 1.0;
-							else pixels[i] = 0.0;
+							if (foreground_mask_data[i][j]) pixels[kk] = 1.0;
+							else pixels[kk] = 0.0;
 						} else if (emask) {
-							if (extended_mask[mask_k][iprime][jprime]) pixels[i] = 1.0;
-							else pixels[i] = 0.0;
+							if (extended_mask[mask_k][i][j]) pixels[kk] = 1.0;
+							else pixels[kk] = 0.0;
 						} else {
-							if (in_mask[mask_k][iprime][jprime]) pixels[i] = 1.0;
-							else pixels[i] = 0.0;
+							if (in_mask[mask_k][i][j]) pixels[kk] = 1.0;
+							else pixels[kk] = 0.0;
 						}
 					}
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
