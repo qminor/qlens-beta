@@ -12629,6 +12629,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	} else if (source_fit_mode==Delaunay_Source) {
 		if (n_ptsrc==0) {
 			if ((delaunay_srcgrids==NULL) or (delaunay_srcgrids[0]==NULL)) { warn("No Delaunay source grid has been generated"); return false; }
+			if ((image_pixel_grids != NULL) and (image_pixel_grids[0] != NULL) and (image_pixel_grids[0]->delaunay_srcgrid == NULL)) { warn("No Delaunay source grid has been generated"); return false; }
 		}
 	}
 	if (image_pixel_grids == NULL) { warn("no extended source redshifts have been setup"); return false; }
@@ -12666,6 +12667,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	if (!plot_current_sb) {
 		for (int zsrc_i=zsrc_i_0; zsrc_i < zsrc_i_f; zsrc_i++) {
 			if (image_pixel_grids[zsrc_i] == NULL) {
+				if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) { warn("No inversion has been performed to reconstruct source"); return false; }
 				// if it hasn't been created yet, create now
 				if (use_data) {
 					image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);

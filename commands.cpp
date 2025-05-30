@@ -1259,6 +1259,8 @@ void QLens::process_commands(bool read_file)
 							"sbmap loadimg <image_data_file>\n"
 							"sbmap saveimg <image_data_file> [...]\n" // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap loadpsf <psf_file>\n"
+							"sbmap savepsf <psf_file>\n"
+							"sbmap plotpsf\n"
 							"sbmap load_noisemap <noisemap_file>\n"
 							"sbmap save_noisemap <noisemap_file> [...]\n" // WRITE HELP DOCS FOR THIS COMMAND
 							"sbmap unloadpsf\n"                 // WRITE HELP DOCS FOR THIS COMMAND
@@ -10010,6 +10012,24 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap savepsf'");
 				if (!save_psf_fits(filename,sup)) Complain("could not save PSF fits file '" << filename << "'");
+			}
+			else if (words[1]=="plotpsf")
+			{
+				string filename;
+				bool sup = false;
+				vector<string> args;
+				if (extract_word_starts_with('-',2,nwords-1,args)==true)
+				{
+					for (int i=0; i < args.size(); i++) {
+						if (args[i]=="-supersampled") {
+							if (!psf_supersampling) Complain("psf_supersampling must be set to 'on' to save supersampled PSF");
+							else sup = true;
+						}
+						else Complain("argument '" << args[i] << "' not recognized");
+					}
+				}
+				if (!plot_psf("psfimg",sup)) Complain("could not plot PSF fits file '" << filename << "'");
+				run_plotter("psfimg");
 			}
 			else if (words[1]=="unloadpsf")
 			{

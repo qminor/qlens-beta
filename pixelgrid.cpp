@@ -7986,6 +7986,66 @@ bool QLens::save_psf_fits(string fits_filename, const bool supersampled)
 #endif
 }
 
+bool QLens::plot_psf(string outfile_root, const bool supersampled)
+{
+#ifndef USE_FITS
+	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return false;
+#else
+
+	int i,j;
+
+	string psf_filename = outfile_root + ".dat";
+	string x_filename = outfile_root + ".x";
+	string y_filename = outfile_root + ".y";
+
+	ofstream psf_image_file; open_output_file(psf_image_file,psf_filename);
+	ofstream psf_xvals; open_output_file(psf_xvals,x_filename);
+	ofstream psf_yvals; open_output_file(psf_yvals,y_filename);
+	psf_image_file << setiosflags(ios::scientific);
+
+	int nx, ny;
+	double **psf;
+	if (psf_matrix == NULL) {
+		warn("no PSF matrix has been loaded or generated; cannot save PSF to FITS file");
+		return false;
+	}
+	if ((supersampled) and (supersampled_psf_matrix == NULL)) {
+		warn("no supersampled PSF matrix has been loaded or generated; cannot save PSF to FITS file");
+		return false;
+	}
+	if (supersampled) {
+		nx = supersampled_psf_npixels_x;
+		ny = supersampled_psf_npixels_y;
+		psf = supersampled_psf_matrix;
+	} else {
+		nx = psf_npixels_x;
+		ny = psf_npixels_y;
+		psf = psf_matrix;
+	}
+	int imid,jmid;
+	imid = nx/2;
+	jmid = ny/2;
+	double x,y;
+	double xstep=1,ystep=1;
+	if (data_pixel_size > 0) {
+		xstep = ystep = data_pixel_size;
+	}
+	for (i=0, x=(-imid-0.5)*xstep; i <= nx; i++, x += xstep) {
+		psf_xvals << x << endl; // you should improve this using data_pixel_size
+	}
+	for (j=0, y=(-jmid-0.5)*ystep; j <= ny; j++, y += ystep) {
+		psf_yvals << y << endl;
+	}	
+	for (i=0; i < nx; i++) {
+		for (j=0; j < ny; j++) {
+			psf_image_file << abs(psf[i][j]) << " ";
+		}
+		psf_image_file << endl;
+	}
+	return true;
+#endif
+}
+
 ImagePixelData::~ImagePixelData()
 {
 	if (xvals != NULL) delete[] xvals;
@@ -13038,6 +13098,8 @@ void ImagePixelGrid::set_zero_foreground_surface_brightness()
 
 void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const bool lensed_sources_only, const bool include_first_order_corrections, const bool show_only_first_order_corrections)
 {
+	if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid == NULL)) die("No Delaunay source grid has been created");
+	if ((source_fit_mode==Cartesian_Source) and (cartesian_srcgrid == NULL)) die("No Delaunay source grid has been created");
 	bool supersampling = lens->psf_supersampling;
 	double noise;
 #ifdef USE_OPENMP

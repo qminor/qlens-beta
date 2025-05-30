@@ -628,6 +628,16 @@ then
 	else
 		PLOTLINE="$SETTERM\n$PLOTCOMMAND"
 	fi
+elif [[ $COMMAND == "psfimg" ]]
+then
+	set -- $(head -2 $PLOTDIR/psfimg.x && head -2 $PLOTDIR/psfimg.y)
+	DX=`bc <<< "scale=15; $2-($1)"`
+	X0=`bc <<< "scale=15; $1+0.5*$DX"`
+	DY=`bc <<< "scale=15; $4-($3)"`
+	Y0=`bc <<< "scale=15; $3+0.5*$DY"`
+
+	PLOTCOMMAND="set logscale cb; set format cb '10^{%T}'; set xrange [:] noextend; set yrange [:] noextend; plot $RANGE '$PLOTDIR/psfimg.dat' u ($DX*\$1+$X0):($DY*\$2+$Y0):3 matrix w image"
+	PLOTLINE="unset key\n$SETTERM\n$PLOTCOMMAND"
 elif [[ $COMMAND == "imgpixel" ]]
 then
 	set -- $(head -2 $PLOTDIR/img_pixel.x && head -2 $PLOTDIR/img_pixel.y)

@@ -893,6 +893,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void generate_supersampled_PSF_matrix(const bool downsample = false, const int downsample_fac = 1);
 	bool load_psf_fits(string fits_filename, const int hdu_indx, const bool supersampled, const bool show_header = false, const bool verbal = false);
 	bool save_psf_fits(string fits_filename, const bool supersampled = false);
+	bool plot_psf(string filename, const bool supersampled);
+
 	int psf_npixels_x, psf_npixels_y;
 	int supersampled_psf_npixels_x, supersampled_psf_npixels_y;
 	double psf_threshold, psf_ptsrc_threshold;
