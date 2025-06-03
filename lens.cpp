@@ -274,7 +274,7 @@ QLens::QLens() : UCMC(), ModelParams()
 	psf_threshold = 0.0; // no truncation by default
 	psf_ptsrc_threshold = 0.0; // no truncation by default
 	ignore_foreground_in_chisq = false;
-	psf_ptsrc_nsplit = 5; // for subpixel evaluation of point source PSF
+	ptimg_nsplit = 5; // for subpixel evaluation of point source PSF
 	fft_convolution = false;
 	fgmask_padding = 2; // padding the foreground mask to allow for convolution with neighboring pixels even if they're not included directly in the likelihood function
 	n_image_prior = false;
@@ -639,7 +639,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	psf_threshold = lens_in->psf_threshold;
 	psf_ptsrc_threshold = lens_in->psf_ptsrc_threshold;
 	ignore_foreground_in_chisq = lens_in->ignore_foreground_in_chisq;
-	psf_ptsrc_nsplit = lens_in->psf_ptsrc_nsplit;
+	ptimg_nsplit = lens_in->ptimg_nsplit;
 	fft_convolution = lens_in->fft_convolution;
 	fgmask_padding = lens_in->fgmask_padding; // padding the foreground mask to allow for convolution with neighboring pixels even if they're not included directly in the likelihood function
 	n_image_prior = lens_in->n_image_prior;
@@ -1909,8 +1909,10 @@ int QLens::add_new_extended_src_redshift(const double zs, const int src_i, const
 	}
 	// Now you need to update sbprofile_redshift_indx and pixellated_src_redshift_indx
 
-	if (!pixellated_src) sbprofile_redshift_idx[src_i] = znum;
-	else pixellated_src_redshift_idx[src_i] = znum;
+	if (src_i >= 0) {
+		if (!pixellated_src) sbprofile_redshift_idx[src_i] = znum;
+		else pixellated_src_redshift_idx[src_i] = znum;
+	}
 
 	if (new_redshift) {
 		 //we inserted a new redshift, so higher redshifts get bumped up an index
@@ -6815,9 +6817,14 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		fitmodel->lens_list[i]->qlens = fitmodel; // point to the fitmodel, since the cosmology may be varied (by varying H0, e.g.)
 	}
 
-	if (source_fit_mode != Point_Source) {
-		if (n_extended_src_redshifts==0) add_pixellated_source(source_redshift); // THIS IS UGLY. There must be a better way to do this
+	//if ((source_fit_mode != Point_Source) and (n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
+		 //add_pixellated_source(source_redshift); // THIS IS UGLY. There must be a better way to do this
+	//}
+	if (n_extended_src_redshifts == 0) {
+		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
+		else add_new_extended_src_redshift(source_redshift,-1,false);
 	}
+
 	if (n_extended_src_redshifts > 0) {
 		fitmodel->n_extended_src_redshifts = n_extended_src_redshifts;
 		fitmodel->extended_src_redshifts = new double[n_extended_src_redshifts];
@@ -7091,7 +7098,7 @@ double QLens::update_model(const double* params)
 		sb_list[i]->update_fit_parameters(params,index,status);
 	}
 	for (i=0; i < n_pixellated_src; i++) {
-		srcgrids[i]->update_fit_parameters(params,index);
+		if (srcgrids[i] != NULL) srcgrids[i]->update_fit_parameters(params,index);
 	}
 	for (i=0; i < n_pixellated_lens; i++) {
 		lensgrids[i]->update_fit_parameters(params,index);
@@ -8025,7 +8032,9 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	int i, index=0;
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
 	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_stepsizes(stepsizes,index);
-	for (i=0; i < n_pixellated_src; i++) srcgrids[i]->get_auto_stepsizes(stepsizes,index);
+	for (i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) srcgrids[i]->get_auto_stepsizes(stepsizes,index);
+	}
 	for (i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_auto_stepsizes(stepsizes,index);
 	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_stepsizes(stepsizes,index);
 	cosmo.get_auto_stepsizes(stepsizes,index);
@@ -8044,7 +8053,9 @@ void QLens::set_default_plimits()
 
 	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	for (i=0; i < n_pixellated_src; i++) srcgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	for (i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) srcgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	}
 	for (i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	cosmo.get_auto_ranges(use_penalty_limits,lower,upper,index);
@@ -8066,7 +8077,9 @@ void QLens::get_n_fit_parameters(int &nparams)
 	nparams = lensmodel_fit_parameters;
 	for (int i=0; i < n_sb; i++) srcmodel_fit_parameters += sb_list[i]->get_n_vary_params();
 	nparams += srcmodel_fit_parameters;
-	for (int i=0; i < n_pixellated_src; i++) pixsrc_fit_parameters += srcgrids[i]->get_n_vary_params();
+	for (int i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) pixsrc_fit_parameters += srcgrids[i]->get_n_vary_params();
+	}
 	nparams += pixsrc_fit_parameters;
 	for (int i=0; i < n_pixellated_lens; i++) pixlens_fit_parameters += lensgrids[i]->get_n_vary_params();
 	nparams += pixlens_fit_parameters;
@@ -8114,7 +8127,9 @@ bool QLens::setup_fit_parameters(const bool ignore_limits)
 	for (int i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
 	if (index != lensmodel_fit_parameters) die("Index didn't go through all the lens model fit parameters (%i vs %i)",index,lensmodel_fit_parameters);
 	for (int i=0; i < n_sb; i++) sb_list[i]->get_fit_parameters(fitparams,index);
-	for (int i=0; i < n_pixellated_src; i++) srcgrids[i]->get_fit_parameters(fitparams,index);
+	for (int i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) srcgrids[i]->get_fit_parameters(fitparams,index);
+	}
 	for (int i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_fit_parameters(fitparams,index);
 	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_fit_parameters(fitparams,index);
 	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters;
@@ -8152,7 +8167,7 @@ bool QLens::setup_limits()
 		if ((sb_list[i]->get_n_vary_params() > 0) and (sb_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for source %i",i); return false; }
 	}
 	for (int i=0; i < n_pixellated_src; i++) {
-		if ((srcgrids[i]->get_n_vary_params() > 0) and (srcgrids[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for pixellated source %i",i); return false; }
+		if ((srcgrids[i] != NULL) and (srcgrids[i]->get_n_vary_params() > 0) and (srcgrids[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for pixellated source %i",i); return false; }
 	}
 	for (int i=0; i < n_pixellated_lens; i++) {
 		if ((lensgrids[i]->get_n_vary_params() > 0) and (lensgrids[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for pixellated source %i",i); return false; }
@@ -8199,7 +8214,7 @@ void QLens::get_all_parameter_names()
 		sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts,true);
 	}
 	for (i=0; i < n_pixellated_src; i++) {
-		srcgrids[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+		if (srcgrids[i] != NULL) srcgrids[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
 	for (i=0; i < n_pixellated_lens; i++) {
 		lensgrids[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
@@ -11140,7 +11155,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 	double chisq00;
 	if (loglike < 1e30) {
 		for (int i=0; i < n_ranchisq; i++) {
-			chisq += fitmodel->invert_image_surface_brightness_map(chisq00,false,i);
+			chisq += fitmodel->pixel_log_evidence_times_two(chisq00,false,i);
 			chisq0 += chisq00;
 		}
 		chisq /= n_ranchisq;
@@ -12701,19 +12716,29 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 
 			bool at_least_one_lensed_src_object = false; // this could be analytic source or pixellated source grid
 			bool at_least_one_foreground_src_included = false;
+			bool at_least_one_lensed_nonshapelet_src = false;
+			bool include_lensed_nonshapelet_src_as_foreground = false;
 			for (k=0; k < n_sb; k++) {
-				if ((sb_list[k]->is_lensed) and (sbprofile_redshift_idx[k]==zsrc_i)) at_least_one_lensed_src_object = true;
+				if ((sb_list[k]->is_lensed) and (sbprofile_redshift_idx[k]==zsrc_i)) {
+					at_least_one_lensed_src_object = true;
+					if (sb_list[k]->sbtype!=SHAPELET) at_least_one_lensed_nonshapelet_src = true;
+				}
 				if ((!sb_list[k]->is_lensed) and (zsrc_i==0)) at_least_one_foreground_src_included = true;
 			}
 			if (source_fit_mode==Cartesian_Source) {
 				at_least_one_lensed_src_object = true;
 			} else if (source_fit_mode==Delaunay_Source) {
 				at_least_one_lensed_src_object = true;
+			} else if (source_fit_mode==Shapelet_Source) {
+				if (at_least_one_lensed_nonshapelet_src) {
+					at_least_one_foreground_src_included = true; // non-shapelet analytic sources get included in the "foreground" surface brightness (kinda weird, I know)
+					include_lensed_nonshapelet_src_as_foreground = true;
+				}
 			}
 			if ((!at_least_one_lensed_src_object) and (at_least_one_foreground_src_included)) plot_foreground_only = true;
 
 			if ((!plot_foreground_only) and (at_least_one_lensed_src_object)) {
-				image_pixel_grid->find_surface_brightness(false,true,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections);
+				image_pixel_grid->find_surface_brightness(false,true,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections,include_lensed_nonshapelet_src_as_foreground); // the last argument will cause it to omit lense nonshapelet sources here, since they'll be included in the foreground SB calculation
 				vectorize_image_pixel_surface_brightness(zsrc_i,true); // note that in this case, the image pixel vector does NOT contain the foreground; the foreground PSF convolution was done separately above
 				PSF_convolution_pixel_vector(zsrc_i,false,verbose,fft_convolution);
 				store_image_pixel_surface_brightness(zsrc_i);
@@ -12723,7 +12748,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 
 			if ((!omit_foreground) and (at_least_one_foreground_src_included)) {
 				assign_foreground_mappings(zsrc_i,use_data);
-				calculate_foreground_pixel_surface_brightness(zsrc_i,false); // PSF convolution of foreground is done within this functions
+				calculate_foreground_pixel_surface_brightness(zsrc_i,include_lensed_nonshapelet_src_as_foreground); // PSF convolution of foreground is done within this function
 				store_foreground_pixel_surface_brightness(zsrc_i);
 			} else {
 				image_pixel_grids[zsrc_i]->set_zero_foreground_surface_brightness();
@@ -12962,10 +12987,15 @@ bool QLens::load_pixel_grid_from_data()
 {
 	bool loaded_new_grid = false;
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return false; }
-	if ((n_extended_src_redshifts==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) {
-		if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
-		add_pixellated_source(source_redshift);
+	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
+		//if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
+		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
+	//}
+	if (n_extended_src_redshifts == 0) {
+		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
+		else add_new_extended_src_redshift(source_redshift,-1,false);
 	}
+
 	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 		if (image_pixel_grids[zsrc_i] != NULL) {
 			delete image_pixel_grids[zsrc_i];
@@ -12980,10 +13010,15 @@ void QLens::plot_image_pixel_grid(const int zsrc_i)
 {
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return; }
 	if (image_pixel_grids == NULL) { warn("No extended sources have been created"); return; }
-	if ((n_extended_src_redshifts==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) {
-		if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
-		add_pixellated_source(source_redshift);
+	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
+		//if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
+		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
+	//}
+	if (n_extended_src_redshifts == 0) {
+		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
+		else add_new_extended_src_redshift(source_redshift,-1,false);
 	}
+
 
 	if (image_pixel_grids[zsrc_i] == NULL) {
 		image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode,ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);
@@ -12995,10 +13030,15 @@ void QLens::plot_image_pixel_grid(const int zsrc_i)
 double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool verbal, const bool zero_verbal)
 {
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
-	if (n_extended_src_redshifts==0) {
-		if ((mpi_id==0) and (verbal)) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
-		add_pixellated_source(source_redshift);
+	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
+		//if ((mpi_id==0) and (verbal)) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
+		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
+	//}
+	if (n_extended_src_redshifts == 0) {
+		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
+		else add_new_extended_src_redshift(source_redshift,-1,false);
 	}
+
 	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 		if (image_pixel_grids[zsrc_i] == NULL) {
 			image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_extended_mask_in_inversion, zsrc_i, assigned_mask[zsrc_i], true, verbal);
@@ -13013,7 +13053,7 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 	}
 #endif
 	for (int i=0; i < n_ranchisq; i++) {
-		chisq += invert_image_surface_brightness_map(chisq00,verbal,i);
+		chisq += pixel_log_evidence_times_two(chisq00,verbal,i);
 		chisq0 += chisq00;
 	}
 	chisq /= n_ranchisq;
@@ -13027,7 +13067,7 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 	}
 #endif
 
-	//chisq = invert_image_surface_brightness_map(chisq0,verbal);
+	//chisq = pixel_log_evidence_times_two(chisq0,verbal);
 	if (chisq == 2e30) {
 		// in this case, the inversion didn't work, so we delete the image pixel grids so there is no confusion if the user tries to plot the lensed images
 		for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -13039,11 +13079,17 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 	return chisq;
 }
 
-double QLens::invert_image_surface_brightness_map(double &chisq0, const bool verbal, const int ranchisq_i) // This function should probably be renamed to something like 'pixel_level_log_evidence' or something like that
+double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, const int ranchisq_i)
 {
 	// This function is WAY too long, and should be broken into a bunch of inline functions.
 	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
-	if ((n_extended_src_redshifts==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift); // THIS IS UGLY. There must be a better way to do this
+	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
+		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
+	//}
+	if (n_extended_src_redshifts == 0) {
+		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
+		else add_new_extended_src_redshift(source_redshift,-1,false);
+	}
 	if (image_pixel_grids == NULL) { warn("No image surface brightness grid has been generated"); return -1e30; }
 	int zsrc_i;
 	for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -13069,11 +13115,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	}
 
 	// the foreground surface brightness includes foreground, but can also include additional (analytic) lensed sources if in pixel mode
-	// Note that if only parameterized sources are used, a separate foreground sb array is not needed
+	bool include_foreground_sbmask = false;
 	bool include_foreground_sb = false;
 	bool at_least_one_foreground_src = false;
 	bool at_least_one_lensed_src = false;
 	bool at_least_one_lensed_nonshapelet_src = false;
+	bool at_least_one_shapelet_src = false;
 	for (int k=0; k < n_sb; k++) {
 		//if ((!sb_list[k]->is_lensed) or ((source_fit_mode != Parameterized_Source) and ((sb_list[k]->sbtype != SHAPELET) or (source_fit_mode != Shapelet_Source)))) {
 		if (!sb_list[k]->is_lensed) {
@@ -13082,9 +13129,14 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			at_least_one_lensed_src = true;
 			if (sb_list[k]->sbtype!=SHAPELET) at_least_one_lensed_nonshapelet_src = true;
 		}
+		if (sb_list[k]->sbtype==SHAPELET) at_least_one_shapelet_src = true;
 	}
-	if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) include_foreground_sb = true;
+	if ((!ignore_foreground_in_chisq) and (at_least_one_foreground_src)) { include_foreground_sbmask = true; include_foreground_sb = true; } 
 	else if ((!at_least_one_foreground_src) and ((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
+	if ((source_fit_mode==Shapelet_Source) and (!at_least_one_shapelet_src) and ((n_ptsrc==0) or ((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)))) {
+		warn("cannot perform inversion because no shapelet objects and no point sources with invertible amplitudes are defined");
+		chisq0=-1e30; return -1e30;
+	}
 
 #ifdef USE_OPENMP
 	double fspline_wtime0;
@@ -13119,11 +13171,11 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	//else if (at_least_one_zoom_lensed_src) image_pixel_grids[0]->redo_lensing_calculations_corners(); // this function needs to be updated (or else scrapped)
 
 	int i,j,k;
-	double loglike_times_two = 0;
+	double logev_times_two = 0;
 	double loglike_reg = 0;
 	double regterms;
 
-	if (((n_image_prior) or (n_ptsrc > 0)) and (source_fit_mode != Cartesian_Source) and (source_fit_mode != Parameterized_Source)) {
+	if ((n_image_prior) or (n_ptsrc > 0)) {
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			int src_i = -1;
 			for (int i=0; i < n_pixellated_src; i++) {
@@ -13132,28 +13184,37 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					break;
 				}
 			}
-			if ((mpi_id==0) and (verbal)) cout << "Trying auxiliary sourcegrid creation..." << endl;
+			bool source_grid_defined = false;
+			if (source_fit_mode != Cartesian_Source) {
+				if ((mpi_id==0) and (verbal)) cout << "Trying auxiliary sourcegrid creation..." << endl;
 #ifdef USE_OPENMP
-			double srcgrid_wtime0, srcgrid_wtime;
-			if (show_wtime) {
-				srcgrid_wtime0 = omp_get_wtime();
-			}
-#endif
-			bool source_grid_defined = true;
-			if (nlens > 0) {
-				// create auxiliary source grid for findimg number of images or finding point images (if not using cartesian source grid already)
-				if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-					create_sourcegrid_cartesian(zsrc_i,verbal,true,true,true,true);
-				} else if (source_fit_mode==Delaunay_Source) {
-					create_sourcegrid_cartesian(zsrc_i,verbal,true,false,true,true);
+				double srcgrid_wtime0, srcgrid_wtime;
+				if (show_wtime) {
+					srcgrid_wtime0 = omp_get_wtime();
 				}
-			} else source_grid_defined = false;
-#ifdef USE_OPENMP
-			if (show_wtime) {
-				srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-				if (mpi_id==0) cout << "wall time for auxiliary source grid creation: " << srcgrid_wtime << endl;
-			}
 #endif
+				if ((source_fit_mode==Cartesian_Source) and (cartesian_srcgrids != NULL) and (cartesian_srcgrids[src_i] != NULL)) source_grid_defined = true;
+				if (nlens > 0) {
+					// create auxiliary source grid for findimg number of images or finding point images (if not using cartesian source grid already)
+					if ((source_fit_mode==Shapelet_Source) and (n_image_prior)) { // note, in shapelet mode, we only need the auxiliary grid if using n_image_prior
+						create_sourcegrid_cartesian(zsrc_i,verbal,true,true,true,true);
+						source_grid_defined = true;
+					} else if (source_fit_mode==Delaunay_Source) {
+						create_sourcegrid_cartesian(zsrc_i,verbal,true,false,true,true);
+						source_grid_defined = true;
+					}
+				}
+#ifdef USE_OPENMP
+				if (source_grid_defined) {
+					if (show_wtime) {
+						srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
+						if (mpi_id==0) cout << "wall time for auxiliary source grid creation: " << srcgrid_wtime << endl;
+					}
+				}
+#endif
+			} else {
+				source_grid_defined = true;
+			}
 			if (source_grid_defined) {
 				image_pixel_grids[zsrc_i]->set_cartesian_srcgrid(cartesian_srcgrids[src_i]);
 				cartesian_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
@@ -13172,6 +13233,18 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					}
 				}
 			}
+		}
+		if ((source_fit_mode==Shapelet_Source) and (!at_least_one_shapelet_src) and (include_imgfluxes_in_inversion)) {
+			// Make sure there is at least one image produced, otherwise there will be no amplitudes to invert! (since no shapelets have been created)
+			int nimgs_tot = 0;
+			for (i=0; i < n_ptsrc; i++) {
+				nimgs_tot += ptsrc_list[i]->images.size(); // in this case, source amplitudes include point image amplitudes as well as pixel values
+			}
+			if (nimgs_tot==0) {
+				warn("cannot perform inversion because no shapelet objects and no images with invertible amplitudes have been produced");
+				chisq0=2e30; return 2e30;
+			}
+
 		}
 	}
 
@@ -13355,10 +13428,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			if ((regularization_method != None) and (source_npixels > 0)) {
 				if ((*regparam_ptr) != 0) {
 					regterms = calculate_regularization_prior_term(regparam_ptr);
-					loglike_times_two += regterms;
+					logev_times_two += regterms;
 					loglike_reg += regterms;
 				}
-				loglike_times_two += Fmatrix_log_determinant;
+				logev_times_two += Fmatrix_log_determinant;
 			}
 
 #ifdef USE_OPENMP
@@ -13427,16 +13500,16 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					regparam_ptr = &(image_pixel_grids[zsrc_i]->delaunay_srcgrid->regparam);
 				}
 
-				if (generate_and_invert_lensing_matrix(zsrc_i,src_i,false,include_potential_perturbations,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
+				if (generate_and_invert_lensing_matrix_delaunay(zsrc_i,src_i,false,include_potential_perturbations,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
 				if (include_potential_perturbations) {
 					clear_sparse_lensing_matrices();
 					clear_pixel_matrices(false); 
 					for (int it=0; it < potential_correction_iterations; it++) {
-						if (generate_and_invert_lensing_matrix(zsrc_i,src_i,true,true,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
+						if (generate_and_invert_lensing_matrix_delaunay(zsrc_i,src_i,true,true,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
 						clear_sparse_lensing_matrices();
 						clear_pixel_matrices(false); 
 					}
-					if (generate_and_invert_lensing_matrix(zsrc_i,src_i,true,adopt_final_sbgrad,tot_wtime,tot_wtime0,verbal)==false) return 2e30; // choose false for 4th arg if you want to reproduce the same first-order SB corrections (meaning it uses SB_grad from previous iteration in first order term)
+					if (generate_and_invert_lensing_matrix_delaunay(zsrc_i,src_i,true,adopt_final_sbgrad,tot_wtime,tot_wtime0,verbal)==false) return 2e30; // choose false for 4th arg if you want to reproduce the same first-order SB corrections (meaning it uses SB_grad from previous iteration in first order term)
 
 				}
 
@@ -13452,16 +13525,16 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					if ((*regparam_ptr) != 0) {
 						regterms = calculate_regularization_prior_term(regparam_ptr);
 						loglike_reg += regterms;
-						loglike_times_two += regterms;
+						logev_times_two += regterms;
 					}
 					if ((include_potential_perturbations) and ((*regparam_pot_ptr) != 0)) {
 						regterms = calculate_regularization_prior_term(regparam_pot_ptr,true);
 						loglike_reg += regterms;
-						loglike_times_two += regterms;
+						logev_times_two += regterms;
 					}
 
-					if (!use_covariance_matrix) loglike_times_two += Fmatrix_log_determinant;
-					else loglike_times_two += Gmatrix_log_determinant;
+					if (!use_covariance_matrix) logev_times_two += Fmatrix_log_determinant;
+					else logev_times_two += Gmatrix_log_determinant;
 				}
 				clear_pixel_matrices();
 			}
@@ -13511,14 +13584,14 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		// Shapelet_Source mode
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
-			if (at_least_one_foreground_src) {
-				assign_foreground_mappings(zsrc_i);
+			assign_foreground_mappings(zsrc_i); // note, this is done even if there is no foreground "source" object; foreground sb vector just has all elements equal zero
+			if ((at_least_one_foreground_src) or (at_least_one_lensed_nonshapelet_src)) {
 				if (!ignore_foreground_in_chisq) {
 					calculate_foreground_pixel_surface_brightness(zsrc_i);
 					store_foreground_pixel_surface_brightness(zsrc_i);
 				}
 			} else {
-				image_pixel_grids[zsrc_i]->set_zero_lensed_surface_brightness();
+				image_pixel_grids[zsrc_i]->set_zero_foreground_surface_brightness();
 			}
 			int i_shapelet = -1;
 			if ((n_sb > 0) and ((auto_shapelet_scaling) or (auto_shapelet_center))) {
@@ -13541,7 +13614,9 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 					}
 				}
 			}
-			sb_list[i_shapelet]->get_regularization_param_ptr(regparam_ptr);
+			if (i_shapelet >= 0) {
+				sb_list[i_shapelet]->get_regularization_param_ptr(regparam_ptr);
+			}
 			initialize_pixel_matrices_shapelets(zsrc_i,verbal);
 			if ((mpi_id==0) and (verbal)) {
 				cout << "Number of active image pixels: " << image_npixels << endl;
@@ -13581,17 +13656,17 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				image_pixel_grids[zsrc_i]->add_point_images(point_image_surface_brightness,image_pixel_grids[zsrc_i]->n_active_pixels);
 			}
 
-			//cout << "LOGLIKE0: " << loglike_times_two << endl;
+			//cout << "LOGLIKE0: " << logev_times_two << endl;
 			if ((regularization_method != None) and (source_npixels > 0)) {
 				if ((*regparam_ptr) != zsrc_i) {
 					regterms = calculate_regularization_prior_term(regparam_ptr);
 					//loglike_reg += calculate_regularization_prior_term();
 					loglike_reg += regterms;
-					loglike_times_two += regterms;
+					logev_times_two += regterms;
 				}
-				loglike_times_two += Fmatrix_log_determinant;
+				logev_times_two += Fmatrix_log_determinant;
 			}
-			//cout << "LOGLIKE: " << loglike_times_two << " Flogdet=" << Fmatrix_log_determinant << " regterms=" << regterms << " sum=" << (Fmatrix_log_determinant+regterms) << endl;
+			//cout << "LOGLIKE: " << logev_times_two << " Flogdet=" << Fmatrix_log_determinant << " regterms=" << regterms << " sum=" << (Fmatrix_log_determinant+regterms) << endl;
 			clear_pixel_matrices();
 		}
 
@@ -13654,7 +13729,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 		chisq0_zsrc = 0;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if ((image_pixel_grid->pixel_in_mask[i][j]) or ((include_foreground_sb) and (image_pixel_data->foreground_mask_data[i][j]))) {
+				if ((image_pixel_grid->pixel_in_mask[i][j]) or ((include_foreground_sbmask) and (image_pixel_data->foreground_mask_data[i][j]))) {
 					n_data_pixels++;
 					if (use_noise_map) cov_inverse = image_pixel_data->covinv_map[i][j];
 					if ((image_pixel_grid->pixel_in_mask[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
@@ -13679,7 +13754,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			}
 		}
 		chisq0 += chisq0_zsrc;
-		loglike_times_two += chisq0_zsrc; // loglike_times_two includes the prior terms
+		logev_times_two += chisq0_zsrc; // logev_times_two includes the prior terms
 
 		int n_tot_pixels;
 		if (include_foreground_sb) n_tot_pixels = image_npixels_fgmask;
@@ -13701,12 +13776,12 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			// Need to improve this when using noise map!
 			if (use_noise_map) {
 				for (i=0; i < image_npixels; i++) {
-					loglike_times_two -= log(imgpixel_covinv_vector[i]); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
+					logev_times_two -= log(imgpixel_covinv_vector[i]); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
 				}
 			} else {
-				loglike_times_two -= n_data_pixels*log(cov_inverse); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
+				logev_times_two -= n_data_pixels*log(cov_inverse); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
 			}
-			loglike_times_two += n_data_pixels*log(M_2PI);
+			logev_times_two += n_data_pixels*log(M_2PI);
 		}
 		if ((mpi_id==0) and (verbal)) {
 			if ((source_npixels > 0) and (regularization_method != None)) {
@@ -13721,7 +13796,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 			if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
 			if (pixel_avg_n_images < n_image_threshold) {
 				chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,40) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
-				loglike_times_two += chisq_penalty;
+				logev_times_two += chisq_penalty;
 				if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_images << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 			}
 		}
@@ -13825,7 +13900,7 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 				double chisq_penalty;
 				sb_outside_window = true;
 				chisq_penalty = pow(1+abs((max_external_sb-outside_sb_threshold)/outside_sb_threshold),60) - 1.0;
-				loglike_times_two += chisq_penalty;
+				logev_times_two += chisq_penalty;
 				if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << outside_sb_threshold << ") has been found outside the selected fit region at pixel (" << image_pixel_grids[zsrc_i]->center_pts[isb][jsb][0] << "," << image_pixel_grids[zsrc_i]->center_pts[isb][jsb][1] << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 			}
 			image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),false,assigned_mask[zsrc_i],false);
@@ -13837,11 +13912,11 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	if (((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) and (source_npixels > 0))
 	{
 		if ((group_id==0) and (logfile.is_open())) {
-			if (sb_outside_window) logfile << " -2*log(ev)=" << loglike_times_two << " (no priors; SB produced outside window)" << endl;
-			else logfile << " -2*log(ev)=" << loglike_times_two << " (no priors)" << endl;
+			if (sb_outside_window) logfile << " -2*log(ev)=" << logev_times_two << " (no priors; SB produced outside window)" << endl;
+			else logfile << " -2*log(ev)=" << logev_times_two << " (no priors)" << endl;
 		}
 		if ((mpi_id==0) and (verbal)) {
-			cout << "-2*log(ev)=" << loglike_times_two << " (a.k.a. 'chisq_pix')" << endl;
+			cout << "-2*log(ev)=" << logev_times_two << " (a.k.a. 'chisq_pix')" << endl;
 		}
 	}
 	if ((include_noise_term_in_loglike) and (regularization_method != None) and (source_fit_mode != Parameterized_Source)) {
@@ -13858,10 +13933,10 @@ double QLens::invert_image_surface_brightness_map(double &chisq0, const bool ver
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) clear_sparse_lensing_matrices();
 	regparam_ptr = NULL;
 
-	return loglike_times_two;
+	return logev_times_two;
 }
 
-bool QLens::generate_and_invert_lensing_matrix(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal)
+bool QLens::generate_and_invert_lensing_matrix_delaunay(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal)
 {
 	if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
 	if (assign_pixel_mappings(zsrc_i,potential_perturbations,verbal)==false) {

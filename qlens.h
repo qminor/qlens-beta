@@ -898,7 +898,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int psf_npixels_x, psf_npixels_y;
 	int supersampled_psf_npixels_x, supersampled_psf_npixels_y;
 	double psf_threshold, psf_ptsrc_threshold;
-	int psf_ptsrc_nsplit; // allows for subpixel PSF
+	int ptimg_nsplit; // allows for subpixel PSF even if supersampling is not being used for all pixels
 
 	double Fmatrix_log_determinant, Rmatrix_log_determinant, Rmatrix_pot_log_determinant;
 	double Gmatrix_log_determinant;
@@ -954,8 +954,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void store_foreground_pixel_surface_brightness(const int zsrc_i=-1);
 	void vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root, const int zsrc_i=-1);
-	double invert_image_surface_brightness_map(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
-	bool generate_and_invert_lensing_matrix(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
+	double pixel_log_evidence_times_two(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
+	bool generate_and_invert_lensing_matrix_delaunay(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
 
 	bool load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal, const bool zero_verbal = false);

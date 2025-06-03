@@ -12776,15 +12776,15 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Point source PSF input threshold = " << psf_ptsrc_threshold << endl;
 			} else Complain("can only specify up to one argument for point source PSF input threshold");
 		}
-		else if (words[0]=="psf_ptsrc_nsplit")
+		else if (words[0]=="ptimg_nsplit")
 		{
 			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
 			if (nwords == 2) {
 				int nsp;
-				if (!(ws[1] >> nsp)) Complain("invalid number of point source PSF pixel splittings");
-				psf_ptsrc_nsplit = nsp;
+				if (!(ws[1] >> nsp)) Complain("invalid number of point image PSF pixel splittings");
+				ptimg_nsplit = nsp;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "default number of point source PSF pixel splittings = " << psf_ptsrc_nsplit << endl;
+				if (mpi_id==0) cout << "default number of point image PSF pixel splittings = " << ptimg_nsplit << endl;
 			} else Complain("must specify either zero or one argument (default number of point source PSF pixel splittings)");
 		}
 		else if (words[0]=="fft_convolution")

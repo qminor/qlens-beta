@@ -13096,7 +13096,7 @@ void ImagePixelGrid::set_zero_foreground_surface_brightness()
 	}
 }
 
-void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const bool lensed_sources_only, const bool include_first_order_corrections, const bool show_only_first_order_corrections)
+void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const bool lensed_sources_only, const bool include_first_order_corrections, const bool show_only_first_order_corrections, const bool omit_lensed_nonshapelet_sources)
 {
 	if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid == NULL)) die("No Delaunay source grid has been created");
 	if ((source_fit_mode==Cartesian_Source) and (cartesian_srcgrid == NULL)) die("No Delaunay source grid has been created");
@@ -13382,7 +13382,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
 							for (int k=0; k < lens->n_sb; k++) {
 								if ((lens->sb_list[k]->is_lensed) and (lens->sbprofile_redshift_idx[k]==src_redshift_index)) {
-									if (!foreground_only) {
+									if ((!foreground_only) and ((!omit_lensed_nonshapelet_sources) or (lens->sb_list[k]->sbtype==SHAPELET))) {
 										sb = lens->sb_list[k]->surface_brightness(center_srcpt[subcell_index][0],center_srcpt[subcell_index][1]);
 									}
 								} else if ((!lensed_sources_only) and (!lens->sb_list[k]->is_lensed) and (src_redshift_index==0)) { // this is ugly. Should just generate a list (near the beginning of this function) of which sources will be used!
@@ -13432,7 +13432,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 				for (i=0; i < x_N; i++) {
 					for (int k=0; k < lens->n_sb; k++) {
 						if ((lens->sb_list[k]->is_lensed) and (lens->sbprofile_redshift_idx[k]==src_redshift_index)) { // this is ugly. Should just generate a list (near the beginning of this function) of which sources will be used!
-							if (!foreground_only) {
+							if ((!foreground_only) and ((!omit_lensed_nonshapelet_sources) or (lens->sb_list[k]->sbtype==SHAPELET))) {
 								if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
 								else {
 									noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
@@ -13462,8 +13462,6 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 	}
 #endif
 }
-
-
 
 void ImagePixelGrid::find_point_images(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap_in, const bool is_lensed, const bool verbal)
 {
@@ -13615,7 +13613,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 				image_candidates[imgpt_i].pos[0] = ((*vertex1)[0] + (*vertex2)[0] + (*vertex3)[0])/3;
 				image_candidates[imgpt_i].pos[1] = ((*vertex1)[1] + (*vertex2)[1] + (*vertex3)[1])/3;
 				// For now, just don't bother with central image points when using a pixel image--it only causes trouble in the form of duplicate images
-				//if (!lens->include_central_image) {
+				//if (!lens->include_central_image) 
 				if (*twist_type==0) { // central images are unlikely to be highly magnified near a critical curve, so twisting is unlikely in that case
 					kap = lens->kappa(image_candidates[imgpt_i].pos,imggrid_zfactors,imggrid_betafactors);
 					side1 = corner_pts[img_i][img_j+1] - corner_pts[img_i][img_j];
@@ -13636,7 +13634,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 			} else {
 				image_candidates[imgpt_i].pos[0] = ((*vertex3)[0] + (*vertex4)[0] + (*vertex5)[0])/3;
 				image_candidates[imgpt_i].pos[1] = ((*vertex3)[1] + (*vertex4)[1] + (*vertex5)[1])/3;
-				//if (!lens->include_central_image) {
+				//if (!lens->include_central_image) 
 				if (*twist_type==0) { // central images are unlikely to be highly magnified near a critical curve, so twisting is unlikely in that case
 					kap = lens->kappa(image_candidates[imgpt_i].pos,imggrid_zfactors,imggrid_betafactors);
 					//if (kap > 1) cout << "CENTRAL IMAGE? candidate pos=" << image_candidates[imgpt_i].pos[0] << "," << image_candidates[imgpt_i].pos[1] << endl;
@@ -13777,7 +13775,7 @@ void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *pt
 {
 	int nx_half, ny_half;
 	double normfac, sigx, sigy;
-	int nsplit = lens->psf_ptsrc_nsplit;
+	int nsplit = lens->ptimg_nsplit;
 	int nsubpix = nsplit*nsplit;
 	if (lens->use_input_psf_matrix) {
 		if (lens->psf_matrix == NULL) return;
@@ -14599,7 +14597,8 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 	//if (amplitude_vector != NULL) die("source surface brightness vector already initialized");
 	vectorize_image_pixel_surface_brightness(zsrc_i, true);
 	count_shapelet_npixels(zsrc_i);
-	n_amps = source_npixels;
+	source_and_lens_npixels = source_npixels; // it's possible one could add shapelet potential corrections later, but probably not worth doing
+	n_amps = source_and_lens_npixels;
 	if (include_imgfluxes_in_inversion) {
 		for (int i=0; i < n_ptsrc; i++) {
 			n_amps += ptsrc_list[i]->images.size(); // in this case, source amplitudes include point image amplitudes as well as pixel values
@@ -17563,9 +17562,29 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 		wtime0 = omp_get_wtime();
 	}
 #endif
+	bool at_least_one_shapelet = false;
+	for (int i=0; i < n_sb; i++) {
+		if ((sb_list[i]->sbtype==SHAPELET) and ((zsrc_i<0) or (sbprofile_redshift_idx[i]==zsrc_i))) {
+			at_least_one_shapelet = true;
+			break;
+		}
+	}
+
 	double *regparam, *regparam_pot;
 	if (source_fit_mode==Delaunay_Source) regparam = &(image_pixel_grid->delaunay_srcgrid->regparam);
 	else if (source_fit_mode==Cartesian_Source) regparam = &(image_pixel_grid->cartesian_srcgrid->regparam);
+	else if (source_fit_mode==Shapelet_Source) {
+		int shapelet_i = -1;
+		for (int i=0; i < n_sb; i++) {
+			if ((sb_list[i]->sbtype==SHAPELET) and ((zsrc_i<0) or (sbprofile_redshift_idx[i]==zsrc_i))) {
+				shapelet_i = i;
+				break;
+			}
+		}
+
+		if (shapelet_i >= 0) sb_list[shapelet_i]->get_regularization_param_ptr(regparam);
+		else regparam = NULL;
+	}
 	else die("unknown source pixellation mode");
 	if ((potential_perturbations) and (image_pixel_grid->lensgrid != NULL)) regparam_pot = &(image_pixel_grid->lensgrid->regparam);
 

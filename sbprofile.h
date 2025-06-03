@@ -29,6 +29,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	friend class SPLE_Lens;
 	friend class dPIE_Lens;
 	friend class NFW;
+	friend class ImagePixelGrid;
 	friend struct ImagePixelData;
 	private:
 	Spline sb_spline;

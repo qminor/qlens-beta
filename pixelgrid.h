@@ -636,7 +636,7 @@ class ImagePixelGrid : private Sort
 	void set_lensgrid(LensPixelGrid* gridptr) { lensgrid = gridptr; }
 	void find_optimal_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
-	void find_surface_brightness(const bool foreground_only = false, const bool lensed_sources_only = false, const bool include_first_order_corrections = false, const bool show_only_first_order_corrections = false);
+	void find_surface_brightness(const bool foreground_only = false, const bool lensed_sources_only = false, const bool include_first_order_corrections = false, const bool show_only_first_order_corrections = false, const bool omit_lensed_nonshapelet_sources = false);
 	void set_zero_lensed_surface_brightness();
 	void set_zero_foreground_surface_brightness();
 
