@@ -331,7 +331,7 @@ QLens::QLens() : UCMC(), ModelParams()
 
 	source_fit_mode = Point_Source;
 	use_ansi_characters = false;
-	chisq_tolerance = 1e-3;
+	chisq_tolerance = 1e-4;
 	//chisqtol_lumreg = 1e-3;
 	lumreg_max_it = 0;
 	//lumreg_max_it_final = 20;
