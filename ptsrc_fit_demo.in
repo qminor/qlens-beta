@@ -18,10 +18,10 @@ split_imgpixels on
 ptimg_nsplit 5
 #inversion_method dense
 
-#sbmap set_all_pixels             # The following commands are for creating your own mask
-#sbmap unset_low_sn_pixels 0.005  # This "masks out" pixels that have surface brightness smaller than 0.015
-#sbmap trim_mask_windows 4.0      # Removes mask "windows" (regions of contiguous pixels within mask) that don't have SB greater than 4*noise
-#sbmap set_neighbor_pixels        # Includes neighbor pixels for every pixel in mask (i.e. expands mask by one pixel length in all directions)
+sbmap set_all_pixels             # The following commands are for creating your own mask
+sbmap unset_low_sn_pixels 0.08  # This "masks out" pixels that have surface brightness smaller than 0.015
+sbmap trim_mask_windows 4.0      # Removes mask "windows" (regions of contiguous pixels within mask) that don't have SB greater than 4*noise
+sbmap set_neighbor_pixels 2        # Includes neighbor pixels for every pixel in mask (i.e. expands mask by one pixel length in all directions)
 
 #optimize_regparam on     # Optimize regularization parameter instead of varying as a free parameter
 #regparam_minlog -5

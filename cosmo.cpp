@@ -257,7 +257,7 @@ int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double ne
 	}
 
 	 spline_comoving_distance();
-	 rms_tophat_spline();
+	 //rms_tophat_spline();
 
 	 return qwarn;
 }
