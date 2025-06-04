@@ -10799,6 +10799,10 @@ bool QLens::output_coolest_files(const string filename)
 				Json::Value point_estimate;
 				param_val = lensptr->get_parameter(j);
 				if (lensptr->paramnames[j]=="alpha") param_val += 1; // from 2D power index to 3D power index	
+				if (lensptr->paramnames[j]=="theta") {
+					while (param_val > 90) param_val -= 180;
+					while (param_val < -90) param_val += 180;
+				}
 				point_estimate["value"] = param_val;
 				if ((lensptr->paramnames[j]=="s") and (param_val==0)) {
 					name = "PEMD";
