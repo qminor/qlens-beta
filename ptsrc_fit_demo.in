@@ -48,7 +48,7 @@ fit source sersic 20 0.10 1.5 1 0 0.014 0.05
 imgdata read sim_ptsrc_imgdata.dat   # this will automatically create a ptsrc object at the correct redshift for this file
 ptsrc update 0 xsrc=0.014 ysrc=0.05
 
-invert_imgflux on
+invert_imgflux off
 time_delays on
 chisq_time_delays on
 fit transform s0_src log

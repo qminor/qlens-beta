@@ -25,7 +25,7 @@
 using namespace std;
 
 #ifdef USE_COOLEST
-#include "json.h"
+#include "json/json.h"
 #include <CCfits/CCfits>
 #endif
 
