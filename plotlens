@@ -176,13 +176,14 @@ if [[ $TITLE != "" ]]; then
 	fi
 fi
 
-SETTERM="$SETTERM\nset sample 30000"
+SETTERM="$SETTERM\nset sample 30000\nset xrange [:] noextend; set yrange [:] noextend"
 
 if [[ $COMMAND == "imgpixel" ]]; then
 	if [[ $INCLUDE_CONTOURS == 1 ]]; then
 		COMMAND="imgpixel_nocc"
 	fi
 fi
+
 
 if [[ $COMMAND == "crit" ]]
 then

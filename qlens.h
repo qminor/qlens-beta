@@ -1200,6 +1200,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_source_object(const char *splinefile, const bool is_lensed, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void add_multipole_source(const bool is_lensed, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
 	void add_shapelet_source(const bool is_lensed, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
+	void add_mge_source(const bool is_lensed, const double zsrc_in, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode = 0);
+
 
 	void remove_source_object(int sb_number);
 	void clear_source_objects();

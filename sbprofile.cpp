@@ -2118,13 +2118,13 @@ double SB_Profile::profile_fit_loglike_bspline(double *params)
 /*
 double SB_Profile::calculate_Lmatrix_element(double x, double y, const int amp_index)
 {
-	return 0.0; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+	return 0.0; // this is only used in the derived classes Shapelet, MGE
 }
 */
 
 void SB_Profile::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight)
 {
-	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+	return; // this is only used in the derived classes Shapelet, MGE
 }
 
 /*
@@ -2151,7 +2151,7 @@ void SB_Profile::get_regularization_param_ptr(double* regparam_ptr)
 
 void SB_Profile::update_amplitudes(double*& ampvec)
 {
-	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+	return; // this is only used in the derived classes Shapelet, MGE
 }
 
 double SB_Profile::surface_brightness_zeroth_order(double x, double y)
@@ -2212,6 +2212,7 @@ void SB_Profile::print_parameters(const double zs)
 	if (parenthesis) divider = ",";
 	
 	if (sbtype==SHAPELET) { cout << divider << "n_shapelets=" << (*indxptr); parenthesis = true; }
+	else if (sbtype==MULTI_GAUSSIAN_EXPANSION) { cout << divider << "n_gaussians=" << (*indxptr); parenthesis = true; }
 	if (zoom_subgridding) { cout << divider << "zoom"; parenthesis = true; }
 	if (parenthesis) cout << ")";
 	cout << ": ";
@@ -3357,6 +3358,153 @@ double Shapelet::length_scale()
 	if (truncate_at_3sigma) return sig;
 	return sig*sqrt(n_shapelets);
 }
+
+
+MGE::MGE(const double amp0, const double sig_i_in, const double sig_f_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const int parameter_mode_in, QLens* qlens_in)
+{
+	if (nn <= 0) die("must have n_gaussians > 0");
+	model_name = "mge";
+	sbtype = MULTI_GAUSSIAN_EXPANSION;
+	setup_base_source_properties(4,1,false,parameter_mode_in);
+	qlens = qlens_in;
+	logsig_i = log(sig_i_in)/ln10;
+	logsig_f = log(sig_f_in)/ln10;
+	n_gaussians = nn;
+	indxptr = &n_gaussians;
+	amps = new double[n_gaussians];
+	sigs = new double[n_gaussians];
+	int i;
+	double logsig, logsigstep = (logsig_f - logsig_i) / (n_gaussians-1);
+	for (i=0, logsig = logsig_i; i < n_gaussians; i++, logsig += logsigstep) {
+		sigs[i] = pow(10,logsig);
+		amps[i] = 0;
+	}
+	amps[0] = amp0;
+
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
+}
+
+MGE::MGE(const MGE* sb_in)
+{
+	n_gaussians = sb_in->n_gaussians;
+	logsig_i = sb_in->logsig_i;
+	logsig_f = sb_in->logsig_f;
+	indxptr = &n_gaussians;
+	amps = new double[n_gaussians];
+	sigs = new double[n_gaussians];
+	for (int i=0; i < n_gaussians; i++) {
+		amps[i] = sb_in->amps[i];
+		sigs[i] = sb_in->sigs[i];
+	}
+	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void MGE::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+}
+
+void MGE::assign_paramnames()
+{
+	int indx=0;
+	set_geometric_paramnames(indx);
+}
+
+void MGE::assign_param_pointers()
+{
+	int indx=0;
+	set_geometric_param_pointers(indx);
+}
+
+void MGE::set_auto_stepsizes()
+{
+	int indx=0;
+	set_geometric_param_auto_stepsizes(indx);
+}
+
+void MGE::set_auto_ranges()
+{
+	int indx=0;
+	set_geometric_param_auto_ranges(indx);
+}
+
+double MGE::sb_rsq(const double rsq)
+{
+	double sb=0;
+	for (int i=0; i < n_gaussians; i++) {
+		sb += amps[i]*exp(-rsq/SQR(sigs[i])/2)/M_SQRT_2PI/sigs[i];
+	}
+	return sb;
+}
+
+void MGE::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight)
+{
+	x -= x_center;
+	y -= y_center;
+	if (theta != 0) rotate(x,y);
+
+	double xisq = x*x + y*y/(q*q);
+	for (int i=0; i < n_gaussians; i++) {
+		*(Lmatrix_elements++) += weight*exp(-xisq/SQR(sigs[i])/2)/M_SQRT_2PI/sigs[i];
+	}
+}
+
+void MGE::update_amplitudes(double*& ampvec)
+{
+	int i,j,k=0;
+
+	for (i=0; i < n_gaussians; i++) {
+		amps[i] = *(ampvec++);
+	}
+}
+
+/*
+void MGE::get_amplitudes(double *ampvec)
+{
+	int i,j,k=0;
+	for (i=0; i < n_gaussians; i++) {
+		for (j=0; j < n_gaussians; j++) {
+			ampvec[k++] = amps[i][j];
+		}
+	}
+}
+*/
+
+void MGE::update_indxptr(const int newval)
+{
+	// indxptr points to n_gaussians
+	int old_nn = n_gaussians;
+	n_gaussians = newval;
+	indxptr = &n_gaussians;
+
+	double *newamps = new double[n_gaussians];
+	double *newsigs = new double[n_gaussians];
+	int i;
+	double logsig, logsigstep = (logsig_f - logsig_i) / (n_gaussians-1);
+	for (i=0, logsig = logsig_i; i < n_gaussians; i++, logsig += logsigstep) {
+		newsigs[i] = pow(10,logsig);
+		newamps[i] = 0;
+	}
+	if (amps != NULL) delete[] amps;
+	if (sigs != NULL) delete[] sigs;
+	amps = newamps;
+	sigs = newsigs;
+}
+
+double MGE::window_rmax() // used to define the window size for pixellated surface brightness maps
+{
+	return 3*sigs[n_gaussians-1];
+}
+
+double MGE::length_scale()
+{
+	return sigs[n_gaussians-1];
+}
+
+
+
 
 SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine, QLens* qlens_in)
 {

@@ -11,6 +11,10 @@
 #include <functional>
 #include <stdio.h>
 
+#ifdef USE_EIGEN
+#include "Cholesky"
+#endif
+
 #ifdef USE_MKL
 #include "mkl.h"
 #include "mkl_spblas.h"

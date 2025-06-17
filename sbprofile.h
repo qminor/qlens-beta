@@ -17,7 +17,7 @@ struct ImagePixelData;
 class LensProfile;
 class QLens;
 
-enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, dpie, nfw_SOURCE, SHAPELET, TOPHAT, SB_MULTIPOLE };
+enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, dpie, nfw_SOURCE, SHAPELET, MULTI_GAUSSIAN_EXPANSION, TOPHAT, SB_MULTIPOLE };
 
 class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 {
@@ -508,6 +508,42 @@ class Shapelet : public SB_Profile
 	//void get_amplitudes(double *ampvec);
 	double get_scale_parameter();
 	void update_scale_parameter(const double scale);
+	void update_indxptr(const int newval);
+
+	double window_rmax();
+	double length_scale();
+};
+
+class MGE : public SB_Profile
+{
+	private:
+	int n_gaussians;
+	double *amps; // shapelet amplitudes
+	double *sigs; // shapelet widths
+	double logsig_i, logsig_f;
+
+	double sb_rsq(const double);
+
+	public:
+	MGE() : SB_Profile() { amps = NULL; sigs = NULL; }
+	MGE(const double amp0, const double sig_i, const double sig_f, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const int parameter_mode_in, QLens* qlens_in);
+	MGE(const MGE* sb_in);
+	~MGE() {
+		if (amps != NULL) {
+			delete[] amps;
+			delete[] sigs;
+		}
+	}
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
+	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
+	void update_amplitudes(double*& ampvec);
+	//void get_amplitudes(double *ampvec);
 	void update_indxptr(const int newval);
 
 	double window_rmax();

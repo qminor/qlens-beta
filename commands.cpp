@@ -18,6 +18,12 @@
 #include <readline/history.h>
 #endif
 
+#ifdef USE_EIGEN
+#include "Cholesky"
+using Eigen::MatrixXd;
+using Eigen::VectorXd;
+#endif
+
 #include <unistd.h>
 using namespace std;
 
@@ -5959,6 +5965,99 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 				else Complain("shapelet requires at least 3 parameters (amp00, sig, q)");
+			}
+			else if (words[1]=="mge")
+			{
+				int nmax = -1;
+				double amp0 = 0.1;
+				bool amp_specified = false;
+				for (int j=nwords-1; j >= 2; j--) {
+					if (words[j].find("n=")==0) {
+						if (update_parameters) Complain("n=# argument cannot be specified when updating " << words[1]);
+						string nstr = words[j].substr(2);
+						stringstream nstream;
+						nstream << nstr;
+						if (!(nstream >> nmax)) Complain("invalid nmax value");
+						remove_word(j);
+					} else if (words[j].find("amp0=")==0) {
+						if (update_parameters) Complain("amp0=# argument cannot be specified when updating " << words[1]);
+						amp_specified = true;
+						string astr = words[j].substr(5);
+						stringstream astream;
+						astream << astr;
+						if (!(astream >> amp0)) Complain("invalid mge m=0 amplitude value");
+						remove_word(j);
+					}
+				}
+				int pi = 2;
+				if (nmax == -1) Complain("must specify nmax via 'n=#' argument");
+				if (nwords > 8) Complain("more than 6 parameters not allowed for model mge");
+				if (nmax <= 0) Complain("nmax cannot be negative");
+				if (nwords >= 6) {
+					double sig_i, sig_f;
+					double q, theta = 0, xc = 0, yc = 0;
+					if (!(ws[pi++] >> sig_i)) Complain("invalid sigma parameter for model mge");
+					if (!(ws[pi++] >> sig_f)) Complain("invalid sigma parameter for model mge");
+					if (!(ws[pi++] >> q)) Complain("invalid q parameter for model mge");
+					if (nwords >= (pi+1)) {
+						if (!(ws[pi++] >> theta)) Complain("invalid theta parameter for model mge");
+						if (nwords == (pi+1)) {
+							if (words[pi].find("anchor_center=")==0) {
+								string anchorstr = words[pi].substr(14);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
+								if (anchornum >= n_sb) Complain("source anchor number does not exist");
+								anchor_source_center = true;
+							} else if (words[pi].find("anchor_lens_center=")==0) {
+								string anchorstr = words[pi].substr(19);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
+								if (anchornum >= nlens) Complain("lens anchor number does not exist");
+								anchor_center_to_lens = true;
+							} else Complain("must specify both xc and yc, or 'anchor_center=#' if anchoring, for model Shapelet");
+						} else if (nwords == (pi+2)) {
+							if (!(ws[pi++] >> xc)) Complain("invalid x-center parameter for model mge");
+							if (!(ws[pi++] >> yc)) Complain("invalid y-center parameter for model mge");
+						}
+					}
+					default_nparams = 6;
+					nparams_to_vary = default_nparams;
+					param_vals.input(nparams_to_vary);
+					//param_vals[0]=amp0; // currently cannot vary amp0 as a free parameter (it would have to be removed from the source amplitudes when inverting)
+					int indx=0;
+					param_vals[indx++]=sig_i;
+					param_vals[indx++]=sig_f;
+					param_vals[indx++]=q;
+					param_vals[indx++]=theta;
+					param_vals[indx++]=xc;
+					param_vals[indx++]=yc;
+
+					if (vary_parameters) {
+						if (read_command(false)==false) return;
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for five parameters (sigma,q,theta,xc,yc) in model mge, plus optional c0/rfsc parameter or fourier modes");
+						vary_flags.input(nparams_to_vary);
+						bool invalid_params = false;
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
+						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
+					}
+
+					if (update_parameters) {
+						sb_list[src_number]->update_parameters(param_vals.array());
+						if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of mge amplitudes may have changed, will redo FFT setup here
+					} else {
+						add_mge_source(is_lensed, zs_in, amp0, sig_i, sig_f, q, theta, xc, yc, nmax, pmode);
+						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
+						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
+						if (vary_parameters) {
+							if (set_sb_vary_parameters(n_sb-1,vary_flags)==false) Complain("could not vary parameters for model mge");
+						}
+						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
+					}
+				}
+				else Complain("mge requires at least 4 parameters (amp0, sig_i, sig_f, q)");
 			}
 			else if (words[1]=="sersic")
 			{
@@ -14862,12 +14961,29 @@ void QLens::process_commands(bool read_file)
 			if (Shear::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
-			if ((delaunay_srcgrids) and (delaunay_srcgrids[0])) {
-				double qs,phi_s,xavg,yavg;
-				delaunay_srcgrids[0]->find_source_moments(200,qs,phi_s,xavg,yavg);
-				double phi_s_deg = phi_s*180.0/M_PI;
-				cout << "qs=" << qs << " phi_s=" << phi_s_deg << " degrees" << endl;
-			}
+#ifdef USE_EIGEN
+			MatrixXd A(2,2);
+			A(0,0) = 3;
+			A(0,1) = -1;
+			A(1,0) = 2.5;
+			A(1,1) = A(1,0) + A(0,1);
+			MatrixXd B(2,2);
+			B << 1, 5, 2, -4;
+			MatrixXd C(2,2);
+			C = A + B;
+			cout << C << endl;
+			VectorXd b(2);
+			b << 3, 2;
+			C = A*b;
+			cout << C << endl;
+#endif
+			//if ((delaunay_srcgrids) and (delaunay_srcgrids[0])) {
+				//double qs,phi_s,xavg,yavg;
+				//delaunay_srcgrids[0]->find_source_moments(200,qs,phi_s,xavg,yavg);
+				//double phi_s_deg = phi_s*180.0/M_PI;
+				//cout << "qs=" << qs << " phi_s=" << phi_s_deg << " degrees" << endl;
+			//}
+
 			//generate_supersampled_PSF_matrix();
 			/*
 			int iter = 20;

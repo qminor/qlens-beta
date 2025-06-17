@@ -2960,6 +2960,29 @@ void QLens::add_shapelet_source(const bool is_lensed, const double zsrc_in, cons
 	if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's has changed, will need to redo FFT setup
 }
 
+void QLens::add_mge_source(const bool is_lensed, const double zsrc_in, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode)
+{
+	SB_Profile** newlist = new SB_Profile*[n_sb+1];
+	int* new_sbprofile_redshift_idx = new int[n_sb+1];
+	if (n_sb > 0) {
+		for (int i=0; i < n_sb; i++) {
+			newlist[i] = sb_list[i];
+			new_sbprofile_redshift_idx[i] = sbprofile_redshift_idx[i];
+		}
+		delete[] sb_list;
+		delete[] sbprofile_redshift_idx;
+	}
+
+	newlist[n_sb] = new MGE(amp0, sig_i, sig_f, q, theta, xc, yc, nmax, pmode, this);
+	sbprofile_redshift_idx = new_sbprofile_redshift_idx;
+	double zsrc = (is_lensed) ? zsrc_in : -1;
+	add_new_extended_src_redshift(zsrc,n_sb,false);
+	n_sb++;
+	sb_list = newlist;
+	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's has changed, will need to redo FFT setup
+}
+
 void QLens::add_multipole_source(const bool is_lensed, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
@@ -9058,8 +9081,8 @@ void QLens::nested_sampling()
 	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
-		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		//string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
 		create_output_directory();
@@ -9160,8 +9183,8 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
-		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		//string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
 		create_output_directory();
@@ -9442,8 +9465,8 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
-		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		//string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
 		create_output_directory();
@@ -9663,8 +9686,8 @@ void QLens::chi_square_twalk()
 	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
-		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		//string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		create_output_directory();
 	}
 	if (!initialize_fitmodel(true)) {
@@ -13578,6 +13601,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 		}
 		if (save_sbweights_during_inversion) calculate_subpixel_sbweights(true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
 		if (n_ptsrc > 0) {
+			if (point_image_surface_brightness != NULL) delete[] point_image_surface_brightness;
 			point_image_surface_brightness = new double[image_npixels];
 			if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 			for (i=0; i < n_ptsrc; i++) {
