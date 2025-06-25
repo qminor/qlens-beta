@@ -60,9 +60,9 @@ chisqflux on            # This means we use the image fluxes in the fit (very us
 chisq_time_delays off   # Don't use time delays (this is the default; time delays are only available for certain quasar lenses)
 n_livepts = 1000       # This determines how well the nested sampler explores the parameter space;
 
+pause
 fit run   # FYI: you can interrupt the nested sampling at any time by pressing CTRL-C, e.g. if it is clearly not converging well
 #fit run -resume   # you can use this instead of the above line if a previous run got interrupted; it will continue where it left off
-pause
 
 fit use_bestfit
 fit chisq

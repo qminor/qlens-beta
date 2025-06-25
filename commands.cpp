@@ -5282,6 +5282,9 @@ void QLens::process_commands(bool read_file)
 			bool zoom = false;
 			double c0val = 0;
 			double rtval = 0;
+			int nmax = -1; // for shapelets and MGE's
+			double sig_i = 0.02; // for MGE's
+			double sig_f = 3; // for MGE's
 
 			const int nmax_anchor = 100;
 			ParamAnchor parameter_anchors[nmax_anchor]; // number of anchors per source can't exceed 100 (which will never happen!)
@@ -5340,6 +5343,31 @@ void QLens::process_commands(bool read_file)
 					ws = new_ws;
 				} else Complain("must specify a source number to update, followed by parameters");
 			} else {
+				for (int j=nwords-1; j >= 2; j--) {
+					if (words[j].find("n=")==0) {
+						if (update_parameters) Complain("n=# argument cannot be specified when updating " << words[1]);
+						string nstr = words[j].substr(2);
+						stringstream nstream;
+						nstream << nstr;
+						if (!(nstream >> nmax)) Complain("invalid nmax value");
+						remove_word(j);
+					} else if (words[j].find("si=")==0) {
+						if (update_parameters) Complain("si=# argument cannot be specified when updating " << words[1]);
+						string astr = words[j].substr(3);
+						stringstream astream;
+						astream << astr;
+						if (!(astream >> sig_i)) Complain("invalid sig_i value");
+						remove_word(j);
+					} else if (words[j].find("sf=")==0) {
+						if (update_parameters) Complain("sf=# argument cannot be specified when updating " << words[1]);
+						string astr = words[j].substr(3);
+						stringstream astream;
+						astream << astr;
+						if (!(astream >> sig_f)) Complain("invalid sig_f value");
+						remove_word(j);
+					}
+				}
+
 				for (int i=2; i < nwords; i++) {
 					int pos;
 					if ((pos = words[i].find("emode=")) != string::npos) {
@@ -5869,20 +5897,12 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="shapelet")
 			{
-				int nmax = -1;
 				bool truncate = false;
 				double amp00 = 0.1;
 				bool amp_specified = false;
 				for (int j=nwords-1; j >= 2; j--) {
 					if (words[j]=="-truncate") {
 						truncate = true;
-						remove_word(j);
-					} else if (words[j].find("n=")==0) {
-						if (update_parameters) Complain("n=# argument cannot be specified when updating " << words[1]);
-						string nstr = words[j].substr(2);
-						stringstream nstream;
-						nstream << nstr;
-						if (!(nstream >> nmax)) Complain("invalid nmax value");
 						remove_word(j);
 					} else if (words[j].find("amp0=")==0) {
 						if (update_parameters) Complain("amp0=# argument cannot be specified when updating " << words[1]);
@@ -5968,36 +5988,14 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="mge")
 			{
-				int nmax = -1;
-				double amp0 = 0.1;
-				bool amp_specified = false;
-				for (int j=nwords-1; j >= 2; j--) {
-					if (words[j].find("n=")==0) {
-						if (update_parameters) Complain("n=# argument cannot be specified when updating " << words[1]);
-						string nstr = words[j].substr(2);
-						stringstream nstream;
-						nstream << nstr;
-						if (!(nstream >> nmax)) Complain("invalid nmax value");
-						remove_word(j);
-					} else if (words[j].find("amp0=")==0) {
-						if (update_parameters) Complain("amp0=# argument cannot be specified when updating " << words[1]);
-						amp_specified = true;
-						string astr = words[j].substr(5);
-						stringstream astream;
-						astream << astr;
-						if (!(astream >> amp0)) Complain("invalid mge m=0 amplitude value");
-						remove_word(j);
-					}
-				}
+				double amp0 = 10.0;
 				int pi = 2;
 				if (nmax == -1) Complain("must specify nmax via 'n=#' argument");
-				if (nwords > 8) Complain("more than 6 parameters not allowed for model mge");
+				if (nwords > 7) Complain("more than 6 parameters not allowed for model mge");
 				if (nmax <= 0) Complain("nmax cannot be negative");
-				if (nwords >= 6) {
-					double sig_i, sig_f;
-					double q, theta = 0, xc = 0, yc = 0;
-					if (!(ws[pi++] >> sig_i)) Complain("invalid sigma parameter for model mge");
-					if (!(ws[pi++] >> sig_f)) Complain("invalid sigma parameter for model mge");
+				if (nwords >= 5) {
+					double reg, q, theta = 0, xc = 0, yc = 0;
+					if (!(ws[pi++] >> reg)) Complain("invalid regularization parameter for model mge");
 					if (!(ws[pi++] >> q)) Complain("invalid q parameter for model mge");
 					if (nwords >= (pi+1)) {
 						if (!(ws[pi++] >> theta)) Complain("invalid theta parameter for model mge");
@@ -6022,13 +6020,12 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[pi++] >> yc)) Complain("invalid y-center parameter for model mge");
 						}
 					}
-					default_nparams = 6;
+					default_nparams = 5;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
 					//param_vals[0]=amp0; // currently cannot vary amp0 as a free parameter (it would have to be removed from the source amplitudes when inverting)
 					int indx=0;
-					param_vals[indx++]=sig_i;
-					param_vals[indx++]=sig_f;
+					param_vals[indx++]=reg;
 					param_vals[indx++]=q;
 					param_vals[indx++]=theta;
 					param_vals[indx++]=xc;
@@ -6036,7 +6033,7 @@ void QLens::process_commands(bool read_file)
 
 					if (vary_parameters) {
 						if (read_command(false)==false) return;
-						if (nwords != nparams_to_vary) Complain("Must specify vary flags for five parameters (sigma,q,theta,xc,yc) in model mge, plus optional c0/rfsc parameter or fourier modes");
+						if (nwords != nparams_to_vary) Complain("Must specify vary flags for four parameters (q,theta,xc,yc) in model mge, plus optional c0/rfsc parameter or fourier modes");
 						vary_flags.input(nparams_to_vary);
 						bool invalid_params = false;
 						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) invalid_params = true;
@@ -6047,17 +6044,22 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 						if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of mge amplitudes may have changed, will redo FFT setup here
 					} else {
-						add_mge_source(is_lensed, zs_in, amp0, sig_i, sig_f, q, theta, xc, yc, nmax, pmode);
+						add_mge_source(is_lensed, zs_in, reg, amp0, sig_i, sig_f, q, theta, xc, yc, nmax, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
+						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (vary_parameters) {
 							if (set_sb_vary_parameters(n_sb-1,vary_flags)==false) Complain("could not vary parameters for model mge");
 						}
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
+						if ((!is_lensed) and (!include_fgmask_in_inversion)) {
+							include_fgmask_in_inversion = true;
+							if (mpi_id==0) cout << "NOTE: Setting 'include_fgmask_in_inversion' to 'on', since foreground MGE is assume to use foreground mask" << endl;
+						}
 					}
 				}
-				else Complain("mge requires at least 4 parameters (amp0, sig_i, sig_f, q)");
+				else Complain("mge requires at least 5 parameters (sig_i, sig_f, regparam, q)");
 			}
 			else if (words[1]=="sersic")
 			{
@@ -10737,7 +10739,7 @@ void QLens::process_commands(bool read_file)
 				bool show_extended_mask = false;
 				bool show_foreground_mask = false;
 				bool exclude_ptimgs = false; // by default, we include point images if n_ptsrc > 0
-				if (include_extended_mask_in_inversion) show_extended_mask = true; // no reason not to show emask if we're including it in the inversion
+				if (include_fgmask_in_inversion) show_foreground_mask = true; // no reason not to show emask if we're including it in the inversion
 				bool plot_fits = false;
 				bool omit_source_plot = true; // changed this to false because it's annoying to have the source plot come out when you really just want e.g. residuals.
 				bool offload_to_data = false;
@@ -10867,11 +10869,15 @@ void QLens::process_commands(bool read_file)
 						Complain("must specify lens/source model first");
 					} else {
 						bool all_unlensed = true;
-						for (int i=0; i < n_sb; i++) if (sb_list[i]->is_lensed) all_unlensed = false;
+						bool at_least_one_mge = false;
+						for (int i=0; i < n_sb; i++) {
+							if (sb_list[i]->is_lensed) all_unlensed = false;
+							if (sb_list[i]->sbtype==MULTI_GAUSSIAN_EXPANSION) at_least_one_mge = true;
+						}
 						if (!all_unlensed) {
 							Complain("must specify lens model first, since lensed sources are present");
 						} else {
-							plot_foreground_only = true; // since there are only foreground sources
+							if (!at_least_one_mge) plot_foreground_only = true; // since there are only foreground sources
 							omit_cc = true;
 							show_cc = false;
 						}
@@ -10943,7 +10949,7 @@ void QLens::process_commands(bool read_file)
 					old_pnoise = background_pixel_noise;
 					background_pixel_noise = pnoise;
 				}
-				if ((include_extended_mask_in_inversion) and (mpi_id==0)) cout << "NOTE: Showing extended mask by default, since include_emask_in_chisq = true" << endl;
+				if ((include_fgmask_in_inversion) and (mpi_id==0)) cout << "NOTE: Showing foreground mask by default, since include_fgmask_in_chisq = true" << endl;
 				if ((show_cc) and (zsrc_i >= 0)) create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i],zsrc_i);
 				if (include_imgpts) {
 					if (!plot_images("sourcexy.in", "imgs.dat", false, verbal_mode)==true) Complain("could not create grid to plot images");
@@ -14123,13 +14129,13 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "# of neighbor pixels for padding foreground mask = " << fgmask_padding << endl;
 			} else Complain("must specify either zero or one argument for fgmask_padding");
 		}
-		else if (words[0]=="include_emask_in_chisq")
+		else if (words[0]=="include_fgmask_in_inversion")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Include extended mask in chisq & inversion (include_emask_in_chisq): " << display_switch(include_extended_mask_in_inversion) << endl;
+				if (mpi_id==0) cout << "Include foreground mask in inversion (include_fgmask_in_inversion): " << display_switch(include_fgmask_in_inversion) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'include_emask_in_chisq' command; must specify 'on' or 'off'");
-				set_switch(include_extended_mask_in_inversion,setword);
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'include_fgmask_in_inversion' command; must specify 'on' or 'off'");
+				set_switch(include_fgmask_in_inversion,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="include_noise_term_in_loglike")
@@ -14141,13 +14147,13 @@ void QLens::process_commands(bool read_file)
 				set_switch(include_noise_term_in_loglike,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="zero_sb_emask_prior")
+		else if (words[0]=="zero_lensed_sb_fgmask_prior")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Use zero SB prior for extended mask pixels: " << display_switch(zero_sb_extended_mask_prior) << endl;
+				if (mpi_id==0) cout << "Use zero SB prior for lensed sources in foreground mask pixels: " << display_switch(zero_sb_fgmask_prior) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'zero_sb_emask_prior' command; must specify 'on' or 'off'");
-				set_switch(zero_sb_extended_mask_prior,setword);
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'zero_lensed_sb_emask_prior' command; must specify 'on' or 'off'");
+				set_switch(zero_sb_fgmask_prior,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="zero_outside_border")

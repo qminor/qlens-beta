@@ -234,7 +234,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	virtual void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
 	virtual void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
 	virtual void update_amplitudes(double*& ampvec); // used by Shapelet subclass
-	virtual void get_regularization_param_ptr(double* regparam_ptr); // for source objects that are regularized
+	virtual void get_regularization_param_ptr(double*& regparam_ptr); // for source objects that are regularized
 	//virtual void get_amplitudes(double *ampvec); // used by Shapelet subclass
 	virtual void update_indxptr(const int newval);
 	virtual double surface_brightness_zeroth_order(double x, double y);
@@ -468,6 +468,7 @@ class NFW_Source : public SB_Profile
 
 class Shapelet : public SB_Profile
 {
+	friend class QLens;
 	private:
 	double sig; // sig is the average dispersion of the (0,0) shapelet which is Gaussian
 	double regparam; // regularization parameter for shapelets (if using)
@@ -502,7 +503,7 @@ class Shapelet : public SB_Profile
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
 	void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
 	void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
-	void get_regularization_param_ptr(double* regparam_ptr);
+	void get_regularization_param_ptr(double*& regparam_ptr);
 	double surface_brightness_zeroth_order(double x, double y);
 	void update_amplitudes(double*& ampvec);
 	//void get_amplitudes(double *ampvec);
@@ -516,17 +517,19 @@ class Shapelet : public SB_Profile
 
 class MGE : public SB_Profile
 {
+	friend class QLens;
 	private:
 	int n_gaussians;
 	double *amps; // shapelet amplitudes
 	double *sigs; // shapelet widths
 	double logsig_i, logsig_f;
+	double regparam; // regularization parameter for MGE
 
 	double sb_rsq(const double);
 
 	public:
 	MGE() : SB_Profile() { amps = NULL; sigs = NULL; }
-	MGE(const double amp0, const double sig_i, const double sig_f, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const int parameter_mode_in, QLens* qlens_in);
+	MGE(const double reg, const double amp0, const double sig_i, const double sig_f, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const int parameter_mode_in, QLens* qlens_in);
 	MGE(const MGE* sb_in);
 	~MGE() {
 		if (amps != NULL) {
@@ -542,6 +545,7 @@ class MGE : public SB_Profile
 	void set_auto_ranges();
 	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
+	void get_regularization_param_ptr(double*& regparam_ptr);
 	void update_amplitudes(double*& ampvec);
 	//void get_amplitudes(double *ampvec);
 	void update_indxptr(const int newval);

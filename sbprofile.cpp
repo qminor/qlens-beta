@@ -1055,7 +1055,7 @@ void SB_Profile::copy_parameter_anchors(const SB_Profile* sb_in)
 
 void SB_Profile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source)
 {
-	if (paramnum >= n_params) die("Parameter does not exist for this source");
+	if (paramnum >= n_params) die("Parameter %i does not exist for this source (nparams=%i)",paramnum,n_params);
 	if (anchor_paramnum >= param_anchor_source->n_params) die("Parameter does not exist for source you are anchoring to");
 	anchor_parameter_to_source[paramnum] = true;
 	parameter_anchor_source[paramnum] = param_anchor_source;
@@ -2144,7 +2144,7 @@ void SB_Profile::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmat
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
-void SB_Profile::get_regularization_param_ptr(double* regparam_ptr)
+void SB_Profile::get_regularization_param_ptr(double*& regparam_ptr)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
@@ -3286,7 +3286,7 @@ void Shapelet::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatri
 	Rmatrix_index[n] = indx;
 }
 
-void Shapelet::get_regularization_param_ptr(double* regparam_ptr)
+void Shapelet::get_regularization_param_ptr(double*& regparam_ptr)
 {
 	regparam_ptr = &regparam;
 }
@@ -3360,17 +3360,18 @@ double Shapelet::length_scale()
 }
 
 
-MGE::MGE(const double amp0, const double sig_i_in, const double sig_f_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const int parameter_mode_in, QLens* qlens_in)
+MGE::MGE(const double reg, const double amp0, const double sig_i_in, const double sig_f_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const int parameter_mode_in, QLens* qlens_in)
 {
 	if (nn <= 0) die("must have n_gaussians > 0");
 	model_name = "mge";
 	sbtype = MULTI_GAUSSIAN_EXPANSION;
-	setup_base_source_properties(4,1,false,parameter_mode_in);
+	setup_base_source_properties(5,1,false,parameter_mode_in);
 	qlens = qlens_in;
 	logsig_i = log(sig_i_in)/ln10;
 	logsig_f = log(sig_f_in)/ln10;
 	n_gaussians = nn;
 	indxptr = &n_gaussians;
+	regparam = reg;
 	amps = new double[n_gaussians];
 	sigs = new double[n_gaussians];
 	int i;
@@ -3391,6 +3392,7 @@ MGE::MGE(const MGE* sb_in)
 	logsig_i = sb_in->logsig_i;
 	logsig_f = sb_in->logsig_f;
 	indxptr = &n_gaussians;
+	regparam = sb_in->regparam;
 	amps = new double[n_gaussians];
 	sigs = new double[n_gaussians];
 	for (int i=0; i < n_gaussians; i++) {
@@ -3409,24 +3411,28 @@ void MGE::update_meta_parameters()
 void MGE::assign_paramnames()
 {
 	int indx=0;
+	paramnames[indx] = "regparam"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = ""; indx++;
 	set_geometric_paramnames(indx);
 }
 
 void MGE::assign_param_pointers()
 {
 	int indx=0;
+	param[indx++] = &regparam;
 	set_geometric_param_pointers(indx);
 }
 
 void MGE::set_auto_stepsizes()
 {
 	int indx=0;
+	stepsizes[indx++] = 0.3*regparam; // arbitrary
 	set_geometric_param_auto_stepsizes(indx);
 }
 
 void MGE::set_auto_ranges()
 {
 	int indx=0;
+	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++; // regparam
 	set_geometric_param_auto_ranges(indx);
 }
 
@@ -3451,12 +3457,18 @@ void MGE::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elemen
 	}
 }
 
+void MGE::get_regularization_param_ptr(double*& regparam_ptr)
+{
+	regparam_ptr = &regparam;
+}
+
 void MGE::update_amplitudes(double*& ampvec)
 {
 	int i,j,k=0;
 
 	for (i=0; i < n_gaussians; i++) {
 		amps[i] = *(ampvec++);
+		//cout << "AMP " << i << ": " << amps[i] << endl;
 	}
 }
 

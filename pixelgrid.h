@@ -491,8 +491,8 @@ class ImagePixelGrid : private Sort
 	bool ***subpixel_maps_to_srcpixel;
 	int **pixel_index;
 	int **pixel_index_fgmask;
-	int Lmatrix_src_npixels;
-	int Lmatrix_pot_npixels, Lmatrix_src_and_pot_npixels;
+	int Lmatrix_n_amps;
+	int Lmatrix_pot_npixels;
 
 	int *active_image_pixel_i;
 	int *active_image_pixel_j;
@@ -580,7 +580,7 @@ class ImagePixelGrid : private Sort
 	public:
 	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false, int src_redshift_index = -1);
 	//ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in, const int src_redshift_index = -1);
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_extended_mask = false, const int src_redshift_index = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_fgmask = false, const int src_redshift_index = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	void update_zfactors_and_beta_factors();
@@ -613,7 +613,7 @@ class ImagePixelGrid : private Sort
 	void set_nsplits_from_lens_settings();
 	void set_nsplits(const int default_nsplit, const int emask_nsplit, const bool split_pixels);
 	void setup_noise_map(QLens* lens_in);
-	bool setup_FFT_convolution(const bool supersampling, const bool foreground, const bool verbal);
+	bool setup_FFT_convolution(const bool supersampling, const bool foreground, const bool include_fgmask_in_inversion, const bool verbal);
 	void cleanup_FFT_convolution_arrays();
 	void cleanup_foreground_FFT_convolution_arrays();
 

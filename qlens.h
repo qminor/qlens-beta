@@ -398,8 +398,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool concentration_prior;
 	double einstein_radius_low_threshold;
 	double einstein_radius_high_threshold;
-	bool include_extended_mask_in_inversion;
-	bool zero_sb_extended_mask_prior;
+	bool include_fgmask_in_inversion;
+	bool zero_sb_fgmask_prior;
 	bool include_noise_term_in_loglike;
 	double high_sn_frac;
 	bool use_custom_prior;
@@ -746,7 +746,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	ImagePixelGrid **image_pixel_grids;
 	ImagePixelData *image_pixel_data;
-	int image_npixels, source_npixels, lensgrid_npixels, source_and_lens_npixels, n_amps;
+	int image_npixels, source_npixels, lensgrid_npixels, source_and_lens_n_amps, n_mge_amps, n_amps;
 	int image_n_subpixels; // for supersampling
 	int image_npixels_fgmask;
 
@@ -758,7 +758,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double *img_minus_sbprofile;
 	double *amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	double *amplitude_vector;
-	double *source_pixel_n_images;
+	//double *source_pixel_n_images;
 
 	int *image_pixel_location_Lmatrix;
 	int *source_pixel_location_Lmatrix;
@@ -802,12 +802,15 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 #endif
 
 	void convert_Lmatrix_to_dense();
-	void construct_Lmatrix_shapelets(const int zsrc_, bool verbal=false);
+	void construct_Lmatrix_shapelets(const int zsrc_i);
+	void add_MGE_amplitudes_to_Lmatrix(const int zsrc_i);
 	void PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal=false);
 	void create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const bool potential_perturbations=false, const bool verbal=false);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix(double *regparam_ptr, const bool potential_perturbations=false);
+	void add_MGE_regularization_terms_to_dense_Fmatrix(const int zsrc_i);
 	double calculate_regularization_prior_term(double *regparam_ptr, const bool potential_perturbations=false);
+	double calculate_MGE_regularization_prior_term(const int zsrc_i);
 
 	bool optimize_regularization_parameter(const int zsrc_i, const bool dense_Fmatrix=false, const bool verbal=false, const bool pre_srcgrid = false);
 	void setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatrix=false);
@@ -904,7 +907,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double Gmatrix_log_determinant;
 	void initialize_pixel_matrices(const int zsrc_i, const bool potential_perturbations=false, bool verbal=false);
 	void initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal=false);
-	void count_shapelet_npixels(const int zsrc_i=-1);
+	void count_shapelet_amplitudes(const int zsrc_i=-1);
+	int count_MGE_amplitudes(const int zsrc_i=-1);
 	void clear_pixel_matrices(const bool include_foreground_sbprofile=true);
 	void clear_sparse_lensing_matrices();
 	double find_sbprofile_surface_brightness(lensvector &pt);
@@ -992,6 +996,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	friend struct DerivedParam;
 	friend class LensProfile;
 	friend class SB_Profile;
+	friend class MGE;
 	QLens();
 	QLens(QLens *lens_in);
 	void setup_parameters(const bool initial_setup); 
@@ -1200,7 +1205,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_source_object(const char *splinefile, const bool is_lensed, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void add_multipole_source(const bool is_lensed, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
 	void add_shapelet_source(const bool is_lensed, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
-	void add_mge_source(const bool is_lensed, const double zsrc_in, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode = 0);
+	void add_mge_source(const bool is_lensed, const double zsrc_in, const double reg, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode = 0);
 
 
 	void remove_source_object(int sb_number);
