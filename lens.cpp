@@ -11182,8 +11182,8 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		loglike += fitmodel->get_einstein_radius_prior(false);
 		//if (loglike > 1e10) loglike += 1e5; // in this case, intead of doing inversion we'll just add 1e5 as a stand-in for chi-square to save time
 	}
-	chisq=0,chisq0=0;
 	double chisq00;
+	chisq=0,chisq0=0;
 	if (loglike < 1e30) {
 		for (int i=0; i < n_ranchisq; i++) {
 			chisq += fitmodel->pixel_log_evidence_times_two(chisq00,false,i);
@@ -13544,11 +13544,11 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				if (generate_and_invert_lensing_matrix_delaunay(zsrc_i,src_i,false,include_potential_perturbations,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
 				if (include_potential_perturbations) {
 					clear_sparse_lensing_matrices();
-					clear_pixel_matrices(false); 
+					clear_pixel_matrices(); 
 					for (int it=0; it < potential_correction_iterations; it++) {
 						if (generate_and_invert_lensing_matrix_delaunay(zsrc_i,src_i,true,true,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
 						clear_sparse_lensing_matrices();
-						clear_pixel_matrices(false); 
+						clear_pixel_matrices(); 
 					}
 					if (generate_and_invert_lensing_matrix_delaunay(zsrc_i,src_i,true,adopt_final_sbgrad,tot_wtime,tot_wtime0,verbal)==false) return 2e30; // choose false for 4th arg if you want to reproduce the same first-order SB corrections (meaning it uses SB_grad from previous iteration in first order term)
 

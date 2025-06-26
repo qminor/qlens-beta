@@ -14515,6 +14515,7 @@ void QLens::assign_foreground_mappings(const int zsrc_i, const bool use_data)
 			} else image_pixel_grid->pixel_index_fgmask[i][j] = -1;
 		}
 	}
+	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	sbprofile_surface_brightness = new double[image_npixels_fgmask];
 	for (int i=0; i < image_npixels_fgmask; i++) sbprofile_surface_brightness[i] = 0;
 #ifdef USE_OPENMP
@@ -14630,12 +14631,14 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 		n_amps += n_ptsrc;
 	}
 
+	if (point_image_surface_brightness != NULL) die("FUCK0");
 	point_image_surface_brightness = new double[image_npixels];
 
 	if (n_amps <= 0) die("no shapelet or point source amplitude parameters found");
+	if (amplitude_vector != NULL) die("FUCK1");
 	amplitude_vector = new double[n_amps];
-	imgpixel_covinv_vector = new double[image_npixels];
 	if ((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_mag_weighted_regularization)) {
+	if (reg_weight_factor != NULL) die("FUCK3");
 		reg_weight_factor = new double[source_npixels];
 		for (int i=0; i < source_npixels; i++) reg_weight_factor[i] = 1.0;
 	}
@@ -14663,12 +14666,12 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 	if (n_mge_amps > 0) add_MGE_amplitudes_to_Lmatrix(zsrc_i);
 }
 
-void QLens::clear_pixel_matrices(const bool include_foreground_sbprofile)
+void QLens::clear_pixel_matrices()
 {
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
 	if (imgpixel_covinv_vector != NULL) delete[] imgpixel_covinv_vector;
 	if (point_image_surface_brightness != NULL) delete[] point_image_surface_brightness;
-	if ((include_foreground_sbprofile) and (sbprofile_surface_brightness != NULL)) delete[] sbprofile_surface_brightness;
+	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (amplitude_vector != NULL) delete[] amplitude_vector;
 	if (reg_weight_factor != NULL) delete[] reg_weight_factor;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
@@ -14678,7 +14681,7 @@ void QLens::clear_pixel_matrices(const bool include_foreground_sbprofile)
 	image_surface_brightness = NULL;
 	imgpixel_covinv_vector = NULL;
 	point_image_surface_brightness = NULL;
-	if (include_foreground_sbprofile) sbprofile_surface_brightness = NULL;
+	sbprofile_surface_brightness = NULL;
 	amplitude_vector = NULL;
 	reg_weight_factor = NULL;
 	image_pixel_location_Lmatrix = NULL;
@@ -19488,7 +19491,11 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 	if (!use_covariance_matrix) {
 		lapack_int status;
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed.array());
-		if (status != 0) warn("Matrix was not invertible and/or positive definite");
+		if (status != 0) {
+			warn("Matrix was not invertible and/or positive definite");
+			print_source_list(false);
+			die();
+		}
 		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',n_amps,1,Fmatrix_packed.array(),amplitude_vector,1);
 		Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,n_amps);

@@ -909,7 +909,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal=false);
 	void count_shapelet_amplitudes(const int zsrc_i=-1);
 	int count_MGE_amplitudes(const int zsrc_i=-1);
-	void clear_pixel_matrices(const bool include_foreground_sbprofile=true);
+	void clear_pixel_matrices();
 	void clear_sparse_lensing_matrices();
 	double find_sbprofile_surface_brightness(lensvector &pt);
 	void construct_Lmatrix(const int zsrc_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
