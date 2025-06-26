@@ -12713,7 +12713,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	if (!plot_current_sb) {
 		for (int zsrc_i=zsrc_i_0; zsrc_i < zsrc_i_f; zsrc_i++) {
 			if (image_pixel_grids[zsrc_i] == NULL) {
-				if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) { warn("No inversion has been performed to reconstruct source"); return false; }
+				if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source) or (source_fit_mode==Shapelet_Source)) { warn("No inversion has been performed to reconstruct source"); return false; }
 				// if it hasn't been created yet, create now
 				if (use_data) {
 					image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);

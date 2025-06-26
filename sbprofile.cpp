@@ -3432,7 +3432,7 @@ void MGE::set_auto_stepsizes()
 void MGE::set_auto_ranges()
 {
 	int indx=0;
-	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++; // regparam
+	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 1e-10; penalty_upper_limits[indx] = 1e30; indx++; // regparam
 	set_geometric_param_auto_ranges(indx);
 }
 

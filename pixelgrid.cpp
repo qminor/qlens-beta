@@ -19493,8 +19493,9 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed.array());
 		if (status != 0) {
 			warn("Matrix was not invertible and/or positive definite");
-			print_source_list(false);
-			die();
+			//print_source_list(false);
+			//cout << "WHA?" << endl << endl << endl;
+			//die();
 		}
 		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',n_amps,1,Fmatrix_packed.array(),amplitude_vector,1);
