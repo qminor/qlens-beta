@@ -4200,6 +4200,24 @@ void DelaunaySourceGrid::create_srcpixel_grid(double* srcpts_x, double* srcpts_y
 		if (image_pixel_grid->cartesian_srcgrid != NULL) find_pixel_magnifications();
 	}
 
+	// the following is for plotting purposes
+	srcgrid_xmin = 1e30, srcgrid_xmax = -1e30;
+	srcgrid_ymin = 1e30, srcgrid_ymax = -1e30;
+	for (n=0; n < n_srcpts; n++) {
+		if (srcpts_x[n] < srcgrid_xmin) srcgrid_xmin = srcpts_x[n];
+		if (srcpts_x[n] > srcgrid_xmax) srcgrid_xmax = srcpts_x[n];
+		if (srcpts_y[n] < srcgrid_ymin) srcgrid_ymin = srcpts_y[n];
+		if (srcpts_y[n] > srcgrid_ymax) srcgrid_ymax = srcpts_y[n];
+	}
+	// add an extra 5% so we can see the outer points on the plots more easily
+	double x_extra = 0.05*(srcgrid_xmax-srcgrid_xmax);
+	double y_extra = 0.05*(srcgrid_xmax-srcgrid_xmax);
+	srcgrid_xmin -= x_extra;
+	srcgrid_xmax += x_extra;
+	srcgrid_ymin -= y_extra;
+	srcgrid_ymax += y_extra;
+
+	/*
 	if (lens != NULL) {
 		// This is mainly for plotting purposes
 		if (image_pixel_grid != NULL) {
@@ -4214,6 +4232,7 @@ void DelaunaySourceGrid::create_srcpixel_grid(double* srcpts_x, double* srcpts_y
 			srcgrid_ymax = lens->sourcegrid_ymax;
 		}
 	}
+	*/
 }
 
 void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
@@ -11837,6 +11856,8 @@ void ImagePixelGrid::redo_lensing_calculations(const bool verbal)
 #endif
 }
 
+/*
+// obsolete function
 void ImagePixelGrid::redo_lensing_calculations_corners() // this is used for analytic source mode with zooming when not using pixellated or shapelet sources
 {
 	// Update this so it uses the extended mask!! DO THIS!!!!!!!!
@@ -11916,6 +11937,7 @@ void ImagePixelGrid::redo_lensing_calculations_corners() // this is used for ana
 	delete[] defx_corners;
 	delete[] defy_corners;
 }
+*/
 
 void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
 {
@@ -12011,10 +12033,19 @@ void ImagePixelGrid::plot_sourcepts(string outfile_root, const bool show_subpixe
 	double residual;
 
 	int k,nsp;
+	//cout << "PLOOTTING SOURCE POINTS!" << endl;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			//if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
-			if ((pixel_in_mask==NULL) or ((!lens->zero_sb_fgmask_prior) and (emask) and (emask[i][j])) or ((lens->zero_sb_fgmask_prior) and (mask) and (mask[i][j]))) {
+			if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
+				//if ((lens->include_fgmask_in_inversion) and (mask[i][j]==false)) {
+					//cout << "CONTINUING" << endl;
+					//continue; // if including foreground mask in inversion, we still only use the lensing mask to define delaunay source pixels
+				//}
+				//else if ((lens->include_fgmask_in_inversion) and (mask[i][j]==true)) {
+					//cout << "WTF?" << endl;
+				//}
+				//else if (!lens->include_fgmask_in_inversion) cout << "HARG?" << endl;
+			//if ((pixel_in_mask==NULL) or ((!lens->zero_sb_fgmask_prior) and (emask) and (emask[i][j])) or ((lens->zero_sb_fgmask_prior) and (mask) and (mask[i][j]))) {
 				if ((!lens->split_imgpixels) or (!show_subpixels)) {
 					sourcepts_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << endl;
 				} else {
@@ -12376,7 +12407,7 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 	bool resize_grid;
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			if (pixel_in_mask[i][j]) {
+			if ((!mask) or (mask[i][j])) {
 				resize_grid = true;
 				if (use_noise_threshold) {
 					sbavg=0;

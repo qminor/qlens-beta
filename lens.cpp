@@ -12039,7 +12039,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	double avg_sb = -1e30;
 	if (image_pixel_data) avg_sb = image_pixel_data->find_avg_sb(10*background_pixel_noise);
 
-	int i,j,k,l,n,npix=0;
+	int i,j,k,l,n,npix=0,npix_in_lensing_mask=0; // npix_in_lensing_mask will be different from npix_in_mask if include_fgmask_in_inversion is turned on
 	bool include;
 	double max_sb = -1e30, min_sb = 1e30;
 	double sbfrac = delaunay_high_sn_sbfrac;
@@ -12050,36 +12050,44 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	int nsubpix, nysubpix;
 	double sb;
 	if (reinitialize_random_grid) reinitialize_random_generator();
+	if (!include_fgmask_in_inversion) npix_in_lensing_mask = npix_in_mask;
 	for (n=0; n < npix_in_mask; n++) {
-		include = false;
 		i = pixptr_i[n];
 		j = pixptr_j[n];
-		nysubpix = image_pixel_grids[zsrc_i]->nsplits[i][j]; // why not just store the square and avoid having to always take the square?
-		nsubpix = INTSQR(nysubpix); // why not just store the square and avoid having to always take the square?
-		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
-			include = true;
-			sb = image_pixel_data->surface_brightness[i][j];
-			if (sb > max_sb) max_sb = sb;
-			if (sb < min_sb) min_sb = sb;
+		if ((include_fgmask_in_inversion) and (!(image_pixel_data->in_mask[zsrc_i][i][j]))) {
+			include_in_delaunay_grid[n] = false; // if we're including the foreground mask in the inversion, we still only use the pixels within the lensing mask to define our source grid
 		} else {
-			if ((delaunay_high_sn_mode) and (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb)) {
-				if ((delaunay_mode==1) or (delaunay_mode==2)) include = true;
-				else if ((delaunay_mode==3) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true; // switch to mode 1 if S/N high enough
-				else if ((delaunay_mode==4) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true; // switch to mode 2 if S/N high enough
-				else if (image_pixel_data->surface_brightness[i][j] > 3*sbfrac*avg_sb) include = true; // if threshold is high enough, just include it
+			if (include_fgmask_in_inversion) npix_in_lensing_mask++;
+			include = false;
+			nysubpix = image_pixel_grids[zsrc_i]->nsplits[i][j]; // why not just store the square and avoid having to always take the square?
+			nsubpix = INTSQR(nysubpix); // why not just store the square and avoid having to always take the square?
+			if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
+				include = true;
+				sb = image_pixel_data->surface_brightness[i][j];
+				if (sb > max_sb) max_sb = sb;
+				if (sb < min_sb) min_sb = sb;
+			} else {
+				if ((delaunay_high_sn_mode) and (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb)) {
+					if ((delaunay_mode==1) or (delaunay_mode==2)) include = true;
+					else if ((delaunay_mode==3) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true; // switch to mode 1 if S/N high enough
+					else if ((delaunay_mode==4) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true; // switch to mode 2 if S/N high enough
+					else if (image_pixel_data->surface_brightness[i][j] > 3*sbfrac*avg_sb) include = true; // if threshold is high enough, just include it
+				}
+				else if ((delaunay_mode==0) or (delaunay_mode==5)) include = true;
+				else if ((delaunay_mode==1) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true;
+				else if ((delaunay_mode==2) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true;
+				else if ((delaunay_mode==3) and (((i%3==0) and (j%3==0)) or ((i%3==1) and (j%3==1)) or ((i%3==2) and (j%3==2)))) include = true;
+				else if ((delaunay_mode==4) and (((i%4==0) and (j%4==0)) or ((i%4==1) and (j%4==1)) or ((i%4==2) and (j%4==2)) or ((i%4==3) and (j%4==3)))) include = true;
 			}
-			else if ((delaunay_mode==0) or (delaunay_mode==5)) include = true;
-			else if ((delaunay_mode==1) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true;
-			else if ((delaunay_mode==2) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true;
-			else if ((delaunay_mode==3) and (((i%3==0) and (j%3==0)) or ((i%3==1) and (j%3==1)) or ((i%3==2) and (j%3==2)))) include = true;
-			else if ((delaunay_mode==4) and (((i%4==0) and (j%4==0)) or ((i%4==1) and (j%4==1)) or ((i%4==2) and (j%4==2)) or ((i%4==3) and (j%4==3)))) include = true;
+			if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
+				npix += nsubpix;
+			}
+			else if (include) {
+				npix++;
+				if (split_imgpixels) npix++;
+			}
+			include_in_delaunay_grid[n] = include;
 		}
-		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) npix += nsubpix;
-		else if (include) {
-			npix++;
-			if (split_imgpixels) npix++;
-		}
-		include_in_delaunay_grid[n] = include;
 	}
 	if (min_sb < 0) min_sb = 0;
 
@@ -12156,8 +12164,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		else use_weighted_initial_centroids = false;
 
 		int n_src_centroids = n_src_clusters;	
-		if (n_src_centroids < 0) n_src_centroids = npix_in_mask / 2;
-		else if (n_src_centroids == 0) n_src_centroids = npix_in_mask;
+		if (n_src_centroids < 0) n_src_centroids = npix_in_lensing_mask / 2;
+		else if (n_src_centroids == 0) n_src_centroids = npix_in_lensing_mask;
 
 		int data_reduce_factor;
 		int icent_offset;
@@ -13584,7 +13592,6 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			if ((include_potential_perturbations) and (!first_order_sb_correction) and (lensgrids != NULL) and (zsrc_i==0)) {
 				lensgrids[0]->include_in_lensing_calculations = true;
 			}
-
 		}
 
 		//split_imgpixels = old_split_imgpixels;
