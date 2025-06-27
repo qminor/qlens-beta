@@ -222,6 +222,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 
 	// the following items MUST be redefined in all derived classes
 	virtual double sb_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	virtual double sb_rsq_deriv(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
 	virtual void window_params(double& xmin, double& xmax, double& ymin, double& ymax);
 	virtual double window_rmax();
 	virtual double length_scale(); // retrieves characteristic length scale of object (used for zoom subgridding)
@@ -526,6 +527,7 @@ class MGE : public SB_Profile
 	double regparam; // regularization parameter for MGE
 
 	double sb_rsq(const double);
+	double sb_rsq_deriv(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
 
 	public:
 	MGE() : SB_Profile() { amps = NULL; sigs = NULL; }

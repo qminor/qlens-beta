@@ -12174,6 +12174,7 @@ void ImagePixelGrid::include_all_pixels(const bool redo_fft)
 
 void ImagePixelGrid::activate_extended_mask(const bool redo_fft)
 {
+	if (emask==NULL) { warn("emask pointer set to NULL; could not activate extended mask"); return; }
 	int i,j,k;
 	if (pixel_in_mask==NULL) {
 		pixel_in_mask = new bool*[x_N];
@@ -12198,6 +12199,7 @@ void ImagePixelGrid::activate_extended_mask(const bool redo_fft)
 void ImagePixelGrid::activate_foreground_mask(const bool redo_fft)
 {
 	int i,j,k;
+	if (lens->image_pixel_data==NULL) { warn("image pixel data set to NULL; could not activate foreground mask"); return; }
 	if (pixel_in_mask==NULL) {
 		pixel_in_mask = new bool*[x_N];
 		for (i=0; i < x_N; i++) pixel_in_mask[i] = new bool[y_N];
@@ -12220,6 +12222,7 @@ void ImagePixelGrid::activate_foreground_mask(const bool redo_fft)
 
 void ImagePixelGrid::deactivate_extended_mask(const bool redo_fft)
 {
+	if (mask==NULL) { warn("mask pointer set to NULL; could not activate extended mask"); return; }
 	int i,j,k;
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
@@ -12239,6 +12242,7 @@ void ImagePixelGrid::deactivate_extended_mask(const bool redo_fft)
 
 void ImagePixelGrid::update_mask_values()
 {
+	if (mask==NULL) { warn("mask pointer set to NULL; could not update mask values within imggrid"); return; }
 	int i,j,k;
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {

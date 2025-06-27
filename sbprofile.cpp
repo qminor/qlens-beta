@@ -1252,6 +1252,17 @@ double SB_Profile::sb_rsq(const double rsq) // this function should be redefined
 	return (f_parameter*sb_spline.splint(r/qx_parameter));
 }
 
+double SB_Profile::sb_rsq_deriv(const double rsq)
+{
+	static const double precision = 1e-6;
+	double temp, h;
+	h = precision*rsq;
+	temp = rsq + h;
+	h = temp - rsq; // silly NR trick
+	return (sb_rsq((rsq+h)/(qx_parameter*qx_parameter))-sb_rsq((rsq-h)/(qx_parameter*qx_parameter)))/(2*h);
+}
+
+
 void SB_Profile::shift_angle_90()
 {
 	// do this if the major axis orientation is changed (so the qlens angles values are changed appropriately, even though the qlens doesn't change)
@@ -3432,7 +3443,7 @@ void MGE::set_auto_stepsizes()
 void MGE::set_auto_ranges()
 {
 	int indx=0;
-	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 1e-10; penalty_upper_limits[indx] = 1e30; indx++; // regparam
+	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 1e-6; penalty_upper_limits[indx] = 1e30; indx++; // regparam
 	set_geometric_param_auto_ranges(indx);
 }
 
@@ -3443,6 +3454,15 @@ double MGE::sb_rsq(const double rsq)
 		sb += amps[i]*exp(-rsq/SQR(sigs[i])/2)/M_SQRT_2PI/sigs[i];
 	}
 	return sb;
+}
+
+double MGE::sb_rsq_deriv(const double rsq)
+{
+	double sb_deriv=0;
+	for (int i=0; i < n_gaussians; i++) {
+		sb_deriv += -amps[i]*exp(-rsq/SQR(sigs[i])/2)/M_SQRT_2PI/CUBE(sigs[i])/2;
+	}
+	return sb_deriv;
 }
 
 void MGE::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight)

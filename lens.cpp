@@ -12662,7 +12662,7 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root,
 void QLens::update_imggrid_mask_values(const int mask_i)
 {
 	for (int i=0; i < n_extended_src_redshifts; i++) {
-		if ((assigned_mask[i]==mask_i) and (image_pixel_grids != NULL) and (image_pixel_grids[i] != NULL)) image_pixel_grids[i]->update_mask_values();
+		if ((assigned_mask != NULL) and (assigned_mask[i]==mask_i) and (image_pixel_grids != NULL) and (image_pixel_grids[i] != NULL)) image_pixel_grids[i]->update_mask_values();
 	}
 }
 
@@ -12918,6 +12918,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		}
 		//if (image_pixel_data != NULL) delete image_pixel_data;
 		image_pixel_data->load_from_image_grid(image_pixel_grid);
+		image_pixel_grid->set_fit_window((*image_pixel_data),false,0,fft_convolution); // this is just to give image_pixel_grid the mask pointers from image_pixel_data
 
 		// are the following lines really necessary??
 		double xmin,xmax,ymin,ymax;

@@ -6055,7 +6055,7 @@ void QLens::process_commands(bool read_file)
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((!is_lensed) and (!include_fgmask_in_inversion)) {
 							include_fgmask_in_inversion = true;
-							if (mpi_id==0) cout << "NOTE: Setting 'include_fgmask_in_inversion' to 'on', since foreground MGE is assume to use foreground mask" << endl;
+							if (mpi_id==0) cout << "NOTE: Setting 'include_fgmask_in_inversion' to 'on', since foreground MGE is assumed to use foreground mask" << endl;
 						}
 					}
 				}
@@ -9890,7 +9890,7 @@ void QLens::process_commands(bool read_file)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-add") add_mask = true;
-						else if (args[i]=="-fg") foreground_mask = true;
+						else if ((args[i]=="-fg") or (args[i]=="-fgmask")) foreground_mask = true;
 						else if (args[i]=="-emask") emask = true;
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
