@@ -36,10 +36,12 @@ zsrc 2
 
 # For reference, the following is the "true" model used to make the simulated data being fit here:
 #fit lens alpha 1.3634 1.17163 0 0.963867 81.9 0.0102892 0.00358392 shear=0.0647257 -0.0575047
-fit lens sple 1.35 1.0 0 0.8 90 0 0 shear=0.05 0.02            # input model
+#fit lens sple 1.35 1.0 0 0.8 90 0 0 shear=0.05 0.02            # input model
+fit lens sple 1.42 0.96 0 0.78 -21 -0.03 0.05 shear=-0.05 0.02            # input model
 1 1 0 1 1 1 1 1 1
 
-fit source sersic 20 0.10 1.5 1 0 0.014 0.05
+fit source sersic 20 0.05 1 1 0 -0.076 0.039
+#fit source sersic 20 0.10 1.5 1 0 0.014 0.05
 1 1 1 0 0 1 1
 
 #fit ptsrc add 0.02 0.0   # if there is no point image data file, then point sources have to be added this way

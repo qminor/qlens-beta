@@ -5082,7 +5082,6 @@ void DelaunaySourceGrid::find_source_gradient(const lensvector& input_pt, lensve
 }
 
 
-
 void DelaunaySourceGrid::plot_surface_brightness(string root, const int npix, const bool interpolate_sb, const bool plot_magnification, const bool plot_fits)
 {
 	double x, y, xlength, ylength, pixel_xlength, pixel_ylength;
@@ -10783,6 +10782,7 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 	}
 	mask = NULL;
 	emask = NULL;
+	fgmask = NULL;
 	if (raytrace) {
 #ifdef USE_OPENMP
 		double wtime0, wtime;
@@ -10839,9 +10839,11 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		if (mask_index >= pixel_data.n_masks) die("image_pixel_grid initialized with mask index that doesn't correspond to a mask that has been created/loaded (mask_i=%i,n_masks=%i)",mask_index,pixel_data.n_masks);
 		mask = pixel_data.in_mask[mask_index];
 		emask = pixel_data.extended_mask[mask_index];
+		fgmask = pixel_data.foreground_mask;
 	} else {
 		mask = NULL;
 		emask = NULL;
+		fgmask = NULL;
 	}
 
 	int i,j;
@@ -12134,12 +12136,20 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 #endif
 }
 
-bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytrace, const int mask_index, const bool redo_fft)
+void ImagePixelGrid::assign_mask_pointers(ImagePixelData& pixel_data, const int mask_index)
+{
+	mask = pixel_data.in_mask[mask_index];
+	emask = pixel_data.extended_mask[mask_index];
+	fgmask = pixel_data.foreground_mask;
+}
+
+bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytrace, const int mask_index, const bool redo_fft, const bool use_fgmask)
 {
 	if ((x_N != pixel_data.npixels_x) or (y_N != pixel_data.npixels_y)) {
 		warn("Number of data pixels does not match specified number of image pixels; cannot activate fit window");
 		return false;
 	}
+	//cout << "RUNNING SET FIT WINDOW " << endl;
 	int i,j,k;
 	if (pixel_in_mask==NULL) {
 		pixel_in_mask = new bool*[x_N];
@@ -12148,9 +12158,11 @@ bool ImagePixelGrid::set_fit_window(ImagePixelData& pixel_data, const bool raytr
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	mask = pixel_data.in_mask[mask_index];
 	emask = pixel_data.extended_mask[mask_index];
+	fgmask = pixel_data.foreground_mask;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			pixel_in_mask[i][j] = pixel_data.in_mask[mask_index][i][j];
+			if (!use_fgmask) pixel_in_mask[i][j] = pixel_data.in_mask[mask_index][i][j];
+			else pixel_in_mask[i][j] = pixel_data.foreground_mask[i][j];
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
 			mapped_potpixels[i][j].clear();
@@ -12251,14 +12263,16 @@ void ImagePixelGrid::activate_foreground_mask(const bool redo_fft)
 	if (lens) setup_ray_tracing_arrays(redo_fft);
 }
 
-void ImagePixelGrid::deactivate_extended_mask(const bool redo_fft)
+/*
+void ImagePixelGrid::deactivate_extended_mask(const bool redo_fft, const bool use_fgmask)
 {
 	if (mask==NULL) { warn("mask pointer set to NULL; could not activate extended mask"); return; }
 	int i,j,k;
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			pixel_in_mask[i][j] = mask[i][j];
+			if (use_fgmask) pixel_in_mask[i][j] = fgmask[i][j];
+			else pixel_in_mask[i][j] = mask[i][j];
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
 			mapped_potpixels[i][j].clear();
@@ -12270,15 +12284,17 @@ void ImagePixelGrid::deactivate_extended_mask(const bool redo_fft)
 	}
 	if (lens) setup_ray_tracing_arrays(redo_fft);
 }
+*/
 
-void ImagePixelGrid::update_mask_values()
+void ImagePixelGrid::update_mask_values(const bool use_fgmask)
 {
 	if (mask==NULL) { warn("mask pointer set to NULL; could not update mask values within imggrid"); return; }
 	int i,j,k;
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			pixel_in_mask[i][j] = mask[i][j];
+			if (use_fgmask) pixel_in_mask[i][j] = fgmask[i][j];
+			else pixel_in_mask[i][j] = mask[i][j];
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
 			mapped_potpixels[i][j].clear();
@@ -13644,7 +13660,6 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 		if (inside_tri != None) {
 			//cout << "i=" << img_i << " j=" << img_j << " twiststat=" << *twist_type << endl;
 			imgpt_i = n_candidates++;
-			if (n_candidates > max_nimgs) die("exceeded max number of images in ImagePixelGrid::find_point_images");
 			//pixels_with_imgpts[imgpt_i].img_i = img_i;
 			//pixels_with_imgpts[imgpt_i].img_j = img_j;
 			//pixels_with_imgpts[imgpt_i].upper_tri = (inside_tri==Upper) ? true : false;
@@ -13699,6 +13714,10 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 		}
 
 		//cout << "Pixel " << img_i << "," << img_j << endl;
+		if (n_candidates == max_nimgs) {
+			warn("exceeded max number of images in ImagePixelGrid::find_point_images");
+			break;
+		}
 	}
 
 	LensProfile *lptr;
@@ -13768,6 +13787,23 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 	double sep, pixel_size;
 	pixel_size = dmax(pixel_xlength,pixel_ylength);
 	//int oldsize = imgs.size();
+	int i_center, j_center;
+	for (it = imgs.begin(); it != imgs.end(); it++) {
+		// check to see if the image is inside the pixel grid; if not, discard it since it can't fit any image in the data
+		i_center = (it->pos[0] - xmin)/pixel_xlength;
+		j_center = (it->pos[1] - ymin)/pixel_ylength;
+		//cout << "icenter=" << i_center << " jcenter=" << j_center << endl;
+		if ((i_center < 0) or (i_center >= x_N) or (j_center < 0) or (j_center >= y_N)) {
+			warn("image point (%g,%g) lies outside image pixel grid; will eliminate from image set",it->pos[0],it->pos[1]);
+			if (it == imgs.end()-1) {
+				imgs.pop_back();
+				break;
+			} else {
+				imgs.erase(it);
+				it--;
+			}
+		}
+	}
 	if (imgs.size() > 1) {
 		for (it = imgs.begin()+1; it != imgs.end(); it++) {
 			redundancy = false;
@@ -19528,9 +19564,10 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed.array());
 		if (status != 0) {
 			warn("Matrix was not invertible and/or positive definite");
-			//print_source_list(false);
+			print_source_list(false);
+			print_lens_list(false);
 			//cout << "WHA?" << endl << endl << endl;
-			//die();
+			die();
 		}
 		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',n_amps,1,Fmatrix_packed.array(),amplitude_vector,1);

@@ -10739,7 +10739,7 @@ void QLens::process_commands(bool read_file)
 				bool show_extended_mask = false;
 				bool show_foreground_mask = false;
 				bool exclude_ptimgs = false; // by default, we include point images if n_ptsrc > 0
-				if (include_fgmask_in_inversion) show_foreground_mask = true; // no reason not to show emask if we're including it in the inversion
+				//if (include_fgmask_in_inversion) show_foreground_mask = true; // no reason not to show emask if we're including it in the inversion
 				bool plot_fits = false;
 				bool omit_source_plot = true; // changed this to false because it's annoying to have the source plot come out when you really just want e.g. residuals.
 				bool offload_to_data = false;
@@ -10949,7 +10949,7 @@ void QLens::process_commands(bool read_file)
 					old_pnoise = background_pixel_noise;
 					background_pixel_noise = pnoise;
 				}
-				if ((include_fgmask_in_inversion) and (mpi_id==0)) cout << "NOTE: Showing foreground mask by default, since include_fgmask_in_chisq = true" << endl;
+				if ((include_fgmask_in_inversion) and (mpi_id==0)) cout << "NOTE: Showing foreground mask by default, since include_fgmask_in_inversion = true" << endl;
 				if ((show_cc) and (zsrc_i >= 0)) create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i],zsrc_i);
 				if (include_imgpts) {
 					if (!plot_images("sourcexy.in", "imgs.dat", false, verbal_mode)==true) Complain("could not create grid to plot images");
@@ -11002,6 +11002,8 @@ void QLens::process_commands(bool read_file)
 									else run_plotter_range("imgpixel_nocc",range2,contstring,cbstring);
 								}
 							}
+						} else {
+							Complain("Plotting failed");
 						}
 					} else if (nwords == 3) {
 						if ((terminal==TEXT) or (plot_fits)) {
@@ -11016,7 +11018,7 @@ void QLens::process_commands(bool read_file)
 								if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural_nocc",words[2],range2,contstring,cbstring);
 								else run_plotter_file("imgpixel_nocc",words[2],range2,contstring,cbstring);
 							}
-						}
+						} else Complain("Plotting failed");
 					} else if (nwords == 4) {
 						if ((terminal==TEXT) or (plot_fits)) {
 							if (!replot) {
@@ -11036,7 +11038,7 @@ void QLens::process_commands(bool read_file)
 								else run_plotter_file("imgpixel_nocc",words[3],range2,contstring,cbstring);
 								if ((plot_srcplane) and (plotted_src)) run_plotter_file("srcpixel_nocc",words[2],range1);
 							}
-						}
+						} else Complain("Plotting failed");
 					} else Complain("invalid number of arguments to 'sbmap plotimg'");
 				} else if (!foundcc) Complain("could not find critical curves");
 				reset_grid();
@@ -14136,6 +14138,10 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'include_fgmask_in_inversion' command; must specify 'on' or 'off'");
 				set_switch(include_fgmask_in_inversion,setword);
+				for (int i=0; i < n_extended_src_redshifts; i++) {
+					if ((image_pixel_grids != NULL) and (image_pixel_grids[i] != NULL)) image_pixel_grids[i]->update_mask_values(include_fgmask_in_inversion);
+				}
+				if (fft_convolution) cleanup_FFT_convolution_arrays();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="include_noise_term_in_loglike")

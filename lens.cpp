@@ -6845,9 +6845,9 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	//if ((source_fit_mode != Point_Source) and (n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		 //add_pixellated_source(source_redshift); // THIS IS UGLY. There must be a better way to do this
 	//}
-	if (n_extended_src_redshifts == 0) {
-		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
-		else add_new_extended_src_redshift(source_redshift,-1,false);
+	if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift);
+	else if (n_extended_src_redshifts == 0) {
+		add_new_extended_src_redshift(source_redshift,-1,false);
 	}
 
 	if (n_extended_src_redshifts > 0) {
@@ -11883,7 +11883,7 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 				bool raytrace = true;
 				if ((use_mask) and (image_pixel_data != NULL)) raytrace = false;
 				image_pixel_grids[zsrc_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace,zsrc_i);
-				if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i]); 
+				if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i],include_fgmask_in_inversion); 
 			}
 		}
 		cartesian_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
@@ -11988,7 +11988,7 @@ bool QLens::create_sourcegrid_delaunay(const int src_i, const bool use_mask, con
 		bool raytrace = true;
 		if ((use_mask) and (image_pixel_data != NULL)) raytrace = false;
 		image_pixel_grids[zsrc_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace,zsrc_i);
-		if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i]); 
+		if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i],include_fgmask_in_inversion); 
 	}
 
 #ifdef USE_OPENMP
@@ -12320,7 +12320,7 @@ bool QLens::create_lensgrid_cartesian(const int zsrc_i, const int pixlens_i, con
 		bool raytrace = true;
 		if ((use_mask) and (image_pixel_data != NULL)) raytrace = false;
 		image_pixel_grids[zsrc_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace,zsrc_i);
-		if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i]); 
+		if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i],include_fgmask_in_inversion); 
 		npx = n_image_pixels_x;
 		npy = n_image_pixels_y;
 	} else {
@@ -12670,7 +12670,7 @@ bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root,
 void QLens::update_imggrid_mask_values(const int mask_i)
 {
 	for (int i=0; i < n_extended_src_redshifts; i++) {
-		if ((assigned_mask != NULL) and (assigned_mask[i]==mask_i) and (image_pixel_grids != NULL) and (image_pixel_grids[i] != NULL)) image_pixel_grids[i]->update_mask_values();
+		if ((assigned_mask != NULL) and (assigned_mask[i]==mask_i) and (image_pixel_grids != NULL) and (image_pixel_grids[i] != NULL)) image_pixel_grids[i]->update_mask_values(include_fgmask_in_inversion);
 	}
 }
 
@@ -12891,7 +12891,8 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		for (int zsrc_i=zsrc_i_0; zsrc_i < zsrc_i_f; zsrc_i++) {
 			if ((changed_mask) or ((n_extended_src_redshifts > 1) and (zsrc_i==0) and (specific_zsrc_i < 0))) // explanation for the latter condition: if all the lensed images were combined in one plot, then masks were combined image_pixel_grid[0], so we should restore the original mask
 			{
-				if (!image_pixel_grid->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i])) {
+				if (!image_pixel_grid->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i],false,include_fgmask_in_inversion)) {
+					warn("could not reset mask for redshift index %i",zsrc_i);
 					//delete image_pixel_grids; // so when you invert, it will load a new image grid based on the data
 					//image_pixel_grids = NULL;
 					return false;
@@ -12926,7 +12927,8 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		}
 		//if (image_pixel_data != NULL) delete image_pixel_data;
 		image_pixel_data->load_from_image_grid(image_pixel_grid);
-		image_pixel_grid->set_fit_window((*image_pixel_data),false,0,fft_convolution); // this is just to give image_pixel_grid the mask pointers from image_pixel_data
+		if (specific_zsrc_i < 0) specific_zsrc_i = 0;
+		image_pixel_grid->assign_mask_pointers((*image_pixel_data),specific_zsrc_i); // this is just to give image_pixel_grid the mask pointers from image_pixel_data
 
 		// are the following lines really necessary??
 		double xmin,xmax,ymin,ymax;
@@ -12943,9 +12945,6 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
 		data_pixel_size = image_pixel_data->pixel_size;
 	}
-
-	//delete image_pixel_grids; // so when you invert, it will load a new image grid based on the data
-	//image_pixel_grids = NULL;
 
 	return true;
 }
@@ -13033,9 +13032,9 @@ bool QLens::load_pixel_grid_from_data()
 		//if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
 		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
 	//}
-	if (n_extended_src_redshifts == 0) {
-		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
-		else add_new_extended_src_redshift(source_redshift,-1,false);
+	if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift);
+	else if (n_extended_src_redshifts == 0) {
+		add_new_extended_src_redshift(source_redshift,-1,false);
 	}
 
 	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -13056,11 +13055,10 @@ void QLens::plot_image_pixel_grid(const int zsrc_i)
 		//if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
 		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
 	//}
-	if (n_extended_src_redshifts == 0) {
-		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
-		else add_new_extended_src_redshift(source_redshift,-1,false);
+	if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift);
+	else if (n_extended_src_redshifts == 0) {
+		add_new_extended_src_redshift(source_redshift,-1,false);
 	}
-
 
 	if (image_pixel_grids[zsrc_i] == NULL) {
 		image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode,ray_tracing_method, (*image_pixel_data), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);
@@ -13076,9 +13074,9 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 		//if ((mpi_id==0) and (verbal)) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
 		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
 	//}
-	if (n_extended_src_redshifts == 0) {
-		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
-		else add_new_extended_src_redshift(source_redshift,-1,false);
+	if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift);
+	else if (n_extended_src_redshifts == 0) {
+		add_new_extended_src_redshift(source_redshift,-1,false);
 	}
 
 	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -13128,10 +13126,11 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
 	//}
-	if (n_extended_src_redshifts == 0) {
-		if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) add_pixellated_source(source_redshift);
-		else add_new_extended_src_redshift(source_redshift,-1,false);
+	if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift);
+	else if (n_extended_src_redshifts == 0) {
+		add_new_extended_src_redshift(source_redshift,-1,false);
 	}
+
 	if (image_pixel_grids == NULL) { warn("No image surface brightness grid has been generated"); return -1e30; }
 	int zsrc_i;
 	for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -13178,7 +13177,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 	if ((!ignore_foreground_in_chisq) and (at_least_one_noninverted_foreground_src) or (include_fgmask_in_inversion)) { include_foreground_sbmask = true; include_foreground_sb = true; } 
 	else if ((!at_least_one_noninverted_foreground_src) and ((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
 	if ((source_fit_mode==Shapelet_Source) and (!at_least_one_shapelet_src) and (!at_least_one_mge_src) and ((n_ptsrc==0) or ((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)))) {
-		warn("cannot perform inversion because no shapelet/MGE objects and no point sources with invertible amplitudes are defined");
+		if (verbal) warn("cannot perform inversion because no shapelet/MGE objects and no point sources with invertible amplitudes are defined");
 		chisq0=-1e30; return -1e30;
 	}
 
@@ -13285,7 +13284,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				nimgs_tot += ptsrc_list[i]->images.size(); // in this case, source amplitudes include point image amplitudes as well as pixel values
 			}
 			if (nimgs_tot==0) {
-				warn("cannot perform inversion because no shapelet objects and no images with invertible amplitudes have been produced");
+				if (verbal) warn("cannot perform inversion because no shapelet/MGE objects and no images with invertible amplitudes have been produced");
 				chisq0=2e30; return 2e30;
 			}
 
@@ -13912,11 +13911,14 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			}
 		}
 
+		bool **mask_for_inversion;
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+			if (include_fgmask_in_inversion) mask_for_inversion = image_pixel_grids[zsrc_i]->fgmask;
+			else mask_for_inversion = image_pixel_grids[zsrc_i]->mask;
 			double max_external_sb = -1e30, max_sb = -1e30;
 			for (i=0; i < image_pixel_data->npixels_x; i++) {
 				for (j=0; j < image_pixel_data->npixels_y; j++) {
-					if ((image_pixel_grids[zsrc_i]->mask[i][j]) and (image_pixel_grids[zsrc_i]->maps_to_source_pixel[i][j])) {
+					if ((mask_for_inversion) and (image_pixel_grids[zsrc_i]->maps_to_source_pixel[i][j])) {
 						//img_index = image_pixel_grids[zsrc_i]->pixel_index[i][j];
 						if (image_pixel_grids[zsrc_i]->surface_brightness[i][j] > max_sb) {
 							 max_sb = image_pixel_grids[zsrc_i]->surface_brightness[i][j];
@@ -13935,7 +13937,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			}
 			for (i=0; i < image_pixel_data->npixels_x; i++) {
 				for (j=0; j < image_pixel_data->npixels_y; j++) {
-					if ((!image_pixel_grids[zsrc_i]->mask[i][j]) and ((image_pixel_grids[zsrc_i]->emask[i][j])) and (image_pixel_grids[zsrc_i]->maps_to_source_pixel[i][j])) {
+					if ((!mask_for_inversion) and ((image_pixel_grids[zsrc_i]->emask[i][j])) and (image_pixel_grids[zsrc_i]->maps_to_source_pixel[i][j])) {
 						//img_index = image_pixel_grids[zsrc_i]->pixel_index[i][j];
 						//cout << image_surface_brightness[img_index] << endl;
 						if (abs(image_pixel_grids[zsrc_i]->surface_brightness[i][j]) >= outside_sb_threshold) {
@@ -13954,7 +13956,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				logev_times_two += chisq_penalty;
 				if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << outside_sb_threshold << ") has been found outside the selected fit region at pixel (" << image_pixel_grids[zsrc_i]->center_pts[isb][jsb][0] << "," << image_pixel_grids[zsrc_i]->center_pts[isb][jsb][1] << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 			}
-			image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),false,assigned_mask[zsrc_i],false);
+			image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),false,assigned_mask[zsrc_i],false,include_fgmask_in_inversion);
 			psf_supersampling = supersampling_orig;
 		}
 	}

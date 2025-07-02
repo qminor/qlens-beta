@@ -482,6 +482,7 @@ class ImagePixelGrid : private Sort
 	bool **pixel_in_mask;
 	bool **mask;
 	bool **emask;
+	bool **fgmask;
 	double pixel_area, triangle_area; // half of pixel area
 	double min_srcplane_area;
 	double max_sb;
@@ -592,12 +593,13 @@ class ImagePixelGrid : private Sort
 	void generate_and_add_point_images(const vector<image>& imgs, const bool include_imgfluxes, const double srcflux);
 	void find_point_images(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap, const bool is_lensed, const bool verbal);
 	//bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
-	bool set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false, const int mask_k = 0, const bool redo_fft = true);
+	void assign_mask_pointers(ImagePixelData& pixel_data, const int mask_index);
+	bool set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false, const int mask_k = 0, const bool redo_fft = true, const bool use_fgmask = false);
 	void include_all_pixels(const bool redo_fft = true);
 	void activate_extended_mask(const bool redo_fft = true);
 	void activate_foreground_mask(const bool redo_fft = true);
-	void deactivate_extended_mask(const bool redo_fft = true);
-	void update_mask_values();
+	//void deactivate_extended_mask(const bool redo_fft = true, const bool use_fgmask = false);
+	void update_mask_values(const bool use_fgmask = false);
 
 	void setup_pixel_arrays();
 	void set_null_ray_tracing_arrays();

@@ -1051,6 +1051,7 @@ fi
 
 echo -en "$PLOTLINE" >$PLOTDIR/$PLOTFILE
 #echo "$PLOTLINE"
+#gnuplot -persist $PLOTDIR/$PLOTFILE 
 gnuplot -persist $PLOTDIR/$PLOTFILE >/dev/null 2>&1
 
 #if [[ $FILENAME == "" ]]; then
