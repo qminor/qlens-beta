@@ -7888,6 +7888,21 @@ double QLens::chisq_time_delays_from_model_imgs()
 	for (i=0; i < n_ptsrc; i++) {
 		n_images = ptsrc_list[i]->images.size();
 		chisq_each_srcpt = 0;
+
+		/*
+		if (n_images<=1) {
+			for (k=0; k < image_data[i].n_images; k++) {
+				sigsq = SQR(image_data[i].sigma_t[k]);
+				if (image_data[i].use_in_chisq[k]) {
+					chisq_each_srcpt += 100*image_data[i].max_tdsqr/sigsq;
+				}
+				//chisq_each_srcpt += 100*image_data[i].max_tdsqr/sigsq;
+			}
+			chisq += chisq_each_srcpt;
+			continue;
+		}
+		*/
+
 		zero_td_exists = false;
 		td_offset = 0;
 		skip = false;
@@ -13217,6 +13232,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 	double logev_times_two = 0;
 	double loglike_reg = 0;
 	double regterms;
+	bool skip_inversion = false;
 
 	if ((n_image_prior) or (n_ptsrc > 0)) {
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -13285,7 +13301,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			}
 			if (nimgs_tot==0) {
 				if (verbal) warn("cannot perform inversion because no shapelet/MGE objects and no images with invertible amplitudes have been produced");
-				chisq0=2e30; return 2e30;
+				skip_inversion = true;
 			}
 
 		}
@@ -13664,67 +13680,71 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					}
 				}
 			}
-			if (i_shapelet >= 0) {
-				sb_list[i_shapelet]->get_regularization_param_ptr(regparam_ptr);
-			}
-			initialize_pixel_matrices_shapelets(zsrc_i,verbal);
-			if ((mpi_id==0) and (verbal)) {
-				cout << "Number of active image pixels: " << image_npixels << endl;
-				cout << "Number of shapelet amplitudes: " << source_npixels << endl;
-				if (n_amps > source_npixels) cout << "Number of total amplitudes: " << n_amps << endl;
-			}
+			if (!skip_inversion) {
+				if (i_shapelet >= 0) {
+					sb_list[i_shapelet]->get_regularization_param_ptr(regparam_ptr);
+				}
+				initialize_pixel_matrices_shapelets(zsrc_i,verbal);
+				if ((mpi_id==0) and (verbal)) {
+					cout << "Number of active image pixels: " << image_npixels << endl;
+					cout << "Number of shapelet amplitudes: " << source_npixels << endl;
+					if (n_amps > source_npixels) cout << "Number of total amplitudes: " << n_amps << endl;
+				}
 
-			image_pixel_grids[zsrc_i]->fill_surface_brightness_vector(); // note that image_pixel_grids[0] just has the data pixel values stored in it
-			PSF_convolution_Lmatrix_dense(zsrc_i,verbal);
-			if (zsrc_i==0) {
-				// currently only allowing point sources with first image grid...will extend later
-				if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-					if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
-					for (i=0; i < n_ptsrc; i++) {
-						image_pixel_grids[zsrc_i]->generate_point_images(ptsrc_list[i]->images, point_image_surface_brightness, false, ptsrc_list[i]->srcflux);
+				image_pixel_grids[zsrc_i]->fill_surface_brightness_vector(); // note that image_pixel_grids[0] just has the data pixel values stored in it
+				PSF_convolution_Lmatrix_dense(zsrc_i,verbal);
+				if (zsrc_i==0) {
+					// currently only allowing point sources with first image grid...will extend later
+					if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
+						if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
+						for (i=0; i < n_ptsrc; i++) {
+							image_pixel_grids[zsrc_i]->generate_point_images(ptsrc_list[i]->images, point_image_surface_brightness, false, ptsrc_list[i]->srcflux);
+						}
 					}
 				}
-			}
 
-			if (regularization_method != None) create_regularization_matrix_shapelet(zsrc_i);
-			if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
-			create_lensing_matrices_from_Lmatrix_dense(zsrc_i,false,verbal);
+				if (regularization_method != None) create_regularization_matrix_shapelet(zsrc_i);
+				if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
+				create_lensing_matrices_from_Lmatrix_dense(zsrc_i,false,verbal);
 
 #ifdef USE_OPENMP
-			if (show_wtime) {
-				tot_wtime = omp_get_wtime() - tot_wtime0;
-				if (mpi_id==0) cout << "Total wall time before F-matrix inversion: " << tot_wtime << endl;
-			}
+				if (show_wtime) {
+					tot_wtime = omp_get_wtime() - tot_wtime0;
+					if (mpi_id==0) cout << "Total wall time before F-matrix inversion: " << tot_wtime << endl;
+				}
 #endif
-			if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
-			if ((optimize_regparam) and (regularization_method != None) and (source_npixels > 0)) optimize_regularization_parameter(zsrc_i,true,verbal);
-			if ((!optimize_regparam) or (source_npixels==0) or (regularization_method==None)) invert_lens_mapping_dense(zsrc_i,verbal); 
-			if (save_sbweights_during_inversion) calculate_subpixel_sbweights(zsrc_i,true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
-			calculate_image_pixel_surface_brightness_dense();
-			store_image_pixel_surface_brightness(zsrc_i);
-			if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-				image_pixel_grids[zsrc_i]->add_point_images(point_image_surface_brightness,image_pixel_grids[zsrc_i]->n_active_pixels);
-			}
+				if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
+				if ((optimize_regparam) and (regularization_method != None) and (source_npixels > 0)) optimize_regularization_parameter(zsrc_i,true,verbal);
+				if ((!optimize_regparam) or (source_npixels==0) or (regularization_method==None)) invert_lens_mapping_dense(zsrc_i,verbal); 
+				if (save_sbweights_during_inversion) calculate_subpixel_sbweights(zsrc_i,true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
+				calculate_image_pixel_surface_brightness_dense();
+				store_image_pixel_surface_brightness(zsrc_i);
+				if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
+					image_pixel_grids[zsrc_i]->add_point_images(point_image_surface_brightness,image_pixel_grids[zsrc_i]->n_active_pixels);
+				}
 
-			//cout << "LOGLIKE0: " << logev_times_two << endl;
-			if (regularization_method != None) {
-				if (source_npixels > 0) {
-					if ((*regparam_ptr) != 0) {
-						regterms = calculate_regularization_prior_term(regparam_ptr);
+				//cout << "LOGLIKE0: " << logev_times_two << endl;
+				if (regularization_method != None) {
+					if (source_npixels > 0) {
+						if ((*regparam_ptr) != 0) {
+							regterms = calculate_regularization_prior_term(regparam_ptr);
+							logev_times_two += regterms;
+							loglike_reg += regterms;
+						}
+					}
+					if (n_mge_amps > 0)  {
+						regterms = calculate_MGE_regularization_prior_term(zsrc_i);
 						logev_times_two += regterms;
 						loglike_reg += regterms;
 					}
+					logev_times_two += Fmatrix_log_determinant;
+					//cout << "regterms=" << regterms << " Fmatrix_logdet=" << Fmatrix_log_determinant << endl;
 				}
-				if (n_mge_amps > 0)  {
-					regterms = calculate_MGE_regularization_prior_term(zsrc_i);
-					logev_times_two += regterms;
-					loglike_reg += regterms;
-				}
-				logev_times_two += Fmatrix_log_determinant;
-				//cout << "regterms=" << regterms << " Fmatrix_logdet=" << Fmatrix_log_determinant << endl;
+				//cout << "LOGLIKE: " << logev_times_two << " Flogdet=" << Fmatrix_log_determinant << " regterms=" << regterms << " sum=" << (Fmatrix_log_determinant+regterms) << endl;
+				clear_pixel_matrices();
+			} else {
+				image_pixel_grids[zsrc_i]->set_zero_lensed_surface_brightness();
 			}
-			//cout << "LOGLIKE: " << logev_times_two << " Flogdet=" << Fmatrix_log_determinant << " regterms=" << regterms << " sum=" << (Fmatrix_log_determinant+regterms) << endl;
-			clear_pixel_matrices();
 		}
 
 #ifdef USE_OPENMP
@@ -13817,7 +13837,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			if (logfile.is_open()) {
 				logfile << "it=" << chisq_it << ": ";
 				if (n_extended_src_redshifts > 1) logfile << "zsrc_i=" << zsrc_i;
-				logfile << " chisq0=" << chisq0_zsrc << " chisq0_per_pixel=" << chisq0_zsrc/n_data_pixels << " (ntot_pixels=" << n_data_pixels << ") regterms=" << regterms;
+				logfile << " chisq0=" << chisq0_zsrc << " chisq0_per_pixel=" << chisq0_zsrc/n_data_pixels << " (ntot_pixels=" << n_data_pixels << ") regterms=" << regterms << endl;
 			}
 		}
 		if ((mpi_id==0) and (verbal)) {

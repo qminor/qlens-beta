@@ -14740,6 +14740,7 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 void QLens::clear_pixel_matrices()
 {
 	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
+	if (image_surface_brightness_supersampled != NULL) delete[] image_surface_brightness_supersampled;
 	if (imgpixel_covinv_vector != NULL) delete[] imgpixel_covinv_vector;
 	if (point_image_surface_brightness != NULL) delete[] point_image_surface_brightness;
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
@@ -19564,10 +19565,10 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed.array());
 		if (status != 0) {
 			warn("Matrix was not invertible and/or positive definite");
-			print_source_list(false);
-			print_lens_list(false);
+			//print_source_list(false);
+			//print_lens_list(false);
 			//cout << "WHA?" << endl << endl << endl;
-			die();
+			//die();
 		}
 		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',n_amps,1,Fmatrix_packed.array(),amplitude_vector,1);
