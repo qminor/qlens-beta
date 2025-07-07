@@ -22,8 +22,11 @@
 #include <cstdlib>
 #include <csignal>
 #include <sys/stat.h>
-#include <filesystem>
 using namespace std;
+
+#if __cplusplus >= 201703L // C++17 standard or later
+#include <filesystem>
+#endif
 
 #ifdef USE_COOLEST
 #include "json/json.h"
@@ -9099,13 +9102,16 @@ void QLens::nested_sampling()
 	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
-		//string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
+#if __cplusplus >= 201703L // C++17 standard or later
 		if (filesystem::exists(fit_output_dir)) {
 			filesystem::remove_all(fit_output_dir);
 		}
+#else
+		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+#endif
 		create_output_directory();
 	}
 
@@ -9204,13 +9210,17 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
-		//string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
+#if __cplusplus >= 201703L // C++17 standard or later
+		cout << "YAY we have C++2017" << endl;
 		if (filesystem::exists(fit_output_dir)) {
 			filesystem::remove_all(fit_output_dir);
 		}
+#else
+		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+#endif
 		create_output_directory();
 	}
 
@@ -9489,13 +9499,17 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
-		//string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
+
+#if __cplusplus >= 201703L // C++17 standard or later
 		if (filesystem::exists(fit_output_dir)) {
 			filesystem::remove_all(fit_output_dir);
 		}
+#else
+		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+#endif
 		create_output_directory();
 	}
 
@@ -9713,11 +9727,14 @@ void QLens::chi_square_twalk()
 	if (setup_fit_parameters()==false) return;
 	fit_set_optimizations();
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
-		//string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
-		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+#if __cplusplus >= 201703L // C++17 standard or later
 		if (filesystem::exists(fit_output_dir)) {
 			filesystem::remove_all(fit_output_dir);
 		}
+#else
+		string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
+		if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+#endif
 		create_output_directory();
 	}
 	if (!initialize_fitmodel(true)) {

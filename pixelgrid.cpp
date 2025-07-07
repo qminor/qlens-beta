@@ -19530,6 +19530,10 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 	int i,j;
 #ifdef USE_MKL
 	if (!use_covariance_matrix) {
+//#ifdef USE_EIGEN
+		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
+		//Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> fmatrix_eigen(Fmatrix_stacked.array(),n_amps,n_amps);
+//#endif
 		lapack_int status;
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed.array());
 		if (status != 0) {
