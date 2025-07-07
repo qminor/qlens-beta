@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <csignal>
 #include <sys/stat.h>
+#include <filesystem>
 using namespace std;
 
 #ifdef USE_COOLEST
@@ -454,7 +455,6 @@ QLens::QLens() : UCMC(), ModelParams()
 	sbprofile_surface_brightness = NULL;
 	amplitude_vector = NULL;
 	reg_weight_factor = NULL;
-	//source_pixel_n_images = NULL;
 	image_pixel_location_Lmatrix = NULL;
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
@@ -824,7 +824,6 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	sbprofile_surface_brightness = NULL;
 	amplitude_vector = NULL;
 	reg_weight_factor = NULL;
-	//source_pixel_n_images = NULL;
 	Lmatrix_index = NULL;
 	if (lens_in->psf_matrix==NULL) psf_matrix = NULL;
 	else {
@@ -9104,6 +9103,9 @@ void QLens::nested_sampling()
 		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
+		if (filesystem::exists(fit_output_dir)) {
+			filesystem::remove_all(fit_output_dir);
+		}
 		create_output_directory();
 	}
 
@@ -9206,6 +9208,9 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
+		if (filesystem::exists(fit_output_dir)) {
+			filesystem::remove_all(fit_output_dir);
+		}
 		create_output_directory();
 	}
 
@@ -9488,6 +9493,9 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for nested sampling results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
+		if (filesystem::exists(fit_output_dir)) {
+			filesystem::remove_all(fit_output_dir);
+		}
 		create_output_directory();
 	}
 
@@ -9707,6 +9715,9 @@ void QLens::chi_square_twalk()
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
 		//string rmstring = "if [ -e " + fit_output_dir + " ]; then rm -r " + fit_output_dir + "; fi";
 		//if (system(rmstring.c_str()) != 0) warn("could not delete old output directory for twalk results"); // delete the old output directory and remake it, just in case there is old data that might get mixed up when running mkdist
+		if (filesystem::exists(fit_output_dir)) {
+			filesystem::remove_all(fit_output_dir);
+		}
 		create_output_directory();
 	}
 	if (!initialize_fitmodel(true)) {
@@ -13703,7 +13714,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					}
 				}
 
-				if (regularization_method != None) create_regularization_matrix_shapelet(zsrc_i);
+				if ((regularization_method != None) and (i_shapelet >= 0)) create_regularization_matrix_shapelet(zsrc_i);
 				if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
 				create_lensing_matrices_from_Lmatrix_dense(zsrc_i,false,verbal);
 
@@ -14294,7 +14305,6 @@ QLens::~QLens()
 	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
 	if (amplitude_vector != NULL) delete[] amplitude_vector;
 	if (reg_weight_factor != NULL) delete[] reg_weight_factor;
-	//if (source_pixel_n_images != NULL) delete[] source_pixel_n_images;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
 	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
 	if (Lmatrix_index != NULL) delete[] Lmatrix_index;

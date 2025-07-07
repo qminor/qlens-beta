@@ -758,7 +758,6 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double *img_minus_sbprofile;
 	double *amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	double *amplitude_vector;
-	//double *source_pixel_n_images;
 
 	int *image_pixel_location_Lmatrix;
 	int *source_pixel_location_Lmatrix;

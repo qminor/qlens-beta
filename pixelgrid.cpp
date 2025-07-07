@@ -842,29 +842,6 @@ void SourcePixel::fill_surface_brightness_vector_recursive(int& column_j)
 	}
 }
 
-/*
-void SourcePixel::fill_n_image_vector()
-{
-	int column_j = 0;
-	fill_n_image_vector_recursive(column_j);
-}
-
-void SourcePixel::fill_n_image_vector_recursive(int& column_j)
-{
-	int i,j;
-	for (j=0; j < w_N; j++) {
-		for (i=0; i < u_N; i++) {
-			if (cell[i][j]->cell != NULL) cell[i][j]->fill_n_image_vector_recursive(column_j);
-			else {
-				if (cell[i][j]->active_pixel) {
-					lens->source_pixel_n_images[column_j++] = cell[i][j]->n_images;
-				}
-			}
-		}
-	}
-}
-*/
-
 double SourcePixelGrid::find_avg_n_images(const double sb_threshold_frac)
 {
 	// no support for adaptive Cartesian grid in this function, which is ok since we're only using this when Cartesian sources are not being used
@@ -14629,11 +14606,6 @@ void QLens::initialize_pixel_matrices(const int zsrc_i, const bool potential_per
 	if (delaunay) {
 		Lmatrix_n_elements = image_pixel_grid->count_nonzero_source_pixel_mappings_delaunay();
 	} else {
-		//if (n_image_prior) {
-			// does this get used? I think you can get rid of it, but check later
-			//source_pixel_n_images = new double[n_amps];
-			//cartesian_srcgrid->fill_n_image_vector();
-		//}
 		Lmatrix_n_elements = image_pixel_grid->count_nonzero_source_pixel_mappings_cartesian();
 	}
 	if (potential_perturbations) Lmatrix_n_elements += image_pixel_grid->count_nonzero_lensgrid_pixel_mappings();
@@ -14748,9 +14720,10 @@ void QLens::clear_pixel_matrices()
 	if (reg_weight_factor != NULL) delete[] reg_weight_factor;
 	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
 	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
-	if (Lmatrix_index != NULL) delete[] Lmatrix_index;
 	if (Lmatrix != NULL) delete[] Lmatrix;
+	if (Lmatrix_index != NULL) delete[] Lmatrix_index;
 	image_surface_brightness = NULL;
+	image_surface_brightness_supersampled = NULL;
 	imgpixel_covinv_vector = NULL;
 	point_image_surface_brightness = NULL;
 	sbprofile_surface_brightness = NULL;
@@ -14760,10 +14733,6 @@ void QLens::clear_pixel_matrices()
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
 	Lmatrix_index = NULL;
-	//if ((n_image_prior) and (source_fit_mode==Cartesian_Source)) {
-		//if (source_pixel_n_images != NULL) delete[] source_pixel_n_images;
-		//source_pixel_n_images = NULL;
-	//}
 }
 
 void QLens::construct_Lmatrix(const int zsrc_i, const bool delaunay, const bool potential_perturbations, const bool verbal)
