@@ -15,7 +15,7 @@
 #include "Eigen/Cholesky"
 #include "Eigen/Dense"
 #include "unsupported/Eigen/NNLS"
-#include "fnnls.hpp"
+//#include "fnnls.hpp"
 #endif
 
 #ifdef USE_MKL
@@ -19569,16 +19569,17 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 		Eigen::MatrixXd lltmat(n_amps,n_amps);
 		Eigen::VectorXd amplitudes_eigen(n_amps);
 		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> dvector_eigen(Dvector,n_amps,1);
-		if (use_fnnls) {
-			Eigen::Map<Eigen::MatrixXd> ZT_map(Fmatrix_stacked.array(),n_amps,n_amps);
-			Eigen::Map<Eigen::VectorXd> x_map(Dvector,n_amps);
-			if (show_wtime) {
-				inv_wtime0 = omp_get_wtime();
-			}
-			amplitudes_eigen = fnnls::fnnls_solver<double>(ZT_map,x_map,max_nnls_iterations,nnls_tolerance);
-			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
-			lltmat = Fmatrix_llt.matrixL();
-		} else if (use_non_negative_least_squares) {
+		//if (use_fnnls) {
+			//Eigen::Map<Eigen::MatrixXd> ZT_map(Fmatrix_stacked.array(),n_amps,n_amps);
+			//Eigen::Map<Eigen::VectorXd> x_map(Dvector,n_amps);
+			//if (show_wtime) {
+				//inv_wtime0 = omp_get_wtime();
+			//}
+			//amplitudes_eigen = fnnls::fnnls_solver<double>(ZT_map,x_map,max_nnls_iterations,nnls_tolerance);
+			//Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
+			//lltmat = Fmatrix_llt.matrixL();
+		//} else
+		if (use_non_negative_least_squares) {
 			if (show_wtime) {
 				inv_wtime0 = omp_get_wtime();
 			}
