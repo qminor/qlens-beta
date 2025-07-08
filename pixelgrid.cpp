@@ -12,7 +12,10 @@
 #include <stdio.h>
 
 #ifdef USE_EIGEN
-#include "Cholesky"
+#include "Eigen/Cholesky"
+#include "Eigen/Dense"
+#include "unsupported/Eigen/NNLS"
+#include "fnnls.hpp"
 #endif
 
 #ifdef USE_MKL
@@ -8677,7 +8680,7 @@ bool ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 	if (n_neighbors < 0) {
 		for (i=0; i < npixels_x; i++) {
 			for (j=0; j < npixels_y; j++) {
-				if (foreground_mask[i][j]) extended_mask[mask_k][i][j] = true;
+				extended_mask[mask_k][i][j] = true;
 			}
 		}
 		return true;
@@ -8710,7 +8713,7 @@ bool ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 								//cout << "NOT adding pixel " << (i+1) << " " << j << " " << r << " vs " << r0 << endl;
 							}
 							else {
-								if (foreground_mask[i+1][j]) extended_mask[mask_k][i+1][j] = true;
+								extended_mask[mask_k][i+1][j] = true;
 								//cout << "Adding pixel " << (i+1) << " " << j << " " << r0 << endl;
 							}
 						}
@@ -8721,7 +8724,7 @@ bool ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								//cout << "NOT Adding pixel " << (i-1) << " " << j << " " << r << " vs " << r0 << endl;
 							} else {
-								if (foreground_mask[i-1][j]) extended_mask[mask_k][i-1][j] = true;
+								extended_mask[mask_k][i-1][j] = true;
 								//cout << "Adding pixel " << (i-1) << " " << j << " " << r << " vs " << r0 << endl;
 							}
 						}
@@ -8732,7 +8735,7 @@ bool ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								//cout << "NOT Adding pixel " << (i) << " " << (j+1) << " " << r << " vs " << r0 << endl;
 							} else {
-								if (foreground_mask[i][j+1]) extended_mask[mask_k][i][j+1] = true;
+								extended_mask[mask_k][i][j+1] = true;
 								//cout << "Adding pixel " << (i) << " " << (j+1) << " " << r << " vs " << r0 << endl;
 							}
 						}
@@ -8743,7 +8746,7 @@ bool ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 							if ((only_interior_neighbors) and ((r - r0) > 1e-6)) {
 								//cout << "NOT Adding pixel " << (i) << " " << (j-1) << " " << r << " vs " << r0 << endl;
 							} else {
-								if (foreground_mask[i][j-1]) extended_mask[mask_k][i][j-1] = true;
+								extended_mask[mask_k][i][j-1] = true;
 								//cout << "Adding pixel " << (i) << " " << (j-1) << " " << r << " vs " << r0 << endl;
 							}
 						}
@@ -8757,7 +8760,7 @@ bool ImagePixelData::set_extended_mask(const int n_neighbors, const bool add_to_
 				if (!extended_mask[mask_k][i][j]) {
 					if (((i < npixels_x-1) and (extended_mask[mask_k][i+1][j])) and ((i > 0) and (extended_mask[mask_k][i-1][j])) and ((j < npixels_y-1) and (extended_mask[mask_k][i][j+1])) and ((j > 0) and (extended_mask[mask_k][i][j-1]))) {
 						if (!extended_mask[mask_k][i][j]) {
-							if (foreground_mask[i][j]) extended_mask[mask_k][i][j] = true;
+							extended_mask[mask_k][i][j] = true;
 							//cout << "Filling hole " << i << " " << j << endl;
 						}
 					}
@@ -11044,7 +11047,8 @@ void ImagePixelGrid::setup_pixel_arrays()
 			foreground_surface_brightness[i][j] = 0;
 			noise_map[i][j] = 0;
 			pixel_in_mask[i][j] = true; // default, since no mask has been introduced yet
-			if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
+			maps_to_source_pixel[i][j] = true;
+			//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) maps_to_source_pixel[i][j] = true; // in this mode you can always get a surface brightness for any image pixel
 			//nsplits[i][j] = lens_in->default_imgpixel_nsplit; // default
 			subpixel_maps_to_srcpixel[i][j] = new bool[max_nsplit*max_nsplit];
 			subpixel_center_pts[i][j] = new lensvector[max_nsplit*max_nsplit];
@@ -12971,8 +12975,9 @@ int ImagePixelGrid::count_nonzero_lensgrid_pixel_mappings()
 
 
 
-void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool potential_perturbations)
+void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool potential_perturbations, const bool map_all_imgpixels)
 {
+	//cout << "ASSIGNING MAPPING FLASGS" << endl;
 	int i,j,k;
 	n_active_pixels = 0;
 	n_high_sn_pixels = 0;
@@ -12983,6 +12988,9 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 			if (delaunay) mapped_delaunay_srcpixels[i][j].clear();
 			else mapped_cartesian_srcpixels[i][j].clear();
 			maps_to_source_pixel[i][j] = false;
+			if ((map_all_imgpixels) and ((pixel_in_mask == NULL) or (pixel_in_mask[i][j]))) {
+				maps_to_source_pixel[i][j] = true;
+			}
 			ptr = n_mapped_srcpixels[i][j];
 			for (k=0; k < nsubpix; k++) {
 				(*ptr++) = 0;
@@ -13020,8 +13028,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 							#pragma omp atomic
 							n_active_pixels++;
 							if ((pixel_in_mask != NULL) and (pixel_in_mask[i][j]) and (lens->image_pixel_data->high_sn_pixel[i][j])) n_high_sn_pixels++;
-						} else
-							maps_to_source_pixel[i][j] = false;
+						}
 					}
 				}
 			}
@@ -13068,7 +13075,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 									#pragma omp atomic
 									n_high_sn_pixels++;
 								}
-							} else maps_to_source_pixel[i][j] = false;
+							}
 						}
 					}
 				}
@@ -13093,8 +13100,6 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 									#pragma omp atomic
 									n_high_sn_pixels++;
 								}
-							} else {
-								maps_to_source_pixel[i][j] = false;
 							}
 							if (potential_perturbations) {
 								lensgrid->assign_mapping_flags(center_pts[i][j],mapped_potpixels[i][j],n_mapped_potpixels[i][j][0],i,j,thread);
@@ -14373,9 +14378,11 @@ bool QLens::assign_pixel_mappings(const int zsrc_i, const bool potential_perturb
 		wtime0 = omp_get_wtime();
 	}
 #endif
+	n_mge_amps = count_MGE_amplitudes(zsrc_i);
+	bool map_all_imgpixels = (n_mge_amps > 0) ? true : false;
 	int tot_npixels_count;
 	if (source_fit_mode==Delaunay_Source) {
-		image_pixel_grid->assign_image_mapping_flags(true,potential_perturbations);
+		image_pixel_grid->assign_image_mapping_flags(true,potential_perturbations,map_all_imgpixels);
 		if (image_pixel_grid->delaunay_srcgrid != NULL) { 
 			source_npixels = image_pixel_grid->delaunay_srcgrid->assign_active_indices_and_count_source_pixels(activate_unmapped_source_pixels);
 		} else {
@@ -14384,7 +14391,7 @@ bool QLens::assign_pixel_mappings(const int zsrc_i, const bool potential_perturb
 	} else {
 		tot_npixels_count = cartesian_srcgrid->assign_indices_and_count_levels();
 		if ((mpi_id==0) and (adaptive_subgrid) and (verbal==true)) cout << "Number of source cells: " << tot_npixels_count << endl;
-		image_pixel_grid->assign_image_mapping_flags(false,potential_perturbations);
+		image_pixel_grid->assign_image_mapping_flags(false,potential_perturbations,map_all_imgpixels);
 
 		cartesian_srcgrid->regrid = false;
 		if (nlens==0) source_npixels = 0;
@@ -14398,7 +14405,7 @@ bool QLens::assign_pixel_mappings(const int zsrc_i, const bool potential_perturb
 			cartesian_srcgrid->assign_all_neighbors();
 			tot_npixels_count = cartesian_srcgrid->assign_indices_and_count_levels();
 			if ((mpi_id==0) and (verbal==true)) cout << "Number of source cells after re-gridding: " << tot_npixels_count << endl;
-			image_pixel_grid->assign_image_mapping_flags(false,potential_perturbations);
+			image_pixel_grid->assign_image_mapping_flags(false,potential_perturbations,map_all_imgpixels);
 			//cartesian_srcgrid->print_indices();
 			source_npixels = cartesian_srcgrid->assign_active_indices_and_count_source_pixels(regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
 		}
@@ -14411,7 +14418,6 @@ bool QLens::assign_pixel_mappings(const int zsrc_i, const bool potential_perturb
 	} else {
 		lensgrid_npixels = 0;
 	}
-	n_mge_amps = count_MGE_amplitudes(zsrc_i);
 	n_amps += n_mge_amps;
 	source_and_lens_n_amps = source_npixels + lensgrid_npixels + n_mge_amps;
 	image_pixel_grid->Lmatrix_n_amps = source_and_lens_n_amps; // store the number of source/potential amplitudes for each image pixel grid; useful later for initializing/cleaning up FFT convolution arrays
@@ -14674,14 +14680,11 @@ void QLens::initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal)
 		n_amps += n_ptsrc;
 	}
 
-	if (point_image_surface_brightness != NULL) die("FUCK0");
 	point_image_surface_brightness = new double[image_npixels];
 
 	if (n_amps <= 0) die("no shapelet or point source amplitude parameters found");
-	if (amplitude_vector != NULL) die("FUCK1");
 	amplitude_vector = new double[n_amps];
 	if ((use_lum_weighted_regularization) or (use_distance_weighted_regularization) or (use_mag_weighted_regularization)) {
-	if (reg_weight_factor != NULL) die("FUCK3");
 		reg_weight_factor = new double[source_npixels];
 		for (int i=0; i < source_npixels; i++) reg_weight_factor[i] = 1.0;
 	}
@@ -15973,10 +15976,12 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 	int npix;
 	int *pixel_map_ii, *pixel_map_jj;
 	if (foreground) {
+		//cout << "using fgmask" << endl;
 		npix = image_npixels_fgmask;
 		pixel_map_ii = image_pixel_grid->active_image_pixel_i_fgmask;
 		pixel_map_jj = image_pixel_grid->active_image_pixel_j_fgmask;
 	} else {
+		//cout << "NOT using fgmask" << endl;
 		if (!psf_supersampling) {
 			npix = image_npixels;
 			pixel_map_ii = image_pixel_grid->active_image_pixel_i;
@@ -16056,6 +16061,10 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 				k = 2*(jj*ni + ii);
 				img_zvec[k] = surface_brightness_vector[img_index];
 #endif
+			//} else {
+				//cout << "WTF?" << endl;
+				//if (!image_pixel_grid->maps_to_source_pixel[i][j]) cout << "DOESNT MAP" << endl;
+				//die();
 			}
 		}
 #ifdef USE_OPENMP
@@ -16117,6 +16126,8 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 				k = 2*(jj*ni + ii);
 				surface_brightness_vector[img_index] = img_zvec[k];
 #endif
+			//} else {
+				//cout << "HARG?" << endl;
 			}
 		}
 #ifndef USE_FFTW
@@ -18911,12 +18922,29 @@ double QLens::chisq_regparam_dense(const double logreg)
 	double Fmatrix_logdet, Gmatrix_logdet;
 	if (!use_covariance_matrix) {
 #ifdef USE_MKL
+#ifdef USE_EIGEN
+		LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed_copy.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
+		LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',n_amps,Fmatrix_packed_copy.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the upper half of Fmatrix_stacked
+		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> Fmatrix_eigen(Fmatrix_stacked.array(),n_amps,n_amps);
+		Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
+		Eigen::MatrixXd lltmat(n_amps,n_amps);
+		lltmat = Fmatrix_llt.matrixL();
+		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> dvector_eigen(Dvector,n_amps,1);
+		Eigen::VectorXd amplitudes_eigen(n_amps);
+		amplitudes_eigen = Fmatrix_llt.solve(dvector_eigen);
+		for (int i=0; i < n_amps; i++) amplitude_vector[i] = amplitudes_eigen[i];
+		Fmatrix_logdet = 0;
+		for (int i=0; i < n_amps; i++) Fmatrix_logdet += log(abs(lltmat(i,i)));
+		Fmatrix_logdet *= 2;
+		//Fmatrix_log_determinant = 2*log(abs(lltmat.diagonal().prod()));
+#else
 		lapack_int status;
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed_copy.array());
 		if (status != 0) warn("Matrix was not invertible and/or positive definite");
 		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',n_amps,1,Fmatrix_packed_copy.array(),amplitude_vector,1);
 		Cholesky_logdet_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,n_amps);
+#endif
 #else
 		// At the moment, the native (non-MKL) Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper
 		// triangular part, we have to switch Fmatrix to a lower triangular version here. Fix later so it uses the upper triangular Cholesky version!!!
@@ -19530,10 +19558,52 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 	int i,j;
 #ifdef USE_MKL
 	if (!use_covariance_matrix) {
-//#ifdef USE_EIGEN
-		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
-		//Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> fmatrix_eigen(Fmatrix_stacked.array(),n_amps,n_amps);
-//#endif
+#ifdef USE_EIGEN
+		double inv_wtime0, inv_wtime;
+		if (show_wtime) {
+			inv_wtime0 = omp_get_wtime();
+		}
+		LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
+		LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the upper half of Fmatrix_stacked
+		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> Fmatrix_eigen(Fmatrix_stacked.array(),n_amps,n_amps);
+		Eigen::MatrixXd lltmat(n_amps,n_amps);
+		Eigen::VectorXd amplitudes_eigen(n_amps);
+		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> dvector_eigen(Dvector,n_amps,1);
+		if (use_fnnls) {
+			Eigen::Map<Eigen::MatrixXd> ZT_map(Fmatrix_stacked.array(),n_amps,n_amps);
+			Eigen::Map<Eigen::VectorXd> x_map(Dvector,n_amps);
+			if (show_wtime) {
+				inv_wtime0 = omp_get_wtime();
+			}
+			amplitudes_eigen = fnnls::fnnls_solver<double>(ZT_map,x_map,max_nnls_iterations,nnls_tolerance);
+			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
+			lltmat = Fmatrix_llt.matrixL();
+		} else if (use_non_negative_least_squares) {
+			if (show_wtime) {
+				inv_wtime0 = omp_get_wtime();
+			}
+			Eigen::MatrixXd lnnlsmat(n_amps,n_amps);
+
+			Eigen::NNLS<Eigen::MatrixXd> Fmatrix_nnls(Fmatrix_eigen,max_nnls_iterations,nnls_tolerance);
+			Fmatrix_nnls.setTolerance(nnls_tolerance);
+			amplitudes_eigen = Fmatrix_nnls.solve(dvector_eigen);
+			if ((mpi_id==0) and (verbal)) {
+				cout << "Number of iterations required: " << Fmatrix_nnls.iterations() << endl;
+				cout << "Tolerance: " << Fmatrix_nnls.tolerance() << endl;
+			}
+			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
+			lltmat = Fmatrix_llt.matrixL();
+		} else {
+			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
+			lltmat = Fmatrix_llt.matrixL();
+			amplitudes_eigen = Fmatrix_llt.solve(dvector_eigen);
+		}
+		for (int i=0; i < n_amps; i++) amplitude_vector[i] = amplitudes_eigen[i];
+		Fmatrix_log_determinant = 0;
+		for (int i=0; i < n_amps; i++) Fmatrix_log_determinant += log(abs(lltmat(i,i)));
+		Fmatrix_log_determinant *= 2;
+		//Fmatrix_log_determinant = 2*log(abs(lltmat.diagonal().prod()));
+#else
 		lapack_int status;
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed.array());
 		if (status != 0) {
@@ -19546,6 +19616,7 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',n_amps,1,Fmatrix_packed.array(),amplitude_vector,1);
 		Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,n_amps);
+#endif
 	} else {
 		lapack_int status;
 		int *ipiv = new int[n_amps];
@@ -19563,6 +19634,7 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 	if (use_covariance_matrix) {
 		die("Compiling with MKL is currently required for covariance kernel regularization");
 	}
+	cout << "WHAT THE FUCK" << endl;
 	// At the moment, the native Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper triangular part,
 	// we have to switch Fmatrix to a lower triangular version here
 	repack_matrix_lower(Fmatrix_packed);

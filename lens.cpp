@@ -394,6 +394,10 @@ QLens::QLens() : UCMC(), ModelParams()
 	ray_tracing_method = Interpolate;
 	natural_neighbor_interpolation = true; // if false, uses 3-point interpolation
 	inversion_method = DENSE;
+	use_non_negative_least_squares = false;
+	use_fnnls = false;
+	max_nnls_iterations = 1000;
+	nnls_tolerance = 1e-6;
 	parallel_mumps = false;
 	show_mumps_info = false;
 
@@ -787,6 +791,10 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 
 	ray_tracing_method = lens_in->ray_tracing_method;
 	inversion_method = lens_in->inversion_method;
+	use_non_negative_least_squares = lens_in->use_non_negative_least_squares;
+	use_fnnls = lens_in->use_fnnls;
+	max_nnls_iterations = lens_in->max_nnls_iterations;
+	nnls_tolerance = lens_in->nnls_tolerance;
 	parallel_mumps = lens_in->parallel_mumps;
 	show_mumps_info = lens_in->show_mumps_info;
 
@@ -12820,8 +12828,16 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 			}
 			if ((!at_least_one_inverted_src_object) and (at_least_one_noninverted_foreground_src_included)) plot_foreground_only = true;
 
-			if ((!plot_foreground_only) and (at_least_one_inverted_src_object)) {
-				image_pixel_grid->find_surface_brightness(false,true,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections,include_lensed_nonshapelet_src_as_foreground); // the last argument will cause it to omit lense nonshapelet sources here, since they'll be included in the foreground SB calculation
+			if (((include_fgmask_in_inversion) or (!plot_foreground_only)) and (at_least_one_inverted_src_object)) {
+				bool fg_only = false;
+				bool lensed_only = true;
+				if ((include_fgmask_in_inversion) and (plot_foreground_only)) {
+					fg_only = true;
+					lensed_only = false; 
+					// not working...fix this on Thursday!!!
+					//cout << "DOING THIS?" << endl;
+				}
+				image_pixel_grid->find_surface_brightness(fg_only,lensed_only,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections,include_lensed_nonshapelet_src_as_foreground); // the last argument will cause it to omit lense nonshapelet sources here, since they'll be included in the foreground SB calculation
 				vectorize_image_pixel_surface_brightness(zsrc_i,true); // note that in this case, the image pixel vector does NOT contain the foreground; the foreground PSF convolution was done separately above
 				PSF_convolution_pixel_vector(zsrc_i,false,verbose,fft_convolution);
 				store_image_pixel_surface_brightness(zsrc_i);

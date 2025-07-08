@@ -19,9 +19,9 @@
 #endif
 
 #ifdef USE_EIGEN
-#include "Cholesky"
-using Eigen::MatrixXd;
-using Eigen::VectorXd;
+//#include "Eigen/Cholesky"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
 #endif
 
 #include <unistd.h>
@@ -14712,6 +14712,46 @@ void QLens::process_commands(bool read_file)
 				else Complain("invalid argument to 'inversion_method' command; must specify valid inversion method");
 			} else Complain("invalid number of arguments; can only inversion method");
 		}
+		else if (words[0]=="use_nnls")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use non-negative least squares solver: " << display_switch(use_non_negative_least_squares) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_nnls' command; must specify 'on' or 'off'");
+				set_switch(use_non_negative_least_squares,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="use_fnnls")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use non-negative least squares solver: " << display_switch(use_fnnls) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_fnnls' command; must specify 'on' or 'off'");
+				set_switch(use_fnnls,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="nnls_it")
+		{
+			int param;
+			if (nwords == 2) {
+				if (!(ws[1] >> param)) Complain("invalid maximum number of NNLS iterations");
+				if (param < 0) Complain("nnls_it cannot be negative");
+				max_nnls_iterations = param;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "nnls_it = " << max_nnls_iterations << endl;
+			} else Complain("must specify either zero or one argument (nnls_it)");
+		}
+		else if (words[0]=="nnls_tol")
+		{
+			double tol;
+			if (nwords == 2) {
+				if (!(ws[1] >> tol)) Complain("invalid NNLS tolerance");
+				if (tol < 0) Complain("nnls_tol cannot be negative");
+				nnls_tolerance = tol;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "nnls_tol = " << nnls_tolerance << endl;
+			} else Complain("must specify either zero or one argument (nnls_tol)");
+		}
 		else if (words[0]=="auto_srcgrid")
 		{
 			if (nwords==1) {
@@ -14974,20 +15014,32 @@ void QLens::process_commands(bool read_file)
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
 #ifdef USE_EIGEN
-			MatrixXd A(2,2);
+			Eigen::MatrixXd A(2,2);
 			A(0,0) = 3;
 			A(0,1) = -1;
 			A(1,0) = 2.5;
 			A(1,1) = A(1,0) + A(0,1);
-			MatrixXd B(2,2);
+			Eigen::MatrixXd B(2,2);
 			B << 1, 5, 2, -4;
-			MatrixXd C(2,2);
+			Eigen::MatrixXd C(2,2);
 			C = A + B;
 			cout << C << endl;
-			VectorXd b(2);
-			b << 3, 2;
-			C = A*b;
-			cout << C << endl;
+			cout << C(0,1) << " IH" << endl;
+			//VectorXd b(2);
+			//b << 3, 2;
+			//C = A*b;
+			//cout << C << endl;
+			cout << "DIAGNOAL PROD: " << endl;
+			cout << C.diagonal().prod() << endl;
+			Eigen::MatrixXd D(3,3);
+			D(0,0) = 2;
+			D(0,1) = 5;
+			D(1,1) = 7;
+			D(2,2) = 9;
+			D(2,1) = 1e-5;
+			D(0,2) = 2;
+			Eigen::SparseView<Eigen::MatrixXd> sv = D.sparseView();
+			cout << sv << endl;
 #endif
 			//if ((delaunay_srcgrids) and (delaunay_srcgrids[0])) {
 				//double qs,phi_s,xavg,yavg;

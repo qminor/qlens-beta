@@ -650,6 +650,10 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
 	RegularizationMethod regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
+	bool use_non_negative_least_squares;
+	bool use_fnnls;
+	int max_nnls_iterations;
+	double nnls_tolerance;
 	RayTracingMethod ray_tracing_method;
 	bool natural_neighbor_interpolation;
 	bool parallel_mumps, show_mumps_info;
