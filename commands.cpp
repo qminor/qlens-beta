@@ -18,11 +18,11 @@
 #include <readline/history.h>
 #endif
 
-#ifdef USE_EIGEN
+//#ifdef USE_EIGEN
 //#include "Eigen/Cholesky"
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
-#endif
+//#include "Eigen/Dense"
+//#include "Eigen/Sparse"
+//#endif
 
 #include <unistd.h>
 using namespace std;
@@ -15013,6 +15013,7 @@ void QLens::process_commands(bool read_file)
 			if (Shear::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
+			/*
 #ifdef USE_EIGEN
 			Eigen::MatrixXd A(2,2);
 			A(0,0) = 3;
@@ -15041,6 +15042,7 @@ void QLens::process_commands(bool read_file)
 			Eigen::SparseView<Eigen::MatrixXd> sv = D.sparseView();
 			cout << sv << endl;
 #endif
+			*/
 			//if ((delaunay_srcgrids) and (delaunay_srcgrids[0])) {
 				//double qs,phi_s,xavg,yavg;
 				//delaunay_srcgrids[0]->find_source_moments(200,qs,phi_s,xavg,yavg);
