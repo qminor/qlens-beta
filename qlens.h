@@ -121,8 +121,10 @@ struct ImageDataSet {
 class PointSource : public ModelParams
 {
 	friend class QLens;
+	friend class SB_Profile;
 	QLens *lens;
 
+	int ptsrc_number; // stores index in point source list
 	lensvector pos;
 	lensvector shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
 	double zsrc, srcflux;

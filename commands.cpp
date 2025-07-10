@@ -1021,7 +1021,7 @@ void QLens::process_commands(bool read_file)
 					else if (words[2]=="priors")
 						cout << "fit priors [-nosci]\n"
 							"fit priors <param_num/name> <prior_type> [prior_params]\n"
-							"fit priors <param_num/name> range <lower_limit> <upper_limit>\n\n"
+							"fit priors <param_num/name> limits <lower_limit> <upper_limit>\n\n"
 							"fit priors limits [param_num/name]\n\n"
 							"Define prior probability distributions in each fit parameter, which are used by the T-Walk and nested\n"
 							"sampling routines. Type 'fit priors' to see current list of fit parameters and corresponding priors/limits\n"
@@ -5247,6 +5247,7 @@ void QLens::process_commands(bool read_file)
 			bool vary_parameters = false;
 			bool anchor_source_center = false;
 			bool anchor_center_to_lens = false;
+			bool anchor_center_to_ptsrc = false;
 			int anchornum; // in case new source is being anchored to existing lens
 			int pmode = 0;
 			int emode = -1;
@@ -5841,6 +5842,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[6].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[6].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							}
 
 						} else if (nwords == 8) {
@@ -5878,6 +5886,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -5944,6 +5953,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[pi].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[pi].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							} else Complain("must specify both xc and yc, or 'anchor_center=#' if anchoring, for model Shapelet");
 						} else if (nwords == (pi+2)) {
 							if (!(ws[pi++] >> xc)) Complain("invalid x-center parameter for model shapelet");
@@ -5977,6 +5993,7 @@ void QLens::process_commands(bool read_file)
 						add_shapelet_source(is_lensed, zs_in, amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) {
 							if (set_sb_vary_parameters(n_sb-1,vary_flags)==false) Complain("could not vary parameters for model shapelet");
@@ -6014,6 +6031,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[pi].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[pi].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							} else Complain("must specify both xc and yc, or 'anchor_center=#' if anchoring, for model Shapelet");
 						} else if (nwords == (pi+2)) {
 							if (!(ws[pi++] >> xc)) Complain("invalid x-center parameter for model mge");
@@ -6047,6 +6071,7 @@ void QLens::process_commands(bool read_file)
 						add_mge_source(is_lensed, zs_in, reg, amp0, sig_i, sig_f, q, theta, xc, yc, nmax, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (vary_parameters) {
@@ -6088,6 +6113,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[7].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[7].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							}
 						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model sersic");
@@ -6125,6 +6157,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6172,6 +6205,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[10].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[10].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							}
 						} else if (nwords == 12) {
 							if (!(ws[10] >> xc)) Complain("invalid x-center parameter for model Csersic");
@@ -6209,6 +6249,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6254,6 +6295,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[8].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[8].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							}
 						} else if (nwords == 10) {
 							if (!(ws[8] >> xc)) Complain("invalid x-center parameter for model csersic");
@@ -6292,6 +6340,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6339,6 +6388,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[10].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[10].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							}
 						} else if (nwords == 12) {
 							if (!(ws[10] >> xc)) Complain("invalid x-center parameter for model dsersic");
@@ -6376,6 +6432,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6420,6 +6477,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[7].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[7].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							}
 						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model sple");
@@ -6457,6 +6521,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6501,6 +6566,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[7].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[7].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							}
 						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model dpie");
@@ -6538,6 +6610,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6581,6 +6654,13 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid lens number for lens to anchor to");
 								if (anchornum >= nlens) Complain("lens anchor number does not exist");
 								anchor_center_to_lens = true;
+							} else if (words[6].find("anchor_ptsrc_center=")==0) {
+								string anchorstr = words[7].substr(20);
+								stringstream anchorstream;
+								anchorstream << anchorstr;
+								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
+								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
+								anchor_center_to_ptsrc = true;
 							}
 						} else if (nwords == 8) {
 							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model nfw");
@@ -6618,6 +6698,7 @@ void QLens::process_commands(bool read_file)
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
+						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}

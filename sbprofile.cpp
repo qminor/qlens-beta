@@ -38,6 +38,7 @@ void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_
 	parameter_mode = pmode_in;
 	center_anchored_to_lens = false;
 	center_anchored_to_source = false;
+	center_anchored_to_ptsrc = false;
 	if (is_elliptical_source) {
 		ellipticity_mode = default_ellipticity_mode;
 	} else {
@@ -83,6 +84,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	center_anchored_to_lens = sb_in->center_anchored_to_lens;
 	center_anchor_lens = sb_in->center_anchor_lens;
 	center_anchored_to_source = sb_in->center_anchored_to_source;
+	center_anchored_to_ptsrc = sb_in->center_anchored_to_ptsrc;
 	center_anchor_source = sb_in->center_anchor_source;
 	is_lensed = sb_in->is_lensed;
 	zoom_subgridding = sb_in->zoom_subgridding;
@@ -273,9 +275,18 @@ void SB_Profile::anchor_center_to_source(SB_Profile** center_anchor_list, const 
 	y_center = center_anchor_source->y_center;
 }
 
+void SB_Profile::anchor_center_to_ptsrc(PointSource** center_anchor_list, const int &center_anchor_ptsrc_number)
+{
+	if (!center_anchored_to_ptsrc) center_anchored_to_ptsrc = true;
+	center_anchor_ptsrc = center_anchor_list[center_anchor_ptsrc_number];
+	x_center = center_anchor_ptsrc->pos[0];
+	y_center = center_anchor_ptsrc->pos[1];
+}
+
 int SB_Profile::get_center_anchor_number() {
 	if (center_anchored_to_lens) return center_anchor_lens->lens_number;
 	else if (center_anchored_to_source) return center_anchor_source->sb_number;
+	else if (center_anchored_to_ptsrc) return center_anchor_ptsrc->ptsrc_number;
 	else return -1;
 }
 
@@ -288,6 +299,9 @@ void SB_Profile::delete_center_anchor()
 	} else if (center_anchored_to_source) {
 		center_anchored_to_source = false;
 		center_anchor_source = NULL;
+	} else if (center_anchored_to_ptsrc) {
+		center_anchored_to_ptsrc = false;
+		center_anchor_ptsrc = NULL;
 	}
 }
 
@@ -884,6 +898,9 @@ void SB_Profile::update_anchor_center()
 	} else if (center_anchored_to_source) {
 		x_center = center_anchor_source->x_center;
 		y_center = center_anchor_source->y_center;
+	} else if (center_anchored_to_ptsrc) {
+		x_center = center_anchor_ptsrc->pos[0];
+		y_center = center_anchor_ptsrc->pos[1];
 	}
 }
 
@@ -2235,6 +2252,7 @@ void SB_Profile::print_parameters(const double zs)
 	}
 	if (center_anchored_to_lens) cout << " (center anchored to lens " << center_anchor_lens->lens_number << ")";
 	else if (center_anchored_to_source) cout << " (center anchored to source " << center_anchor_source->sb_number << ")";
+	else if (center_anchored_to_ptsrc) cout << " (center anchored to ptsrc " << center_anchor_ptsrc->ptsrc_number << ")";
 	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != -1)) {
 		cout << " (";
 		if (ellipticity_gradient) cout << "egrad=on,";

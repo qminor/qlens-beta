@@ -15,6 +15,7 @@
 
 struct ImagePixelData;
 class LensProfile;
+class PointSource;
 class QLens;
 
 enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, dpie, nfw_SOURCE, SHAPELET, MULTI_GAUSSIAN_EXPANSION, TOPHAT, SB_MULTIPOLE };
@@ -110,9 +111,10 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	int sb_number;
 	bool is_lensed; // Can be a lensed source, or a galaxy in the lens plane
 	bool zoom_subgridding; // Useful if pixels are large compared to profile--subgrids to prevent undersampling
-	bool center_anchored_to_lens, center_anchored_to_source;
+	bool center_anchored_to_lens, center_anchored_to_source, center_anchored_to_ptsrc;
 	LensProfile* center_anchor_lens;
 	SB_Profile* center_anchor_source;
+	PointSource* center_anchor_ptsrc;
 	SB_Profile** parameter_anchor_source;
 	int* parameter_anchor_paramnum;
 	double* parameter_anchor_ratio;
@@ -146,6 +148,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 
 	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
 	void anchor_center_to_source(SB_Profile** center_anchor_list, const int &center_anchor_source_number);
+	void anchor_center_to_ptsrc(PointSource** center_anchor_list, const int &center_anchor_ptsrc_number);
 	void delete_center_anchor();
 	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	void disable_ellipticity_gradient();

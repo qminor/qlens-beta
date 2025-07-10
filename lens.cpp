@@ -3423,6 +3423,7 @@ void QLens::add_point_source(const double zsrc, const lensvector &sourcept, cons
 
 	n_ptsrc++;
 	ptsrc_list = newlist;
+	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->ptsrc_number = i;
 }
 
 void QLens::remove_point_source(int ptsrc_number)
@@ -3447,6 +3448,13 @@ void QLens::remove_point_source(int ptsrc_number)
 			j++;
 		}
 	}
+
+	for (i=0; i < n_sb; i++) {
+		// if any source profiles are anchored to the center of this point source, delete the anchor
+		if ((sb_list[i]->center_anchored_to_ptsrc==true) and (sb_list[i]->get_center_anchor_number()==ptsrc_number)) sb_list[i]->delete_center_anchor();
+	}
+
+
 
 	delete ptsrc_list[ptsrc_number];
 	delete[] ptsrc_list;
@@ -7016,6 +7024,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	for (i=0; i < n_sb; i++) {
 		if (fitmodel->sb_list[i]->center_anchored_to_lens==true) fitmodel->sb_list[i]->anchor_center_to_lens(fitmodel->lens_list, sb_list[i]->get_center_anchor_number());
 		if (fitmodel->sb_list[i]->center_anchored_to_source==true) fitmodel->sb_list[i]->anchor_center_to_source(fitmodel->sb_list, sb_list[i]->get_center_anchor_number());
+		if (fitmodel->sb_list[i]->center_anchored_to_ptsrc==true) fitmodel->sb_list[i]->anchor_center_to_ptsrc(fitmodel->ptsrc_list, sb_list[i]->get_center_anchor_number());
 		for (j=0; j < fitmodel->sb_list[i]->get_n_params(); j++) {
 			if (fitmodel->sb_list[i]->anchor_parameter_to_source[j]==true) {
 				SB_Profile *parameter_anchor_source = fitmodel->sb_list[sb_list[i]->parameter_anchor_source[j]->sb_number];
@@ -7062,7 +7071,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 void QLens::update_anchored_parameters_and_redshift_data()
 {
 	for (int i=0; i < n_sb; i++) {
-		if ((sb_list[i]->center_anchored_to_lens) or (sb_list[i]->center_anchored_to_source)) {
+		if ((sb_list[i]->center_anchored_to_lens) or (sb_list[i]->center_anchored_to_source) or (sb_list[i]->center_anchored_to_ptsrc)) {
 			sb_list[i]->update_anchor_center();
 		}
 		sb_list[i]->update_anchored_parameters();
@@ -13333,6 +13342,9 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 						if ((is_lensed) and (nlens==0)) die("lensed source point has been defined, but no lens objects have been created");
 						image_pixel_grids[zsrc_i]->find_point_images(ptsrc_list[i]->pos[0],ptsrc_list[i]->pos[1],ptsrc_list[i]->images,source_grid_defined,is_lensed,verbal);
 					}
+				}
+				for (i=0; i < n_sb; i++) {
+					if (sb_list[i]->center_anchored_to_ptsrc==true) sb_list[i]->update_anchor_center();
 				}
 			}
 		}
