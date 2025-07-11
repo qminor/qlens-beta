@@ -11934,7 +11934,7 @@ void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
 	}
 }
 
-double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool normalize_sb, bool show_noise_thresh, bool plot_log)
+double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_residual, bool normalize_sb, bool show_noise_thresh, bool plot_log, bool show_foreground_mask)
 {
 	string sb_filename = outfile_root + ".dat";
 	string x_filename = outfile_root + ".x";
@@ -11958,7 +11958,7 @@ double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_re
 	//ofstream wtfout("wtf2.dat");
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
+			if (((show_foreground_mask) and (lens->image_pixel_data->foreground_mask_data[i][j])) or ((!show_foreground_mask) and (pixel_in_mask==NULL) or (pixel_in_mask[i][j]))) {
 				if (!plot_residual) {
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
 					if (normalize_sb) {
@@ -12207,7 +12207,8 @@ void ImagePixelGrid::activate_extended_mask(const bool redo_fft)
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			pixel_in_mask[i][j] = emask[i][j];
+			//pixel_in_mask[i][j] = emask[i][j];
+			pixel_in_mask[i][j] = true;
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
 			mapped_potpixels[i][j].clear();
@@ -13134,12 +13135,25 @@ void ImagePixelGrid::set_zero_foreground_surface_brightness()
 	}
 }
 
-void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const bool lensed_and_inverted_sources_only, const bool include_first_order_corrections, const bool show_only_first_order_corrections, const bool omit_lensed_nonshapelet_sources)
+void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const bool lensed_sources_only, const bool include_first_order_corrections, const bool show_only_first_order_corrections, const bool omit_lensed_nonshapelet_sources)
 {
 	if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid == NULL)) die("No Delaunay source grid has been created");
 	if ((source_fit_mode==Cartesian_Source) and (cartesian_srcgrid == NULL)) die("No Delaunay source grid has been created");
 	bool supersampling = lens->psf_supersampling;
 	double noise;
+
+	bool at_least_one_foreground_src = false;
+	bool at_least_one_lensed_or_inverted_src = false;
+	for (int k=0; k < lens->n_sb; k++) {
+		if (!lens->sb_list[k]->is_lensed) {
+			at_least_one_foreground_src = true;
+		} else {
+			at_least_one_lensed_or_inverted_src = true;
+		}
+	}
+	if ((foreground_only) and (!at_least_one_foreground_src)) return;
+
+
 #ifdef USE_OPENMP
 	double wtime0, wtime;
 	if (lens->show_wtime) {
@@ -13155,17 +13169,6 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 	double sbmax=0;
 	if ((foreground_only) and (src_redshift_index > 0)) return; // only the first image_pixel_grid object will have foreground light included
 	if ((source_fit_mode == Cartesian_Source) or (source_fit_mode == Delaunay_Source)) {
-		bool at_least_one_noninverted_foreground_src = false;
-		bool at_least_one_lensed_or_inverted_src = false;
-		for (int k=0; k < lens->n_sb; k++) {
-			if ((!lens->sb_list[k]->is_lensed) and (lens->sb_list[k]->sbtype != MULTI_GAUSSIAN_EXPANSION)) {
-				at_least_one_noninverted_foreground_src = true;
-			} else {
-				at_least_one_lensed_or_inverted_src = true;
-			}
-		}
-		if ((foreground_only) and (!at_least_one_noninverted_foreground_src)) return;
-
 		if ((source_fit_mode == Cartesian_Source) and (ray_tracing_method == Area_Overlap)) {
 			lensvector **corners = new lensvector*[4];
 			for (j=0; j < y_N; j++) {
@@ -13176,18 +13179,18 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 					corners[2] = &corner_sourcepts[i+1][j];
 					corners[3] = &corner_sourcepts[i+1][j+1];
 					if (!foreground_only) surface_brightness[i][j] = cartesian_srcgrid->find_lensed_surface_brightness_overlap(corners,&twist_pts[i][j],twist_status[i][j],0);
-					if ((at_least_one_noninverted_foreground_src) and (!lensed_and_inverted_sources_only) and (src_redshift_index==0)) {
-						for (int k=0; k < lens->n_sb; k++) {
-							if (!lens->sb_list[k]->is_lensed) {
-								if (!lens->sb_list[k]->zoom_subgridding) {
-									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
-								} else {
-									noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
-									surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise);
-								}
-							}
-						}
-					}
+					//if ((at_least_one_noninverted_foreground_src) and (!lensed_sources_only) and (src_redshift_index==0)) {
+						//for (int k=0; k < lens->n_sb; k++) {
+							//if (!lens->sb_list[k]->is_lensed) {
+								//if (!lens->sb_list[k]->zoom_subgridding) {
+									//surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+								//} else {
+									//noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
+									//surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise);
+								//}
+							//}
+						//}
+					//}
 				}
 			}
 			delete[] corners;
@@ -13368,33 +13371,27 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 								}
 							}
 						}
-						if ((at_least_one_noninverted_foreground_src) and (!lensed_and_inverted_sources_only) and (src_redshift_index==0)) {
-							for (int k=0; k < lens->n_sb; k++) {
-								if (!lens->sb_list[k]->is_lensed) {
-									if (!lens->sb_list[k]->zoom_subgridding) {
-										surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
-									} else {
-										noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
-										surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise);
-									}
-								}
-							}
-						}
+						//if ((at_least_one_noninverted_foreground_src) and (!lensed_sources_only) and (src_redshift_index==0)) {
+							//for (int k=0; k < lens->n_sb; k++) {
+								//if (!lens->sb_list[k]->is_lensed) {
+									//if (!lens->sb_list[k]->zoom_subgridding) {
+										//surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
+									//} else {
+										//noise = (lens->use_noise_map) ? noise_map[i][j] : lens->background_pixel_noise;
+										//surface_brightness[i][j] += lens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise);
+									//}
+								//}
+							//}
+						//}
 					}
-
 				}
 			}
 		}
 	}
 
 	// Now we deal with lensed and unlensed source objects, if they exist
-	bool at_least_one_lensed_or_inverted_src = false;
-	for (int k=0; k < lens->n_sb; k++) {
-		if ((lens->sb_list[k]->is_lensed) and (lens->sbprofile_redshift_idx[k]==src_redshift_index)) {
-			at_least_one_lensed_or_inverted_src = true;
-		}
-	}
-	if (lens->split_imgpixels) {
+	if ((lensed_sources_only) and (!at_least_one_lensed_or_inverted_src)) ;
+	else if (lens->split_imgpixels) {
 		#pragma omp parallel
 		{
 			int thread;
@@ -13423,7 +13420,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 									if ((!foreground_only) and ((!omit_lensed_nonshapelet_sources) or (lens->sb_list[k]->sbtype==SHAPELET))) {
 										sb = lens->sb_list[k]->surface_brightness(center_srcpt[subcell_index][0],center_srcpt[subcell_index][1]);
 									}
-								} else if (((!lensed_and_inverted_sources_only) and (!lens->sb_list[k]->is_lensed) and (src_redshift_index==0)) or (lens->sb_list[k]->sbtype==MULTI_GAUSSIAN_EXPANSION)) { // this is ugly. Should just generate a list (near the beginning of this function) of which sources will be used!
+								} else if ((!lensed_sources_only) and (!lens->sb_list[k]->is_lensed) and (src_redshift_index==0)) { // this is ugly. Should just generate a list (near the beginning of this function) of which sources will be used!
 									if (!lens->sb_list[k]->zoom_subgridding) {
 										//cout << " center pt: " << center_pt[subcell_index][0] << " " << center_pt[subcell_index][1] << " (should be near " << center_pts[i][j][0] << " " << center_pts[i][j][1] << ")" << endl;
 										sb = lens->sb_list[k]->surface_brightness(center_pt[subcell_index][0],center_pt[subcell_index][1]);
@@ -13469,7 +13466,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 			for (j=0; j < y_N; j++) {
 				for (i=0; i < x_N; i++) {
 					for (int k=0; k < lens->n_sb; k++) {
-						if (((lens->sb_list[k]->is_lensed) and (lens->sbprofile_redshift_idx[k]==src_redshift_index)) or (lens->sb_list[k]->sbtype==MULTI_GAUSSIAN_EXPANSION)) { // this is ugly. Should just generate a list (near the beginning of this function) of which sources will be used!
+						if ((lens->sb_list[k]->is_lensed) and (lens->sbprofile_redshift_idx[k]==src_redshift_index)) { // this is ugly. Should just generate a list (near the beginning of this function) of which sources will be used!
 							if ((!foreground_only) and ((!omit_lensed_nonshapelet_sources) or (lens->sb_list[k]->sbtype==SHAPELET))) {
 								if (!lens->sb_list[k]->zoom_subgridding) surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1]);
 								else {
@@ -13478,7 +13475,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 								}
 							}
 						}
-						else if (((!lensed_and_inverted_sources_only) and (!lens->sb_list[k]->is_lensed) and (src_redshift_index==0)) or (lens->sb_list[k]->sbtype==MULTI_GAUSSIAN_EXPANSION)) { // this is ugly. Should just generate a list (near the beginning of this function) of which sources will be used!
+						else if ((!lensed_sources_only) and (!lens->sb_list[k]->is_lensed) and (src_redshift_index==0)) { // this is ugly. Should just generate a list (near the beginning of this function) of which sources will be used!
 							if (!lens->sb_list[k]->zoom_subgridding) {
 								surface_brightness[i][j] += lens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
 							}
@@ -15916,6 +15913,21 @@ void QLens::PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal)
 			}
 		}
 	}
+	/*
+	if (include_fgmask_in_inversion) {
+		int i,j,k,img_index;
+		for (img_index=0; img_index < image_npixels; img_index++) {
+			i = image_pixel_grid->active_image_pixel_i[img_index];
+			j = image_pixel_grid->active_image_pixel_j[img_index];
+			if (!image_pixel_data->foreground_mask_data[i][j]) {
+				cout << "ZEROING LMATRIX ELEMENTS" << endl;
+				for (k=0; k < n_amps; k++) {
+					Lmatrix_dense[img_index][k] = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
+				}
+			}
+		}
+	}
+	*/
 }
 
 void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground, const bool verbal, const bool use_fft)
@@ -19635,7 +19647,6 @@ void QLens::invert_lens_mapping_dense(const int zsrc_i, bool verbal)
 	if (use_covariance_matrix) {
 		die("Compiling with MKL is currently required for covariance kernel regularization");
 	}
-	cout << "WHAT THE FUCK" << endl;
 	// At the moment, the native Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper triangular part,
 	// we have to switch Fmatrix to a lower triangular version here
 	repack_matrix_lower(Fmatrix_packed);

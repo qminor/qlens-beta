@@ -12839,10 +12839,13 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 
 			if (((include_fgmask_in_inversion) or (!plot_foreground_only)) and (at_least_one_inverted_src_object)) {
 				bool fg_only = false;
-				bool lensed_only = true;
-				if ((include_fgmask_in_inversion) and (plot_foreground_only)) {
-					fg_only = true;
-					lensed_only = false; 
+				bool lensed_only = false;
+				if (include_fgmask_in_inversion) {
+					if (plot_foreground_only) {
+						fg_only = true;
+					} else if (omit_foreground) {
+						lensed_only = true; 
+					}
 					// not working...fix this on Thursday!!!
 					//cout << "DOING THIS?" << endl;
 				}
@@ -12949,7 +12952,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	double chisq_from_residuals;
 	if (output_fits==false) {
 		if (mpi_id==0) 
-			chisq_from_residuals = image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,normalize_residuals,show_noise_thresh,plot_log);
+			chisq_from_residuals = image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,normalize_residuals,show_noise_thresh,plot_log,show_foreground_mask or include_fgmask_in_inversion);
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
@@ -13574,7 +13577,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			}
 			if (src_i < 0) {
 				// no Delaunay source at this redshift, so assume there is an analytic source and find/store the corresponding surface brightness
-				image_pixel_grids[zsrc_i]->find_surface_brightness(false);
+				image_pixel_grids[zsrc_i]->find_surface_brightness();
 				vectorize_image_pixel_surface_brightness(zsrc_i,true);
 				PSF_convolution_pixel_vector(zsrc_i,false,verbal,fft_convolution);
 				store_image_pixel_surface_brightness(zsrc_i);
@@ -13861,7 +13864,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 		chisq0_zsrc = 0;
 		for (i=0; i < image_pixel_data->npixels_x; i++) {
 			for (j=0; j < image_pixel_data->npixels_y; j++) {
-				if ((image_pixel_grid->pixel_in_mask[i][j]) or ((include_foreground_sbmask) and (image_pixel_data->foreground_mask_data[i][j]))) {
+				if (((!include_fgmask_in_inversion) and (image_pixel_grid->pixel_in_mask[i][j])) or ((include_foreground_sbmask) and (image_pixel_data->foreground_mask_data[i][j]))) {
 					n_data_pixels++;
 					if (use_noise_map) cov_inverse = image_pixel_data->covinv_map[i][j];
 					if ((image_pixel_grid->pixel_in_mask[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
@@ -13943,10 +13946,12 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				initialize_pixel_matrices(zsrc_i,false,verbal);
 				//if (inversion_method==DENSE) die("need to implement FFT convolution of emask for outside_sb_prior");
 				//else PSF_convolution_Lmatrix(zsrc_i,verbal);
-				if (source_fit_mode==Cartesian_Source) image_pixel_grids[zsrc_i]->cartesian_srcgrid->fill_surface_brightness_vector();
-				else image_pixel_grids[zsrc_i]->delaunay_srcgrid->fill_surface_brightness_vector();
-				if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
-				else calculate_image_pixel_surface_brightness();
+				//if (source_fit_mode==Cartesian_Source) image_pixel_grids[zsrc_i]->cartesian_srcgrid->fill_surface_brightness_vector();
+				//else image_pixel_grids[zsrc_i]->delaunay_srcgrid->fill_surface_brightness_vector();
+				//if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
+				//else calculate_image_pixel_surface_brightness();
+				image_pixel_grids[zsrc_i]->find_surface_brightness(false,true);
+				vectorize_image_pixel_surface_brightness(zsrc_i,true);
 				PSF_convolution_pixel_vector(zsrc_i,false,verbal,false); // no PSF supersampling, no FFT convolution (saves time)
 				store_image_pixel_surface_brightness(zsrc_i);
 				clear_sparse_lensing_matrices();
@@ -14012,7 +14017,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			}
 			for (i=0; i < image_pixel_data->npixels_x; i++) {
 				for (j=0; j < image_pixel_data->npixels_y; j++) {
-					if ((!mask_for_inversion) and ((image_pixel_grids[zsrc_i]->emask[i][j])) and (image_pixel_grids[zsrc_i]->maps_to_source_pixel[i][j])) {
+					if ((!mask_for_inversion[i][j]) and ((image_pixel_grids[zsrc_i]->emask[i][j])) and (image_pixel_grids[zsrc_i]->maps_to_source_pixel[i][j])) {
 						//img_index = image_pixel_grids[zsrc_i]->pixel_index[i][j];
 						//cout << image_surface_brightness[img_index] << endl;
 						if (abs(image_pixel_grids[zsrc_i]->surface_brightness[i][j]) >= outside_sb_threshold) {
