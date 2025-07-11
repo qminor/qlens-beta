@@ -12207,8 +12207,7 @@ void ImagePixelGrid::activate_extended_mask(const bool redo_fft)
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			//pixel_in_mask[i][j] = emask[i][j];
-			pixel_in_mask[i][j] = true;
+			pixel_in_mask[i][j] = emask[i][j];
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
 			mapped_potpixels[i][j].clear();
