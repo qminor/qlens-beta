@@ -12803,6 +12803,9 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				} else if (show_foreground_mask) {
 					image_pixel_grid->activate_foreground_mask(); 
 					changed_mask = true;
+				//} else if (include_fgmask_in_inversion) {
+					//image_pixel_grid->activate_foreground_mask(true,true); // show the foreground mask without the padding
+					//changed_mask = true;
 				}
 			}
 			if (changed_mask) {
@@ -12846,8 +12849,6 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 					} else if (omit_foreground) {
 						lensed_only = true; 
 					}
-					// not working...fix this on Thursday!!!
-					//cout << "DOING THIS?" << endl;
 				}
 				image_pixel_grid->find_surface_brightness(fg_only,lensed_only,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections,include_lensed_nonshapelet_src_as_foreground); // the last argument will cause it to omit lense nonshapelet sources here, since they'll be included in the foreground SB calculation
 				vectorize_image_pixel_surface_brightness(zsrc_i,true); // note that in this case, the image pixel vector does NOT contain the foreground; the foreground PSF convolution was done separately above
@@ -13907,8 +13908,15 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 		if (include_noise_term_in_loglike) {
 			// Need to improve this when using noise map!
 			if (use_noise_map) {
-				for (i=0; i < image_npixels; i++) {
-					logev_times_two -= log(imgpixel_covinv_vector[i]); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
+				bool include_pixel;
+				for (img_index=0; img_index < image_npixels; img_index++) {
+					include_pixel = true;
+					if (include_fgmask_in_inversion) {
+						i = image_pixel_grid->active_image_pixel_i[img_index];
+						j = image_pixel_grid->active_image_pixel_j[img_index];
+						if (!image_pixel_data->foreground_mask_data[i][j]) include_pixel = false;
+					}
+					if (include_pixel) logev_times_two -= log(imgpixel_covinv_vector[img_index]); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
 				}
 			} else {
 				logev_times_two -= n_data_pixels*log(cov_inverse); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)

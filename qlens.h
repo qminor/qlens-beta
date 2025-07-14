@@ -755,6 +755,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int image_npixels, source_npixels, lensgrid_npixels, source_and_lens_n_amps, n_mge_amps, n_amps;
 	int image_n_subpixels; // for supersampling
 	int image_npixels_fgmask;
+	int image_npixels_data; // right now, only used during optimization of regparam (and is only different from image_npixels when include_fgmask_in_inversion is used and there is padding of the fgmask)
 
 	double *image_surface_brightness;
 	double *image_surface_brightness_supersampled;
@@ -764,6 +765,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double *img_minus_sbprofile;
 	double *amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	double *amplitude_vector;
+	int *img_index_datapixels;
 
 	int *image_pixel_location_Lmatrix;
 	int *source_pixel_location_Lmatrix;

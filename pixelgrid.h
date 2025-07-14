@@ -597,7 +597,7 @@ class ImagePixelGrid : private Sort
 	bool set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false, const int mask_k = 0, const bool redo_fft = true, const bool use_fgmask = false);
 	void include_all_pixels(const bool redo_fft = true);
 	void activate_extended_mask(const bool redo_fft = true);
-	void activate_foreground_mask(const bool redo_fft = true);
+	void activate_foreground_mask(const bool redo_fft = true, const bool datamask = false);
 	//void deactivate_extended_mask(const bool redo_fft = true, const bool use_fgmask = false);
 	void update_mask_values(const bool use_fgmask = false);
 

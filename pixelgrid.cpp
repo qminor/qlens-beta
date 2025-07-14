@@ -11958,7 +11958,7 @@ double ImagePixelGrid::plot_surface_brightness(string outfile_root, bool plot_re
 	//ofstream wtfout("wtf2.dat");
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if (((show_foreground_mask) and (lens->image_pixel_data->foreground_mask_data[i][j])) or ((!show_foreground_mask) and (pixel_in_mask==NULL) or (pixel_in_mask[i][j]))) {
+			if (((show_foreground_mask) and (lens->image_pixel_data->foreground_mask_data[i][j])) or ((!show_foreground_mask) and ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])))) {
 				if (!plot_residual) {
 					double sb = surface_brightness[i][j] + foreground_surface_brightness[i][j];
 					if (normalize_sb) {
@@ -12220,7 +12220,7 @@ void ImagePixelGrid::activate_extended_mask(const bool redo_fft)
 	if (lens) setup_ray_tracing_arrays(redo_fft);
 }
 
-void ImagePixelGrid::activate_foreground_mask(const bool redo_fft)
+void ImagePixelGrid::activate_foreground_mask(const bool redo_fft, const bool datamask)
 {
 	int i,j,k;
 	if (lens->image_pixel_data==NULL) { warn("image pixel data set to NULL; could not activate foreground mask"); return; }
@@ -12231,7 +12231,8 @@ void ImagePixelGrid::activate_foreground_mask(const bool redo_fft)
 	int nsubpix = INTSQR(lens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
-			pixel_in_mask[i][j] = lens->image_pixel_data->foreground_mask[i][j];
+			if (datamask) pixel_in_mask[i][j] = lens->image_pixel_data->foreground_mask_data[i][j];
+			else pixel_in_mask[i][j] = lens->image_pixel_data->foreground_mask[i][j];
 			mapped_cartesian_srcpixels[i][j].clear();
 			mapped_delaunay_srcpixels[i][j].clear();
 			mapped_potpixels[i][j].clear();
@@ -15869,6 +15870,20 @@ void QLens::PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal)
 #endif
 		}
 		if (psf_supersampling) average_supersampled_dense_Lmatrix(zsrc_i);
+
+		if (include_fgmask_in_inversion) {
+			// make sure it doesn't try to fit to the "padded" pixels around the borders of the foreground mask, since those are only there for the PSF convolution
+			int i,j,k,img_index;
+			for (img_index=0; img_index < image_npixels; img_index++) {
+				i = image_pixel_grid->active_image_pixel_i[img_index];
+				j = image_pixel_grid->active_image_pixel_j[img_index];
+				if (!image_pixel_data->foreground_mask_data[i][j]) {
+					for (k=0; k < n_amps; k++) {
+						Lmatrix_dense[img_index][k] = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
+					}
+				}
+			}
+		}
 	}
 
 	if (include_imgfluxes_in_inversion) {
@@ -15912,21 +15927,6 @@ void QLens::PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal)
 			}
 		}
 	}
-	/*
-	if (include_fgmask_in_inversion) {
-		int i,j,k,img_index;
-		for (img_index=0; img_index < image_npixels; img_index++) {
-			i = image_pixel_grid->active_image_pixel_i[img_index];
-			j = image_pixel_grid->active_image_pixel_j[img_index];
-			if (!image_pixel_data->foreground_mask_data[i][j]) {
-				cout << "ZEROING LMATRIX ELEMENTS" << endl;
-				for (k=0; k < n_amps; k++) {
-					Lmatrix_dense[img_index][k] = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
-				}
-			}
-		}
-	}
-	*/
 }
 
 void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground, const bool verbal, const bool use_fft)
@@ -17819,18 +17819,20 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 		for (i=0; i < n_amps; i++) {
 			row = i*image_npixels;
 			for (j=0; j < image_npixels; j++) {
-				if (use_noise_map) covinv = imgpixel_covinv_vector[j];
-				pix_i = image_pixel_grid->active_image_pixel_i[j];
-				pix_j = image_pixel_grid->active_image_pixel_j[j];
-				img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
-				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - sbprofile_surface_brightness[j])/cov_inverse;
-				//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/cov_inverse;
-				if ((zero_sb_fgmask_prior) and (include_fgmask_in_inversion) and (image_pixel_data->foreground_mask[pix_i][pix_j]) and (!image_pixel_data->in_mask[assigned_mask[zsrc_i]][pix_i][pix_j])) ;  // "force" the pixels in the extended mask region to fit to zero surface brightness
-				else {
-					sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
-					if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_ptsrc > 0)) sb_adj -= point_image_surface_brightness[j];
-					Dvector[i] += Lmatrix_dense[j][i]*sb_adj*covinv;
-					//if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
+				if (Lmatrix_dense[j][i] != 0.0) {
+					if (use_noise_map) covinv = imgpixel_covinv_vector[j];
+					pix_i = image_pixel_grid->active_image_pixel_i[j];
+					pix_j = image_pixel_grid->active_image_pixel_j[j];
+					img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
+					//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - sbprofile_surface_brightness[j])/cov_inverse;
+					//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/cov_inverse;
+					if ((zero_sb_fgmask_prior) and (include_fgmask_in_inversion) and (image_pixel_data->foreground_mask[pix_i][pix_j]) and (!image_pixel_data->in_mask[assigned_mask[zsrc_i]][pix_i][pix_j])) ;  // "force" the pixels in the extended mask region to fit to zero surface brightness (note, this only works if we're not including an MGE in the the Lmatrix to fit foregorund!)
+					else {
+						sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
+						if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_ptsrc > 0)) sb_adj -= point_image_surface_brightness[j];
+						Dvector[i] += Lmatrix_dense[j][i]*sb_adj*covinv;
+						//if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
+					}
 				}
 #ifdef USE_MKL
 				Ltrans_stacked[row+j] = Lmatrix_dense[j][i]*sqrt(covinv); // hack to get the cov_inverse in there
@@ -18345,6 +18347,7 @@ bool QLens::optimize_regularization_parameter(const int zsrc_i, const bool dense
 
 	delete[] img_minus_sbprofile;
 	delete[] amplitude_vector_minchisq;
+	delete[] img_index_datapixels;
 	return true;
 }
 
@@ -18354,12 +18357,26 @@ void QLens::setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatr
 	image_pixel_grid = image_pixel_grids[zsrc_i];
 	img_minus_sbprofile = new double[image_npixels];
 	int i, pix_i, pix_j, img_index_fgmask;
+	image_npixels_data = image_npixels;
+	if (include_fgmask_in_inversion) {
+		image_npixels_data = 0;
+		for (i=0; i < image_npixels; i++) {
+			pix_i = image_pixel_grid->active_image_pixel_i[i];
+			pix_j = image_pixel_grid->active_image_pixel_j[i];
+			if (image_pixel_data->foreground_mask_data[pix_i][pix_j]) image_npixels_data++;
+		}
+	}
 	if (image_pixel_grid->active_image_pixel_i==NULL) die("did not allocate memory to active_image_pixel_i array");
-	for (i=0; i < image_npixels; i++) {
+	int j;
+	img_index_datapixels = new int[image_npixels_data];
+	for (i=0,j=0; i < image_npixels; i++) {
 		pix_i = image_pixel_grid->active_image_pixel_i[i];
 		pix_j = image_pixel_grid->active_image_pixel_j[i];
 		img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
 		img_minus_sbprofile[i] = image_surface_brightness[i] - sbprofile_surface_brightness[img_index_fgmask];
+		if ((!include_fgmask_in_inversion) or (image_pixel_data->foreground_mask_data[pix_i][pix_j])) {
+			img_index_datapixels[j++] = i;
+		}
 		if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_ptsrc > 0)) img_minus_sbprofile[i] -= point_image_surface_brightness[i];
 	}
 
@@ -18943,16 +18960,16 @@ double QLens::chisq_regparam_dense(const double logreg)
 		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> dvector_eigen(Dvector,n_amps,1);
 		Eigen::VectorXd amplitudes_eigen(n_amps);
 		amplitudes_eigen = Fmatrix_llt.solve(dvector_eigen);
-		for (int i=0; i < n_amps; i++) amplitude_vector[i] = amplitudes_eigen[i];
+		for (i=0; i < n_amps; i++) amplitude_vector[i] = amplitudes_eigen[i];
 		Fmatrix_logdet = 0;
-		for (int i=0; i < n_amps; i++) Fmatrix_logdet += log(abs(lltmat(i,i)));
+		for (i=0; i < n_amps; i++) Fmatrix_logdet += log(abs(lltmat(i,i)));
 		Fmatrix_logdet *= 2;
 		//Fmatrix_log_determinant = 2*log(abs(lltmat.diagonal().prod()));
 #else
 		lapack_int status;
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed_copy.array());
 		if (status != 0) warn("Matrix was not invertible and/or positive definite");
-		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector[i];
+		for (i=0; i < n_amps; i++) amplitude_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',n_amps,1,Fmatrix_packed_copy.array(),amplitude_vector,1);
 		Cholesky_logdet_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,n_amps);
 #endif
@@ -18972,7 +18989,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 		lapack_int status;
 		status = LAPACKE_dgetrf(LAPACK_ROW_MAJOR, n_amps, n_amps, Gmatrix_stacked_copy.array(), n_amps, ipiv);
 		if (status != 0) warn("Matrix was not invertible");
-		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector_cov_copy[i];
+		for (i=0; i < n_amps; i++) amplitude_vector[i] = Dvector_cov_copy[i];
 		LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', n_amps, 1, Gmatrix_stacked_copy.array(), n_amps, ipiv, amplitude_vector, 1);
 		LU_logdet_stacked(Gmatrix_stacked_copy.array(),Gmatrix_logdet,n_amps);
 		delete[] ipiv;
@@ -18985,9 +19002,11 @@ double QLens::chisq_regparam_dense(const double logreg)
 	double *Lmatptr;
 	double *tempsrcptr = amplitude_vector;
 	double *tempsrc_end = amplitude_vector + n_amps;
+	int img_index;
 
-	#pragma omp parallel for private(temp_img,i,j,Lmatptr,tempsrcptr,cov_inverse) schedule(static) reduction(+:Ed_times_two)
-	for (i=0; i < image_npixels; i++) {
+	#pragma omp parallel for private(temp_img,img_index,i,j,Lmatptr,tempsrcptr,cov_inverse) schedule(static) reduction(+:Ed_times_two)
+	for (img_index=0; img_index < image_npixels_data; img_index++) {
+		i = img_index_datapixels[img_index];
 		temp_img = 0;
 		if (use_noise_map) {
 			cov_inverse = imgpixel_covinv_vector[i];
