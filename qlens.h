@@ -791,8 +791,15 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double covmatrix_epsilon; // fudge factor in covariance matrix diagonal to aid inversion
 	bool penalize_defective_covmatrix;
 
-	double *Rmatrix;
-	int *Rmatrix_index;
+	double **Rmatrix_ptr;
+	int **Rmatrix_index_ptr;
+	int *source_npixels_ptr;
+	int *src_npixel_start_ptr;
+	int n_src_inv; // specifies how many pixellated (or shapelet) sources will be included in the Lmatrix
+	int* src_npixels_inv;
+	int *src_npixel_start;
+	double **Rmatrix;
+	int **Rmatrix_index;
 
 	double *Rmatrix_pot;
 	int *Rmatrix_pot_index;
@@ -803,6 +810,54 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	std::vector<int> *Rmatrix_index_rows;
 	int *Rmatrix_row_nn;
 
+	dmatrix Lmatrix_dense;
+	dmatrix Lmatrix_supersampled;
+	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
+	dvector Gmatrix_stacked;
+	dvector Gmatrix_stacked_copy;
+	dvector Fmatrix_stacked;
+	dvector Fmatrix_packed;
+	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
+
+	// these will be arrays of size n_src_inv (number of pixellated sources being included in Lmatrix)
+	dvector *covmatrix_stacked;
+	dvector *covmatrix_packed;
+	dvector *covmatrix_factored;
+	dvector *Rmatrix_packed;
+	// these will point to the current element in the above arrays
+	dvector *covmatrix_stacked_ptr;
+	dvector *covmatrix_packed_ptr;
+	dvector *covmatrix_factored_ptr;
+	dvector *Rmatrix_packed_ptr;
+
+	dvector covmatrix_pot_stacked;
+	dvector covmatrix_pot_packed;
+	dvector covmatrix_pot_factored;
+	dvector Rmatrix_pot_packed;
+
+	double* Rmatrix_log_determinant; // array of size n_src_inv (number of pixellated sources being included in Lmatrix)
+	double* Rmatrix_log_determinant_ptr;
+	double Rmatrix_pot_log_determinant;
+
+
+	dvector covmatrix_stacked_copy; // used when optimizing the regularization parameter with luminosity weighting
+	dvector temp_src; // used when optimizing the regularization parameter
+
+	double *gmatrix[4];
+	int *gmatrix_index[4];
+	int *gmatrix_row_index[4];
+	std::vector<double> *gmatrix_rows[4];
+	std::vector<int> *gmatrix_index_rows[4];
+	int *gmatrix_row_nn[4];
+	int gmatrix_nn[4];
+
+	double *hmatrix[2];
+	int *hmatrix_index[2];
+	int *hmatrix_row_index[2];
+	std::vector<double> *hmatrix_rows[2];
+	std::vector<int> *hmatrix_index_rows[2];
+	int *hmatrix_row_nn[2];
+	int hmatrix_nn[2];
 
 #ifdef USE_MUMPS
 	static DMUMPS_STRUC_C *mumps_solver;
@@ -813,8 +868,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_MGE_amplitudes_to_Lmatrix(const int zsrc_i);
 	void PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal=false);
 	void create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const bool potential_perturbations=false, const bool verbal=false);
+	void get_source_regparam_ptr(const int zsrc_i, const int imggrid_include_i, double* &regparam);
 	void generate_Gmatrix();
-	void add_regularization_term_to_dense_Fmatrix(double *regparam_ptr, const bool potential_perturbations=false);
+	void add_regularization_term_to_dense_Fmatrix(double *regparam, const bool potential_perturbations=false);
 	void add_MGE_regularization_terms_to_dense_Fmatrix(const int zsrc_i);
 	double calculate_regularization_prior_term(double *regparam_ptr, const bool potential_perturbations=false);
 	double calculate_MGE_regularization_prior_term(const int zsrc_i);
@@ -856,44 +912,6 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void repack_matrix_lower(dvector& packed_matrix);
 	void repack_matrix_upper(dvector& packed_matrix);
 
-	dmatrix Lmatrix_dense;
-	dmatrix Lmatrix_supersampled;
-	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
-	dvector Gmatrix_stacked;
-	dvector Gmatrix_stacked_copy;
-	dvector Fmatrix_stacked;
-	dvector Fmatrix_packed;
-	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
-
-	dvector covmatrix_stacked;
-	dvector covmatrix_packed;
-	dvector covmatrix_factored;
-	dvector Rmatrix_packed;
-
-	dvector covmatrix_pot_stacked;
-	dvector covmatrix_pot_packed;
-	dvector covmatrix_pot_factored;
-	dvector Rmatrix_pot_packed;
-
-	dvector covmatrix_stacked_copy; // used when optimizing the regularization parameter with luminosity weighting
-	dvector temp_src; // used when optimizing the regularization parameter
-
-	double *gmatrix[4];
-	int *gmatrix_index[4];
-	int *gmatrix_row_index[4];
-	std::vector<double> *gmatrix_rows[4];
-	std::vector<int> *gmatrix_index_rows[4];
-	int *gmatrix_row_nn[4];
-	int gmatrix_nn[4];
-
-	double *hmatrix[2];
-	int *hmatrix_index[2];
-	int *hmatrix_row_index[2];
-	std::vector<double> *hmatrix_rows[2];
-	std::vector<int> *hmatrix_index_rows[2];
-	int *hmatrix_row_nn[2];
-	int hmatrix_nn[2];
-
 	bool use_input_psf_matrix;
 	bool use_input_psf_ptsrc_matrix;
 	bool ignore_foreground_in_chisq;
@@ -910,7 +928,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double psf_threshold, psf_ptsrc_threshold;
 	int ptimg_nsplit; // allows for subpixel PSF even if supersampling is not being used for all pixels
 
-	double Fmatrix_log_determinant, Rmatrix_log_determinant, Rmatrix_pot_log_determinant;
+	double Fmatrix_log_determinant;
 	double Gmatrix_log_determinant;
 	void initialize_pixel_matrices(const int zsrc_i, const bool potential_perturbations=false, bool verbal=false);
 	void initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal=false);
@@ -966,7 +984,12 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root, const int zsrc_i=-1);
 	double pixel_log_evidence_times_two(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
+	void setup_auxiliary_sourcegrids_and_point_imgs(const bool verbal);
+	bool setup_cartesian_sourcegrid(const int zsrc_i, const int src_i, int& n_expected_imgpixels, const bool verbal);
+	bool generate_and_invert_lensing_matrix_cartesian(const int zsrc_i, const int src_i, double& tot_wtime, double& tot_wtime0, const bool verbal);
 	bool generate_and_invert_lensing_matrix_delaunay(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
+	void add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_times_two, const bool verbal);
+	void add_regularization_prior_terms_to_logev(const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false);
 
 	bool load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal, const bool zero_verbal = false);

@@ -7881,6 +7881,11 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="sbprofile") source_fit_mode = Parameterized_Source;
 						else if (setword=="shapelet") source_fit_mode = Shapelet_Source;
 						else Complain("invalid argument; must specify valid source mode (ptsource, cartesian, delaunay, sbprofile, shapelet)");
+						if (image_pixel_grids != NULL) {
+							for (int i=0; i < n_extended_src_redshifts; i++) {
+								if (image_pixel_grids[i] != NULL) image_pixel_grids[i]->source_fit_mode = source_fit_mode;
+							}
+						}
 						update_parameter_list();
 						for (int i=0; i < n_pixellated_src; i++) {
 							if (source_fit_mode==Delaunay_Source) srcgrids[i] = delaunay_srcgrids[i];

@@ -146,6 +146,7 @@ class SourcePixelGrid : public SourcePixel, public ModelParams
 	friend class ImagePixelGrid;
 	friend class SourcePixel;
 
+	int n_active_pixels;
 	double xcenter, ycenter;
 	double srcgrid_xmin, srcgrid_xmax, srcgrid_ymin, srcgrid_ymax;
 	bool regrid_if_unmapped_source_subcells;
@@ -161,7 +162,7 @@ class SourcePixelGrid : public SourcePixel, public ModelParams
 	void assign_firstlevel_neighbors(void);
 	void assign_all_neighbors(void);
 	int assign_indices_and_count_levels();
-	int assign_active_indices_and_count_source_pixels(bool regrid_if_inactive_cells, bool activate_unmapped_pixels, bool exclude_pixels_outside_window);
+	int assign_active_indices_and_count_source_pixels(const int source_pixel_i_initial, const bool regrid_if_inactive_cells, const bool activate_unmapped_pixels, const bool exclude_pixels_outside_window);
 	void split_subcells_firstlevel(const int splitlevel);
 
 	void print_indices();
@@ -300,6 +301,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
 	public:
 	bool look_for_starting_point;
 	int img_ni, img_nj;
+	int n_active_pixels;
 	double *surface_brightness;	
 	double *inv_magnification;
 	bool *maps_to_image_pixel;
@@ -342,7 +344,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
 	bool assign_source_mapping_flags(lensvector &input_pt, vector<PtsWgts>& mapped_delaunay_srcpixels, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex);
 	void record_srcpixel_mappings();
 	void calculate_Lmatrix(const int img_index, PtsWgts* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, const int& ii, const double weight, const int& thread);
-	int assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels);
+	int assign_active_indices_and_count_source_pixels(const int source_pixel_i_initial, const bool activate_unmapped_pixels);
 	void plot_surface_brightness(string root, const int npix = 600, const bool interpolate = false, const bool plot_magnification = false, const bool plot_fits = false);
 	void plot_voronoi_grid(string root);
 	double find_moment(const int p, const int q, const int npix, const double xc, const double yc, const double b, const double a, const double phi);
@@ -545,6 +547,9 @@ class ImagePixelGrid : private Sort
 
 	long int ntot_corners, ntot_cells, ntot_cells_emask;
 	long int ntot_subpixels, ntot_subpixels_in_mask;
+
+	int n_pixsrc_to_include_in_Lmatrix;
+	vector<int> pixsrc_indx_to_include_in_Lmatrix;
 
 	vector<SourcePixel*> **mapped_cartesian_srcpixels; // since the Cartesian grid uses recursion (if adaptive_subgrid is on), a pointer to each mapped source pixel is needed
 	vector<PtsWgts> **mapped_delaunay_srcpixels; // for the Delaunay grid, it only needs to record the index of each mapped source pixel (no pointer needed)

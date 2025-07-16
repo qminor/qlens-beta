@@ -377,6 +377,7 @@ SourcePixelGrid::SourcePixelGrid(QLens* lens_in) : ModelParams()
 	lens = lens_in;
 	cell = NULL;
 	levels = 0;
+	n_active_pixels = 0;
 
 	/*
 	int threads = 1;
@@ -3059,13 +3060,14 @@ void SourcePixel::print_indices()
 //bool SourcePixelGrid::activate_unmapped_source_pixels;
 //bool SourcePixelGrid::exclude_source_pixels_outside_fit_window;
 
-int SourcePixelGrid::assign_active_indices_and_count_source_pixels(bool regrid_if_inactive_cells, bool activate_unmapped_pixels, bool exclude_pixels_outside_window)
+int SourcePixelGrid::assign_active_indices_and_count_source_pixels(const int source_pixel_i_initial, const bool regrid_if_inactive_cells, const bool activate_unmapped_pixels, const bool exclude_pixels_outside_window)
 {
+	int source_pixel_i=source_pixel_i_initial;
 	parent_grid->regrid_if_unmapped_source_subcells = regrid_if_inactive_cells;
 	parent_grid->activate_unmapped_source_pixels = activate_unmapped_pixels;
 	parent_grid->exclude_source_pixels_outside_fit_window = exclude_pixels_outside_window;
-	int source_pixel_i=0;
 	assign_active_indices(source_pixel_i);
+	n_active_pixels = source_pixel_i;
 	return source_pixel_i;
 }
 
@@ -4130,6 +4132,7 @@ void DelaunaySourceGrid::create_srcpixel_grid(double* srcpts_x, double* srcpts_y
 	int n;
 	//srcpixel_xmin=srcpixel_ymin=1e30;
 	//srcpixel_xmax=srcpixel_ymax=-1e30;
+	n_active_pixels = n_srcpts;
 	for (n=0; n < n_srcpts; n++) {
 		//cout << "Sourcept " << n << ": " << srcpts_x[n] << " " << srcpts_y[n] << endl;
 		//if (srcpts_x[n] > srcpixel_xmax) srcpixel_xmax=srcpts_x[n];
@@ -4758,9 +4761,9 @@ bool DelaunaySourceGrid::find_containing_triangle_with_imgpix(const lensvector &
 	return found_good_starting_vertex;
 }
 
-int DelaunaySourceGrid::assign_active_indices_and_count_source_pixels(const bool activate_unmapped_pixels)
+int DelaunaySourceGrid::assign_active_indices_and_count_source_pixels(const int source_pixel_i_initial, const bool activate_unmapped_pixels)
 {
-	int source_pixel_i=0;
+	int source_pixel_i=source_pixel_i_initial;
 	for (int i=0; i < n_gridpts; i++) {
 		active_pixel[i] = false;
 		if ((maps_to_image_pixel[i]) or (activate_unmapped_pixels)) {
@@ -4769,8 +4772,8 @@ int DelaunaySourceGrid::assign_active_indices_and_count_source_pixels(const bool
 		} else {
 			if ((lens->mpi_id==0) and (lens->regularization_method == 0)) warn(lens->warnings,"A source pixel does not map to any image pixel (for source pixel %i), center (%g,%g)",i,gridpts[i][0],gridpts[i][1]); // only show warning if no regularization being used, since matrix cannot be inverted in that case
 		}
-
 	}
+	n_active_pixels = source_pixel_i;
 	return source_pixel_i;
 }
 
@@ -10740,6 +10743,8 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 			imggrid_betafactors = NULL;
 		}
 	}
+	n_pixsrc_to_include_in_Lmatrix = 1; // default: one pixellated source (associated with the current ImagePixelGrid) is included in Lmatrix
+	pixsrc_indx_to_include_in_Lmatrix.push_back(src_redshift_index);
 
 	pixel_xlength = (xmax-xmin)/x_N;
 	pixel_ylength = (ymax-ymin)/y_N;
@@ -10808,6 +10813,8 @@ ImagePixelGrid::ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMet
 		imggrid_zfactors = lens->extended_src_zfactors[src_redshift_index];
 		imggrid_betafactors = lens->extended_src_beta_factors[src_redshift_index];
 	}
+	n_pixsrc_to_include_in_Lmatrix = 1; // default: one pixellated source (associated with the current ImagePixelGrid) is included in Lmatrix
+	pixsrc_indx_to_include_in_Lmatrix.push_back(src_redshift_index);
 
 	pixel_xlength = (xmax-xmin)/x_N;
 	pixel_ylength = (ymax-ymin)/y_N;
@@ -11826,9 +11833,6 @@ void ImagePixelGrid::redo_lensing_calculations(const bool verbal)
 	}
 #endif
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) n_active_pixels = 0;
-	//delete_ray_tracing_arrays();
-	//setup_pixel_arrays();
-	//setup_ray_tracing_arrays();
 	calculate_sourcepts_and_areas(true,verbal);
 
 #ifdef USE_OPENMP
@@ -11838,89 +11842,6 @@ void ImagePixelGrid::redo_lensing_calculations(const bool verbal)
 	}
 #endif
 }
-
-/*
-// obsolete function
-void ImagePixelGrid::redo_lensing_calculations_corners() // this is used for analytic source mode with zooming when not using pixellated or shapelet sources
-{
-	// Update this so it uses the extended mask!! DO THIS!!!!!!!!
-#ifdef USE_MPI
-	MPI_Comm sub_comm;
-	MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
-#endif
-
-#ifdef USE_OPENMP
-	double wtime0, wtime;
-	if (lens->show_wtime) {
-		wtime0 = omp_get_wtime();
-	}
-#endif
-
-	int i,j,n,n_cell,n_yp;
-	for (i=0; i < x_N; i++) {
-		for (j=0; j < y_N; j++) {
-			if (lens->split_imgpixels) nsplits[i][j] = lens->default_imgpixel_nsplit; // default
-		}
-	}
-	long int ntot_corners = (x_N+1)*(y_N+1);
-	long int ntot_cells = x_N*y_N;
-	double *defx_corners, *defy_corners;
-	defx_corners = new double[ntot_corners];
-	defy_corners = new double[ntot_corners];
-
-	int mpi_chunk, mpi_start, mpi_end;
-	mpi_chunk = ntot_corners / lens->group_np;
-	mpi_start = lens->group_id*mpi_chunk;
-	if (lens->group_id == lens->group_np-1) mpi_chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
-	mpi_end = mpi_start + mpi_chunk;
-
-	#pragma omp parallel
-	{
-		int thread;
-#ifdef USE_OPENMP
-		thread = omp_get_thread_num();
-#else
-		thread = 0;
-#endif
-		lensvector d1,d2,d3,d4;
-		#pragma omp for private(n,i,j) schedule(dynamic)
-		for (n=mpi_start; n < mpi_end; n++) {
-			j = n / (x_N+1);
-			i = n % (x_N+1);
-			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
-		}
-	}
-#ifdef USE_MPI
-		#pragma omp master
-		{
-			int id, chunk, start;
-			for (id=0; id < lens->group_np; id++) {
-				chunk = ntot_corners / lens->group_np;
-				start = id*chunk;
-				if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
-				MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
-				MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
-			}
-		}
-		#pragma omp barrier
-#endif
-	for (n=0; n < ntot_corners; n++) {
-		j = n / (x_N+1);
-		i = n % (x_N+1);
-		corner_sourcepts[i][j][0] = defx_corners[n];
-		corner_sourcepts[i][j][1] = defy_corners[n];
-	}
-
-#ifdef USE_OPENMP
-	if (lens->show_wtime) {
-		wtime = omp_get_wtime() - wtime0;
-		if (lens->mpi_id==0) cout << "Wall time for ray-tracing image pixel grid: " << wtime << endl;
-	}
-#endif
-	delete[] defx_corners;
-	delete[] defy_corners;
-}
-*/
 
 void ImagePixelGrid::load_data(ImagePixelData& pixel_data)
 {
@@ -13138,7 +13059,7 @@ void ImagePixelGrid::set_zero_foreground_surface_brightness()
 void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const bool lensed_sources_only, const bool include_first_order_corrections, const bool show_only_first_order_corrections, const bool omit_lensed_nonshapelet_sources)
 {
 	if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrid == NULL)) die("No Delaunay source grid has been created");
-	if ((source_fit_mode==Cartesian_Source) and (cartesian_srcgrid == NULL)) die("No Delaunay source grid has been created");
+	else if ((source_fit_mode==Cartesian_Source) and (cartesian_srcgrid == NULL)) die("No Cartesian source grid has been created");
 	bool supersampling = lens->psf_supersampling;
 	double noise;
 
@@ -14378,33 +14299,35 @@ bool QLens::assign_pixel_mappings(const int zsrc_i, const bool potential_perturb
 	n_mge_amps = count_MGE_amplitudes(zsrc_i);
 	bool map_all_imgpixels = (n_mge_amps > 0) ? true : false;
 	int tot_npixels_count;
-	if (source_fit_mode==Delaunay_Source) {
-		image_pixel_grid->assign_image_mapping_flags(true,potential_perturbations,map_all_imgpixels);
-		if (image_pixel_grid->delaunay_srcgrid != NULL) { 
-			source_npixels = image_pixel_grid->delaunay_srcgrid->assign_active_indices_and_count_source_pixels(activate_unmapped_source_pixels);
+	source_npixels = 0;
+	ImagePixelGrid *imggrid;
+	for (int i=0; i < image_pixel_grid->n_pixsrc_to_include_in_Lmatrix; i++) {
+		imggrid = image_pixel_grids[image_pixel_grid->pixsrc_indx_to_include_in_Lmatrix[i]];
+		if (source_fit_mode==Delaunay_Source) {
+			imggrid->assign_image_mapping_flags(true,potential_perturbations,map_all_imgpixels);
+			if (imggrid->delaunay_srcgrid != NULL) { 
+				source_npixels = imggrid->delaunay_srcgrid->assign_active_indices_and_count_source_pixels(source_npixels,activate_unmapped_source_pixels);
+			}
 		} else {
-			source_npixels = 0;
-		}
-	} else {
-		tot_npixels_count = cartesian_srcgrid->assign_indices_and_count_levels();
-		if ((mpi_id==0) and (adaptive_subgrid) and (verbal==true)) cout << "Number of source cells: " << tot_npixels_count << endl;
-		image_pixel_grid->assign_image_mapping_flags(false,potential_perturbations,map_all_imgpixels);
+			tot_npixels_count = imggrid->cartesian_srcgrid->assign_indices_and_count_levels();
+			if ((mpi_id==0) and (adaptive_subgrid) and (verbal==true)) cout << "Number of source cells: " << tot_npixels_count << endl;
+			imggrid->assign_image_mapping_flags(false,potential_perturbations,map_all_imgpixels);
 
-		cartesian_srcgrid->regrid = false;
-		if (nlens==0) source_npixels = 0;
-		else {
-			source_npixels = cartesian_srcgrid->assign_active_indices_and_count_source_pixels(regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
-			if (source_npixels==0) { warn("number of source pixels cannot be zero"); return false; }
-		}
-		while (cartesian_srcgrid->regrid) {
-			if ((mpi_id==0) and (verbal==true)) cout << "Redrawing the source grid after reverse-splitting unmapped source pixels...\n";
-			cartesian_srcgrid->regrid = false;
-			cartesian_srcgrid->assign_all_neighbors();
-			tot_npixels_count = cartesian_srcgrid->assign_indices_and_count_levels();
-			if ((mpi_id==0) and (verbal==true)) cout << "Number of source cells after re-gridding: " << tot_npixels_count << endl;
-			image_pixel_grid->assign_image_mapping_flags(false,potential_perturbations,map_all_imgpixels);
-			//cartesian_srcgrid->print_indices();
-			source_npixels = cartesian_srcgrid->assign_active_indices_and_count_source_pixels(regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
+			imggrid->cartesian_srcgrid->regrid = false;
+			if (nlens != 0) {
+				source_npixels = imggrid->cartesian_srcgrid->assign_active_indices_and_count_source_pixels(source_npixels,regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
+				if (source_npixels==0) { warn("number of source pixels cannot be zero"); return false; }
+			}
+			while (imggrid->cartesian_srcgrid->regrid) {
+				if ((mpi_id==0) and (verbal==true)) cout << "Redrawing the source grid after reverse-splitting unmapped source pixels...\n";
+				imggrid->cartesian_srcgrid->regrid = false;
+				imggrid->cartesian_srcgrid->assign_all_neighbors();
+				tot_npixels_count = imggrid->cartesian_srcgrid->assign_indices_and_count_levels();
+				if ((mpi_id==0) and (verbal==true)) cout << "Number of source cells after re-gridding: " << tot_npixels_count << endl;
+				imggrid->assign_image_mapping_flags(false,potential_perturbations,map_all_imgpixels);
+				//imggrid->cartesian_srcgrid->print_indices();
+				source_npixels = imggrid->cartesian_srcgrid->assign_active_indices_and_count_source_pixels(source_npixels,regrid_if_unmapped_source_subpixels,activate_unmapped_source_pixels,exclude_source_pixels_beyond_fit_window);
+			}
 		}
 	}
 	n_amps = source_npixels;
@@ -14617,6 +14540,41 @@ void QLens::initialize_pixel_matrices(const int zsrc_i, const bool potential_per
 	if (!psf_supersampling) image_pixel_location_Lmatrix = new int[image_npixels+1];
 	else image_pixel_location_Lmatrix = new int[image_n_subpixels+1];
 	Lmatrix = new double[Lmatrix_n_elements];
+
+	if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) n_src_inv = image_pixel_grid->n_pixsrc_to_include_in_Lmatrix;
+	else if (source_fit_mode==Shapelet_Source) n_src_inv = 1; // currently, there is only support for one set of shapelets to invert; can generalize this later
+	src_npixels_inv = new int[n_src_inv];
+	src_npixel_start = new int[n_src_inv];
+	src_npixel_start[0] = 0;
+
+	if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) {
+		ImagePixelGrid *imggrid;
+		int npixels_check=0;
+		for (int i=0; i < n_src_inv; i++) {
+			imggrid = image_pixel_grids[image_pixel_grid->pixsrc_indx_to_include_in_Lmatrix[i]];
+			if (source_fit_mode==Delaunay_Source) {
+				src_npixels_inv[i] = imggrid->delaunay_srcgrid->n_active_pixels;
+			} else if (source_fit_mode==Cartesian_Source) {
+				src_npixels_inv[i] = imggrid->cartesian_srcgrid->n_active_pixels;
+			}
+			if (i > 0) src_npixel_start[i] = src_npixel_start[i-1] + src_npixels_inv[i-1];
+			npixels_check += src_npixels_inv[i];
+		}
+		if (npixels_check != source_npixels) die("wrong number of total source pixels from total n_active_pixels");
+	}
+	else if (source_fit_mode==Shapelet_Source) {
+		int shapelet_i = -1;
+		for (int i=0; i < n_sb; i++) {
+			if ((sb_list[i]->sbtype==SHAPELET) and ((zsrc_i<0) or (sbprofile_redshift_idx[i]==zsrc_i))) {
+				shapelet_i = i;
+				break;
+			}
+		}
+		src_npixels_inv[0] = *(sb_list[shapelet_i]->indxptr);
+		if (src_npixels_inv[0] != source_npixels) die("wrong number of source pixels from shapelet amplitudes");
+	}
+	else die("unknown source pixellation mode");
+
 	if (include_imgfluxes_in_inversion) {
 		int nimgs = 0;
 		for (int i=0; i < n_ptsrc; i++) nimgs += ptsrc_list[i]->images.size();
@@ -14722,6 +14680,15 @@ void QLens::clear_pixel_matrices()
 	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
 	if (Lmatrix != NULL) delete[] Lmatrix;
 	if (Lmatrix_index != NULL) delete[] Lmatrix_index;
+
+	if (src_npixels_inv != NULL) delete[] src_npixels_inv;
+	if (src_npixel_start != NULL) delete[] src_npixel_start;
+	if (covmatrix_stacked != NULL) delete[] covmatrix_stacked;
+	if (covmatrix_packed != NULL) delete[] covmatrix_packed;
+	if (covmatrix_factored != NULL) delete[] covmatrix_factored;
+	if (Rmatrix_packed != NULL) delete[] Rmatrix_packed;
+	if (Rmatrix_log_determinant != NULL) delete[] Rmatrix_log_determinant;
+
 	image_surface_brightness = NULL;
 	image_surface_brightness_supersampled = NULL;
 	imgpixel_covinv_vector = NULL;
@@ -14733,13 +14700,30 @@ void QLens::clear_pixel_matrices()
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
 	Lmatrix_index = NULL;
+
+	src_npixels_inv = NULL;
+	src_npixel_start = NULL;
+	covmatrix_stacked = NULL;
+	covmatrix_packed = NULL;
+	covmatrix_factored = NULL;
+	Rmatrix_packed = NULL;
+	Rmatrix_log_determinant = NULL;
+	n_src_inv = 0;
 }
 
 void QLens::construct_Lmatrix(const int zsrc_i, const bool delaunay, const bool potential_perturbations, const bool verbal)
 {
 	ImagePixelGrid *image_pixel_grid;
 	image_pixel_grid = image_pixel_grids[zsrc_i];
-	SourcePixelGrid *cartesian_srcgrid = image_pixel_grid->cartesian_srcgrid;
+
+	int n_imggrids = image_pixel_grid->n_pixsrc_to_include_in_Lmatrix;
+	if (n_imggrids==0) die("No image grids are included for constructing Lmatrix");
+	ImagePixelGrid **imggrids;
+	imggrids = new ImagePixelGrid*[n_imggrids+1]; // last element will be used to identify end of list
+	for (int i=0; i < n_imggrids; i++) imggrids[i] = image_pixel_grids[image_pixel_grid->pixsrc_indx_to_include_in_Lmatrix[i]];
+	imggrids[n_imggrids] = NULL;
+	ImagePixelGrid **imggrid_end = imggrids+n_imggrids;
+
 	int img_index;
 	int index;
 	int i,j;
@@ -14751,6 +14735,8 @@ void QLens::construct_Lmatrix(const int zsrc_i, const bool delaunay, const bool 
 		wtime0 = omp_get_wtime();
 	}
 #endif
+	ImagePixelGrid** imggrid_ptr;
+	ImagePixelGrid* imggrid;
 	if ((!delaunay) and (image_pixel_grid->ray_tracing_method == Area_Overlap))
 	{
 		lensvector *corners[4];
@@ -14762,7 +14748,7 @@ void QLens::construct_Lmatrix(const int zsrc_i, const bool delaunay, const bool 
 #else
 			thread = 0;
 #endif
-			#pragma omp for private(img_index,i,j,index,corners) schedule(dynamic)
+			#pragma omp for private(img_index,i,j,imggrid_ptr,imggrid,index,corners) schedule(dynamic)
 			for (img_index=0; img_index < image_npixels; img_index++) {
 				index=0;
 				i = image_pixel_grid->active_image_pixel_i[img_index];
@@ -14771,7 +14757,9 @@ void QLens::construct_Lmatrix(const int zsrc_i, const bool delaunay, const bool 
 				corners[1] = &image_pixel_grid->corner_sourcepts[i][j+1];
 				corners[2] = &image_pixel_grid->corner_sourcepts[i+1][j];
 				corners[3] = &image_pixel_grid->corner_sourcepts[i+1][j+1];
-				cartesian_srcgrid->calculate_Lmatrix_overlap(img_index,i,j,index,corners,&image_pixel_grid->twist_pts[i][j],image_pixel_grid->twist_status[i][j],thread);
+				for (imggrid_ptr = imggrids; imggrid_ptr != NULL; imggrid_ptr++) {
+					(*imggrid_ptr)->cartesian_srcgrid->calculate_Lmatrix_overlap(img_index,i,j,index,corners,&(*imggrid_ptr)->twist_pts[i][j],(*imggrid_ptr)->twist_status[i][j],thread);
+				}
 				Lmatrix_row_nn[img_index] = index;
 			}
 		}
@@ -14790,7 +14778,7 @@ void QLens::construct_Lmatrix(const int zsrc_i, const bool delaunay, const bool 
 			lensvector *center_srcpt;
 
 			if ((split_imgpixels) and (!raytrace_using_pixel_centers)) {
-				#pragma omp for private(img_index,i,j,nsubpix,index,center_srcpt) schedule(dynamic)
+				#pragma omp for private(img_index,i,j,imggrid_ptr,imggrid,nsubpix,index,center_srcpt) schedule(dynamic)
 				for (img_index=0; img_index < image_npixels; img_index++) {
 					index = 0;
 					i = image_pixel_grid->active_image_pixel_i[img_index];
@@ -14801,7 +14789,10 @@ void QLens::construct_Lmatrix(const int zsrc_i, const bool delaunay, const bool 
 					if (delaunay) {
 						if (image_pixel_grid->delaunay_srcgrid != NULL) {
 							for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-								image_pixel_grid->delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j].data(),image_pixel_grid->n_mapped_srcpixels[i][j],index,subcell_index,1.0/nsubpix,thread);
+								for (imggrid_ptr = imggrids; imggrid_ptr != imggrid_end; imggrid_ptr++) {
+									imggrid = (*imggrid_ptr);
+									imggrid->delaunay_srcgrid->calculate_Lmatrix(img_index,imggrid->mapped_delaunay_srcpixels[i][j].data(),imggrid->n_mapped_srcpixels[i][j],index,subcell_index,1.0/nsubpix,thread);
+								}
 							}
 						}
 						if ((potential_perturbations) and (image_pixel_grid->lensgrid != NULL)) {
@@ -14811,23 +14802,32 @@ void QLens::construct_Lmatrix(const int zsrc_i, const bool delaunay, const bool 
 						}
 					} else {
 						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-							cartesian_srcgrid->calculate_Lmatrix_interpolate(img_index,image_pixel_grid->mapped_cartesian_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
+							for (imggrid_ptr = imggrids; imggrid_ptr != imggrid_end; imggrid_ptr++) {
+								imggrid = (*imggrid_ptr);
+								imggrid->cartesian_srcgrid->calculate_Lmatrix_interpolate(img_index,imggrid->mapped_cartesian_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
+							}
 						}
 					}
 					Lmatrix_row_nn[img_index] = index;
 				}
 			} else {
-				#pragma omp for private(img_index,i,j,index) schedule(dynamic)	
+				#pragma omp for private(img_index,i,j,imggrid_ptr,imggrid,index) schedule(dynamic)	
 				for (img_index=0; img_index < image_npixels; img_index++) {
 					index = 0;
 					i = image_pixel_grid->active_image_pixel_i[img_index];
 					j = image_pixel_grid->active_image_pixel_j[img_index];
 					if (delaunay) {
 						if (image_pixel_grid->delaunay_srcgrid != NULL) {
-							image_pixel_grid->delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j].data(),image_pixel_grid->n_mapped_srcpixels[i][j],index,0,1.0,thread);
+							for (imggrid_ptr = imggrids; imggrid_ptr != imggrid_end; imggrid_ptr++) {
+								imggrid = (*imggrid_ptr);
+								imggrid->delaunay_srcgrid->calculate_Lmatrix(img_index,imggrid->mapped_delaunay_srcpixels[i][j].data(),imggrid->n_mapped_srcpixels[i][j],index,0,1.0,thread);
+							}
 						}
 					} else {
-						cartesian_srcgrid->calculate_Lmatrix_interpolate(img_index,image_pixel_grid->mapped_cartesian_srcpixels[i][j],index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
+						for (imggrid_ptr = imggrids; imggrid_ptr != imggrid_end; imggrid_ptr++) {
+							imggrid = (*imggrid_ptr);
+							imggrid->cartesian_srcgrid->calculate_Lmatrix_interpolate(img_index,imggrid->mapped_cartesian_srcpixels[i][j],index,image_pixel_grid->center_sourcepts[i][j],0,1.0,thread);
+						}
 					}
 					if ((potential_perturbations) and (image_pixel_grid->lensgrid != NULL)) {
 						image_pixel_grid->lensgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_potpixels[i][j].data(),image_pixel_grid->n_mapped_potpixels[i][j],image_pixel_grid->subpixel_source_gradient[i][j][0],index,0,source_npixels,1.0,thread);
@@ -14869,13 +14869,22 @@ void QLens::construct_Lmatrix(const int zsrc_i, const bool delaunay, const bool 
 	delete[] Lmatrix_row_nn;
 	delete[] Lmatrix_rows;
 	delete[] Lmatrix_index_rows;
+	delete[] imggrids;
 }
 
 void QLens::construct_Lmatrix_supersampled(const int zsrc_i, const bool delaunay, const bool potential_perturbations, const bool verbal)
 {
 	ImagePixelGrid *image_pixel_grid;
 	image_pixel_grid = image_pixel_grids[zsrc_i];
-	SourcePixelGrid *cartesian_srcgrid = image_pixel_grid->cartesian_srcgrid;
+
+	int n_imggrids = image_pixel_grid->n_pixsrc_to_include_in_Lmatrix;
+	if (n_imggrids==0) die("No image grids are included for constructing Lmatrix");
+	ImagePixelGrid **imggrids;
+	imggrids = new ImagePixelGrid*[n_imggrids+1]; // last element will be used to identify end of list
+	for (int i=0; i < n_imggrids; i++) imggrids[i] = image_pixel_grids[image_pixel_grid->pixsrc_indx_to_include_in_Lmatrix[i]];
+	imggrids[n_imggrids] = NULL;
+	ImagePixelGrid **imggrid_end = imggrids+n_imggrids;
+
 	int img_index;
 	int index;
 	int i,j;
@@ -14887,6 +14896,8 @@ void QLens::construct_Lmatrix_supersampled(const int zsrc_i, const bool delaunay
 		wtime0 = omp_get_wtime();
 	}
 #endif
+	ImagePixelGrid** imggrid_ptr;
+	ImagePixelGrid* imggrid;
 	#pragma omp parallel
 	{
 		int thread;
@@ -14898,7 +14909,7 @@ void QLens::construct_Lmatrix_supersampled(const int zsrc_i, const bool delaunay
 		int nsubpix,subcell_index;
 		lensvector *center_srcpt;
 
-		#pragma omp for private(img_index,i,j,nsubpix,index,center_srcpt) schedule(dynamic)
+		#pragma omp for private(img_index,i,j,imggrid_ptr,imggrid,nsubpix,index,center_srcpt) schedule(dynamic)
 		for (img_index=0; img_index < image_n_subpixels; img_index++) {
 			index = 0;
 			i = image_pixel_grid->active_image_pixel_i_ss[img_index];
@@ -14908,10 +14919,16 @@ void QLens::construct_Lmatrix_supersampled(const int zsrc_i, const bool delaunay
 			center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j];
 			if (delaunay) {
 				if (image_pixel_grid->delaunay_srcgrid != NULL) { // this might be the case if we're only doing point sources but happen to be in delaunay source mode
-						image_pixel_grid->delaunay_srcgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_delaunay_srcpixels[i][j].data(),image_pixel_grid->n_mapped_srcpixels[i][j],index,subcell_index,1.0,thread);
+					for (imggrid_ptr = imggrids; imggrid_ptr != NULL; imggrid_ptr++) {
+						imggrid = (*imggrid_ptr);
+						imggrid->delaunay_srcgrid->calculate_Lmatrix(img_index,imggrid->mapped_delaunay_srcpixels[i][j].data(),imggrid->n_mapped_srcpixels[i][j],index,subcell_index,1.0,thread);
+					}
 				}
 			} else {
-				cartesian_srcgrid->calculate_Lmatrix_interpolate(img_index,image_pixel_grid->mapped_cartesian_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0,thread);
+				for (imggrid_ptr = imggrids; imggrid_ptr != NULL; imggrid_ptr++) {
+					imggrid = (*imggrid_ptr);
+					imggrid->cartesian_srcgrid->calculate_Lmatrix_interpolate(img_index,imggrid->mapped_cartesian_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0,thread);
+				}
 			}
 			if ((potential_perturbations) and (image_pixel_grid->lensgrid != NULL)) {
 				image_pixel_grid->lensgrid->calculate_Lmatrix(img_index,image_pixel_grid->mapped_potpixels[i][j].data(),image_pixel_grid->n_mapped_potpixels[i][j],image_pixel_grid->subpixel_source_gradient[i][j][subcell_index],index,subcell_index,source_npixels,1.0,thread);
@@ -16582,15 +16599,37 @@ void QLens::generate_supersampled_PSF_matrix(const bool downsample, const int do
 			supersampled_psf_matrix[i][j] /= normalization;
 		}
 	}
-
 }
 
 bool QLens::create_regularization_matrix(const int zsrc_i, const bool allow_reg_weighting, const bool use_sbweights, const bool potential_perturbations, const bool verbal)
 {
 	RegularizationMethod reg_method = regularization_method;
 	if (!potential_perturbations) {
-		if (Rmatrix != NULL) { delete[] Rmatrix; Rmatrix = NULL; }
-		if (Rmatrix_index != NULL) { delete[] Rmatrix_index; Rmatrix_index = NULL; }
+		if (Rmatrix != NULL) die("Rmatrix is not NULL");
+		if (Rmatrix_index != NULL) die("Rmatrix_index is not NULL");
+		if (n_src_inv==0) die("no sources have been selected to invert");
+		Rmatrix = new double*[n_src_inv];
+		Rmatrix_index = new int*[n_src_inv];
+		for (int i=0; i < n_src_inv; i++) {
+			Rmatrix[i] = NULL;
+			Rmatrix_index[i] = NULL;
+		}
+		covmatrix_stacked = new dvector[n_src_inv];
+		covmatrix_packed = new dvector[n_src_inv];
+		covmatrix_factored = new dvector[n_src_inv];
+		Rmatrix_packed = new dvector[n_src_inv];
+		Rmatrix_log_determinant = new double[n_src_inv];
+
+		source_npixels_ptr = src_npixels_inv;
+		src_npixel_start_ptr = src_npixel_start;
+		Rmatrix_ptr = Rmatrix;
+		Rmatrix_index_ptr = Rmatrix_index;
+		covmatrix_stacked_ptr = covmatrix_stacked;
+		covmatrix_packed_ptr = covmatrix_packed;
+		covmatrix_factored_ptr = covmatrix_factored;
+		Rmatrix_packed_ptr = Rmatrix_packed;
+		Rmatrix_log_determinant_ptr = Rmatrix_log_determinant;
+
 		if ((use_lum_weighted_regularization) and (!allow_reg_weighting)) reg_method = Curvature;
 		if (allow_reg_weighting) calculate_lumreg_srcpixel_weights(zsrc_i,use_sbweights);
 	} else {
@@ -16603,58 +16642,70 @@ bool QLens::create_regularization_matrix(const int zsrc_i, const bool allow_reg_
 	use_covariance_matrix = false; // if true, will use covariance matrix directly instead of Rmatrix
 	bool successful_Rmatrix = true;
 	if ((!find_covmatrix_inverse) and (n_ptsrc > 0)) die("modeling point images is not currently compatible with 'find_cov_inverse off' setting"); // see notes in generate_Gmatrix function (this is where the problem is, I believe)...FIX LATER!!
-	switch (reg_method) {
-		case Norm:
-			generate_Rmatrix_norm(potential_perturbations); break;
-		case Gradient:
-			generate_Rmatrix_from_gmatrices(zsrc_i,potential_perturbations); break;
-		case SmoothGradient:
-			generate_Rmatrix_from_gmatrices(zsrc_i,true,potential_perturbations); break;
-		case Curvature:
-			generate_Rmatrix_from_hmatrices(zsrc_i,potential_perturbations); break;
-		case SmoothCurvature:
-			generate_Rmatrix_from_hmatrices(zsrc_i,true,potential_perturbations); break;
-		case Matern_Kernel:
-			dense_Rmatrix = true;
-			covariance_kernel_regularization = true;
-			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(zsrc_i,0,allow_reg_weighting,potential_perturbations,verbal);
-			break;
-		case Exponential_Kernel:
-			dense_Rmatrix = true;
-			covariance_kernel_regularization = true;
-			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(zsrc_i,1,allow_reg_weighting,potential_perturbations,verbal);
-			break;
-		case Squared_Exponential_Kernel:
-			dense_Rmatrix = true;
-			covariance_kernel_regularization = true;
-			if (!find_covmatrix_inverse) use_covariance_matrix = true;
-			successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(zsrc_i,2,allow_reg_weighting,potential_perturbations,verbal);
-			break;
-		default:
-			die("Regularization method not recognized");
-	}
-	if (!successful_Rmatrix) return false;
-	if ((dense_Rmatrix) and (inversion_method!=DENSE) and (inversion_method!=DENSE_FMATRIX)) die("inversion method must be set to 'dense' or 'fdense' if a dense regularization matrix is used");
-	if ((!dense_Rmatrix) and ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX))) {
-		// If doing a sparse inversion, the determinant of R-matrix will be calculated when doing the inversion; otherwise, must be done here
-		// unless R-matrix is dense (as in the covariance kernel reg.), in which case determinant is found during its construction
+
+	for (int i=0; i < n_src_inv; i++) {
+		switch (reg_method) {
+			case Norm:
+				generate_Rmatrix_norm(potential_perturbations); break;
+			case Gradient:
+				generate_Rmatrix_from_gmatrices(zsrc_i,potential_perturbations); break;
+			case SmoothGradient:
+				generate_Rmatrix_from_gmatrices(zsrc_i,true,potential_perturbations); break;
+			case Curvature:
+				generate_Rmatrix_from_hmatrices(zsrc_i,potential_perturbations); break;
+			case SmoothCurvature:
+				generate_Rmatrix_from_hmatrices(zsrc_i,true,potential_perturbations); break;
+			case Matern_Kernel:
+				dense_Rmatrix = true;
+				covariance_kernel_regularization = true;
+				if (!find_covmatrix_inverse) use_covariance_matrix = true;
+				successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(zsrc_i,0,allow_reg_weighting,potential_perturbations,verbal);
+				break;
+			case Exponential_Kernel:
+				dense_Rmatrix = true;
+				covariance_kernel_regularization = true;
+				if (!find_covmatrix_inverse) use_covariance_matrix = true;
+				successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(zsrc_i,1,allow_reg_weighting,potential_perturbations,verbal);
+				break;
+			case Squared_Exponential_Kernel:
+				dense_Rmatrix = true;
+				covariance_kernel_regularization = true;
+				if (!find_covmatrix_inverse) use_covariance_matrix = true;
+				successful_Rmatrix = generate_Rmatrix_from_covariance_kernel(zsrc_i,2,allow_reg_weighting,potential_perturbations,verbal);
+				break;
+			default:
+				die("Regularization method not recognized");
+		}
+		if (!successful_Rmatrix) return false;
+		if ((dense_Rmatrix) and (inversion_method!=DENSE) and (inversion_method!=DENSE_FMATRIX)) die("inversion method must be set to 'dense' or 'fdense' if a dense regularization matrix is used");
+		if (!dense_Rmatrix) {
+			// If doing a sparse inversion, the determinant of R-matrix will be calculated when doing the inversion; otherwise, must be done here
+			// unless R-matrix is dense (as in the covariance kernel reg.), in which case determinant is found during its construction
 
 #ifdef USE_UMFPACK
-		Rmatrix_determinant_UMFPACK(potential_perturbations);
+			Rmatrix_determinant_UMFPACK(potential_perturbations);
 #else
 #ifdef USE_MUMPS
-		Rmatrix_determinant_MUMPS(potential_perturbations);
+			Rmatrix_determinant_MUMPS(potential_perturbations);
 #else
 #ifdef USE_MKL
-		Rmatrix_determinant_MKL(potential_perturbations);
+			Rmatrix_determinant_MKL(potential_perturbations);
 #else
-		warn("Converting Rmatrix to dense, since MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
-		Rmatrix_determinant_dense(potential_perturbations);
+			warn("Converting Rmatrix to dense, since MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
+			Rmatrix_determinant_dense(potential_perturbations);
 #endif
 #endif
 #endif
+		}
+		source_npixels_ptr++;
+		src_npixel_start_ptr++;
+		Rmatrix_ptr++;
+		Rmatrix_index_ptr++;
+		covmatrix_stacked_ptr++;
+		covmatrix_packed_ptr++;
+		covmatrix_factored_ptr++;
+		Rmatrix_packed_ptr++;
+		Rmatrix_log_determinant_ptr++;
 	}
 
 	//cout << "Printing Rmatrix..." << endl;
@@ -16674,6 +16725,19 @@ bool QLens::create_regularization_matrix(const int zsrc_i, const bool allow_reg_
 void QLens::create_regularization_matrix_shapelet(const int zsrc_i)
 {
 	if (source_npixels==0) return;
+	if (Rmatrix != NULL) die("Rmatrix is not NULL");
+	if (Rmatrix_index != NULL) die("Rmatrix_index is not NULL");
+	if (n_src_inv==0) die("no sources have been selected to invert");
+	Rmatrix = new double*[n_src_inv];
+	Rmatrix_index = new int*[n_src_inv];
+	Rmatrix_log_determinant = new double[n_src_inv];
+
+	source_npixels_ptr = src_npixels_inv;
+	src_npixel_start_ptr = src_npixel_start;
+	Rmatrix_ptr = Rmatrix;
+	Rmatrix_index_ptr = Rmatrix_index;
+	Rmatrix_log_determinant_ptr = Rmatrix_log_determinant;
+
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime0 = omp_get_wtime();
@@ -16681,30 +16745,37 @@ void QLens::create_regularization_matrix_shapelet(const int zsrc_i)
 #endif
 	dense_Rmatrix = false;
 	use_covariance_matrix = false; // if true, will use covariance matrix directly instead of Rmatrix
-	switch (regularization_method) {
-		case Norm:
-			generate_Rmatrix_norm(); break;
-		case Gradient:
-			generate_Rmatrix_shapelet_gradient(zsrc_i); break;
-		case Curvature:
-			generate_Rmatrix_shapelet_curvature(zsrc_i); break;
-		default:
-			die("Regularization method not recognized for dense matrices");
-	}
+	for (int i=0; i < n_src_inv; i++) {
+		switch (regularization_method) {
+			case Norm:
+				generate_Rmatrix_norm(); break;
+			case Gradient:
+				generate_Rmatrix_shapelet_gradient(zsrc_i); break;
+			case Curvature:
+				generate_Rmatrix_shapelet_curvature(zsrc_i); break;
+			default:
+				die("Regularization method not recognized for dense matrices");
+		}
 #ifdef USE_UMFPACK
-	Rmatrix_determinant_UMFPACK(false);
+		Rmatrix_determinant_UMFPACK(false);
 #else
 #ifdef USE_MUMPS
-	Rmatrix_determinant_MUMPS(false);
+		Rmatrix_determinant_MUMPS(false);
 #else
 #ifdef USE_MKL
-	Rmatrix_determinant_MKL(false);
+		Rmatrix_determinant_MKL(false);
 #else
-	warn("Converting Rmatrix to dense, since MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
-	Rmatrix_determinant_dense(false);
+		warn("Converting Rmatrix to dense, since MUMPS, UMFPACK, or MKL is required to calculate sparse R-matrix determinants");
+		Rmatrix_determinant_dense(false);
 #endif
 #endif
 #endif
+		source_npixels_ptr++;
+		src_npixel_start_ptr++;
+		Rmatrix_ptr++;
+		Rmatrix_index_ptr++;
+		Rmatrix_log_determinant_ptr++;
+	}
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
@@ -16718,31 +16789,31 @@ void QLens::create_regularization_matrix_shapelet(const int zsrc_i)
 void QLens::generate_Rmatrix_norm(const bool potential_perturbations)
 {
 	int Rmatrix_nn, npixels;
-	double *Rmatrix_ptr;
-	int *Rmatrix_index_ptr;
+	double *new_Rmatrix_ptr;
+	int *new_Rmatrix_index_ptr;
 	if (!potential_perturbations) {
-		npixels = source_npixels;
+		npixels = (*source_npixels_ptr);
 	} else {
 		npixels = lensgrid_npixels;
 	}
 	Rmatrix_nn = npixels+1;
 
-	Rmatrix_ptr = new double[Rmatrix_nn];
-	Rmatrix_index_ptr = new int[Rmatrix_nn];
+	new_Rmatrix_ptr = new double[Rmatrix_nn];
+	new_Rmatrix_index_ptr = new int[Rmatrix_nn];
 
 	for (int i=0; i < npixels; i++) {
-		Rmatrix_ptr[i] = 1;
-		Rmatrix_index_ptr[i] = npixels+1;
+		new_Rmatrix_ptr[i] = 1;
+		new_Rmatrix_index_ptr[i] = npixels+1;
 	}
-	Rmatrix_index_ptr[npixels] = npixels+1;
+	new_Rmatrix_index_ptr[npixels] = npixels+1;
 
 	if (!potential_perturbations) {
-		Rmatrix = Rmatrix_ptr;
-		Rmatrix_index = Rmatrix_index_ptr;
-		Rmatrix_log_determinant = 0;
+		(*Rmatrix_ptr) = new_Rmatrix_ptr;
+		(*Rmatrix_index_ptr) = new_Rmatrix_index_ptr;
+		(*Rmatrix_log_determinant_ptr) = 0;
 	} else {
-		Rmatrix_pot = Rmatrix_ptr;
-		Rmatrix_pot_index = Rmatrix_index_ptr;
+		Rmatrix_pot = new_Rmatrix_ptr;
+		Rmatrix_pot_index = new_Rmatrix_index_ptr;
 		Rmatrix_pot_log_determinant = 0;
 	}
 }
@@ -16756,7 +16827,7 @@ void QLens::generate_Rmatrix_from_hmatrices(const int zsrc_i, const bool interpo
 #endif
 	int npixels;
 	if (!potential_perturbations) {
-		npixels = source_npixels;
+		npixels = (*source_npixels_ptr);
 	} else {
 		npixels = lensgrid_npixels;
 	}
@@ -16896,34 +16967,34 @@ void QLens::generate_Rmatrix_from_hmatrices(const int zsrc_i, const bool interpo
 	Rmatrix_nn = Rmatrix_nn_part;
 	Rmatrix_nn += npixels+1;
 
-	double *Rmatrix_ptr;
-	int *Rmatrix_index_ptr;
+	double *new_Rmatrix_ptr;
+	int *new_Rmatrix_index_ptr;
 
-	Rmatrix_ptr = new double[Rmatrix_nn];
-	Rmatrix_index_ptr = new int[Rmatrix_nn];
+	new_Rmatrix_ptr = new double[Rmatrix_nn];
+	new_Rmatrix_index_ptr = new int[Rmatrix_nn];
 
 	for (i=0; i < npixels; i++)
-		Rmatrix_ptr[i] = Rmatrix_diag_temp[i];
+		new_Rmatrix_ptr[i] = Rmatrix_diag_temp[i];
 
-	Rmatrix_index_ptr[0] = npixels+1;
+	new_Rmatrix_index_ptr[0] = npixels+1;
 	for (i=0; i < npixels; i++) {
-		Rmatrix_index_ptr[i+1] = Rmatrix_index_ptr[i] + Rmatrix_row_nn[i];
+		new_Rmatrix_index_ptr[i+1] = new_Rmatrix_index_ptr[i] + Rmatrix_row_nn[i];
 	}
 
 	for (i=0; i < npixels; i++) {
-		indx = Rmatrix_index_ptr[i];
+		indx = new_Rmatrix_index_ptr[i];
 		for (j=0; j < Rmatrix_row_nn[i]; j++) {
-			Rmatrix_ptr[indx+j] = Rmatrix_rows[i][j];
-			Rmatrix_index_ptr[indx+j] = Rmatrix_index_rows[i][j];
+			new_Rmatrix_ptr[indx+j] = Rmatrix_rows[i][j];
+			new_Rmatrix_index_ptr[indx+j] = Rmatrix_index_rows[i][j];
 		}
 	}
 
 	if (!potential_perturbations) {
-		Rmatrix = Rmatrix_ptr;
-		Rmatrix_index = Rmatrix_index_ptr;
+		(*Rmatrix_ptr) = new_Rmatrix_ptr;
+		(*Rmatrix_index_ptr) = new_Rmatrix_index_ptr;
 	} else {
-		Rmatrix_pot = Rmatrix_ptr;
-		Rmatrix_pot_index = Rmatrix_index_ptr;
+		Rmatrix_pot = new_Rmatrix_ptr;
+		Rmatrix_pot_index = new_Rmatrix_index_ptr;
 	}
 
 	delete[] Rmatrix_row_nn;
@@ -16946,7 +17017,7 @@ void QLens::generate_Rmatrix_from_gmatrices(const int zsrc_i, const bool interpo
 #endif
 	int npixels;
 	if (!potential_perturbations) {
-		npixels = source_npixels;
+		npixels = (*source_npixels_ptr);
 	} else {
 		npixels = lensgrid_npixels;
 	}
@@ -17086,34 +17157,34 @@ void QLens::generate_Rmatrix_from_gmatrices(const int zsrc_i, const bool interpo
 	Rmatrix_nn = Rmatrix_nn_part;
 	Rmatrix_nn += npixels+1;
 
-	double *Rmatrix_ptr;
-	int *Rmatrix_index_ptr;
+	double *new_Rmatrix_ptr;
+	int *new_Rmatrix_index_ptr;
 
-	Rmatrix_ptr = new double[Rmatrix_nn];
-	Rmatrix_index_ptr = new int[Rmatrix_nn];
+	new_Rmatrix_ptr = new double[Rmatrix_nn];
+	new_Rmatrix_index_ptr = new int[Rmatrix_nn];
 
 	for (i=0; i < npixels; i++)
-		Rmatrix_ptr[i] = Rmatrix_diag_temp[i];
+		new_Rmatrix_ptr[i] = Rmatrix_diag_temp[i];
 
-	Rmatrix_index_ptr[0] = npixels+1;
+	new_Rmatrix_index_ptr[0] = npixels+1;
 	for (i=0; i < npixels; i++) {
-		Rmatrix_index_ptr[i+1] = Rmatrix_index_ptr[i] + Rmatrix_row_nn[i];
+		new_Rmatrix_index_ptr[i+1] = new_Rmatrix_index_ptr[i] + Rmatrix_row_nn[i];
 	}
 
 	for (i=0; i < npixels; i++) {
-		indx = Rmatrix_index_ptr[i];
+		indx = new_Rmatrix_index_ptr[i];
 		for (j=0; j < Rmatrix_row_nn[i]; j++) {
-			Rmatrix_ptr[indx+j] = Rmatrix_rows[i][j];
-			Rmatrix_index_ptr[indx+j] = Rmatrix_index_rows[i][j];
+			new_Rmatrix_ptr[indx+j] = Rmatrix_rows[i][j];
+			new_Rmatrix_index_ptr[indx+j] = Rmatrix_index_rows[i][j];
 		}
 	}
 
 	if (!potential_perturbations) {
-		Rmatrix = Rmatrix_ptr;
-		Rmatrix_index = Rmatrix_index_ptr;
+		(*Rmatrix_ptr) = new_Rmatrix_ptr;
+		(*Rmatrix_index_ptr) = new_Rmatrix_index_ptr;
 	} else {
-		Rmatrix_pot = Rmatrix_ptr;
-		Rmatrix_pot_index = Rmatrix_index_ptr;
+		Rmatrix_pot = new_Rmatrix_ptr;
+		Rmatrix_pot_index = new_Rmatrix_index_ptr;
 	}
 
 	delete[] Rmatrix_row_nn;
@@ -17138,29 +17209,29 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 	}
 #endif
 	int npixels;
-	dvector *covmatrix_ptr;
-	dvector *covmatrix_factored_ptr;
-	dvector *Rmatrix_ptr;
-	double *Rmatrix_logdet_ptr;
+	dvector *new_covmatrix_packed_ptr;
+	dvector *new_covmatrix_factored_ptr;
+	dvector *new_Rmatrix_packed_ptr;
+	double *new_Rmatrix_logdet_ptr;
 	if (!potential_perturbations) {
-		npixels = source_npixels;
-		covmatrix_ptr = &covmatrix_packed;
-		covmatrix_factored_ptr = &covmatrix_factored;
-		Rmatrix_ptr = &Rmatrix_packed;
-		Rmatrix_logdet_ptr = &Rmatrix_log_determinant;
+		npixels = (*source_npixels_ptr);
+		new_covmatrix_packed_ptr = covmatrix_packed_ptr;
+		new_covmatrix_factored_ptr = covmatrix_factored_ptr;
+		new_Rmatrix_packed_ptr = Rmatrix_packed_ptr;
+		new_Rmatrix_logdet_ptr = Rmatrix_log_determinant_ptr;
 	} else {
 		npixels = lensgrid_npixels;
-		covmatrix_ptr = &covmatrix_pot_packed;
-		covmatrix_factored_ptr = &covmatrix_pot_factored;
-		Rmatrix_ptr = &Rmatrix_pot_packed;
-		Rmatrix_logdet_ptr = &Rmatrix_pot_log_determinant;
+		new_covmatrix_packed_ptr = &covmatrix_pot_packed;
+		new_covmatrix_factored_ptr = &covmatrix_pot_factored;
+		new_Rmatrix_packed_ptr = &Rmatrix_pot_packed;
+		new_Rmatrix_logdet_ptr = &Rmatrix_pot_log_determinant;
 	}
 
 	int ntot = npixels*(npixels+1)/2;
 	double xc_approx, yc_approx, sig;
-	covmatrix_ptr->input(ntot);
-	covmatrix_factored_ptr->input(ntot);
-	Rmatrix_ptr->input(ntot);
+	new_covmatrix_packed_ptr->input(ntot);
+	new_covmatrix_factored_ptr->input(ntot);
+	new_Rmatrix_packed_ptr->input(ntot);
 	if (source_fit_mode==Delaunay_Source) {
 		if (use_distance_weighted_regularization) {
 			sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx,verbal);
@@ -17171,7 +17242,7 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 		if (use_mag_weighted_regularization) calculate_mag_srcpixel_weights(zsrc_i);
 
 		double *wgtfac = ((use_distance_weighted_regularization) or (use_mag_weighted_regularization) or ((allow_reg_weighting) and (use_lum_weighted_regularization))) ? reg_weight_factor : NULL;
-		image_pixel_grid->delaunay_srcgrid->generate_covariance_matrix(covmatrix_ptr->array(),kernel_type,covmatrix_epsilon,wgtfac);
+		image_pixel_grid->delaunay_srcgrid->generate_covariance_matrix(new_covmatrix_packed_ptr->array(),kernel_type,covmatrix_epsilon,wgtfac);
 	}
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
 #ifdef USE_OPENMP
@@ -17181,19 +17252,19 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 	}
 #endif
 
-	for (int i=0; i < ntot; i++) (*covmatrix_factored_ptr)[i] = (*covmatrix_ptr)[i];
+	for (int i=0; i < ntot; i++) (*new_covmatrix_factored_ptr)[i] = (*new_covmatrix_packed_ptr)[i];
 #ifdef USE_MKL
 	lapack_int status;
-   status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',npixels,covmatrix_factored_ptr->array()); // Cholesky decomposition
+   status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',npixels,new_covmatrix_factored_ptr->array()); // Cholesky decomposition
 	if ((status != 0) and (penalize_defective_covmatrix)) return false;
 	//if (status > 0) warn("cholesky decomposition of covmatrix was not successful; covmatrix is not positive definite");
-	Cholesky_logdet_packed(covmatrix_factored_ptr->array(),(*Rmatrix_logdet_ptr),npixels);
-	(*Rmatrix_logdet_ptr) = -(*Rmatrix_logdet_ptr); // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
+	Cholesky_logdet_packed(new_covmatrix_factored_ptr->array(),(*new_Rmatrix_logdet_ptr),npixels);
+	(*new_Rmatrix_logdet_ptr) = -(*new_Rmatrix_logdet_ptr); // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
 	if (!use_covariance_matrix) {
 		// Since we're going to use R-matrix explicitly, we must find it by taking cov_inverse
-		for (int i=0; i < ntot; i++) (*Rmatrix_ptr)[i] = (*covmatrix_factored_ptr)[i];
+		for (int i=0; i < ntot; i++) (*new_Rmatrix_packed_ptr)[i] = (*new_covmatrix_factored_ptr)[i];
 		lapack_int status;
-		status = LAPACKE_dpptri(LAPACK_ROW_MAJOR,'U',npixels,Rmatrix_ptr->array()); // computes inverse; this is where most of the computational burden is
+		status = LAPACKE_dpptri(LAPACK_ROW_MAJOR,'U',npixels,new_Rmatrix_packed_ptr->array()); // computes inverse; this is where most of the computational burden is
 		//if (status != 0) { warn("covmatrix inversion was not successful"); return false; }
 
 		//Gmatrix_stacked.input(n_amps*n_amps); // just used here to check if inverse is correct
@@ -17225,11 +17296,11 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 	}
 #else
 	// Doing this without MKL, using the following functions, is MUCH slower (and might be broken right now?)
-	repack_matrix_lower((*covmatrix_factored_ptr));
-	Cholesky_dcmp_packed(covmatrix_factored_ptr->array(),n_amps);
-	Cholesky_logdet_lower_packed(covmatrix_factored_ptr->array(),(*Rmatrix_logdet_ptr),n_amps);
-	(*Rmatrix_logdet_ptr) = -(*Rmatrix_logdet_ptr); // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
-	repack_matrix_upper((*covmatrix_factored_ptr));
+	repack_matrix_lower((*new_covmatrix_factored_ptr));
+	Cholesky_dcmp_packed(new_covmatrix_factored_ptr->array(),n_amps);
+	Cholesky_logdet_lower_packed(new_covmatrix_factored_ptr->array(),(*new_Rmatrix_logdet_ptr),n_amps);
+	(*new_Rmatrix_logdet_ptr) = -(*new_Rmatrix_logdet_ptr); // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
+	repack_matrix_upper((*new_covmatrix_factored_ptr));
 	//for (int i=0; i < ntot; i++) Rmatrix_packed[i] = covmatrix_factored[i];
 	//Cholesky_invert_upper_packed(Rmatrix_packed.array(),npixels); // invert the triangular matrix to get U_inverse
 	//upper_triangular_syrk(Rmatrix_packed.array(),npixels); // Now take U_inverse * U_inverse_transpose to get C_inverse (the regularization matrix)
@@ -17247,40 +17318,65 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int 
 void QLens::generate_Rmatrix_shapelet_gradient(const int zsrc_i)
 {
 	bool at_least_one_shapelet = false;
-	int Rmatrix_nn = 3*source_npixels+1; // actually it will be slightly less than this due to truncation at shapelets with i=n_shapelets-1 or j=n_shapelets-1
+	int Rmatrix_nn = 3*(*source_npixels_ptr)+1; // actually it will be slightly less than this due to truncation at shapelets with i=n_shapelets-1 or j=n_shapelets-1
 
-	Rmatrix = new double[Rmatrix_nn];
-	Rmatrix_index = new int[Rmatrix_nn];
+	(*Rmatrix_ptr) = new double[Rmatrix_nn];
+	(*Rmatrix_index_ptr) = new int[Rmatrix_nn];
 
 	for (int i=0; i < n_sb; i++) {
 		if ((sb_list[i]->sbtype==SHAPELET) and ((zsrc_i<0) or (sbprofile_redshift_idx[i]==zsrc_i))) {
-			sb_list[i]->calculate_gradient_Rmatrix_elements(Rmatrix, Rmatrix_index);
+			sb_list[i]->calculate_gradient_Rmatrix_elements((*Rmatrix_ptr), (*Rmatrix_index_ptr));
 			at_least_one_shapelet = true;
 			break;
 		}
 	}
 	if (!at_least_one_shapelet) die("No shapelet profile has been created; cannot calculate regularization matrix");
-	Rmatrix_nn = Rmatrix_index[source_npixels];
+	//Rmatrix_nn = Rmatrix_index[source_npixels];
 	//for (int i=0; i <= source_npixels; i++) cout << Rmatrix[i] << " " << Rmatrix_index[i] << endl;
 	//cout << "Rmatrix_nn=" << Rmatrix_nn << " source_npixels=" << source_npixels << endl;
 }
 
 void QLens::generate_Rmatrix_shapelet_curvature(const int zsrc_i)
 {
-	int Rmatrix_nn = source_npixels+1;
+	int Rmatrix_nn = (*source_npixels_ptr)+1;
 
-	Rmatrix = new double[Rmatrix_nn];
-	Rmatrix_index = new int[Rmatrix_nn];
+	(*Rmatrix_ptr) = new double[Rmatrix_nn];
+	(*Rmatrix_index_ptr) = new int[Rmatrix_nn];
 
 	bool at_least_one_shapelet = false;
 	for (int i=0; i < n_sb; i++) {
 		if ((sb_list[i]->sbtype==SHAPELET) and ((zsrc_i<0) or (sbprofile_redshift_idx[i]==zsrc_i))) {
-			sb_list[i]->calculate_curvature_Rmatrix_elements(Rmatrix, Rmatrix_index);
+			sb_list[i]->calculate_curvature_Rmatrix_elements((*Rmatrix_ptr), (*Rmatrix_index_ptr));
 			at_least_one_shapelet = true;
 		}
 	}
 	if (!at_least_one_shapelet) die("No shapelet profile has been created; cannot calculate regularization matrix");
-	Rmatrix_nn = Rmatrix_index[source_npixels];
+	//Rmatrix_nn = Rmatrix_index[source_npixels];
+}
+
+void QLens::get_source_regparam_ptr(const int zsrc_i, const int imggrid_include_i, double* &regparam)
+{
+	if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) {
+		ImagePixelGrid *imggrid = image_pixel_grids[image_pixel_grids[zsrc_i]->pixsrc_indx_to_include_in_Lmatrix[imggrid_include_i]];
+		if (source_fit_mode==Delaunay_Source) {
+			regparam = &imggrid->delaunay_srcgrid->regparam;
+		} else if (source_fit_mode==Cartesian_Source) {
+			regparam = &imggrid->cartesian_srcgrid->regparam;
+		}
+	}
+	else if (source_fit_mode==Shapelet_Source) {
+		int shapelet_i = -1;
+		for (int j=0; j < n_sb; j++) {
+			if ((sb_list[j]->sbtype==SHAPELET) and ((zsrc_i<0) or (sbprofile_redshift_idx[j]==zsrc_i))) {
+				shapelet_i = j;
+				break;
+			}
+		}
+
+		if (shapelet_i >= 0) sb_list[shapelet_i]->get_regularization_param_ptr(regparam);
+		else die("shapelet not found");
+	}
+	else die("unknown source pixellation mode");
 }
 
 void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool dense_Fmatrix, const bool potential_perturbations, const bool verbal)
@@ -17528,44 +17624,65 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 	if ((potential_perturbations) and (image_pixel_grid->lensgrid != NULL)) regparam_pot = &(image_pixel_grid->lensgrid->regparam);
 	if (!dense_Fmatrix) {
 		if ((regularization_method != None) and (source_npixels > 0)) {
-			for (index1=0; index1 < source_npixels; index1++) {
-				if (!optimize_regparam_this_time) Fmatrix_diags[index1] += (*regparam)*Rmatrix[index1];
-				col_i=0;
-				for (j=Rmatrix_index[index1]; j < Rmatrix_index[index1+1]; j++) {
-					new_entry = true;
-					k=0;
-					while ((k < Fmatrix_row_nn[index1]) and (new_entry==true)) {
-						if (Rmatrix_index[j]==Fmatrix_index_rows[index1][k]) {
-							new_entry = false;
-							col_index = k;
-						}
-						k++;
-					}
-					if (new_entry) {
-						if (!optimize_regparam_this_time) {
-						//cout << "Fmat row " << index1 << ", col " << (Rmatrix_index[j]) << ": was 0, now adding " << ((*regparam)*Rmatrix[j]) << endl;
-							Fmatrix_rows[index1].push_back((*regparam)*Rmatrix[j]);
-						} else {
-							Fmatrix_rows[index1].push_back(0);
-							// This way, when we're optimizing the regularization parameter, the needed entries are already there to add to
-						}
-						Fmatrix_index_rows[index1].push_back(Rmatrix_index[j]);
-						Fmatrix_row_nn[index1]++;
-						col_i++;
-					} else {
-						if (!optimize_regparam_this_time) {
-						//cout << "Fmat row " << index1 << ", col " << (Rmatrix_index[j]) << ": was " << Fmatrix_rows[index1][col_index] << ", now adding " << ((*regparam)*Rmatrix[j]) << endl;
-							Fmatrix_rows[index1][col_index] += (*regparam)*Rmatrix[j];
-						}
+			source_npixels_ptr = src_npixels_inv;
+			src_npixel_start_ptr = src_npixel_start;
+			Rmatrix_ptr = Rmatrix;
+			Rmatrix_index_ptr = Rmatrix_index;
+			covmatrix_stacked_ptr = covmatrix_stacked;
+			covmatrix_packed_ptr = covmatrix_packed;
+			covmatrix_factored_ptr = covmatrix_factored;
+			Rmatrix_packed_ptr = Rmatrix_packed;
 
+			for (int i=0; i < n_src_inv; i++) {
+				get_source_regparam_ptr(zsrc_i,i,regparam);
+				for (index1=(*src_npixel_start_ptr), index2=0; index2 < (*source_npixels_ptr); index1++, index2++) {
+					if ((!optimize_regparam_this_time) or (i>0)) Fmatrix_diags[index1] += (*regparam)*(*Rmatrix_ptr)[index2];
+					col_i=0;
+					for (j=(*Rmatrix_index_ptr)[index2]; j < (*Rmatrix_index_ptr)[index2+1]; j++) {
+						new_entry = true;
+						k=0;
+						while ((k < Fmatrix_row_nn[index1]) and (new_entry==true)) {
+							if ((*Rmatrix_index_ptr)[j]==Fmatrix_index_rows[index1][k]) {
+								new_entry = false;
+								col_index = k;
+							}
+							k++;
+						}
+						if (new_entry) {
+							if ((!optimize_regparam_this_time) or (i>0)) {
+							//cout << "Fmat row " << index1 << ", col " << ((*Rmatrix_index_ptr)[j]) << ": was 0, now adding " << ((*regparam)*(*Rmatrix_ptr)[j]) << endl;
+								Fmatrix_rows[index1].push_back((*regparam)*(*Rmatrix_ptr)[j]);
+							} else {
+								Fmatrix_rows[index1].push_back(0);
+								// This way, when we're optimizing the regularization parameter, the needed entries are already there to add to
+							}
+							Fmatrix_index_rows[index1].push_back((*Rmatrix_index_ptr)[j]);
+							Fmatrix_row_nn[index1]++;
+							col_i++;
+						} else {
+							if ((!optimize_regparam_this_time) or (i>0)) {
+							//cout << "Fmat row " << index1 << ", col " << ((*Rmatrix_index_ptr)[j]) << ": was " << Fmatrix_rows[index1][col_index] << ", now adding " << ((*regparam)*(*Rmatrix_ptr)[j]) << endl;
+								Fmatrix_rows[index1][col_index] += (*regparam)*(*Rmatrix_ptr)[j];
+							}
+
+						}
 					}
+					Fmatrix_nn_part += col_i;
 				}
-				Fmatrix_nn_part += col_i;
+
+				source_npixels_ptr++;
+				src_npixel_start_ptr++;
+				Rmatrix_ptr++;
+				Rmatrix_index_ptr++;
 			}
 
 			if (potential_perturbations) {
+				regparam_pot = &(image_pixel_grid->lensgrid->regparam);
+				Rmatrix_ptr = &Rmatrix_pot;
+				Rmatrix_index_ptr = &Rmatrix_pot_index;
+
 				for (index1=source_npixels, index2=0; index2 < lensgrid_npixels; index1++, index2++) {
-					if (!optimize_regparam_this_time) Fmatrix_diags[index1] += (*regparam_pot)*Rmatrix_pot[index2];
+					if ((!optimize_regparam_this_time) or (i>0)) Fmatrix_diags[index1] += (*regparam_pot)*Rmatrix_pot[index2];
 					col_i=0;
 					for (j=Rmatrix_pot_index[index2]; j < Rmatrix_pot_index[index2+1]; j++) {
 						new_entry = true;
@@ -17578,7 +17695,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 							k++;
 						}
 						if (new_entry) {
-							if (!optimize_regparam_this_time) {
+							if ((!optimize_regparam_this_time) or (i>0)) {
 							//cout << "Fmat row " << index1 << ", col " << (Rmatrix_pot_index[j]) << ": was 0, now adding " << ((*regparam)*Rmatrix_pot[j]) << endl;
 								Fmatrix_rows[index1].push_back((*regparam_pot)*Rmatrix_pot[j]);
 							} else {
@@ -17589,7 +17706,7 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 							Fmatrix_row_nn[index1]++;
 							col_i++;
 						} else {
-							if (!optimize_regparam_this_time) {
+							if ((!optimize_regparam_this_time) or (i>0)) {
 							//cout << "Fmat row " << index1 << ", col " << (Rmatrix_pot_index[j]) << ": was " << Fmatrix_rows[index1][col_index] << ", now adding " << ((*regparam_pot)*Rmatrix_pot[j]) << endl;
 								Fmatrix_rows[index1][col_index] += (*regparam_pot)*Rmatrix_pot[j];
 							}
@@ -17669,8 +17786,36 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool de
 		}
 	} else {
 		if ((regularization_method != None) and (source_npixels > 0)) {
-			if (!optimize_regparam_this_time) add_regularization_term_to_dense_Fmatrix(regparam,false);
-			if (potential_perturbations) add_regularization_term_to_dense_Fmatrix(regparam_pot,true);
+			source_npixels_ptr = src_npixels_inv;
+			src_npixel_start_ptr = src_npixel_start;
+			Rmatrix_ptr = Rmatrix;
+			Rmatrix_index_ptr = Rmatrix_index;
+			covmatrix_stacked_ptr = covmatrix_stacked;
+			covmatrix_packed_ptr = covmatrix_packed;
+			covmatrix_factored_ptr = covmatrix_factored;
+			Rmatrix_packed_ptr = Rmatrix_packed;
+
+			for (int i=0; i < n_src_inv; i++) {
+				get_source_regparam_ptr(zsrc_i,i,regparam);
+				if ((!optimize_regparam_this_time) or (i > 0)) add_regularization_term_to_dense_Fmatrix(regparam,false);
+
+				source_npixels_ptr++;
+				src_npixel_start_ptr++;
+				Rmatrix_ptr++;
+				Rmatrix_index_ptr++;
+				covmatrix_stacked_ptr++;
+				covmatrix_packed_ptr++;
+				covmatrix_factored_ptr++;
+				Rmatrix_packed_ptr++;
+			}
+
+			if ((potential_perturbations) and (image_pixel_grid->lensgrid != NULL)) {
+				regparam_pot = &(image_pixel_grid->lensgrid->regparam);
+				Rmatrix_ptr = &Rmatrix_pot;
+				Rmatrix_index_ptr = &Rmatrix_pot_index;
+				Rmatrix_packed_ptr = &Rmatrix_pot_packed;
+				add_regularization_term_to_dense_Fmatrix(regparam_pot,true);
+			}
 		}
 	}
 #ifdef USE_OPENMP
@@ -17750,24 +17895,6 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 			break;
 		}
 	}
-
-	double *regparam, *regparam_pot;
-	if (source_fit_mode==Delaunay_Source) regparam = &(image_pixel_grid->delaunay_srcgrid->regparam);
-	else if (source_fit_mode==Cartesian_Source) regparam = &(image_pixel_grid->cartesian_srcgrid->regparam);
-	else if (source_fit_mode==Shapelet_Source) {
-		int shapelet_i = -1;
-		for (int i=0; i < n_sb; i++) {
-			if ((sb_list[i]->sbtype==SHAPELET) and ((zsrc_i<0) or (sbprofile_redshift_idx[i]==zsrc_i))) {
-				shapelet_i = i;
-				break;
-			}
-		}
-
-		if (shapelet_i >= 0) sb_list[shapelet_i]->get_regularization_param_ptr(regparam);
-		else regparam = NULL;
-	}
-	else die("unknown source pixellation mode");
-	if ((potential_perturbations) and (image_pixel_grid->lensgrid != NULL)) regparam_pot = &(image_pixel_grid->lensgrid->regparam);
 
 	double cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
 	if (!use_noise_map) {
@@ -17889,8 +18016,37 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 	if (use_covariance_matrix) generate_Gmatrix();
 	if (regularization_method != None) {
 		if (source_npixels > 0) {
-			if ((!optimize_regparam) or (potential_perturbations)) add_regularization_term_to_dense_Fmatrix(regparam,false);
-			if (potential_perturbations) add_regularization_term_to_dense_Fmatrix(regparam_pot,true);
+			double *regparam, *regparam_pot;
+			source_npixels_ptr = src_npixels_inv;
+			src_npixel_start_ptr = src_npixel_start;
+			Rmatrix_ptr = Rmatrix;
+			Rmatrix_index_ptr = Rmatrix_index;
+			covmatrix_stacked_ptr = covmatrix_stacked;
+			covmatrix_packed_ptr = covmatrix_packed;
+			covmatrix_factored_ptr = covmatrix_factored;
+			Rmatrix_packed_ptr = Rmatrix_packed;
+
+			for (int i=0; i < n_src_inv; i++) {
+				get_source_regparam_ptr(zsrc_i,i,regparam);
+				if ((!optimize_regparam) or (i > 0) or (potential_perturbations)) add_regularization_term_to_dense_Fmatrix(regparam,false);
+
+				source_npixels_ptr++;
+				src_npixel_start_ptr++;
+				Rmatrix_ptr++;
+				Rmatrix_index_ptr++;
+				covmatrix_stacked_ptr++;
+				covmatrix_packed_ptr++;
+				covmatrix_factored_ptr++;
+				Rmatrix_packed_ptr++;
+			}
+
+			if ((potential_perturbations) and (image_pixel_grid->lensgrid != NULL)) {
+				regparam_pot = &(image_pixel_grid->lensgrid->regparam);
+				Rmatrix_ptr = &Rmatrix_pot;
+				Rmatrix_index_ptr = &Rmatrix_pot_index;
+				Rmatrix_packed_ptr = &Rmatrix_pot_packed;
+				add_regularization_term_to_dense_Fmatrix(regparam_pot,true);
+			}
 		}
 		if (n_mge_amps > 0) add_MGE_regularization_terms_to_dense_Fmatrix(zsrc_i);
 	}
@@ -17917,7 +18073,7 @@ void QLens::generate_Gmatrix()
 	Dvector_cov = new double[n_amps];
 	for (int i=0; i < n_amps; i++) Dvector_cov[i] = 0;
 	Gmatrix_stacked.input(n_amps*n_amps);
-	covmatrix_stacked.input(n_amps*n_amps);
+	covmatrix_stacked_ptr->input(n_amps*n_amps);
 	// NOTE: right now, this doesn't work if image fluxes are included (so n_amps > source_npixels)
 	// You need to explicitly make elements zero that are beyond source_npixels*source_npixels (i.e. if there are other amplitudes)
 #ifdef USE_OPENMP
@@ -17929,8 +18085,8 @@ void QLens::generate_Gmatrix()
 
 #ifdef USE_MKL
 	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
-	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',source_npixels,covmatrix_packed.array(),1,1,n_amps,source_npixels,covmatrix_stacked.array(),n_amps);
-	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',source_npixels,covmatrix_packed.array(),1,1,n_amps,source_npixels,covmatrix_stacked.array(),n_amps);
+	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',source_npixels,covmatrix_packed_ptr->array(),1,1,n_amps,source_npixels,covmatrix_stacked_ptr->array(),n_amps);
+	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',source_npixels,covmatrix_packed_ptr->array(),1,1,n_amps,source_npixels,covmatrix_stacked_ptr->array(),n_amps);
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime_gmat = omp_get_wtime() - wtime_gmat0;
@@ -17939,8 +18095,8 @@ void QLens::generate_Gmatrix()
 	}
 #endif
 
-	cblas_dsymm(CblasRowMajor,CblasLeft,CblasUpper,n_amps,n_amps,1.0,covmatrix_stacked.array(),n_amps,Fmatrix_stacked.array(),n_amps,0,Gmatrix_stacked.array(),n_amps);
-	cblas_dsymv(CblasRowMajor,CblasUpper,n_amps,1.0,covmatrix_stacked.array(),n_amps,Dvector,1,0,Dvector_cov,1);
+	cblas_dsymm(CblasRowMajor,CblasLeft,CblasUpper,n_amps,n_amps,1.0,covmatrix_stacked_ptr->array(),n_amps,Fmatrix_stacked.array(),n_amps,0,Gmatrix_stacked.array(),n_amps);
+	cblas_dsymv(CblasRowMajor,CblasUpper,n_amps,1.0,covmatrix_stacked_ptr->array(),n_amps,Dvector,1,0,Dvector_cov,1);
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime_gmat = omp_get_wtime() - wtime_gmat0;
@@ -17956,15 +18112,12 @@ void QLens::generate_Gmatrix()
 void QLens::add_regularization_term_to_dense_Fmatrix(double *regparam, const bool potential_perturbations)
 {
 	int npixels, start_indx, end_indx;
-	dvector *Rmatrix_ptr;
 	if (!potential_perturbations) {
-		npixels = source_npixels;
-		start_indx = 0;
-		Rmatrix_ptr = &Rmatrix_packed;
+		npixels = (*source_npixels_ptr);
+		start_indx = (*src_npixel_start_ptr);
 	} else {
 		npixels = lensgrid_npixels;
 		start_indx = source_npixels;
-		Rmatrix_ptr = &Rmatrix_pot_packed;
 	}
 
 	int row_indx_offset;
@@ -17975,21 +18128,13 @@ void QLens::add_regularization_term_to_dense_Fmatrix(double *regparam, const boo
 
 	int i,j;
 	if (dense_Rmatrix) {
-		dvector *Rmatrix_ptr;
-		if (!potential_perturbations) {
-			end_indx = source_npixels;
-			Rmatrix_ptr = &Rmatrix_packed;
-		} else {
-			end_indx = source_npixels+lensgrid_npixels;
-			Rmatrix_ptr = &Rmatrix_pot_packed;
-		}
-
+		end_indx = start_indx + npixels;
 		if (!use_covariance_matrix) {
 			int n_extra_amps = n_amps - npixels;
 			double *Fptr, *Rptr;
 			Fptr = Fmatrix_packed.array_offset(start_indx);
 
-			Rptr = Rmatrix_ptr->array();
+			Rptr = Rmatrix_packed_ptr->array();
 			for (i=start_indx; i < end_indx; i++) {
 				for (j=i; j < end_indx; j++) {
 					*(Fptr++) += (*regparam)*(*(Rptr++));
@@ -18010,15 +18155,6 @@ void QLens::add_regularization_term_to_dense_Fmatrix(double *regparam, const boo
 			}
 		}
 	} else {
-		double *Rmatrix_ptr;
-		int *Rmatrix_index_ptr;
-		if (!potential_perturbations) {
-			Rmatrix_ptr = Rmatrix;
-			Rmatrix_index_ptr = Rmatrix_index;
-		} else {
-			Rmatrix_ptr = Rmatrix_pot;
-			Rmatrix_index_ptr = Rmatrix_pot_index;
-		}
 		//if (potential_perturbations) cout << "We are doing pot perturbations" << endl;
 		//else cout << "We are NOT doing pot perturbations" << endl;
 		//cout << "Basic Fmatrix check:" << endl;
@@ -18029,10 +18165,10 @@ void QLens::add_regularization_term_to_dense_Fmatrix(double *regparam, const boo
 		//cout << Rmatrix_index_ptr[0] << endl;
 		for (i=0; i < npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
 			//	cout << "row " << i << "... offset=" << row_indx_offset << endl;
-			Fmatrix_packed[row_indx_offset] += (*regparam)*Rmatrix_ptr[i];
-			for (j=Rmatrix_index_ptr[i]; j < Rmatrix_index_ptr[i+1]; j++) {
+			Fmatrix_packed[row_indx_offset] += (*regparam)*(*Rmatrix_ptr)[i];
+			for (j=(*Rmatrix_index_ptr)[i]; j < (*Rmatrix_index_ptr)[i+1]; j++) {
 				//cout << "Fmat row " << i << ", col " << (Rmatrix_index[j]) << ": was " << Fmatrix_packed[row_indx_offset+Rmatrix_index[j]-i] << ", now adding " << ((*regparam)*Rmatrix[j]) << endl;
-				Fmatrix_packed[row_indx_offset+Rmatrix_index_ptr[j]-i] += (*regparam)*Rmatrix_ptr[j];
+				Fmatrix_packed[row_indx_offset+(*Rmatrix_index_ptr)[j]-i] += (*regparam)*(*Rmatrix_ptr)[j];
 			}
 			//cout << "setting new offset for row " << i << endl;
 			row_indx_offset += n_amps-start_indx-i;
@@ -18116,41 +18252,32 @@ double QLens::calculate_regularization_prior_term(double *regparam, const bool p
 	int npixels, start_indx;
 	double *Rmatrix_logdet_ptr;
 	if (!potential_perturbations) {
-		npixels = source_npixels;
-		start_indx = 0;
-		Rmatrix_logdet_ptr = &Rmatrix_log_determinant;
+		npixels = (*source_npixels_ptr);
+		start_indx = (*src_npixel_start_ptr);
 	} else {
 		npixels = lensgrid_npixels;
 		start_indx = source_npixels;
-		Rmatrix_logdet_ptr = &Rmatrix_pot_log_determinant;
 	}
 
 	int i,j;
 	double loglike_reg,Es_times_two=0;
 	if (dense_Rmatrix) {
-		dvector *Rmatrix_ptr;
-		if (!potential_perturbations) {
-			Rmatrix_ptr = &Rmatrix_packed;
-		} else {
-			Rmatrix_ptr = &Rmatrix_pot_packed;
-		}
-
 		if (use_covariance_matrix) {
 			// Need to expand this to work for potential perturbations
-			double* sprime = new double[source_npixels];
-			for (int i=0; i < source_npixels; i++) sprime[i] = amplitude_vector[i];
+			double* sprime = new double[(*source_npixels_ptr)];
+			for (int i=0; i < (*source_npixels_ptr); i++) sprime[i] = amplitude_vector[i];
 #ifdef USE_MKL
-			LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',source_npixels,1,covmatrix_factored.array(),sprime,1);
+			LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',(*source_npixels_ptr),1,covmatrix_factored_ptr->array(),sprime,1);
 #else
 			die("Compiling with MKL is currently required for covariance kernel regularization");
 #endif
-			for (i=0; i < source_npixels; i++) Es_times_two += amplitude_vector[i]*sprime[i];
+			for (i=0; i < (*source_npixels_ptr); i++) Es_times_two += amplitude_vector[i]*sprime[i];
 			delete[] sprime;
-			//loglike_reg = (*regparam)*Es_times_two - source_npixels*log((*regparam));
+			//loglike_reg = (*regparam)*Es_times_two - (*source_npixels_ptr)*log((*regparam));
 			loglike_reg = (*regparam)*Es_times_two;
 		} else {
 			double *Rptr, *sptr_i, *sptr_j, *s_end;
-			Rptr = Rmatrix_ptr->array();
+			Rptr = Rmatrix_packed_ptr->array();
 			s_end = amplitude_vector + start_indx + npixels;
 			for (sptr_i=amplitude_vector + start_indx; sptr_i != s_end; sptr_i++) {
 				sptr_j = sptr_i;
@@ -18159,27 +18286,17 @@ double QLens::calculate_regularization_prior_term(double *regparam, const bool p
 					Es_times_two += 2*(*sptr_i)*(*(Rptr++))*(*(sptr_j++));
 				}
 			}
-			loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - (*Rmatrix_logdet_ptr);
+			loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - (*Rmatrix_log_determinant_ptr);
 				//cout << "regparam=" << (*regparam) << " Es_times_two=" << Es_times_two << " Flogdet=" << Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
 		}
 	} else {
-		double *Rmatrix_ptr;
-		int *Rmatrix_index_ptr;
-		if (!potential_perturbations) {
-			Rmatrix_ptr = Rmatrix;
-			Rmatrix_index_ptr = Rmatrix_index;
-		} else {
-			Rmatrix_ptr = Rmatrix_pot;
-			Rmatrix_index_ptr = Rmatrix_pot_index;
-		}
-
 		for (i=0; i < npixels; i++) {
-			Es_times_two += Rmatrix_ptr[i]*SQR(amplitude_vector[start_indx+i]);
-			for (j=Rmatrix_index_ptr[i]; j < Rmatrix_index_ptr[i+1]; j++) {
-				Es_times_two += 2 * amplitude_vector[start_indx+i] * Rmatrix_ptr[j] * amplitude_vector[start_indx+Rmatrix_index_ptr[j]]; // factor of 2 since matrix is symmetric
+			Es_times_two += (*Rmatrix_ptr)[i]*SQR(amplitude_vector[start_indx+i]);
+			for (j=(*Rmatrix_index_ptr)[i]; j < (*Rmatrix_index_ptr)[i+1]; j++) {
+				Es_times_two += 2 * amplitude_vector[start_indx+i] * (*Rmatrix_ptr)[j] * amplitude_vector[start_indx+(*Rmatrix_index_ptr)[j]]; // factor of 2 since matrix is symmetric
 			}
 		}
-		loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - (*Rmatrix_logdet_ptr);
+		loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - (*Rmatrix_log_determinant_ptr);
 		//cout << "regparam=" << (*regparam) << " Es_times_two=" << Es_times_two << " Flogdet=" << Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
 	}
 	return loglike_reg;
@@ -18355,6 +18472,7 @@ void QLens::setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatr
 {
 	ImagePixelGrid *image_pixel_grid;
 	image_pixel_grid = image_pixel_grids[zsrc_i];
+	get_source_regparam_ptr(zsrc_i,0,regparam_ptr);
 	img_minus_sbprofile = new double[image_npixels];
 	int i, pix_i, pix_j, img_index_fgmask;
 	image_npixels_data = image_npixels;
@@ -18398,6 +18516,15 @@ void QLens::setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatr
 		Fmatrix_copy = new double[Fmatrix_nn];
 	}
 	temp_src.input(n_amps);
+
+	source_npixels_ptr = src_npixels_inv;
+	src_npixel_start_ptr = src_npixel_start;
+	Rmatrix_ptr = Rmatrix;
+	Rmatrix_index_ptr = Rmatrix_index;
+	covmatrix_stacked_ptr = covmatrix_stacked;
+	covmatrix_packed_ptr = covmatrix_packed;
+	covmatrix_factored_ptr = covmatrix_factored;
+	Rmatrix_packed_ptr = Rmatrix_packed;
 }
 
 void QLens::calculate_subpixel_sbweights(const int zsrc_i, const bool save_sbweights, const bool verbal)
@@ -18828,18 +18955,18 @@ double QLens::chisq_regparam(const double logreg)
 	}
 
 	(*regparam_ptr) = pow(10,logreg);
-	int i,j,k;
+	int i,j,k,index2;
 
 	for (i=0; i < Fmatrix_nn; i++) {
 		Fmatrix_copy[i] = Fmatrix[i];
 	}
 
-	for (i=0; i < source_npixels; i++) {
-		Fmatrix_copy[i] += (*regparam_ptr)*Rmatrix[i];
-		for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+	for (i=(*src_npixel_start_ptr), index2=0; index2 < (*source_npixels_ptr); i++, index2++) {
+		Fmatrix_copy[i] += (*regparam_ptr)*(*Rmatrix_ptr)[index2];
+		for (j=(*Rmatrix_index_ptr)[index2]; j < (*Rmatrix_index_ptr)[index2+1]; j++) {
 			for (k=Fmatrix_index[i]; k < Fmatrix_index[i+1]; k++) {
-				if (Rmatrix_index[j]==Fmatrix_index[k]) {
-					Fmatrix_copy[k] += (*regparam_ptr)*Rmatrix[j];
+				if ((*Rmatrix_index_ptr)[j]==Fmatrix_index[k]) {
+					Fmatrix_copy[k] += (*regparam_ptr)*(*Rmatrix_ptr)[j];
 				}
 			}
 		}
@@ -18898,18 +19025,28 @@ double QLens::chisq_regparam_dense(const double logreg)
 
 	(*regparam_ptr) = pow(10,logreg);
 	int i,j;
+	int npixels, start_indx, end_indx;
+	npixels = (*source_npixels_ptr);
+	start_indx = (*src_npixel_start_ptr);
+
+	int row_indx_offset;
+	if (start_indx==0) row_indx_offset = 0;
+	else {
+		row_indx_offset = start_indx*n_amps - start_indx*(start_indx-1)/2; // the sum of elements of rows prior to the row=start_indx
+	}
 
 	if (dense_Rmatrix) {
+		end_indx = start_indx + npixels;
 		if (!use_covariance_matrix) {
 			for (i=0; i < Fmatrix_packed.size(); i++) {
 				Fmatrix_packed_copy[i] = Fmatrix_packed[i];
 			}
-			int n_extra_amps = n_amps - source_npixels;
+			int n_extra_amps = n_amps - npixels;
 			double *Fptr, *Rptr;
-			Fptr = Fmatrix_packed_copy.array();
-			Rptr = Rmatrix_packed.array();
-			for (i=0; i < source_npixels; i++) {
-				for (j=i; j < source_npixels; j++) {
+			Fptr = Fmatrix_packed_copy.array_offset(start_indx);
+			Rptr = Rmatrix_packed_ptr->array();
+			for (i=start_indx; i < end_indx; i++) {
+				for (j=i; j < end_indx; j++) {
 					*(Fptr++) += (*regparam_ptr)*(*(Rptr++));
 				}
 				Fptr += n_extra_amps;
@@ -18925,7 +19062,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 			for (i=0; i < (n_amps*n_amps); i++) Gmatrix_stacked_copy[i] /= (*regparam_ptr);
 			for (i=0; i < n_amps; i++) Dvector_cov_copy[i] /= (*regparam_ptr);
 			int indx_start = 0;
-			for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
+			for (i=0; i < (*source_npixels_ptr); i++) { // additional source amplitudes (beyond source_npixels) are not regularized
 				//Dvector_cov_copy[i] /= (*regparam_ptr);
 				//Gmatrix_stacked[indx_start] += (*regparam_ptr);
 				Gmatrix_stacked_copy[indx_start] += 1.0;
@@ -18937,13 +19074,13 @@ double QLens::chisq_regparam_dense(const double logreg)
 			Fmatrix_packed_copy[i] = Fmatrix_packed[i];
 		}
 
-		int k,indx_start=0;
-		for (i=0; i < source_npixels; i++) {
-			Fmatrix_packed_copy[indx_start] += (*regparam_ptr)*Rmatrix[i];
-			for (k=Rmatrix_index[i]; k < Rmatrix_index[i+1]; k++) {
-				Fmatrix_packed_copy[indx_start+Rmatrix_index[k]-i] += (*regparam_ptr)*Rmatrix[k];
+		int k;
+		for (i=0; i < npixels; i++) {
+			Fmatrix_packed_copy[row_indx_offset] += (*regparam_ptr)*(*Rmatrix_ptr)[i];
+			for (k=(*Rmatrix_index_ptr)[i]; k < (*Rmatrix_index_ptr)[i+1]; k++) {
+				Fmatrix_packed_copy[row_indx_offset+(*Rmatrix_index_ptr)[k]-i] += (*regparam_ptr)*(*Rmatrix_ptr)[k];
 			}
-			indx_start += n_amps-i;
+			row_indx_offset += n_amps-start_indx-i;
 		}
 	}
 
@@ -19076,6 +19213,7 @@ double QLens::chisq_regparam_dense(const double logreg)
 	chisq = Ed_times_two + loglike_reg;
 	logdet = (use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
 	chisq += logdet;
+	//cout << "chisq0=" << Ed_times_two << " regterms=" << loglike_reg << " F_logdet=" << Fmatrix_logdet << " logev=" << chisq << endl;
 
 	if (chisq < regopt_chisqmin) {
 		regopt_chisqmin = chisq;
@@ -19728,12 +19866,19 @@ void QLens::invert_lens_mapping_CG_method(const int zsrc_i, bool verbal)
 	if ((regularization_method != None) and (source_npixels > 0)) {
 		cg_method.get_log_determinant(Fmatrix_log_determinant);
 		if ((mpi_id==0) and (verbal)) cout << "log determinant = " << Fmatrix_log_determinant << endl;
-		CG_sparse cg_det(Rmatrix,Rmatrix_index,3e-4,100000,inversion_nthreads,group_np,group_id);
+
+		Rmatrix_ptr = Rmatrix;
+		Rmatrix_index_ptr = Rmatrix_index;
+		Rmatrix_log_determinant_ptr = Rmatrix_log_determinant;
+
+		for (int i=0; i < n_src_inv; i++) {
+			CG_sparse cg_det((*Rmatrix_ptr),(*Rmatrix_index_ptr),3e-4,100000,inversion_nthreads,group_np,group_id);
 #ifdef USE_MPI
-		cg_det.set_MPI_comm(&sub_comm);
+			cg_det.set_MPI_comm(&sub_comm);
 #endif
-		Rmatrix_log_determinant = cg_det.calculate_log_determinant();
-		if ((mpi_id==0) and (verbal)) cout << "Rmatrix log determinant = " << Rmatrix_log_determinant << endl;
+			(*Rmatrix_log_determinant_ptr) = cg_det.calculate_log_determinant();
+			if ((mpi_id==0) and (verbal)) cout << "Rmatrix log determinant = " << (*Rmatrix_log_determinant_ptr) << endl;
+		}
 	}
 
 #ifdef USE_OPENMP
@@ -19760,7 +19905,6 @@ void QLens::invert_lens_mapping_UMFPACK(const int zsrc_i, double& logdet, bool v
 #ifndef USE_UMFPACK
 	die("QLens requires compilation with UMFPACK for factorization");
 #else
-	bool calculate_determinant = false;
 	int default_nthreads=1;
 
 #ifdef USE_OPENMP
@@ -19907,8 +20051,6 @@ void QLens::invert_lens_mapping_UMFPACK(const int zsrc_i, double& logdet, bool v
 
    status = umfpack_di_solve(UMFPACK_A, Fmatrix_unsymmetric_cols, Fmatrix_unsymmetric_indices, Fmatrix_unsymmetric, temp, Dvector, Numeric, Control, Info);
 
-	if ((regularization_method != None) and (source_npixels > 0)) calculate_determinant = true; // specifies to calculate determinant
-
 	for (int i=0; i < n_amps; i++) {
 		amplitude_vector[i] = temp[i];
 	}
@@ -19921,7 +20063,6 @@ void QLens::invert_lens_mapping_UMFPACK(const int zsrc_i, double& logdet, bool v
 	umfpack_di_free_numeric(&Numeric);
 	logdet = log(mantissa) + exponent*log(10);
 
-	if (calculate_determinant) Rmatrix_determinant_UMFPACK(false);
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime = omp_get_wtime() - wtime0;
@@ -20023,8 +20164,6 @@ void QLens::invert_lens_mapping_MUMPS(const int zsrc_i, double& logdet, bool ver
 		mumps_solver->icntl[2] = MUMPS_SILENT;
 		mumps_solver->icntl[3] = MUMPS_SILENT;
 	}
-	if ((regularization_method != None) and (source_npixels > 0)) mumps_solver->icntl[32]=1; // specifies to calculate determinant
-	else mumps_solver->icntl[32] = 0;
 	if (parallel_mumps) {
 		mumps_solver->icntl[27]=2; // parallel analysis phase
 		mumps_solver->icntl[28]=2; // parallel analysis phase
@@ -20051,6 +20190,7 @@ void QLens::invert_lens_mapping_MUMPS(const int zsrc_i, double& logdet, bool ver
 		amplitude_vector[i] = temp[i];
 	}
 
+	/*
 	if ((regularization_method != None) and (source_npixels > 0))
 	{
 		logdet = log(mumps_solver->rinfog[11]) + mumps_solver->infog[33]*log(2);
@@ -20109,6 +20249,7 @@ void QLens::invert_lens_mapping_MUMPS(const int zsrc_i, double& logdet, bool ver
 		delete[] jcn_reg;
 		delete[] Rmatrix_elements;
 	}
+	*/
 	mumps_solver->job=JOB_END;
 	dmumps_c(mumps_solver); //Terminate instance
 
@@ -20140,10 +20281,20 @@ void QLens::update_source_and_lensgrid_amplitudes(const int zsrc_i, const bool v
 {
 	ImagePixelGrid *image_pixel_grid;
 	image_pixel_grid = image_pixel_grids[zsrc_i];
-	SourcePixelGrid *cartesian_srcgrid = image_pixel_grid->cartesian_srcgrid;
 	int i,j,index=0;
-	if ((source_fit_mode==Delaunay_Source) and (image_pixel_grid->delaunay_srcgrid != NULL)) image_pixel_grid->delaunay_srcgrid->update_surface_brightness(index);
-	else if (source_fit_mode==Cartesian_Source) cartesian_srcgrid->update_surface_brightness(index);
+
+	int n_imggrids = image_pixel_grid->n_pixsrc_to_include_in_Lmatrix;
+	if (n_imggrids==0) die("No image grids are included for constructing Lmatrix");
+	ImagePixelGrid **imggrids;
+	imggrids = new ImagePixelGrid*[n_imggrids]; // last element will be used to identify end of list
+	for (i=0; i < n_imggrids; i++) imggrids[i] = image_pixel_grids[image_pixel_grid->pixsrc_indx_to_include_in_Lmatrix[i]];
+
+	if ((source_fit_mode==Delaunay_Source) and (image_pixel_grid->delaunay_srcgrid != NULL)) {
+		for (i=0; i < n_imggrids; i++) imggrids[i]->delaunay_srcgrid->update_surface_brightness(index);
+	}
+	else if (source_fit_mode==Cartesian_Source) {
+		for (i=0; i < n_imggrids; i++) imggrids[i]->cartesian_srcgrid->update_surface_brightness(index);
+	}
 	else if (source_fit_mode==Shapelet_Source) {
 		double* srcpix = amplitude_vector;
 		for (i=0; i < n_sb; i++) {
@@ -20176,8 +20327,8 @@ void QLens::update_source_and_lensgrid_amplitudes(const int zsrc_i, const bool v
 			if ((mpi_id==0) and (verbal)) cout << "srcpt " << j << ": srcflux=" << ptsrc_list[j]->srcflux << endl;
 		}
 	}
+	delete[] imggrids;
 }
-
 
 void QLens::Rmatrix_determinant_UMFPACK(const bool potential_perturbations)
 {
@@ -20185,19 +20336,10 @@ void QLens::Rmatrix_determinant_UMFPACK(const bool potential_perturbations)
 	die("QLens requires compilation with UMFPACK (or MUMPS) for determinants of sparse matrices");
 #else
 	int npixels;
-	double *Rmatrix_ptr;
-	int *Rmatrix_index_ptr;
-	double *Rmatrix_logdet_ptr;
 	if (!potential_perturbations) {
-		npixels = source_npixels;
-		Rmatrix_ptr = Rmatrix;
-		Rmatrix_index_ptr = Rmatrix_index;
-		Rmatrix_logdet_ptr = &Rmatrix_log_determinant;
+		npixels = (*source_npixels_ptr);
 	} else {
 		npixels = lensgrid_npixels;
-		Rmatrix_ptr = Rmatrix_pot;
-		Rmatrix_index_ptr = Rmatrix_pot_index;
-		Rmatrix_logdet_ptr = &Rmatrix_pot_log_determinant;
 	}
 
 	double mantissa, exponent;
@@ -20207,8 +20349,8 @@ void QLens::Rmatrix_determinant_UMFPACK(const bool potential_perturbations)
 	double Info [UMFPACK_INFO];
    umfpack_di_defaults (Control);
 	Control[UMFPACK_STRATEGY] = UMFPACK_STRATEGY_SYMMETRIC;
-	int Rmatrix_nonzero_elements = Rmatrix_index_ptr[npixels]-1;
-	int Rmatrix_n_offdiags = Rmatrix_index_ptr[npixels]-1-npixels;
+	int Rmatrix_nonzero_elements = (*Rmatrix_index_ptr)[npixels]-1;
+	int Rmatrix_n_offdiags = (*Rmatrix_index_ptr)[npixels]-1-npixels;
 	int Rmatrix_unsymmetric_nonzero_elements = npixels + 2*Rmatrix_n_offdiags;
 	if (Rmatrix_nonzero_elements==0) {
 		cout << "nsource_pixels=" << npixels << endl;
@@ -20222,32 +20364,32 @@ void QLens::Rmatrix_determinant_UMFPACK(const bool potential_perturbations)
 	double *Rmatrix_transpose = new double[Rmatrix_nonzero_elements+1];
 	int *Rmatrix_transpose_index = new int[Rmatrix_nonzero_elements+1];
 
-	n2=Rmatrix_index_ptr[0];
-	for (j=0; j < n2-1; j++) Rmatrix_transpose[j] = Rmatrix_ptr[j];
-	int n_offdiag = Rmatrix_index_ptr[n2-1] - Rmatrix_index_ptr[0];
+	n2=(*Rmatrix_index_ptr)[0];
+	for (j=0; j < n2-1; j++) Rmatrix_transpose[j] = (*Rmatrix_ptr)[j];
+	int n_offdiag = (*Rmatrix_index_ptr)[n2-1] - (*Rmatrix_index_ptr)[0];
 	int *offdiag_indx = new int[n_offdiag];
 	int *offdiag_indx_transpose = new int[n_offdiag];
-	for (i=0; i < n_offdiag; i++) offdiag_indx[i] = Rmatrix_index_ptr[n2+i];
+	for (i=0; i < n_offdiag; i++) offdiag_indx[i] = (*Rmatrix_index_ptr)[n2+i];
 	indexx(offdiag_indx,offdiag_indx_transpose,n_offdiag);
-	for (j=n2, k=0; j < Rmatrix_index_ptr[n2-1]; j++, k++) {
+	for (j=n2, k=0; j < (*Rmatrix_index_ptr)[n2-1]; j++, k++) {
 		Rmatrix_transpose_index[j] = offdiag_indx_transpose[k];
 	}
 	jp=0;
-	for (k=Rmatrix_index_ptr[0]; k < Rmatrix_index_ptr[n2-1]; k++) {
+	for (k=(*Rmatrix_index_ptr)[0]; k < (*Rmatrix_index_ptr)[n2-1]; k++) {
 		m = Rmatrix_transpose_index[k] + n2;
-		Rmatrix_transpose[k] = Rmatrix_ptr[m];
-		for (j=jp; j < Rmatrix_index_ptr[m]+1; j++)
+		Rmatrix_transpose[k] = (*Rmatrix_ptr)[m];
+		for (j=jp; j < (*Rmatrix_index_ptr)[m]+1; j++)
 			Rmatrix_transpose_index[j]=k;
-		jp = Rmatrix_index_ptr[m] + 1;
+		jp = (*Rmatrix_index_ptr)[m] + 1;
 		jl=0;
 		ju=n2-1;
 		while (ju-jl > 1) {
 			jm = (ju+jl)/2;
-			if (Rmatrix_index_ptr[jm] > m) ju=jm; else jl=jm;
+			if ((*Rmatrix_index_ptr)[jm] > m) ju=jm; else jl=jm;
 		}
 		Rmatrix_transpose_index[k]=jl;
 	}
-	for (j=jp; j < n2; j++) Rmatrix_transpose_index[j] = Rmatrix_index_ptr[n2-1];
+	for (j=jp; j < n2; j++) Rmatrix_transpose_index[j] = (*Rmatrix_index_ptr)[n2-1];
 	for (j=0; j < n2-1; j++) {
 		jl = Rmatrix_transpose_index[j+1] - Rmatrix_transpose_index[j];
 		noff=Rmatrix_transpose_index[j];
@@ -20288,12 +20430,12 @@ void QLens::Rmatrix_determinant_UMFPACK(const bool potential_perturbations)
 			indx++;
 		}
 		Rmatrix_unsymmetric_indices[indx] = i;
-		Rmatrix_unsymmetric[indx] = Rmatrix_ptr[i];
+		Rmatrix_unsymmetric[indx] = (*Rmatrix_ptr)[i];
 		indx++;
-		for (j=Rmatrix_index_ptr[i]; j < Rmatrix_index_ptr[i+1]; j++) {
-			Rmatrix_unsymmetric[indx] = Rmatrix_ptr[j];
+		for (j=(*Rmatrix_index_ptr)[i]; j < (*Rmatrix_index_ptr)[i+1]; j++) {
+			Rmatrix_unsymmetric[indx] = (*Rmatrix_ptr)[j];
 			//cout << "Row " << i << ", column " << Rmatrix_index[j] << ": " << Rmatrix[j] << " " << Rmatrix_unsymmetric[indx] << " (element " << indx << ")" << endl;
-			Rmatrix_unsymmetric_indices[indx] = Rmatrix_index_ptr[j];
+			Rmatrix_unsymmetric_indices[indx] = (*Rmatrix_index_ptr)[j];
 			indx++;
 		}
 		Rmatrix_unsymmetric_cols[i+1] = indx;
@@ -20335,7 +20477,7 @@ void QLens::Rmatrix_determinant_UMFPACK(const bool potential_perturbations)
 	if (status < 0) {
 		die("Could not calculate determinant");
 	}
-	(*Rmatrix_logdet_ptr) = log(mantissa) + exponent*log(10);
+	(*Rmatrix_log_determinant_ptr) = log(mantissa) + exponent*log(10);
 	//cout << "Rmatrix_logdet=" << Rmatrix_log_determinant << endl;
 	delete[] Rmatrix_transpose;
 	delete[] Rmatrix_transpose_index;
@@ -20352,50 +20494,41 @@ void QLens::Rmatrix_determinant_MUMPS(const bool potential_perturbations)
 	die("QLens requires compilation with UMFPACK (or MUMPS) for determinants of sparse matrices");
 #else
 	int npixels;
-	double *Rmatrix_ptr;
-	int *Rmatrix_index_ptr;
-	double *Rmatrix_logdet_ptr;
 	if (!potential_perturbations) {
-		npixels = source_npixels;
-		Rmatrix_ptr = Rmatrix;
-		Rmatrix_index_ptr = Rmatrix_index;
-		Rmatrix_logdet_ptr = &Rmatrix_log_determinant;
+		npixels = (*source_npixels_ptr);
 	} else {
 		npixels = lensgrid_npixels;
-		Rmatrix_ptr = Rmatrix_pot;
-		Rmatrix_index_ptr = Rmatrix_pot_index;
-		Rmatrix_logdet_ptr = &Rmatrix_pot_log_determinant;
 	}
 
 	int i,j;
-	MUMPS_INT Rmatrix_nonzero_elements = Rmatrix_index_ptr[source_npixels]-1;
+	MUMPS_INT Rmatrix_nonzero_elements = (*Rmatrix_index_ptr)[(*source_npixels_ptr)]-1;
 	MUMPS_INT *irn_reg = new MUMPS_INT[Rmatrix_nonzero_elements];
 	MUMPS_INT *jcn_reg = new MUMPS_INT[Rmatrix_nonzero_elements];
 	double *Rmatrix_elements = new double[Rmatrix_nonzero_elements];
-	for (i=0; i < source_npixels; i++) {
-		Rmatrix_elements[i] = Rmatrix_ptr[i];
+	for (i=0; i < (*source_npixels_ptr); i++) {
+		Rmatrix_elements[i] = (*Rmatrix_ptr)[i];
 		irn_reg[i] = i+1;
 		jcn_reg[i] = i+1;
 	}
-	int indx=source_npixels;
-	for (i=0; i < source_npixels; i++) {
+	int indx=(*source_npixels_ptr);
+	for (i=0; i < (*source_npixels_ptr); i++) {
 		//cout << "Row " << i << ": diag=" << Rmatrix[i] << endl;
 		//for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
 			//cout << Rmatrix_index[j] << " ";
 		//}
 		//cout << endl;
-		for (j=Rmatrix_index_ptr[i]; j < Rmatrix_index_ptr[i+1]; j++) {
+		for (j=(*Rmatrix_index_ptr)[i]; j < (*Rmatrix_index_ptr)[i+1]; j++) {
 			//cout << Rmatrix[j] << " ";
-			Rmatrix_elements[indx] = Rmatrix_ptr[j];
+			Rmatrix_elements[indx] = (*Rmatrix_ptr)[j];
 			irn_reg[indx] = i+1;
-			jcn_reg[indx] = Rmatrix_index_ptr[j]+1;
+			jcn_reg[indx] = (*Rmatrix_index_ptr)[j]+1;
 			indx++;
 		}
 	}
 
 	mumps_solver->job=JOB_INIT; mumps_solver->sym=2;
 	dmumps_c(mumps_solver);
-	mumps_solver->n = source_npixels; mumps_solver->nz = Rmatrix_nonzero_elements; mumps_solver->irn=irn_reg; mumps_solver->jcn=jcn_reg;
+	mumps_solver->n = (*source_npixels_ptr); mumps_solver->nz = Rmatrix_nonzero_elements; mumps_solver->irn=irn_reg; mumps_solver->jcn=jcn_reg;
 	mumps_solver->a = Rmatrix_elements;
 	mumps_solver->icntl[0]=MUMPS_SILENT;
 	mumps_solver->icntl[1]=MUMPS_SILENT;
@@ -20409,10 +20542,10 @@ void QLens::Rmatrix_determinant_MUMPS(const bool potential_perturbations)
 	}
 	mumps_solver->job=4;
 	dmumps_c(mumps_solver);
-	if (mumps_solver->rinfog[11]==0) (*Rmatrix_logdet_ptr) = -1e20;
-	else (*Rmatrix_logdet_ptr) = log(mumps_solver->rinfog[11]) + mumps_solver->infog[33]*log(2);
-	//cout << "Rmatrix log determinant = " << (*Rmatrix_logdet_ptr) << " " << mumps_solver->rinfog[11] << " " << mumps_solver->infog[33] << endl;
-	//if (mpi_id==0) cout << "Rmatrix log determinant = " << (*Rmatrix_logdet_ptr) << " " << mumps_solver->rinfog[11] << " " << mumps_solver->infog[33] << endl;
+	if (mumps_solver->rinfog[11]==0) (*Rmatrix_log_determinant_ptr) = -1e20;
+	else (*Rmatrix_log_determinant_ptr) = log(mumps_solver->rinfog[11]) + mumps_solver->infog[33]*log(2);
+	//cout << "Rmatrix log determinant = " << (*Rmatrix_log_determinant_ptr) << " " << mumps_solver->rinfog[11] << " " << mumps_solver->infog[33] << endl;
+	//if (mpi_id==0) cout << "Rmatrix log determinant = " << (*Rmatrix_log_determinant_ptr) << " " << mumps_solver->rinfog[11] << " " << mumps_solver->infog[33] << endl;
 
 	delete[] irn_reg;
 	delete[] jcn_reg;
@@ -20492,27 +20625,21 @@ void QLens::Rmatrix_determinant_MKL(const bool potential_perturbations)
 	die("QLens requires compilation with MKL (or UMFPACK or MUMPS) for determinants of sparse matrices");
 #else
 	int npixels;
-	dvector *Rmatrix_ptr;
-	double *Rmatrix_logdet_ptr;
 	if (!potential_perturbations) {
 		if (!dense_Rmatrix) convert_Rmatrix_to_dense();
-		npixels = source_npixels;
-		Rmatrix_ptr = &Rmatrix_packed;
-		Rmatrix_logdet_ptr = &Rmatrix_log_determinant;
+		npixels = (*source_npixels_ptr);
 	} else {
 		if (!dense_Rmatrix) convert_Rmatrix_pot_to_dense();
 		npixels = lensgrid_npixels;
-		Rmatrix_ptr = &Rmatrix_pot_packed;
-		Rmatrix_logdet_ptr = &Rmatrix_pot_log_determinant;
 	}
 
 	// MKL should use Pardiso to get the Cholesky decomposition, but for the moment, I will just convert to dense matrix and do it that way
-	int ntot = Rmatrix_ptr->size();
+	int ntot = Rmatrix_packed_ptr->size();
 	if (ntot != (npixels*(npixels+1)/2)) die("Rmatrix packed does not have correct number of elements");
 	double *Rmatrix_packed_copy = new double[ntot];
-	for (int i=0; i < ntot; i++) Rmatrix_packed_copy[i] = (*Rmatrix_ptr)[i];
+	for (int i=0; i < ntot; i++) Rmatrix_packed_copy[i] = (*Rmatrix_packed_ptr)[i];
    LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',npixels,Rmatrix_packed_copy); // Cholesky decomposition
-	Cholesky_logdet_packed(Rmatrix_packed_copy,(*Rmatrix_logdet_ptr),npixels);
+	Cholesky_logdet_packed(Rmatrix_packed_copy,(*Rmatrix_log_determinant_ptr),npixels);
 	delete[] Rmatrix_packed_copy;
 #endif
 }
@@ -20520,46 +20647,40 @@ void QLens::Rmatrix_determinant_MKL(const bool potential_perturbations)
 void QLens::Rmatrix_determinant_dense(const bool potential_perturbations)
 {
 	int npixels;
-	dvector *Rmatrix_ptr;
-	double *Rmatrix_logdet_ptr;
 	if (!potential_perturbations) {
 		if (!dense_Rmatrix) convert_Rmatrix_to_dense();
-		npixels = source_npixels;
-		Rmatrix_ptr = &Rmatrix_packed;
-		Rmatrix_logdet_ptr = &Rmatrix_log_determinant;
+		npixels = (*source_npixels_ptr);
 	} else {
 		if (!dense_Rmatrix) convert_Rmatrix_pot_to_dense();
 		npixels = lensgrid_npixels;
-		Rmatrix_ptr = &Rmatrix_pot_packed;
-		Rmatrix_logdet_ptr = &Rmatrix_pot_log_determinant;
 	}
-	int ntot = Rmatrix_ptr->size();
+	int ntot = Rmatrix_packed_ptr->size();
 	if (ntot != (npixels*(npixels+1)/2)) die("Rmatrix packed does not have correct number of elements");
-	dvector Rmatrix_packed_copy(Rmatrix_ptr->size()); 
-	for (int i=0; i < Rmatrix_ptr->size(); i++) {
-		Rmatrix_packed_copy[i] = (*Rmatrix_ptr)[i];
+	dvector Rmatrix_packed_copy(Rmatrix_packed_ptr->size()); 
+	for (int i=0; i < Rmatrix_packed_ptr->size(); i++) {
+		Rmatrix_packed_copy[i] = (*Rmatrix_packed_ptr)[i];
 	}
 
 	repack_matrix_lower(Rmatrix_packed_copy);
 
 	bool status = Cholesky_dcmp_packed(Rmatrix_packed_copy.array(),n_amps);
 	if (!status) die("Cholesky decomposition failed");
-	Cholesky_logdet_lower_packed(Rmatrix_packed_copy.array(),(*Rmatrix_logdet_ptr),n_amps);
+	Cholesky_logdet_lower_packed(Rmatrix_packed_copy.array(),(*Rmatrix_log_determinant_ptr),n_amps);
 }
 
 void QLens::convert_Rmatrix_to_dense()
 {
 	int i,j,indx;
-	int ntot = source_npixels*(source_npixels+1)/2;
-	Rmatrix_packed.input_zero(ntot);
+	int ntot = (*source_npixels_ptr)*((*source_npixels_ptr)+1)/2;
+	(*Rmatrix_packed_ptr).input_zero(ntot);
 	indx=0;
-	for (i=0; i < source_npixels; i++) {
-		Rmatrix_packed[indx] = Rmatrix[i];
-		//cout << "Rmat: " << Rmatrix[i] << endl;
-		for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
-			Rmatrix_packed[indx+Rmatrix_index[j]-i] = Rmatrix[j];
+	for (i=0; i < (*source_npixels_ptr); i++) {
+		(*Rmatrix_packed_ptr)[indx] = (*Rmatrix_ptr)[i];
+		//cout << "Rmat: " << (*Rmatrix_ptr)[i] << endl;
+		for (j=(*Rmatrix_index_ptr)[i]; j < (*Rmatrix_index_ptr)[i+1]; j++) {
+			(*Rmatrix_packed_ptr)[indx+(*Rmatrix_index_ptr)[j]-i] = (*Rmatrix_ptr)[j];
 		}
-		indx += source_npixels-i;
+		indx += (*source_npixels_ptr)-i;
 	}
 }
 
@@ -20584,8 +20705,16 @@ void QLens::clear_sparse_lensing_matrices()
 	if (Dvector != NULL) delete[] Dvector;
 	if (Fmatrix != NULL) delete[] Fmatrix;
 	if (Fmatrix_index != NULL) delete[] Fmatrix_index;
-	if (Rmatrix != NULL) delete[] Rmatrix;
-	if (Rmatrix_index != NULL) delete[] Rmatrix_index;
+	if (n_src_inv != 0) {
+		if (Rmatrix != NULL) {
+			for (int i=0; i < n_src_inv; i++) {
+				if (Rmatrix[i] != NULL) delete[] Rmatrix[i];
+				if (Rmatrix_index[i] != NULL) delete[] Rmatrix_index[i];
+			}
+			delete[] Rmatrix;
+			delete[] Rmatrix_index;
+		}
+	}
 	if (Rmatrix_pot != NULL) delete[] Rmatrix_pot;
 	if (Rmatrix_pot_index != NULL) delete[] Rmatrix_pot_index;
 	Dvector = NULL;
