@@ -9988,19 +9988,19 @@ void QLens::process_commands(bool read_file)
 				} else Complain("too many arguments to 'sbmap loadmask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (image_pixel_data->load_mask_fits(mask_i,filename,foreground_mask,emask,add_mask)==false) Complain("could not load mask file");
-				if (foreground_mask) {
-					if (fgmask_padding > 0) {
-						image_pixel_data->expand_foreground_mask(fgmask_padding);
-						if (mpi_id==0) cout << "Padding foreground mask by " << fgmask_padding << " neighbors (for convolutions)" << endl;
-					}
-				}
-				if (mpi_id==0) {
-					if (!foreground_mask) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
-					else {
-						int nfgpix = image_pixel_data->get_size_of_foreground_mask();
-						cout << "Number of foreground pixels in mask: " << nfgpix << endl;
-					}
-				}
+				//if (foreground_mask) {
+					//if (fgmask_padding > 0) {
+						//image_pixel_data->expand_foreground_mask(fgmask_padding);
+						//if (mpi_id==0) cout << "Padding foreground mask by " << fgmask_padding << " neighbors (for convolutions)" << endl;
+					//}
+				//}
+				//if (mpi_id==0) {
+					//if (!foreground_mask) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+					//else {
+						//int nfgpix = image_pixel_data->get_size_of_foreground_mask();
+						//cout << "Number of foreground pixels in mask: " << nfgpix << endl;
+					//}
+				//}
 			}
 			else if (words[1]=="savemask")
 			{
@@ -10537,7 +10537,7 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="set_all_pixels")
 			{
-				if (nwords > 2) Complain("no arguments allowed for command 'sbmap unset_all_pixels'");
+				if (nwords > 2) Complain("no arguments allowed for command 'sbmap set_all_pixels'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data->set_all_mask_pixels(mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
@@ -10625,6 +10625,17 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="set_data_annulus")
 			{
 				double xc, yc, rmin, rmax, thetamin=0, thetamax=360, xstretch=1.0, ystretch=1.0;
+				bool fgmask = false;
+
+				vector<string> args;
+				if (extract_word_starts_with('-',2,nwords-1,args)==true)
+				{
+					for (int i=0; i < args.size(); i++) {
+						if ((args[i]=="-fgmask") or (args[i]=="-fg")) fgmask = true;
+						else Complain("argument '" << args[i] << "' not recognized");
+					}
+				}
+
 				if (nwords >= 6) {
 					if (!(ws[2] >> xc)) Complain("invalid annulus center x-coordinate");
 					if (!(ws[3] >> yc)) Complain("invalid annulus center y-coordinate");
@@ -10640,13 +10651,39 @@ void QLens::process_commands(bool read_file)
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (!image_pixel_data->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false,mask_i)) Complain("coult not alter mask");
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+				if (!image_pixel_data->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false,fgmask,mask_i)) Complain("coult not alter mask");
+				//image_pixel_data->plot_surface_brightness("data_pixel",true,false,true);
+				//run_plotter_range("datapixel","","");
+
+				if (fgmask) {
+					if (fgmask_padding > 0) {
+						image_pixel_data->expand_foreground_mask(fgmask_padding);
+						if (mpi_id==0) cout << "Padding foreground mask by " << fgmask_padding << " neighbors (for convolutions)" << endl;
+					}
+				}
+				if (mpi_id==0) {
+					if (!fgmask) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
+					else {
+						int nfgpix = image_pixel_data->get_size_of_foreground_mask();
+						cout << "Number of foreground pixels in mask: " << nfgpix << endl;
+					}
+				}
 				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="unset_data_annulus")
 			{
 				double xc, yc, rmin, rmax, thetamin=0, thetamax=360, xstretch=1.0, ystretch=1.0;
+				bool fgmask = false;
+
+				vector<string> args;
+				if (extract_word_starts_with('-',2,nwords-1,args)==true)
+				{
+					for (int i=0; i < args.size(); i++) {
+						if ((args[i]=="-fgmask") or (args[i]=="-fg")) fgmask = true;
+						else Complain("argument '" << args[i] << "' not recognized");
+					}
+				}
+
 				if (nwords >= 6) {
 					if (!(ws[2] >> xc)) Complain("invalid annulus center x-coordinate");
 					if (!(ws[3] >> yc)) Complain("invalid annulus center y-coordinate");
@@ -10662,7 +10699,7 @@ void QLens::process_commands(bool read_file)
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax)");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (!image_pixel_data->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true,mask_i)) Complain("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
+				if (!image_pixel_data->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true,fgmask,mask_i)) Complain("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
 			}
 			else if (words[1]=="set_emask_annulus")
@@ -14228,6 +14265,23 @@ void QLens::process_commands(bool read_file)
 					if ((image_pixel_grids != NULL) and (image_pixel_grids[i] != NULL)) image_pixel_grids[i]->update_mask_values(include_fgmask_in_inversion);
 				}
 				if (fft_convolution) cleanup_FFT_convolution_arrays();
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="include_two_pixsrc_in_inversion")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Include two pixellated sources in inversion (include_two_pixsrc_in_inversion): " << display_switch(include_two_pixsrc_in_Lmatrix) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'include_two_pixsrc_in_inversion' command; must specify 'on' or 'off'");
+				set_switch(include_two_pixsrc_in_Lmatrix,setword);
+				if ((include_two_pixsrc_in_Lmatrix==true) and (include_fgmask_in_inversion==false)) {
+					include_fgmask_in_inversion = true;
+					for (int i=0; i < n_extended_src_redshifts; i++) {
+						if ((image_pixel_grids != NULL) and (image_pixel_grids[i] != NULL)) image_pixel_grids[i]->update_mask_values(include_fgmask_in_inversion);
+					}
+					if (fft_convolution) cleanup_FFT_convolution_arrays();
+					if (mpi_id==0) cout << "NOTE: Setting include_fgmask_in_inversion to 'on'" << endl;
+				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="include_noise_term_in_loglike")

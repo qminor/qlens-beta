@@ -590,6 +590,8 @@ class ImagePixelGrid : private Sort
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	void update_zfactors_and_beta_factors();
+	void set_include_in_Lmatrix(const int zsrc_i);
+	void set_include_only_one_pixsrc_in_Lmatrix();
 
 	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
 	void load_data(ImagePixelData& pixel_data);
@@ -768,7 +770,7 @@ struct ImagePixelData : private Sort
 	bool set_neighbor_pixels(const bool only_interior_neighbors, const bool only_exterior_neighbors, const int mask_k = 0);
 	bool expand_foreground_mask(const int n_it);
 	bool set_mask_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false, const int mask_k = 0);
-	bool set_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false, const int mask_k = 0);
+	bool set_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false, const bool foreground = false, const int mask_k = 0);
 	bool reset_extended_mask(const int mask_k = 0);
 	bool set_extended_mask(const int n_neighbors, const bool add_to_emask = false, const bool only_interior_neighbors = false, const int mask_k = 0);
 	bool set_extended_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1_deg, double theta2_deg, const double xstretch, const double ystretch, const bool unset = false, const int mask_k = 0);

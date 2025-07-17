@@ -562,6 +562,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int delaunay_mode;
 	bool delaunay_high_sn_mode;
 	bool use_srcpixel_clustering;
+	bool include_two_pixsrc_in_Lmatrix;
 
 	bool use_random_delaunay_srcgrid;
 	bool reinitialize_random_grid;
@@ -984,12 +985,13 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root, const int zsrc_i=-1);
 	double pixel_log_evidence_times_two(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
-	void setup_auxiliary_sourcegrids_and_point_imgs(const bool verbal);
+	void setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bool verbal);
 	bool setup_cartesian_sourcegrid(const int zsrc_i, const int src_i, int& n_expected_imgpixels, const bool verbal);
 	bool generate_and_invert_lensing_matrix_cartesian(const int zsrc_i, const int src_i, double& tot_wtime, double& tot_wtime0, const bool verbal);
 	bool generate_and_invert_lensing_matrix_delaunay(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
 	void add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_times_two, const bool verbal);
 	void add_regularization_prior_terms_to_logev(const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false);
+	void set_n_imggrids_to_include_in_inversion();
 
 	bool load_pixel_grid_from_data();
 	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal, const bool zero_verbal = false);
