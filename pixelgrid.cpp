@@ -15537,8 +15537,8 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 	int i,j,ii,jj,k,img_index;
 	ni = 1;
 	nj = 1;
-	fft_imin = 50000;
-	fft_jmin = 50000;
+	imin = 50000;
+	jmin = 50000;
 
 	int imax=-1,jmax=-1;
 	int il0, jl0;
@@ -15558,12 +15558,12 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 			      or ((foreground) and (lens->image_pixel_data->foreground_mask) and (lens->image_pixel_data->foreground_mask[i][j]))) {
 			if (ii > imax) imax = ii;
 			if (jj > jmax) jmax = jj;
-			if (ii < fft_imin) fft_imin = ii;
-			if (jj < fft_jmin) fft_jmin = jj;
+			if (ii < imin) imin = ii;
+			if (jj < jmin) jmin = jj;
 		}
 	}
-	il0 = 1+imax-fft_imin + psf_nx; // will pad with extra zeros to avoid edge effects (wraparound of PSF blurring)
-	jl0 = 1+jmax-fft_jmin + psf_ny;
+	il0 = 1+imax-imin + psf_nx; // will pad with extra zeros to avoid edge effects (wraparound of PSF blurring)
+	jl0 = 1+jmax-jmin + psf_ny;
 
 #ifdef USE_FFTW
 	ni = il0;
@@ -16290,8 +16290,11 @@ void QLens::PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground
 							}
 							//cout << "i=" << i << " ii=" << ii << ", j=" << j << " jj=" << jj << endl;
 							// THIS IS VERY CLUMSY! RE-IMPLEMENT IN A MORE ELEGANT WAY?
-							if (((foreground) and ((image_pixel_grid->pixel_in_mask==NULL) or (!image_pixel_data) or (image_pixel_data->foreground_mask[i][j]))) or  
-							((!foreground) and ((image_pixel_grid->pixel_in_mask==NULL) or (image_pixel_grid->pixel_in_mask[i][j])))) {
+							if (((!foreground) and (image_pixel_grid->maps_to_source_pixel[i][j]) and ((image_pixel_grid->pixel_in_mask==NULL) or (image_pixel_grid->pixel_in_mask[i][j])))
+										or ((foreground) and (image_pixel_data->foreground_mask) and (image_pixel_data->foreground_mask[i][j]))) {
+
+							//if (((foreground) and ((image_pixel_grid->pixel_in_mask==NULL) or (!image_pixel_data) or (image_pixel_data->foreground_mask[i][j]))) or  
+							//((!foreground) and ((image_pixel_grid->pixel_in_mask==NULL) or (image_pixel_grid->pixel_in_mask[i][j])))) {
 								img_index2 = pix_index[ii][jj];
 								new_surface_brightness_vector[img_index] += psf[psf_k][psf_l]*surface_brightness_vector[img_index2];
 								//cout << "PSF: " << psf_k << " " << psf_l << " " << psf[psf_k][psf_l] << " " << surface_brightness_vector[img_index2] << " " << new_surface_brightness_vector[img_index] << endl;

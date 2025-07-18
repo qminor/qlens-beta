@@ -13232,6 +13232,12 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			}
 		}
 	}
+	cout << "NEXT_ZSRC=" << n_extended_src_redshifts << endl;
+	cout << "Source indices:" << endl;
+	for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
+		cout << src_i_list[zsrc_i] << endl;
+	}
+	cout << endl;
 
 	if (((source_fit_mode == Cartesian_Source) or (source_fit_mode == Delaunay_Source)) and (n_pixellated_src > 1)) {
 		set_n_imggrids_to_include_in_inversion();
@@ -13389,36 +13395,38 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			src_i = src_i_list[zsrc_i];
-			if (use_dist_weighted_srcpixel_clustering) calculate_subpixel_distweights(zsrc_i);
-			else if (use_saved_sbweights) load_pixel_sbweights(zsrc_i);
-			if (nlens > 0) {
+			if (src_i >= 0) {
+				if (use_dist_weighted_srcpixel_clustering) calculate_subpixel_distweights(zsrc_i);
+				else if (use_saved_sbweights) load_pixel_sbweights(zsrc_i);
+				if (nlens > 0) {
 #ifdef USE_OPENMP
-				double srcgrid_wtime0, srcgrid_wtime;
-				if (show_wtime) {
-					srcgrid_wtime0 = omp_get_wtime();
-				}
+					double srcgrid_wtime0, srcgrid_wtime;
+					if (show_wtime) {
+						srcgrid_wtime0 = omp_get_wtime();
+					}
 #endif
-				bool use_weighted_clustering = ((use_dist_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights))) ? true : false;
+					bool use_weighted_clustering = ((use_dist_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights))) ? true : false;
 
-				create_sourcegrid_from_imggrid_delaunay(use_weighted_clustering,zsrc_i,verbal);
-				image_pixel_grids[zsrc_i]->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
-				delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
-#ifdef USE_OPENMP
-				if (show_wtime) {
-					srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-					if (mpi_id==0) cout << "wall time for Delaunay grid creation: " << srcgrid_wtime << endl;
-					srcgrid_wtime0=omp_get_wtime();
-				}
-#endif
-				if ((include_potential_perturbations) and (zsrc_i==0)) {
-					if (create_lensgrid_cartesian(zsrc_i,0,verbal)==false) return 2e30;
-					lensgrids[0]->include_in_lensing_calculations = false;
+					create_sourcegrid_from_imggrid_delaunay(use_weighted_clustering,zsrc_i,verbal);
+					image_pixel_grids[zsrc_i]->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
+					delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
 #ifdef USE_OPENMP
 					if (show_wtime) {
 						srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
-						if (mpi_id==0) cout << "wall time for pixellated potential grid creation: " << srcgrid_wtime << endl;
+						if (mpi_id==0) cout << "wall time for Delaunay grid creation: " << srcgrid_wtime << endl;
+						srcgrid_wtime0=omp_get_wtime();
 					}
 #endif
+					if ((include_potential_perturbations) and (zsrc_i==0)) {
+						if (create_lensgrid_cartesian(zsrc_i,0,verbal)==false) return 2e30;
+						lensgrids[0]->include_in_lensing_calculations = false;
+#ifdef USE_OPENMP
+						if (show_wtime) {
+							srcgrid_wtime = omp_get_wtime() - srcgrid_wtime0;
+							if (mpi_id==0) cout << "wall time for pixellated potential grid creation: " << srcgrid_wtime << endl;
+						}
+#endif
+					}
 				}
 			}
 		}
