@@ -13232,12 +13232,6 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			}
 		}
 	}
-	cout << "NEXT_ZSRC=" << n_extended_src_redshifts << endl;
-	cout << "Source indices:" << endl;
-	for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-		cout << src_i_list[zsrc_i] << endl;
-	}
-	cout << endl;
 
 	if (((source_fit_mode == Cartesian_Source) or (source_fit_mode == Delaunay_Source)) and (n_pixellated_src > 1)) {
 		set_n_imggrids_to_include_in_inversion();
