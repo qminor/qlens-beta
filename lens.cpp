@@ -14067,7 +14067,7 @@ void QLens::add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_
 			image_pixel_grids[zsrc_i]->activate_extended_mask(false); 
 			image_pixel_grids[zsrc_i]->redo_lensing_calculations(false); // This shouldn't be necessary! FIX!!!
 			assign_pixel_mappings(zsrc_i,false,verbal);
-			initialize_pixel_matrices(zsrc_i,false,verbal);
+			//initialize_pixel_matrices(zsrc_i,false,verbal);
 			//if (inversion_method==DENSE) die("need to implement FFT convolution of emask for outside_sb_prior");
 			//else PSF_convolution_Lmatrix(zsrc_i,verbal);
 			//if (source_fit_mode==Cartesian_Source) image_pixel_grids[zsrc_i]->cartesian_srcgrid->fill_surface_brightness_vector();
