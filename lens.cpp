@@ -834,6 +834,18 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	find_covmatrix_inverse = lens_in->find_covmatrix_inverse;
 	use_covariance_matrix = lens_in->use_covariance_matrix;
 	covmatrix_epsilon = lens_in->covmatrix_epsilon;
+
+	n_src_inv = 0;
+	Rmatrix = NULL;
+	Rmatrix_index = NULL;
+	src_npixels_inv = NULL;
+	src_npixel_start = NULL;
+	covmatrix_stacked = NULL;
+	covmatrix_packed = NULL;
+	covmatrix_factored = NULL;
+	Rmatrix_packed = NULL;
+	Rmatrix_log_determinant = NULL;
+
 	penalize_defective_covmatrix = lens_in->penalize_defective_covmatrix;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
