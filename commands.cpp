@@ -9988,12 +9988,12 @@ void QLens::process_commands(bool read_file)
 				} else Complain("too many arguments to 'sbmap loadmask'");
 				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
 				if (image_pixel_data->load_mask_fits(mask_i,filename,foreground_mask,emask,add_mask)==false) Complain("could not load mask file");
-				//if (foreground_mask) {
-					//if (fgmask_padding > 0) {
-						//image_pixel_data->expand_foreground_mask(fgmask_padding);
-						//if (mpi_id==0) cout << "Padding foreground mask by " << fgmask_padding << " neighbors (for convolutions)" << endl;
-					//}
-				//}
+				if (foreground_mask) {
+					if (fgmask_padding > 0) {
+						image_pixel_data->expand_foreground_mask(fgmask_padding);
+						if (mpi_id==0) cout << "Padding foreground mask by " << fgmask_padding << " neighbors (for convolutions)" << endl;
+					}
+				}
 				//if (mpi_id==0) {
 					//if (!foreground_mask) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
 					//else {
@@ -14858,6 +14858,9 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Use non-negative least squares solver: " << display_switch(use_non_negative_least_squares) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_nnls' command; must specify 'on' or 'off'");
+#ifndef USE_EIGEN
+				if (setword=="on") Complain("must compile qlens with eigen to use non-negative least squares");
+#endif
 				set_switch(use_non_negative_least_squares,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}

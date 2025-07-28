@@ -12791,6 +12791,8 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		//ymax += 1e-10;
 	}
 	if (n_extended_src_redshifts==0) die("no extended source redshifts have been created");
+	bool include_fgmask_in_inversion_orig = include_fgmask_in_inversion;
+	if (show_all_pixels) include_fgmask_in_inversion = false;
 	//bool raytrace = ((use_data) or (plot_foreground_only)) ? false : true;
 	ImagePixelGrid* image_pixel_grid;
 	int mask_num;
@@ -12841,13 +12843,13 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				image_pixel_grid->calculate_sourcepts_and_areas(); // unlike the above line, we don't reinitialize the arrays since mask hasn't changed
 			}
 
-			bool at_least_one_inverted_src_object = false; // this could be analytic source or pixellated source grid
+			bool at_least_one_inverted_or_lensed_src_object = false; // this could be analytic source or pixellated source grid
 			bool at_least_one_noninverted_foreground_src_included = false;
 			bool at_least_one_lensed_nonshapelet_src = false;
-			bool include_lensed_nonshapelet_src_as_foreground = false;
+			bool include_noninverted_src_as_foreground = false;
 			for (k=0; k < n_sb; k++) {
-				if (((sb_list[k]->is_lensed) and (sbprofile_redshift_idx[k]==zsrc_i)) or (sb_list[k]->sbtype==MULTI_GAUSSIAN_EXPANSION)) {
-					at_least_one_inverted_src_object = true;
+				if (((sb_list[k]->is_lensed) and (sbprofile_redshift_idx[k]==zsrc_i)) or (sb_list[k]->sbtype==MULTI_GAUSSIAN_EXPANSION) or (sb_list[k]->sbtype==SHAPELET)) {
+					at_least_one_inverted_or_lensed_src_object = true; 
 					if ((sb_list[k]->is_lensed) and (sb_list[k]->sbtype!=SHAPELET)) at_least_one_lensed_nonshapelet_src = true;
 				}
 				else if ((!sb_list[k]->is_lensed) and (zsrc_i==0)) {
@@ -12855,28 +12857,27 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				}
 			}
 			if (source_fit_mode==Cartesian_Source) {
-				at_least_one_inverted_src_object = true;
+				at_least_one_inverted_or_lensed_src_object = true;
 			} else if (source_fit_mode==Delaunay_Source) {
-				at_least_one_inverted_src_object = true;
+				at_least_one_inverted_or_lensed_src_object = true;
 			} else if (source_fit_mode==Shapelet_Source) {
 				if (at_least_one_lensed_nonshapelet_src) {
 					at_least_one_noninverted_foreground_src_included = true; // non-shapelet analytic sources get included in the "foreground" surface brightness (kinda weird, I know)
-					include_lensed_nonshapelet_src_as_foreground = true;
+					include_noninverted_src_as_foreground = true;
 				}
 			}
-			if ((!at_least_one_inverted_src_object) and (at_least_one_noninverted_foreground_src_included)) plot_foreground_only = true;
+			if ((at_least_one_inverted_or_lensed_src_object) and (at_least_one_noninverted_foreground_src_included)) include_noninverted_src_as_foreground = true;
+			if ((!at_least_one_inverted_or_lensed_src_object) and (at_least_one_noninverted_foreground_src_included)) plot_foreground_only = true;
 
-			if (((include_fgmask_in_inversion) or (!plot_foreground_only)) and (at_least_one_inverted_src_object)) {
+			if (at_least_one_inverted_or_lensed_src_object) {
 				bool fg_only = false;
 				bool lensed_only = false;
-				if (include_fgmask_in_inversion) {
-					if (plot_foreground_only) {
-						fg_only = true;
-					} else if (omit_foreground) {
-						lensed_only = true; 
-					}
+				if (plot_foreground_only) {
+					fg_only = true;
+				} else if (omit_foreground) {
+					lensed_only = true; 
 				}
-				image_pixel_grid->find_surface_brightness(fg_only,lensed_only,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections,include_lensed_nonshapelet_src_as_foreground); // the last argument will cause it to omit lense nonshapelet sources here, since they'll be included in the foreground SB calculation
+				image_pixel_grid->find_surface_brightness(fg_only,lensed_only,include_potential_perturbations and first_order_sb_correction,show_only_first_order_corrections,include_noninverted_src_as_foreground); // the last argument will cause it to omit lense nonshapelet sources here, since they'll be included in the foreground SB calculation
 				vectorize_image_pixel_surface_brightness(zsrc_i,true); // note that in this case, the image pixel vector does NOT contain the foreground; the foreground PSF convolution was done separately above
 				PSF_convolution_pixel_vector(zsrc_i,false,verbose,fft_convolution);
 				store_image_pixel_surface_brightness(zsrc_i);
@@ -12886,11 +12887,12 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 
 			if ((!omit_foreground) and (at_least_one_noninverted_foreground_src_included)) {
 				assign_foreground_mappings(zsrc_i,use_data);
-				calculate_foreground_pixel_surface_brightness(zsrc_i,include_lensed_nonshapelet_src_as_foreground); // PSF convolution of foreground is done within this function
+				calculate_foreground_pixel_surface_brightness(zsrc_i,include_noninverted_src_as_foreground); // PSF convolution of foreground is done within this function
 				store_foreground_pixel_surface_brightness(zsrc_i);
 			} else {
 				image_pixel_grids[zsrc_i]->set_zero_foreground_surface_brightness();
 			}
+				//image_pixel_grids[zsrc_i]->set_zero_foreground_surface_brightness();
 
 			if (only_ptimgs) {
 				// this is a hack so that it only shows the point images
@@ -12979,10 +12981,13 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	double chisq_from_residuals;
 	if (output_fits==false) {
 		if (mpi_id==0) 
-			chisq_from_residuals = image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,normalize_residuals,show_noise_thresh,plot_log,show_foreground_mask or include_fgmask_in_inversion);
+			chisq_from_residuals = image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,normalize_residuals,show_noise_thresh,plot_log,(show_foreground_mask) or (include_fgmask_in_inversion));
 	} else {
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
+
+	if (show_all_pixels) include_fgmask_in_inversion = include_fgmask_in_inversion_orig;
+
 	if (use_data) {
 		//if (show_all_pixels) image_pixel_grid->include_all_pixels();
 		for (int zsrc_i=zsrc_i_0; zsrc_i < zsrc_i_f; zsrc_i++) {
@@ -14101,7 +14106,7 @@ void QLens::add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_
 		}
 #endif
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
-			image_pixel_grids[zsrc_i]->activate_extended_mask(); 
+			//image_pixel_grids[zsrc_i]->activate_extended_mask(); 
 			image_pixel_grids[zsrc_i]->find_surface_brightness(false,true);
 			vectorize_image_pixel_surface_brightness(zsrc_i);
 #ifdef USE_OPENMP
@@ -14172,7 +14177,7 @@ void QLens::add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_
 			logev_times_two += chisq_penalty;
 			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << outside_sb_threshold << ") has been found outside the selected fit region at pixel (" << image_pixel_grids[zsrc_i]->center_pts[isb][jsb][0] << "," << image_pixel_grids[zsrc_i]->center_pts[isb][jsb][1] << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 		}
-		image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),false,assigned_mask[zsrc_i],false,include_fgmask_in_inversion);
+		image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i],false,include_fgmask_in_inversion);
 		psf_supersampling = supersampling_orig;
 	}
 }
