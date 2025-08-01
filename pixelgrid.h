@@ -15,6 +15,7 @@ class ImagePixelGrid;
 class SourcePixel;
 class SourcePixelGrid;
 struct ImagePixelData;
+class PSF;
 
 enum PixelGridType { CartesianPixelGrid, DelaunayPixelGrid };
 
@@ -458,9 +459,12 @@ class ImagePixelGrid : private Sort
 	friend class DelaunaySourceGrid;
 	friend class ImagePixelData;
 	friend class LensProfile;
+	friend class PSF;
 	QLens *lens;
 	SourcePixelGrid *cartesian_srcgrid;
 	DelaunaySourceGrid *delaunay_srcgrid;
+	ImagePixelData *image_pixel_data;
+	PSF *psf;
 	LensPixelGrid *lensgrid;
 	lensvector **corner_pts;
 	lensvector **corner_sourcepts;
@@ -654,6 +658,7 @@ class ImagePixelGrid : private Sort
 	void output_fits_file(string fits_filename, bool plot_residual = false);
 
 	void add_pixel_noise();
+	void set_image_pixel_data(ImagePixelData* imgdata, const int mask_index);
 	void set_uniform_pixel_noise(const double pn)
 	{
 		if (noise_map != NULL) {
@@ -672,6 +677,40 @@ class ImagePixelGrid : private Sort
 	int count_nonzero_source_pixel_mappings_delaunay();
 	int count_nonzero_lensgrid_pixel_mappings();
 	void get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy) { xmin_in = xmin; xmax_in = xmax; ymin_in = ymin; ymax_in = ymax; npx = x_N; npy = y_N; }
+};
+
+class PSF : public ModelParams
+{
+	friend class QLens;
+	friend class ImagePixelGrid;
+	friend class ImagePixelData;
+	QLens *lens;
+	ImagePixelGrid *image_pixel_grid;
+
+	double **psf_matrix;
+	double **supersampled_psf_matrix;
+	double psf_width_x, psf_width_y;
+
+	bool use_input_psf_matrix;
+	Spline2D psf_spline;
+	int psf_npixels_x, psf_npixels_y;
+	int supersampled_psf_npixels_x, supersampled_psf_npixels_y;
+	string psf_filename;
+
+	public:
+	PSF(QLens* lens_in);
+	void copy_psf_data(PSF* grid_in);
+	void setup_parameters(const bool initial_setup);
+	void delete_psf_matrix();
+	~PSF();
+
+	bool generate_PSF_matrix(const double pixel_xlength, const double pixel_ylength, const bool supersampling);
+	void generate_supersampled_PSF_matrix(const bool downsample = false, const int downsample_fac = 1);
+	bool spline_PSF_matrix(const double xstep, const double ystep);
+	double interpolate_PSF_matrix(const double x, const double y, const bool supersampled);
+	bool load_psf_fits(string fits_filename, const int hdu_indx, const bool supersampled, const bool show_header = false, const bool verbal = false);
+	bool save_psf_fits(string fits_filename, const bool supersampled = false);
+	bool plot_psf(string filename, const bool supersampled);
 };
 
 class SB_Profile;

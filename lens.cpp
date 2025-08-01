@@ -274,7 +274,10 @@ QLens::QLens() : UCMC(), ModelParams()
 	mcmc_logfile = false;
 	open_chisq_logfile = false;
 	psf_convolution_mpi = false;
-	use_input_psf_matrix = false;
+	//use_input_psf_matrix = false;
+	n_psf = 0;
+	psf_list = NULL;
+	add_psf(); // always have at least one psf by default
 	psf_threshold = 0.0; // no truncation by default
 	psf_ptsrc_threshold = 0.0; // no truncation by default
 	ignore_foreground_in_chisq = false;
@@ -366,7 +369,8 @@ QLens::QLens() : UCMC(), ModelParams()
 	sim_err_td = 1;
 	sim_err_shear = 0.1;
 
-	image_pixel_data = NULL;
+	n_bands = 0;
+	image_pixel_data_list = NULL;
 	image_pixel_grids = NULL;
 	srcgrids = NULL;
 	cartesian_srcgrids = NULL;
@@ -426,8 +430,6 @@ QLens::QLens() : UCMC(), ModelParams()
 	optimize_regparam_maxlog = 5;
 	max_regopt_iterations = 20;
 
-	psf_width_x = 0;
-	psf_width_y = 0;
 	background_pixel_noise = 0;
 	simulate_pixel_noise = false;
 	sb_threshold = 0;
@@ -462,6 +464,10 @@ QLens::QLens() : UCMC(), ModelParams()
 	Rmatrix_packed = NULL;
 	Rmatrix_log_determinant = NULL;
 
+	Rmatrix_MGE_packed = NULL;
+	Rmatrix_MGE_log_determinants = NULL;
+	mge_list = NULL;
+
 	Rmatrix_pot = NULL;
 	Rmatrix_pot_index = NULL;
 	Dvector = NULL;
@@ -476,8 +482,6 @@ QLens::QLens() : UCMC(), ModelParams()
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
 	Lmatrix_index = NULL;
-	psf_matrix = NULL;
-	supersampled_psf_matrix = NULL;
 	inversion_nthreads = 1;
 	include_potential_perturbations = false;
 	potential_correction_iterations = 1;
@@ -653,9 +657,11 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	mcmc_logfile = lens_in->mcmc_logfile;
 	open_chisq_logfile = lens_in->open_chisq_logfile;
 	psf_convolution_mpi = lens_in->psf_convolution_mpi;
-	use_input_psf_matrix = lens_in->use_input_psf_matrix;
+	//use_input_psf_matrix = lens_in->use_input_psf_matrix;
 	psf_threshold = lens_in->psf_threshold;
 	psf_ptsrc_threshold = lens_in->psf_ptsrc_threshold;
+	n_psf = 0;
+	psf_list = NULL;
 	ignore_foreground_in_chisq = lens_in->ignore_foreground_in_chisq;
 	ptimg_nsplit = lens_in->ptimg_nsplit;
 	fft_convolution = lens_in->fft_convolution;
@@ -745,7 +751,8 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	image_data = NULL;
 	weak_lensing_data.input(lens_in->weak_lensing_data);
 
-	image_pixel_data = NULL;
+	n_bands = 0;
+	image_pixel_data_list = NULL;
 	image_pixel_grids = NULL;
 	srcgrids = NULL;
 	cartesian_srcgrids = NULL;
@@ -809,8 +816,8 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	parallel_mumps = lens_in->parallel_mumps;
 	show_mumps_info = lens_in->show_mumps_info;
 
-	psf_width_x = lens_in->psf_width_x;
-	psf_width_y = lens_in->psf_width_y;
+	//psf_width_x = lens_in->psf_width_x;
+	//psf_width_y = lens_in->psf_width_y;
 	background_pixel_noise = lens_in->background_pixel_noise;
 	simulate_pixel_noise = false; // the fit model should never add random noise when generating lensed images
 	sb_threshold = lens_in->sb_threshold;
@@ -846,6 +853,10 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	Rmatrix_packed = NULL;
 	Rmatrix_log_determinant = NULL;
 
+	Rmatrix_MGE_packed = NULL;
+	Rmatrix_MGE_log_determinants = NULL;
+	mge_list = NULL;
+
 	penalize_defective_covmatrix = lens_in->penalize_defective_covmatrix;
 	Rmatrix = NULL;
 	Rmatrix_index = NULL;
@@ -859,29 +870,6 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	amplitude_vector = NULL;
 	reg_weight_factor = NULL;
 	Lmatrix_index = NULL;
-	if (lens_in->psf_matrix==NULL) psf_matrix = NULL;
-	else {
-		psf_npixels_x = lens_in->psf_npixels_x;
-		psf_npixels_y = lens_in->psf_npixels_y;
-		psf_matrix = new double*[psf_npixels_x];
-		int i,j;
-		for (i=0; i < psf_npixels_x; i++) {
-			psf_matrix[i] = new double[psf_npixels_y];
-			for (j=0; j < psf_npixels_y; j++) psf_matrix[i][j] = lens_in->psf_matrix[i][j];
-		}
-		if (lens_in->psf_spline.is_splined()) psf_spline.input(lens_in->psf_spline);
-	}
-	if (lens_in->supersampled_psf_matrix==NULL) supersampled_psf_matrix = NULL;
-	else {
-		supersampled_psf_npixels_x = lens_in->supersampled_psf_npixels_x;
-		supersampled_psf_npixels_y = lens_in->supersampled_psf_npixels_y;
-		supersampled_psf_matrix = new double*[supersampled_psf_npixels_x];
-		int i,j;
-		for (i=0; i < supersampled_psf_npixels_x; i++) {
-			supersampled_psf_matrix[i] = new double[supersampled_psf_npixels_y];
-			for (j=0; j < supersampled_psf_npixels_y; j++) supersampled_psf_matrix[i][j] = lens_in->supersampled_psf_matrix[i][j];
-		}
-	}
 	image_pixel_location_Lmatrix = NULL;
 	source_pixel_location_Lmatrix = NULL;
 	Lmatrix = NULL;
@@ -2318,8 +2306,8 @@ void QLens::update_ptsrc_redshift_data()
 bool QLens::assign_mask(const int znum, const int mask_i)
 {
 	if (znum >= n_extended_src_redshifts) { warn("source redshift index does not exist"); return false; }
-	if (image_pixel_data==NULL) { warn("image pixel data has not been loaded"); return false; }
-	if (mask_i >= image_pixel_data->n_masks) { warn("mask index does not exist"); return false; }
+	if (image_pixel_data_list==NULL) { warn("image pixel data has not been loaded"); return false; }
+	if (mask_i >= image_pixel_data_list[0]->n_masks) { warn("mask index does not exist"); return false; }
 	assigned_mask[znum] = mask_i;
 	return true;
 }
@@ -3478,8 +3466,6 @@ void QLens::remove_point_source(int ptsrc_number)
 		if ((sb_list[i]->center_anchored_to_ptsrc==true) and (sb_list[i]->get_center_anchor_number()==ptsrc_number)) sb_list[i]->delete_center_anchor();
 	}
 
-
-
 	delete ptsrc_list[ptsrc_number];
 	delete[] ptsrc_list;
 	delete[] ptsrc_redshift_idx;
@@ -3524,9 +3510,90 @@ void QLens::print_point_source_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
+void QLens::add_psf()
+{
+	PSF** newlist = new PSF*[n_psf+1];
+	if (n_psf > 0) {
+		for (int i=0; i < n_psf; i++) {
+			newlist[i] = psf_list[i];
+		}
+		delete[] psf_list;
+	}
 
+	newlist[n_psf] = new PSF(this); 
 
+	n_psf++;
+	psf_list = newlist;
+}
 
+void QLens::remove_psf(int psf_number)
+{
+	if ((n_psf==0) or (psf_number >= n_psf)) return;
+	PSF** newlist;
+	if (n_psf > 1) {
+		newlist = new PSF*[n_psf-1];
+	}
+
+	int i,j;
+	for (i=0, j=0; i < n_psf; i++) {
+		if (i != psf_number) {
+			newlist[j] = psf_list[i];
+			j++;
+		}
+	}
+
+	delete psf_list[psf_number];
+	delete[] psf_list;
+	n_psf--;
+	if (n_psf > 0) {
+		psf_list = newlist;
+	} else {
+		psf_list = NULL;
+	}
+}
+
+void QLens::add_image_pixel_data()
+{
+	ImagePixelData** newlist = new ImagePixelData*[n_psf+1];
+	if (n_bands > 0) {
+		for (int i=0; i < n_bands; i++) {
+			newlist[i] = image_pixel_data_list[i];
+		}
+		delete[] image_pixel_data_list;
+	}
+
+	newlist[n_bands] = new ImagePixelData(); 
+	newlist[n_bands]->set_lens(this);
+
+	n_bands++;
+	image_pixel_data_list = newlist;
+}
+
+void QLens::remove_image_pixel_data(int band_number)
+{
+	if ((n_bands==0) or (band_number >= n_bands)) return;
+	ImagePixelData** newlist;
+	if (n_bands > 1) {
+		newlist = new ImagePixelData*[n_bands-1];
+	}
+
+	int i,j;
+	for (i=0, j=0; i < n_bands; i++) {
+		if (i != band_number) {
+			newlist[j] = image_pixel_data_list[i];
+			j++;
+		}
+	}
+
+	delete image_pixel_data_list[band_number];
+	delete[] image_pixel_data_list;
+	n_bands--;
+	if (n_bands > 0) {
+		image_pixel_data_list = newlist;
+	} else {
+		image_pixel_data_list = NULL;
+	}
+}
 
 void QLens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2, bool use_kpc)
 {
@@ -3609,7 +3676,7 @@ void QLens::set_gridsize(double xl, double yl)
 	grid_xmax = grid_xcenter + grid_xlength/2;
 	grid_ymin = grid_ycenter - grid_ylength/2;
 	grid_ymax = grid_ycenter + grid_ylength/2;
-	if ((n_extended_src_redshifts > 0) and (!image_pixel_data) and (data_pixel_size <= 0)) {
+	if ((n_extended_src_redshifts > 0) and ((!image_pixel_data_list) or (!image_pixel_data_list[0])) and (data_pixel_size <= 0)) {
 		// if an image pixel grid has been created, but it is not tied to a data image, then update the dimensions of this grid
 		image_pixel_grids[0]->update_grid_dimensions(grid_xmin,grid_xmax,grid_ymin,grid_ymax);
 	}
@@ -3625,7 +3692,7 @@ void QLens::set_grid_corners(double xmin, double xmax, double ymin, double ymax)
 	if (autocenter) autocenter = false;
 	if (auto_gridsize_from_einstein_radius) auto_gridsize_from_einstein_radius = false;
 	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
-	if ((n_extended_src_redshifts > 0) and (!image_pixel_data) and (data_pixel_size <= 0)) {
+	if ((n_extended_src_redshifts > 0) and ((!image_pixel_data_list) or (!image_pixel_data_list[0])) and (data_pixel_size <= 0)) {
 		// if an image pixel grid has been created, but it is not tied to a data image, then update the dimensions of this grid
 		image_pixel_grids[0]->update_grid_dimensions(xmin,xmax,ymin,ymax);
 	}
@@ -3639,7 +3706,7 @@ void QLens::set_grid_from_pixels()
 	if (autocenter) autocenter = false;
 	if (auto_gridsize_from_einstein_radius) auto_gridsize_from_einstein_radius = false;
 	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
-	if ((n_extended_src_redshifts > 0) and (!image_pixel_data) and (data_pixel_size <= 0)) {
+	if ((n_extended_src_redshifts > 0) and ((!image_pixel_data_list) or (!image_pixel_data_list[0])) and (data_pixel_size <= 0)) {
 		double grid_xmin, grid_xmax, grid_ymin, grid_ymax;
 		grid_xmin = grid_xcenter - grid_xlength/2;
 		grid_xmax = grid_xcenter + grid_xlength/2;
@@ -3654,7 +3721,7 @@ void QLens::set_img_npixels(const int npix_x, const int npix_y)
 {
 	n_image_pixels_x = npix_x;
 	n_image_pixels_y = npix_y;
-	if ((n_extended_src_redshifts > 0) and (!image_pixel_data)) {
+	if ((n_extended_src_redshifts > 0) and ((!image_pixel_data_list) or (!image_pixel_data_list[0]))) {
 		// only remake the image pixel grids if they're not tied to image data
 		for (int i=0; i < n_extended_src_redshifts; i++) {
 			if (image_pixel_grids[i] != NULL) {
@@ -6790,7 +6857,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		else if ((image_data==NULL) and (include_flux_chisq)) { warn("cannot evaluate image flux chi-square; no image data have been defined"); return false; }
 		else if ((image_data==NULL) and (include_time_delay_chisq)) { warn("cannot evaluate image time delay chi-square; no image data have been defined"); return false; }
 	} else {
-		if (image_pixel_data==NULL) { warn("image data pixels have not been loaded"); return false; }
+		if (image_pixel_data_list==NULL) { warn("image data pixels have not been loaded"); return false; }
 		if (source_fit_mode==Shapelet_Source) {
 			bool found_invertible_source = false;
 			for (int i=0; i < n_sb; i++) {
@@ -6939,7 +7006,6 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		fitmodel->ptsrc_redshift_groups = ptsrc_redshift_groups;
 	}
 	fitmodel->n_ptsrc = n_ptsrc;
-	fitmodel->borrowed_image_data = true; // this is so we don't have to needlessly copy the data and masks every time we do a fit
 	if (n_ptsrc > 0) {
 		fitmodel->image_data = image_data;
 		fitmodel->ptsrc_list = new PointSource*[n_ptsrc];
@@ -7020,8 +7086,19 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		}
 	}
 
+	fitmodel->n_psf = n_psf;
+	if (n_psf > 0) {
+		fitmodel->psf_list = new PSF*[n_psf];
+		for (i=0; i < n_psf; i++) {
+			fitmodel->psf_list[i] = new PSF(fitmodel);
+			fitmodel->psf_list[i]->copy_psf_data(psf_list[i]);
+		}
+	}
+
 	if (source_fit_mode != Point_Source) {
-		fitmodel->image_pixel_data = image_pixel_data;
+		fitmodel->borrowed_image_data = true; // this is so we don't have to needlessly copy the data and masks every time we do a fit
+		fitmodel->n_bands = n_bands;
+		fitmodel->image_pixel_data_list = image_pixel_data_list;
 		fitmodel->load_pixel_grid_from_data();
 	}
 
@@ -7065,6 +7142,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->pixsrc_fit_parameters = pixsrc_fit_parameters;
 	fitmodel->pixlens_fit_parameters = pixlens_fit_parameters;
 	fitmodel->ptsrc_fit_parameters = ptsrc_fit_parameters;
+	fitmodel->psf_fit_parameters = psf_fit_parameters;
 	fitmodel->cosmo_fit_parameters = cosmo_fit_parameters;
 	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
 
@@ -8157,6 +8235,7 @@ void QLens::get_n_fit_parameters(int &nparams)
 	pixsrc_fit_parameters = 0;
 	pixlens_fit_parameters = 0;
 	ptsrc_fit_parameters = 0;
+	psf_fit_parameters = 0;
 	cosmo_fit_parameters = 0;
 	for (int i=0; i < nlens; i++) lensmodel_fit_parameters += lens_list[i]->get_n_vary_params();
 	nparams = lensmodel_fit_parameters;
@@ -8170,6 +8249,8 @@ void QLens::get_n_fit_parameters(int &nparams)
 	nparams += pixlens_fit_parameters;
 	for (int i=0; i < n_ptsrc; i++) ptsrc_fit_parameters += ptsrc_list[i]->get_n_vary_params();
 	nparams += ptsrc_fit_parameters;
+	for (int i=0; i < n_psf; i++) psf_fit_parameters += psf_list[i]->get_n_vary_params();
+	nparams += psf_fit_parameters;
 	cosmo_fit_parameters = cosmo.get_n_vary_params();
 	nparams += cosmo_fit_parameters;
 	nparams += n_vary_params; // generic parameters within qlens class
@@ -8217,7 +8298,8 @@ bool QLens::setup_fit_parameters(const bool ignore_limits)
 	}
 	for (int i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_fit_parameters(fitparams,index);
 	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_fit_parameters(fitparams,index);
-	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters;
+	for (int i=0; i < n_psf; i++) psf_list[i]->get_fit_parameters(fitparams,index);
+	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters;
 	if (index != expected_index) die("Index didn't go through all the lens+source model fit parameters (%i vs %i)",index,expected_index);
 	cosmo.get_fit_parameters(fitparams,index); // cosmology parameters
 	get_fit_parameters(fitparams,index); // generic parameters in qlens class
@@ -8260,8 +8342,11 @@ bool QLens::setup_limits()
 	for (int i=0; i < n_ptsrc; i++) {
 		if ((ptsrc_list[i]->get_n_vary_params() > 0) and (ptsrc_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for point source %i",i); return false; }
 	}
+	for (int i=0; i < n_psf; i++) {
+		if ((psf_list[i]->get_n_vary_params() > 0) and (psf_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for point source %i",i); return false; }
+	}
 
-	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters;
+	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters;
 	if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
 
 	if ((cosmo.get_n_vary_params() > 0) and (cosmo.get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for cosmology parameters"); return false; }
@@ -8306,6 +8391,9 @@ void QLens::get_all_parameter_names()
 	}
 	for (i=0; i < n_ptsrc; i++) {
 		ptsrc_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+	}
+	for (i=0; i < n_psf; i++) {
+		psf_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
 	cosmo.get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
@@ -8525,21 +8613,40 @@ bool QLens::get_pixlens_parameter_numbers(const int pixlens_i, int& pi, int& pf)
 	return true;
 }
 
-bool QLens::get_ptsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf)
+bool QLens::get_ptsrc_parameter_numbers(const int ptsrc_i, int& pi, int& pf)
 {
-	if (pixsrc_i >= n_ptsrc) { pf=pi=0; return false; }
+	if (ptsrc_i >= n_ptsrc) { pf=pi=0; return false; }
 	get_n_fit_parameters(n_fit_parameters);
 	vector<string> dummy, dummy2, dummy3;
-	for (int i=0; i < pixsrc_i; i++) {
+	for (int i=0; i < ptsrc_i; i++) {
 		ptsrc_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 	}
 	pi = dummy.size();
 	if (pi == n_fit_parameters) { pf=pi=0; return false; }
-	ptsrc_list[pixsrc_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	ptsrc_list[ptsrc_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 
 	pf = dummy.size();
-	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters; // since lens, sb, pixsrc and pixlens fit parameters come before the ptsrc params
-	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters; // since lens, sb, pixsrc and pixlens fit parameters come before the ptsrc params
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + ptsrc_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + ptsrc_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_psf_parameter_numbers(const int psf_i, int& pi, int& pf)
+{
+	if (psf_i >= n_psf) { pf=pi=0; return false; }
+	get_n_fit_parameters(n_fit_parameters);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < psf_i; i++) {
+		psf_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fit_parameters) { pf=pi=0; return false; }
+	psf_list[psf_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pf = dummy.size();
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + psf_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, psf, pixlens and ptsrc fit parameters come before the psf params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + psf_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, psf, pixlens and ptsrc fit parameters come before the psf params
 	if (pf==pi) return false;
 	return true;
 }
@@ -8550,7 +8657,7 @@ bool QLens::get_cosmo_parameter_numbers(int& pi, int& pf)
 	vector<string> dummy, dummy2, dummy3;
 	cosmo.get_fit_parameter_names(dummy,&dummy2,&dummy3);
 
-	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, pixsrc, pixlens and ptsrc fit parameters come before the cosmology params
+	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters; // since lens, sb, pixsrc, pixlens, ptsrc and psf fit parameters come before the cosmology params
 	pf = pi + dummy.size();
 	if (pf==pi) return false;
 	return true;
@@ -8562,7 +8669,7 @@ bool QLens::get_misc_parameter_numbers(int& pi, int& pf)
 	vector<string> dummy, dummy2, dummy3;
 	get_fit_parameter_names(dummy,&dummy2,&dummy3);
 
-	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + cosmo_fit_parameters; // since lens, sb, pixsrc, pixlens, ptsrc and cosmo fit parameters come before the miscellaneous params
+	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters + cosmo_fit_parameters; // since lens, sb, pixsrc, pixlens, ptsrc, psf and cosmo fit parameters come before the miscellaneous params
 	pf = pi + dummy.size();
 	if (pf==pi) return false;
 	return true;
@@ -10810,16 +10917,16 @@ bool QLens::output_coolest_files(const string filename)
 	pixels_psf["field_of_view_y"] = Json::Value(Json::arrayValue);
 	pixels_psf["field_of_view_y"].append(0);
 	if (psf_supersampling) {
-		pixels_psf["field_of_view_x"].append(data_pixel_size*supersampled_psf_npixels_x/default_imgpixel_nsplit);
-		pixels_psf["field_of_view_y"].append(data_pixel_size*supersampled_psf_npixels_y/default_imgpixel_nsplit);
+		pixels_psf["field_of_view_x"].append(data_pixel_size*psf_list[0]->supersampled_psf_npixels_x/default_imgpixel_nsplit);
+		pixels_psf["field_of_view_y"].append(data_pixel_size*psf_list[0]->supersampled_psf_npixels_y/default_imgpixel_nsplit);
 	} else {
-		pixels_psf["field_of_view_x"].append(data_pixel_size*psf_npixels_x);
-		pixels_psf["field_of_view_y"].append(data_pixel_size*psf_npixels_y);
+		pixels_psf["field_of_view_x"].append(data_pixel_size*psf_list[0]->psf_npixels_x);
+		pixels_psf["field_of_view_y"].append(data_pixel_size*psf_list[0]->psf_npixels_y);
 	}
-	pixels_psf["num_pix_x"] = (psf_supersampling ? supersampled_psf_npixels_x : psf_npixels_x);
-	pixels_psf["num_pix_y"] = (psf_supersampling ? supersampled_psf_npixels_y : psf_npixels_y);
+	pixels_psf["num_pix_x"] = (psf_supersampling ? psf_list[0]->supersampled_psf_npixels_x : psf_list[0]->psf_npixels_x);
+	pixels_psf["num_pix_y"] = (psf_supersampling ? psf_list[0]->supersampled_psf_npixels_y : psf_list[0]->psf_npixels_y);
 	pixels_psf["fits_file"] = Json::Value();
-	pixels_psf["fits_file"]["path"] = psf_filename;
+	pixels_psf["fits_file"]["path"] = psf_list[0]->psf_filename;
 	coolest["instrument"]["psf"]["pixels"] = pixels_psf;
 
 	Json::Value pixels_obs;
@@ -10837,7 +10944,7 @@ bool QLens::output_coolest_files(const string filename)
 	pixels_obs["num_pix_x"] = n_image_pixels_x;
 	pixels_obs["num_pix_y"] = n_image_pixels_y;
 	pixels_obs["fits_file"] = Json::Value();
-	pixels_obs["fits_file"]["path"] = image_pixel_data->data_fits_filename;
+	pixels_obs["fits_file"]["path"] = image_pixel_data_list[0]->data_fits_filename;
 	coolest["observation"]["pixels"] = pixels_obs;
 
 	Json::Value noise;
@@ -10852,7 +10959,7 @@ bool QLens::output_coolest_files(const string filename)
 		pixels_noise["num_pix_x"] = n_image_pixels_x;
 		pixels_noise["num_pix_y"] = n_image_pixels_y;
 		pixels_noise["fits_file"] = Json::Value();
-		pixels_noise["fits_file"]["path"] = image_pixel_data->noise_map_fits_filename;
+		pixels_noise["fits_file"]["path"] = image_pixel_data_list[0]->noise_map_fits_filename;
 		noise["type"] = "NoiseMap";
 		noise["noise_map"] = pixels_noise;
 	} else {
@@ -11613,6 +11720,7 @@ void QLens::print_fit_model()
 		cout << "Point source list:" << endl;
 		print_point_source_list(true);
 	}
+
 	if (cosmo.get_n_vary_params() > 0) {
 		cout << "Cosmology parameters:" << endl;
 		cosmo.print_parameters();
@@ -11699,7 +11807,7 @@ void QLens::plot_logkappa_map(const int x_N, const int y_N, const string filenam
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			if ((!ignore_mask) and (image_pixel_data != NULL) and (!image_pixel_data->inside_mask(x,y))) logkapout << "NaN ";
+			if ((!ignore_mask) and (image_pixel_data_list[0] != NULL) and (!image_pixel_data_list[0]->inside_mask(x,y))) logkapout << "NaN ";
 			else {
 				kap = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
 				//kap = kappa_exclude(pos,0,reference_zfactors,default_zsrc_beta_factors); // for looking at convergence of perturber
@@ -11944,6 +12052,10 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 	}
 	if (src_i < 0) { warn("no pixellated source corresponding to given redshift has been created"); return false; }
 
+	ImagePixelData *image_pixel_data;
+	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	else image_pixel_data = NULL;
+
 	bool at_least_one_lensed_src = false;
 	for (int k=0; k < n_sb; k++) {
 		if (sb_list[k]->is_lensed) { at_least_one_lensed_src = true; break; }
@@ -11966,7 +12078,7 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 				bool raytrace = true;
 				if ((use_mask) and (image_pixel_data != NULL)) raytrace = false;
 				image_pixel_grids[zsrc_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace,zsrc_i);
-				if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i],include_fgmask_in_inversion); 
+				if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[zsrc_i]->set_fit_window((*image_pixel_data),true,assigned_mask[zsrc_i],include_fgmask_in_inversion);
 			}
 		}
 		cartesian_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[zsrc_i]);
@@ -12062,6 +12174,10 @@ bool QLens::create_sourcegrid_delaunay(const int src_i, const bool use_mask, con
 	if (n_extended_src_redshifts==0) die("no ext src redshift has been created");
 	int zsrc_i = pixellated_src_redshift_idx[src_i];
 
+	ImagePixelData *image_pixel_data;
+	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	else image_pixel_data = NULL;
+
 	double xmin,xmax,ymin,ymax;
 	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 	ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
@@ -12105,6 +12221,11 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	}
 	if ((src_i < 0) or (src_i >= n_pixellated_src)) { warn("no pixellated source corresponding to given redshift has been created"); return false; }
 	if (delaunay_srcgrids[src_i]==NULL) die("Delaunay source grid should not be NULL!"); // just for debugging; remove this line later
+
+	ImagePixelData *image_pixel_data;
+	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	else image_pixel_data = NULL;
+
 	double *srcpts_x, *srcpts_y;
 	int *ivals, *jvals;
 	int *pixptr_i, *pixptr_j;
@@ -12392,6 +12513,10 @@ bool QLens::create_lensgrid_cartesian(const int zsrc_i, const int pixlens_i, con
 	if (lensgrids == NULL) { warn("no pixellated lenses have been created"); return false; }
 	if ((pixlens_i < 0) or (pixlens_i >= n_pixellated_lens)) { warn("the pixellated lens specified has not been created"); return false; }
 	if (zsrc_i >= n_extended_src_redshifts) die("image grid index does not exist");
+
+	ImagePixelData *image_pixel_data;
+	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	else image_pixel_data = NULL;
 
 	double xmin,xmax,ymin,ymax;
 	int npx, npy;
@@ -12682,14 +12807,17 @@ void QLens::find_source_centroid(const int zsrc_i, double& xc_approx, double& yc
 	}
 }
 
-bool QLens::load_image_surface_brightness_grid(string image_pixel_filename_root, const int hdu_indx, const bool show_fits_header)
+bool QLens::load_image_surface_brightness_grid(const int band_i, string image_pixel_filename_root, const int hdu_indx, const bool show_fits_header)
 {
 	bool first_data_img = false;
-	if (image_pixel_data==NULL) {
-		image_pixel_data = new ImagePixelData();
-		image_pixel_data->set_lens(this);
-		first_data_img = true;
+	if (band_i > n_bands) return false;
+	if (band_i==n_bands) {
+		add_image_pixel_data();
+		if (n_bands==1) first_data_img = true;
 	}
+
+	ImagePixelData *image_pixel_data = image_pixel_data_list[band_i];
+
 	bool status = true;
 	if (fits_format == true) {
 		if (data_pixel_size <= 0) { // in this case no pixel scale has been specified, so we simply use the grid that has already been chosen
@@ -12773,6 +12901,11 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	if (image_pixel_grids == NULL) { warn("no extended source redshifts have been setup"); return false; }
 	if (((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) and (n_sb==0) and (n_ptsrc==0)) { warn("No surface brightness profiles have been defined"); return false; }
 	if ((plot_foreground_only) and (omit_foreground)) { warn("cannot omit both foreground and lensed sources when plotting"); return false; }
+
+	ImagePixelData *image_pixel_data;
+	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	else image_pixel_data = NULL;
+
 	bool use_data = true;
 	if (image_pixel_data==NULL) use_data = false;
 	if ((image_pixel_data != NULL) and ((n_image_pixels_x != image_pixel_data->npixels_x) or (n_image_pixels_y != image_pixel_data->npixels_y))) {
@@ -12792,7 +12925,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	}
 	if (n_extended_src_redshifts==0) die("no extended source redshifts have been created");
 	bool include_fgmask_in_inversion_orig = include_fgmask_in_inversion;
-	if (show_all_pixels) include_fgmask_in_inversion = false;
+	if ((show_all_pixels) or (show_extended_mask)) include_fgmask_in_inversion = false;
 	//bool raytrace = ((use_data) or (plot_foreground_only)) ? false : true;
 	ImagePixelGrid* image_pixel_grid;
 	int mask_num;
@@ -12986,7 +13119,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
 	}
 
-	if (show_all_pixels) include_fgmask_in_inversion = include_fgmask_in_inversion_orig;
+	if ((show_all_pixels) or (show_extended_mask)) include_fgmask_in_inversion = include_fgmask_in_inversion_orig;
 
 	if (use_data) {
 		//if (show_all_pixels) image_pixel_grid->include_all_pixels();
@@ -13023,14 +13156,19 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				}
 			}
 		}
-		if (image_pixel_data == NULL) {
-			image_pixel_data = new ImagePixelData();
-			image_pixel_data->set_lens(this);
+		if (n_bands==0) {
+			add_image_pixel_data();
 		}
-		//if (image_pixel_data != NULL) delete image_pixel_data;
+		image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
 		image_pixel_data->load_from_image_grid(image_pixel_grid);
 		if (specific_zsrc_i < 0) specific_zsrc_i = 0;
 		image_pixel_grid->assign_mask_pointers((*image_pixel_data),specific_zsrc_i); // this is just to give image_pixel_grid the mask pointers from image_pixel_data
+		if (n_bands==1) {
+			// in case an image_pixel_grid has already been created (e.g. when making mock data)
+			for (int i=0; i < n_extended_src_redshifts; i++) {
+				image_pixel_grids[i]->set_image_pixel_data(image_pixel_data_list[0], 0); // mask index = 0, make this better?
+			}
+		}
 
 		// are the following lines really necessary??
 		double xmin,xmax,ymin,ymax;
@@ -13101,10 +13239,10 @@ bool QLens::find_shapelet_scaling_parameters(const int i_shapelet, const int zsr
 
 bool QLens::set_shapelet_imgpixel_nsplit(const int zsrc_i)
 {
-	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return false; }
+	if (image_pixel_data_list == NULL) { warn("No image data have been loaded"); return false; }
 	ImagePixelGrid *image_pixel_grid = image_pixel_grids[zsrc_i];
 	if (image_pixel_grid == NULL) {
-		image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i], true);
+		image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data_list[0]), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i], true);
 	}
 	image_pixel_grid->redo_lensing_calculations();
 	double sig,xc,yc,nsplit,sig_src,maxdist;
@@ -13129,7 +13267,7 @@ int QLens::get_shapelet_nn(const int zsrc_i)
 bool QLens::load_pixel_grid_from_data()
 {
 	bool loaded_new_grid = false;
-	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return false; }
+	if (n_bands==0) { warn("No image data have been loaded"); return false; }
 	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		//if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
 		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
@@ -13143,7 +13281,7 @@ bool QLens::load_pixel_grid_from_data()
 		if (image_pixel_grids[zsrc_i] != NULL) {
 			delete image_pixel_grids[zsrc_i];
 		}
-		image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);
+		image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data_list[0]), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);
 		loaded_new_grid = true;
 	}
 	return loaded_new_grid;
@@ -13151,7 +13289,7 @@ bool QLens::load_pixel_grid_from_data()
 
 void QLens::plot_image_pixel_grid(const int zsrc_i)
 {
-	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return; }
+	if (n_bands==0) { warn("No image data have been loaded"); return; }
 	if (image_pixel_grids == NULL) { warn("No extended sources have been created"); return; }
 	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		//if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
@@ -13163,7 +13301,7 @@ void QLens::plot_image_pixel_grid(const int zsrc_i)
 	}
 
 	if (image_pixel_grids[zsrc_i] == NULL) {
-		image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode,ray_tracing_method, (*image_pixel_data), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);
+		image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode,ray_tracing_method, (*image_pixel_data_list[0]), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i]);
 	}
 	image_pixel_grids[zsrc_i]->redo_lensing_calculations();
 	image_pixel_grids[zsrc_i]->plot_grid("map",false);
@@ -13171,7 +13309,7 @@ void QLens::plot_image_pixel_grid(const int zsrc_i)
 
 double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool verbal, const bool zero_verbal)
 {
-	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
+	if (n_bands==0) { warn("No image data have been loaded"); return -1e30; }
 	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		//if ((mpi_id==0) and (verbal)) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
 		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
@@ -13183,7 +13321,7 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 
 	for (int zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 		if (image_pixel_grids[zsrc_i] == NULL) {
-			image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i], true, verbal);
+			image_pixel_grids[zsrc_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data_list[0]), include_fgmask_in_inversion, zsrc_i, assigned_mask[zsrc_i], true, verbal);
 		}
 	}
 	double chisq=0,chisq00;
@@ -13224,11 +13362,15 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, const int ranchisq_i)
 {
 	// This function is too long, and should be further broken into a bunch of smaller functions.
-	if (image_pixel_data == NULL) { warn("No image data have been loaded"); return -1e30; }
+	if (n_bands==0) { warn("No image data have been loaded"); return -1e30; }
 	if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift);
 	else if (n_extended_src_redshifts == 0) {
 		add_new_extended_src_redshift(source_redshift,-1,false);
 	}
+
+	ImagePixelData *image_pixel_data;
+	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	else image_pixel_data = NULL;
 
 	if (image_pixel_grids == NULL) { warn("No image surface brightness grid has been generated"); return -1e30; }
 	int zsrc_i, src_i;
@@ -14079,6 +14221,12 @@ void QLens::add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_
 	bool supersampling_orig = psf_supersampling;
 	psf_supersampling = false; // since emask pixels may have fewer or no splittings, we cannot use supersampling for the outside_sb_prior
 	int i,j,zsrc_i;
+
+
+	ImagePixelData *image_pixel_data;
+	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	else image_pixel_data = NULL;
+
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			image_pixel_grids[zsrc_i]->activate_extended_mask(false); 
@@ -14321,6 +14469,7 @@ void QLens::reset_grid()
 
 QLens::~QLens()
 {
+	clear_pixel_matrices();
 	int i,j;
 	if (nlens > 0) {
 		for (i=0; i < nlens; i++) {
@@ -14361,14 +14510,16 @@ QLens::~QLens()
 		delete[] ptsrc_redshift_idx;
 		delete[] ptsrc_list;
 	}
+	if (n_psf > 0) {
+		for (i=0; i < n_psf; i++) {
+			if (psf_list[i] != NULL) delete psf_list[i];
+		}
+		delete[] psf_list;
+	}
 
 	delete grid;
 	delete param_settings;
 	if (fitmodel != NULL) delete fitmodel;
-	if (psf_matrix != NULL) {
-		for (i=0; i < psf_npixels_x; i++) delete[] psf_matrix[i];
-		delete[] psf_matrix;
-	}
 
 	if (n_ptsrc_redshifts > 0) {
 		delete[] ptsrc_redshifts;
@@ -14411,24 +14562,14 @@ QLens::~QLens()
 
 	}
 	if ((image_data != NULL) and (borrowed_image_data==false)) delete[] image_data;
-	if ((image_pixel_data != NULL) and (borrowed_image_data==false)) delete image_pixel_data;
-	if (image_surface_brightness != NULL) delete[] image_surface_brightness;
-	if (image_surface_brightness_supersampled != NULL) delete[] image_surface_brightness_supersampled;
-	if (imgpixel_covinv_vector != NULL) delete[] imgpixel_covinv_vector;
-	if (sbprofile_surface_brightness != NULL) delete[] sbprofile_surface_brightness;
-	if (amplitude_vector != NULL) delete[] amplitude_vector;
-	if (reg_weight_factor != NULL) delete[] reg_weight_factor;
-	if (image_pixel_location_Lmatrix != NULL) delete[] image_pixel_location_Lmatrix;
-	if (source_pixel_location_Lmatrix != NULL) delete[] source_pixel_location_Lmatrix;
-	if (Lmatrix_index != NULL) delete[] Lmatrix_index;
-	if (Lmatrix != NULL) delete[] Lmatrix;
-	if (Dvector != NULL) delete[] Dvector;
-	if (Fmatrix != NULL) delete[] Fmatrix;
-	if (Fmatrix_index != NULL) delete[] Fmatrix_index;
-	if (Rmatrix != NULL) delete[] Rmatrix;
-	if (Rmatrix_index != NULL) delete[] Rmatrix_index;
-	if (Rmatrix_pot != NULL) delete[] Rmatrix_pot;
-	if (Rmatrix_pot_index != NULL) delete[] Rmatrix_pot_index;
+	if ((image_pixel_data_list != NULL) and (borrowed_image_data==false)) {
+		if (n_bands > 0) {
+			for (i=0; i < n_bands; i++) {
+				if (image_pixel_data_list[i] != NULL) delete image_pixel_data_list[i];
+			}
+			delete[] image_pixel_data_list;
+		}
+	}
 	if (group_leader != NULL) delete[] group_leader;
 	if (saved_sbweights != NULL) delete[] saved_sbweights;
 }

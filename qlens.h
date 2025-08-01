@@ -86,6 +86,7 @@ class LensPixelGrid;
 class DelaunaySourceGrid;
 class ImagePixelGrid;
 class DelaunaySourceGrid;
+class PSF;
 struct ImageData;
 struct WeakLensingData;
 struct ImagePixelData;
@@ -497,7 +498,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
 	bool use_ansi_characters;
-	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, pixlens_fit_parameters, ptsrc_fit_parameters, cosmo_fit_parameters, n_fit_parameters;
+	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, pixlens_fit_parameters, ptsrc_fit_parameters, psf_fit_parameters, cosmo_fit_parameters, n_fit_parameters;
 	std::vector<string> fit_parameter_names, transformed_parameter_names;
 	std::vector<string> latex_parameter_names, transformed_latex_parameter_names;
 
@@ -665,8 +666,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int srcgrid_npixels_x, srcgrid_npixels_y;
 	bool auto_srcgrid_npixels;
 	bool auto_srcgrid_set_pixel_size;
-	string psf_filename;
-	double psf_width_x, psf_width_y, background_pixel_noise;
+	double background_pixel_noise;
 	bool simulate_pixel_noise;
 	double sb_threshold; // for creating centroid images from pixel maps
 	double noise_threshold; // for automatic source grid sizing
@@ -752,8 +752,10 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void plot_source_pixel_grid(const int zsrc_i, const char filename[]);
 
 	ImagePixelGrid **image_pixel_grids;
-	ImagePixelData *image_pixel_data;
-	int image_npixels, source_npixels, lensgrid_npixels, source_and_lens_n_amps, n_mge_amps, n_amps;
+	int n_bands;
+	ImagePixelData **image_pixel_data_list;
+	int image_npixels, source_npixels, lensgrid_npixels, source_and_lens_n_amps, n_mge_sets, n_mge_amps, n_amps;
+	SB_Profile** mge_list;
 	int image_n_subpixels; // for supersampling
 	int image_npixels_fgmask;
 	int image_npixels_data; // right now, only used during optimization of regparam (and is only different from image_npixels when include_fgmask_in_inversion is used and there is padding of the fgmask)
@@ -836,6 +838,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	dvector covmatrix_pot_factored;
 	dvector Rmatrix_pot_packed;
 
+	dvector *Rmatrix_MGE_packed;
+	double *Rmatrix_MGE_log_determinants;
+
 	double* Rmatrix_log_determinant; // array of size n_src_inv (number of pixellated sources being included in Lmatrix)
 	double* Rmatrix_log_determinant_ptr;
 	double Rmatrix_pot_log_determinant;
@@ -892,6 +897,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	//void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	void create_regularization_matrix_shapelet(const int zsrc_i=-1);
+	void create_MGE_regularization_matrices(const int zsrc_i=-1);
 	void generate_Rmatrix_shapelet_gradient(const int zsrc_i=-1);
 	void generate_Rmatrix_shapelet_curvature(const int zsrc_i=-1);
 	//void set_corrlength_for_given_matscale();
@@ -910,22 +916,24 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	//void Cholesky_invert_lower(double** a, const int n);
 	void Cholesky_invert_upper_packed(double* a, const int n);
 	void upper_triangular_syrk(double* a, const int n);
-	void repack_matrix_lower(dvector& packed_matrix);
-	void repack_matrix_upper(dvector& packed_matrix);
+	void repack_matrix_lower(double* packed_matrix, const int nn);
+	void repack_matrix_upper(double* packed_matrix, const int nn);
 
-	bool use_input_psf_matrix;
-	bool use_input_psf_ptsrc_matrix;
 	bool ignore_foreground_in_chisq;
-	double **psf_matrix;
-	Spline2D psf_spline;
-	double **supersampled_psf_matrix;
-	void generate_supersampled_PSF_matrix(const bool downsample = false, const int downsample_fac = 1);
-	bool load_psf_fits(string fits_filename, const int hdu_indx, const bool supersampled, const bool show_header = false, const bool verbal = false);
-	bool save_psf_fits(string fits_filename, const bool supersampled = false);
-	bool plot_psf(string filename, const bool supersampled);
+	//bool use_input_psf_matrix;
+	//double **psf_matrix;
+	//Spline2D psf_spline;
+	//double **supersampled_psf_matrix;
+	//void generate_supersampled_PSF_matrix(const bool downsample = false, const int downsample_fac = 1);
+	//bool load_psf_fits(string fits_filename, const int hdu_indx, const bool supersampled, const bool show_header = false, const bool verbal = false);
+	//bool save_psf_fits(string fits_filename, const bool supersampled = false);
+	//bool plot_psf(string filename, const bool supersampled);
 
-	int psf_npixels_x, psf_npixels_y;
-	int supersampled_psf_npixels_x, supersampled_psf_npixels_y;
+	//int psf_npixels_x, psf_npixels_y;
+	//int supersampled_psf_npixels_x, supersampled_psf_npixels_y;
+
+	int n_psf;
+	PSF **psf_list;
 	double psf_threshold, psf_ptsrc_threshold;
 	int ptimg_nsplit; // allows for subpixel PSF even if supersampling is not being used for all pixels
 
@@ -934,7 +942,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void initialize_pixel_matrices(const int zsrc_i, const bool potential_perturbations=false, bool verbal=false);
 	void initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal=false);
 	void count_shapelet_amplitudes(const int zsrc_i=-1);
-	int count_MGE_amplitudes(const int zsrc_i=-1);
+	void count_MGE_amplitudes(int& n_mge_objects, int& n_gaussians, const int zsrc_i=-1);
 	void clear_pixel_matrices();
 	void clear_sparse_lensing_matrices();
 	double find_sbprofile_surface_brightness(lensvector &pt);
@@ -948,9 +956,6 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void copy_FFT_convolution_arrays(QLens* lens_in);
 	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
 	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
-	bool generate_PSF_matrix(const double pixel_xlength, const double pixel_ylength, const bool supersampling);
-	bool spline_PSF_matrix(const double xstep, const double ystep);
-	double interpolate_PSF_matrix(const double x, const double y, const bool supersampled);
 
 	bool create_regularization_matrix(const int zsrc_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool potential_perturbations = false, const bool verbal = false);
 	void generate_Rmatrix_from_gmatrices(const int zsrc_i=-1, const bool interpolate = false, const bool potential_perturbations = false);
@@ -965,10 +970,10 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void invert_lens_mapping_UMFPACK(const int zsrc_i, double& logdet, bool verbal, bool use_copy = false);
 	void convert_Rmatrix_to_dense();
 	void convert_Rmatrix_pot_to_dense();
-	void Rmatrix_determinant_MKL(const bool potential_perturbations);
 	void Rmatrix_determinant_MUMPS(const bool potential_perturbations);
 	void Rmatrix_determinant_UMFPACK(const bool potential_perturbations);
-	void Rmatrix_determinant_dense(const bool potential_perturbations);
+	void matrix_determinant_dense(double& logdet, const dvector& matrix_in, const int npixels);
+
 	void invert_lens_mapping_CG_method(const int zsrc_i, bool verbal);
 	void update_source_and_lensgrid_amplitudes(const int zsrc_i, const bool verbal=false);
 	void indexx(int* arr, int* indx, int nn);
@@ -1009,7 +1014,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void create_sourcegrid_from_imggrid_delaunay_old(const bool use_weighted_srcpixel_clustering, const bool verbal);
 	bool create_lensgrid_cartesian(const int zsrc_i, const int pixlens_i, const bool verbal, const bool use_mask = true);
 	//void load_source_surface_brightness_grid(string source_inputfile);
-	bool load_image_surface_brightness_grid(string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
+	bool load_image_surface_brightness_grid(const int band_i, string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
 	//bool make_image_surface_brightness_data();
 	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool show_only_ptimgs = false, int specific_zsrc_i = -1, bool show_only_first_order_corrections = false, bool plot_log = false, bool plot_current_sb = false, bool verbose = true);
 
@@ -1257,6 +1262,11 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void remove_point_source(int src_number);
 	void print_point_source_list(bool show_vary_params);
 
+	void add_psf();
+	void remove_psf(int psf_number);
+	void add_image_pixel_data();
+	void remove_image_pixel_data(int band_number);
+
 	void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30, bool use_kpc = false);
 	void remove_derived_param(int dparam_number);
 	void rename_derived_param(int dparam_number, string newname, string new_latex_name);
@@ -1316,7 +1326,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
 	bool get_pixlens_parameter_numbers(const int pixlens_i, int& pi, int& pf);
-	bool get_ptsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
+	bool get_ptsrc_parameter_numbers(const int ptsrc_i, int& pi, int& pf);
+	bool get_psf_parameter_numbers(const int psf_i, int& pi, int& pf);
 	bool get_cosmo_parameter_numbers(int& pi, int& pf);
 	bool get_misc_parameter_numbers(int& pi, int& pf);
 	bool lookup_parameter_value(const string pname, double& pval);

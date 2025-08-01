@@ -2172,6 +2172,11 @@ void SB_Profile::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmat
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
+void SB_Profile::calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements)
+{
+	return; // this is only used in the derived class MGE (but may be used by more profiles later)
+}
+
 void SB_Profile::get_regularization_param_ptr(double*& regparam_ptr)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
@@ -3492,6 +3497,47 @@ void MGE::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elemen
 	double xisq = x*x + y*y/(q*q);
 	for (int i=0; i < n_gaussians; i++) {
 		*(Lmatrix_elements++) += weight*exp(-xisq/SQR(sigs[i])/2)/M_SQRT_2PI/sigs[i];
+	}
+}
+
+void MGE::calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements)
+{
+	//int i,j;
+	//for (i=0; i < n_gaussians; i++) {
+		//for (j=i; j < n_gaussians; j++) {
+			//if ((i==0) and (j==0)) *(Rmatrix_elements) = 1;
+			//else if (j==i) *(Rmatrix_elements) = 2;
+			//else if (j==i+1) *(Rmatrix_elements) = -1;
+			//else (*Rmatrix_elements) = 0;
+			//Rmatrix_elements++;
+		//}
+	//}
+
+	int i,j,k,l;
+	double sigi5inv, sigj5inv, sigsqil, sigsqlj, sigl10inv;
+	double sum_i, sum_j;
+	for (i=0; i < n_gaussians; i++) {
+		sigi5inv = pow(sigs[i],-1);
+		for (j=i; j < n_gaussians; j++) {
+			sigj5inv = pow(sigs[j],-1);
+			//sigsqij = 1.0/(1.0/SQR(sigs[i]) + 1.0/SQR(sigs[j]));
+			*(Rmatrix_elements) = 0;
+			for (l=0; l < n_gaussians; l++) {
+				sigsqil = 1.0/(1.0/SQR(sigs[i]) + 1.0/SQR(sigs[l]));
+				sigsqlj = 1.0/(1.0/SQR(sigs[l]) + 1.0/SQR(sigs[j]));
+				sigl10inv = pow(sigs[l],-2);
+				sum_i = 0;
+				for (k=0; k < n_rvals; k++) {
+					sum_i += sqrt(rvalsq[k]*abs(rvalsq[k]-sigs[i]*sigs[i]))*exp(-rvalsq[k]*sigsqil/2);
+				}
+				sum_j = 0;
+				for (k=0; k < n_rvals; k++) {
+					sum_j += sqrt(rvalsq[k]*abs(rvalsq[k]-sigs[j]*sigs[j]))*exp(-rvalsq[k]*sigsqlj/2);
+				}
+				*(Rmatrix_elements) += sum_i*sum_j*sigi5inv*sigj5inv*sigl10inv;
+			}
+			Rmatrix_elements++;
+		}
 	}
 }
 
