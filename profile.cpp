@@ -2228,6 +2228,28 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 	zfac = 1.0;
 }
 
+double LensProfile::get_xi_parameter(const double zfactor)
+{
+	double r_ein, re_sq, kappa_e, dkappa_e;
+	if (kapavgptr_rsq_spherical==NULL) {
+		return -1e30;
+	}
+	zfac = zfactor;
+	if ((einstein_radius_root(rmin_einstein_radius)*einstein_radius_root(rmax_einstein_radius)) >= 0) {
+		// multiple imaging does not occur with this lens
+		return -1e30;
+	}
+	double (Brent::*bptr)(const double);
+	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
+	r_ein = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
+
+	re_sq = r_ein*r_ein;
+	kappa_e = zfactor*kappa_rsq(re_sq);
+	dkappa_e = 2*r_ein*zfactor*kappa_rsq_deriv(re_sq);
+	zfac = 1.0;
+	return (2*r_ein*dkappa_e/(1-kappa_e)+2);
+}
+
 double LensProfile::kappa_rsq_deriv(const double rsq)
 {
 	static const double precision = 1e-6;

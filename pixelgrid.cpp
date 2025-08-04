@@ -16936,7 +16936,7 @@ bool QLens::create_regularization_matrix(const int zsrc_i, const bool allow_reg_
 #ifdef USE_MUMPS
 			Rmatrix_determinant_MUMPS(potential_perturbations);
 #else
-			warn("Converting Rmatrix to dense, since MUMPS or UMFPACK is required to calculate sparse R-matrix determinants");
+			//warn("Converting Rmatrix to dense, since MUMPS or UMFPACK is required to calculate sparse R-matrix determinants");
 			int npixels;
 			// MKL should use Pardiso to get the Cholesky decomposition & determinant since Rmatrix is sparse, but for now, I will just convert to dense matrix and do it that way
 			if (!potential_perturbations) {
@@ -17015,7 +17015,7 @@ void QLens::create_regularization_matrix_shapelet(const int zsrc_i)
 #ifdef USE_MUMPS
 		Rmatrix_determinant_MUMPS(false);
 #else
-		warn("Converting Rmatrix to dense, since MUMPS or UMFPACK is required to calculate sparse R-matrix determinants");
+		//warn("Converting Rmatrix to dense, since MUMPS or UMFPACK is required to calculate sparse R-matrix determinants");
 		// MKL should use Pardiso to get the Cholesky decomposition & determinant since Rmatrix is sparse, but for now, I will just convert to dense matrix and do it that way
 		convert_Rmatrix_to_dense();
 		matrix_determinant_dense((*Rmatrix_log_determinant_ptr),(*Rmatrix_packed_ptr),(*source_npixels_ptr));

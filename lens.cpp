@@ -5002,6 +5002,7 @@ bool QLens::get_einstein_radius(int lens_number, double& re_major_axis, double& 
 	return true;
 }
 
+
 double QLens::inverse_magnification_r(const double r)
 {
 	lensmatrix jac;
@@ -5406,6 +5407,16 @@ double QLens::einstein_radius_single_lens(const double src_redshift, const int l
 	lens_list[lensnum]->get_einstein_radius(re_major,re_avg,zfac);
 	return re_avg;
 }
+
+double QLens::get_xi_parameter(const double src_redshift, const int lensnum)
+{
+	double re_avg,re_major,zfac,xi_param;
+	zfac = cosmo.kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
+	xi_param = lens_list[lensnum]->get_xi_parameter(zfac);
+	return xi_param;
+}
+
+
 
 double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 {
@@ -7095,8 +7106,8 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		}
 	}
 
+	fitmodel->borrowed_image_data = true; // this is so we don't have to needlessly copy the data and masks every time we do a fit
 	if (source_fit_mode != Point_Source) {
-		fitmodel->borrowed_image_data = true; // this is so we don't have to needlessly copy the data and masks every time we do a fit
 		fitmodel->n_bands = n_bands;
 		fitmodel->image_pixel_data_list = image_pixel_data_list;
 		fitmodel->load_pixel_grid_from_data();

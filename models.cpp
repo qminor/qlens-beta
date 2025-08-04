@@ -902,8 +902,8 @@ void NFW::update_meta_parameters()
 			double ds, r200;
 			if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
 			ds = ks * sigma_cr_kpc / rs_kpc;
-			qlens->cosmo.get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
-			c200 = r200/rs_kpc;
+			//qlens->cosmo.get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+			//c200 = r200/rs_kpc;
 		}
 	}
 	rmin_einstein_radius = 1e-6*rs; // for determining the Einstein radius (sets lower bound of root finder)
@@ -1037,6 +1037,9 @@ double NFW::calculate_scaled_mass_3d(const double r)
 
 double NFW::concentration_prior()
 {
+	double ds, r200;
+	qlens->cosmo.get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+	c200 = r200/rs_kpc;
 	double log_medc = log(qlens->cosmo.median_concentration_dutton(m200,zlens));
 	const double sig_logc = 0.110; // mass-concentration scatter of 0.110 dex (Dutton et al 2014)
 	//return (exp(-SQR((log(c200)-log_medc)/(ln10*sig_logc))/2)/(sig_logc*M_SQRT_2PI));
@@ -1090,6 +1093,8 @@ bool NFW::output_cosmology_info(const int lens_number)
 /********************************** Truncated_NFW **********************************/
 
 Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int truncation_mode_in, const int parameter_mode_in, QLens* cosmo_in)
+			//qlens->cosmo.get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+			//c200 = r200/rs_kpc;
 {
 	setup_lens_properties(parameter_mode_in,truncation_mode_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);

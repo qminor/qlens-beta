@@ -64,6 +64,7 @@ enum DerivedParamType {
 	Mass3dR,
 	Einstein,
 	Einstein_Mass,
+	Xi_Param,
 	Kappa_Re,
 	LensParam,
 	AvgLogSlope,
@@ -751,9 +752,14 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double shapelet_window_scaling;
 	void plot_source_pixel_grid(const int zsrc_i, const char filename[]);
 
+	//int n_imggrid;
 	ImagePixelGrid **image_pixel_grids;
+	//int* imggrid_zsrc_i;
+	//int* imggrid_band;
+
 	int n_bands;
 	ImagePixelData **image_pixel_data_list;
+
 	int image_npixels, source_npixels, lensgrid_npixels, source_and_lens_n_amps, n_mge_sets, n_mge_amps, n_amps;
 	SB_Profile** mge_list;
 	int image_n_subpixels; // for supersampling
@@ -1394,6 +1400,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double total_kappa(const double r, const int lensnum, const bool use_kpc);
 	double total_dkappa(const double r, const int lensnum, const bool use_kpc);
 	double einstein_radius_single_lens(const double src_redshift, const int lensnum);
+	double get_xi_parameter(const double src_redshift, const int lensnum);
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac, double& reav);
 	double einstein_radius_root(const double r);

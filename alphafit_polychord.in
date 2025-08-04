@@ -64,8 +64,8 @@ n_livepts = 200       # This determines how well the nested sampler explores the
 fit run # FYI: you can interrupt the nested sampling at any time by pressing CTRL-C, e.g. if it is clearly not converging well
 #fit run -resume   # you can use this instead of the above line if a previous run got interrupted; it will continue where it left off
 
-fit use_bestfit
-fit chisq
+#fit use_bestfit
+#fit chisq
 
 # Once the nested sampling finishes, you can plot the resulting posterior probability distributions using the 'mkdist' tool,
 # included with qlens, from the UNIX command line. For a quick start, you can go to the directory 'chains_alpha_poly' and type

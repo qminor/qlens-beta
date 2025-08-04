@@ -347,6 +347,7 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 	// some of these functions can be redefined in the derived classes
 	virtual double kappa_rsq_deriv(const double rsq);
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
+	virtual double get_xi_parameter(const double zfactor);
 	virtual double get_inner_logslope();
 	virtual bool output_cosmology_info(const int lens_number = -1);
 	void change_pmode(const int pmode_in);
