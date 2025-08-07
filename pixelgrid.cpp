@@ -16382,7 +16382,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal)
 			for (img_index=0; img_index < image_npixels; img_index++) {
 				i = image_pixel_grid->active_image_pixel_i[img_index];
 				j = image_pixel_grid->active_image_pixel_j[img_index];
-				if (image_pixel_data->foreground_mask_data[i][j]) {
+				if (!image_pixel_data->foreground_mask_data[i][j]) {
 					for (k=0; k < n_amps; k++) {
 						Lmatrix_dense[img_index][k] = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
 					}
@@ -20581,6 +20581,7 @@ void QLens::update_source_and_lensgrid_amplitudes(const int zsrc_i, const bool v
 	if ((include_potential_perturbations) and (lensgrid_npixels > 0)) image_pixel_grid->lensgrid->update_potential(index);
 	if (n_mge_amps > 0) {
 		double* srcpix = amplitude_vector + source_npixels + lensgrid_npixels;
+		//for (i=0; i < n_mge_amps; i++) cout << srcpix[i] << endl;
 		for (i=0; i < n_sb; i++) {
 			if ((sb_list[i]->sbtype==MULTI_GAUSSIAN_EXPANSION) and ((zsrc_i < 0) or (sbprofile_redshift_idx[i]==zsrc_i))) {
 				sb_list[i]->update_amplitudes(srcpix);
