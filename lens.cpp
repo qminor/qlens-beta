@@ -13562,7 +13562,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					image_pixel_grids[zsrc_i]->add_point_images(point_image_surface_brightness,image_pixel_grids[zsrc_i]->n_active_pixels);
 				}
 
-				if (regularization_method != None) add_regularization_prior_terms_to_logev(zsrc_i,logev_times_two,loglike_reg,regterms);
+				if (regularization_method != None) add_regularization_prior_terms_to_logev(zsrc_i,logev_times_two,loglike_reg,regterms,false,verbal);
 
 #ifdef USE_OPENMP
 				if (show_wtime) {
@@ -13650,7 +13650,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 					image_pixel_grids[zsrc_i]->add_point_images(point_image_surface_brightness,image_pixel_grids[zsrc_i]->n_active_pixels);
 				}
-				if (regularization_method != None) add_regularization_prior_terms_to_logev(zsrc_i,logev_times_two,loglike_reg,regterms,include_potential_perturbations);
+				if (regularization_method != None) add_regularization_prior_terms_to_logev(zsrc_i,logev_times_two,loglike_reg,regterms,include_potential_perturbations,verbal);
 #ifdef USE_OPENMP
 				if (show_wtime) {
 					tot_wtime = omp_get_wtime() - tot_wtime0;
@@ -13767,7 +13767,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					image_pixel_grids[zsrc_i]->add_point_images(point_image_surface_brightness,image_pixel_grids[zsrc_i]->n_active_pixels);
 				}
 
-				if (regularization_method != None) add_regularization_prior_terms_to_logev(zsrc_i,logev_times_two,loglike_reg,regterms);
+				if (regularization_method != None) add_regularization_prior_terms_to_logev(zsrc_i,logev_times_two,loglike_reg,regterms,false,verbal);
 				clear_pixel_matrices();
 			} else {
 				image_pixel_grids[zsrc_i]->set_zero_lensed_surface_brightness();
@@ -13868,14 +13868,6 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				logev_times_two -= n_data_pixels*log(cov_inverse); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
 			}
 			logev_times_two += n_data_pixels*log(M_2PI);
-		}
-		if ((mpi_id==0) and (verbal)) {
-			if ((source_npixels > 0) and (regularization_method != None)) {
-				if (n_extended_src_redshifts > 1) cout << "zsrc_i=" << zsrc_i << ": ";
-				if (use_covariance_matrix) cout << "logdet(Gmatrix)=" << Gmatrix_log_determinant;
-				else cout << "logdet(Fmatrix)=" << Fmatrix_log_determinant;
-			}
-			if ((source_npixels > 0) and (regularization_method != None)) cout << " logdet(Rmatrix)=" << (*Rmatrix_log_determinant_ptr) << endl;
 		}
 
 		// Now we evaluate the nimg_prior to penalize the solution if it produces the wrong number of lensed images
@@ -14360,7 +14352,7 @@ void QLens::add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_
 	}
 }
 
-void QLens::add_regularization_prior_terms_to_logev(const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations)
+void QLens::add_regularization_prior_terms_to_logev(const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations, const bool verbal)
 {
 	if (source_npixels > 0) {
 		source_npixels_ptr = src_npixels_inv;
@@ -14401,6 +14393,16 @@ void QLens::add_regularization_prior_terms_to_logev(const int zsrc_i, double& lo
 				logev_times_two += regterms;
 				loglike_reg += regterms;
 			}
+			if ((mpi_id==0) and (verbal)) {
+				if ((source_npixels > 0) and (regularization_method != None)) {
+					if (n_extended_src_redshifts > 1) cout << "zsrc_i=" << zsrc_i << ": ";
+					if (use_covariance_matrix) cout << "logdet(Gmatrix)=" << Gmatrix_log_determinant;
+					else cout << "logdet(Fmatrix)=" << Fmatrix_log_determinant;
+					if (Rmatrix_log_determinant != NULL) cout << " logdet(Rmatrix)=" << (*Rmatrix_log_determinant_ptr);
+					cout << endl;
+				}
+			}
+
 
 			source_npixels_ptr++;
 			src_npixel_start_ptr++;

@@ -1001,7 +1001,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool generate_and_invert_lensing_matrix_cartesian(const int zsrc_i, const int src_i, double& tot_wtime, double& tot_wtime0, const bool verbal);
 	bool generate_and_invert_lensing_matrix_delaunay(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
 	void add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_times_two, const bool verbal);
-	void add_regularization_prior_terms_to_logev(const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false);
+	void add_regularization_prior_terms_to_logev(const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
 	void set_n_imggrids_to_include_in_inversion();
 
 	bool load_pixel_grid_from_data();
