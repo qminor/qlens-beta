@@ -656,7 +656,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	RegularizationMethod regularization_method;
 	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
 	bool use_non_negative_least_squares;
-	bool use_fnnls;
+	//bool use_fnnls;
 	int max_nnls_iterations;
 	double nnls_tolerance;
 	RayTracingMethod ray_tracing_method;
@@ -752,12 +752,12 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double shapelet_window_scaling;
 	void plot_source_pixel_grid(const int zsrc_i, const char filename[]);
 
-	//int n_imggrid;
+	int n_image_pixel_grids;
 	ImagePixelGrid **image_pixel_grids;
-	//int* imggrid_zsrc_i;
-	//int* imggrid_band;
+	int* imggrid_zsrc_i;
+	int* imggrid_band;
 
-	int n_bands;
+	int n_model_bands, n_data_bands;
 	ImagePixelData **image_pixel_data_list;
 
 	int image_npixels, source_npixels, lensgrid_npixels, source_and_lens_n_amps, n_mge_sets, n_mge_amps, n_amps;

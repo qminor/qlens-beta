@@ -2427,7 +2427,7 @@ void QLens::process_commands(bool read_file)
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Number of image pixels = (" << n_image_pixels_x << "," << n_image_pixels_y << ")\n";
 			} else if ((nwords == 2) and (words[1]=="-data")) {
-				if (n_bands > 0) {
+				if (n_data_bands > 0) {
 					n_image_pixels_x = image_pixel_data_list[0]->npixels_x;
 					n_image_pixels_y = image_pixel_data_list[0]->npixels_y;
 					set_img_npixels(image_pixel_data_list[0]->npixels_x,image_pixel_data_list[0]->npixels_y);
@@ -9099,7 +9099,7 @@ void QLens::process_commands(bool read_file)
 					if (!show_sbmap)
 						run_plotter("imgdat");
 					else {
-						if (n_bands==0) Complain("no image pixel data has been loaded");
+						if (n_data_bands==0) Complain("no image pixel data has been loaded");
 						image_pixel_data_list[0]->plot_surface_brightness("img_pixel",true);
 						if (range=="") {
 							stringstream xminstream, xmaxstream, yminstream, ymaxstream;
@@ -9756,7 +9756,7 @@ void QLens::process_commands(bool read_file)
 			string showmults="";
 			if (show_multiplicities) showmults = "showmults";
 			if (show_pixel_data) {
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				image_pixel_data_list[0]->plot_surface_brightness("img_pixel",true);
 			}
 
@@ -9961,7 +9961,7 @@ void QLens::process_commands(bool read_file)
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
-				if (band_i > n_bands) Complain("band index cannot be greater than current n_bands; to create a new band, set band_i=n_bands");
+				if (band_i > n_data_bands) Complain("band index cannot be greater than current n_data_bands; to create a new band, set band_i=n_data_bands");
 
 				if (nwords==2) filename = "img_pixel";
 				else if (nwords==3) {
@@ -10007,7 +10007,7 @@ void QLens::process_commands(bool read_file)
 				if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
 				} else Complain("too many arguments to 'sbmap loadmask'");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (image_pixel_data_list[band_i]->load_mask_fits(mask_i,filename,foreground_mask,emask,add_mask)==false) Complain("could not load mask file");
 				if (foreground_mask) {
 					if (fgmask_padding > 0) {
@@ -10039,7 +10039,7 @@ void QLens::process_commands(bool read_file)
 				}
 				if ((emask) and (foreground_mask)) Complain("cannot save both emask and foreground mask at the same time");
 				string filename;
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (nwords==2) Complain("output FITS filename for mask is required");
 				else if (nwords>=3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for mask file");
@@ -10057,7 +10057,7 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="load_noisemap")
 			{
-				if (n_bands==0) Complain("image pixel data has not been loaded");
+				if (n_data_bands==0) Complain("image pixel data has not been loaded");
 				string filename;
 				int hdu_indx = 1;
 				bool show_header = false;
@@ -10091,7 +10091,7 @@ void QLens::process_commands(bool read_file)
 				string filename;
 				vector<string> args;
 				if (nwords==2) Complain("filename for noise map in FITS format is required (e.g. 'sbmap save_noisemap file.fits')");
-				if (n_bands==0) Complain("image data/noise map has not been loaded or generated");
+				if (n_data_bands==0) Complain("image data/noise map has not been loaded or generated");
 				else if (nwords>=3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for noise map file");
 					if (nwords==3) {
@@ -10109,7 +10109,7 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="generate_uniform_noisemap")
 			{
 				if (background_pixel_noise <= 0) Complain("bg_pixel_noise should be set to a positive nonzero value to generate uniform noise map");
-				if (n_bands==0) Complain("must load pixel data before generating noise map");
+				if (n_data_bands==0) Complain("must load pixel data before generating noise map");
 				image_pixel_data_list[band_i]->set_uniform_pixel_noise(background_pixel_noise);
 				use_noise_map = true;
 			}
@@ -10118,7 +10118,7 @@ void QLens::process_commands(bool read_file)
 				string filename;
 				if (nwords != 2) Complain("no arguments are required for 'sbmap unload_noisemap'");
 				if (!use_noise_map) Complain("no noise map has been generated or loaded from FITS file");
-				if (n_bands > 0) image_pixel_data_list[band_i]->unload_noise_map();
+				if (n_data_bands > 0) image_pixel_data_list[band_i]->unload_noise_map();
 				use_noise_map = false;
 			}
 			else if (words[1]=="loadpsf")
@@ -10465,7 +10465,7 @@ void QLens::process_commands(bool read_file)
 				bool show_isofit = false;
 				bool show_extended_mask = false;
 				bool show_foreground_mask = false;
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				bool set_title = false;
 				bool plot_contours = false;
 				int n_contours = 24;
@@ -10540,25 +10540,25 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="unset_all_pixels")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap unset_all_pixels'");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				image_pixel_data_list[band_i]->set_no_mask_pixels(mask_i);
 			}
 			else if (words[1]=="set_posrg_pixels")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap set_posrg_pixels'");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				image_pixel_data_list[band_i]->set_positive_radial_gradient_pixels(mask_i);
 			}
 			else if (words[1]=="reset_emask")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap reset_emask'");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				image_pixel_data_list[band_i]->reset_extended_mask(mask_i);
 			}
 			else if (words[1]=="set_all_pixels")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap set_all_pixels'");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data_list[band_i]->set_all_mask_pixels(mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data_list[band_i]->n_mask_pixels[mask_i] << endl;
 				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
@@ -10566,7 +10566,7 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="invert_mask")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap invert_mask'");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data_list[band_i]->invert_mask(mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data_list[band_i]->n_mask_pixels[mask_i] << endl;
 				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
@@ -10574,7 +10574,7 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="create_new_mask")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap create_new_mask'");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data_list[band_i]->create_new_mask()) Complain("could not create new mask");
 				if (mpi_id==0) {
 					cout << "Number of masks: " << image_pixel_data_list[band_i]->n_masks << endl;
@@ -10597,7 +10597,7 @@ void QLens::process_commands(bool read_file)
 				if (nwords == 3) {
 					if (!(ws[2] >> ntimes)) Complain("invalid number of neighbor pixels");
 				}
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (mask_i >= image_pixel_data_list[band_i]->n_masks) Complain("mask index has not been created");
 				for (int i=0; i < ntimes; i++) image_pixel_data_list[band_i]->set_neighbor_pixels(interior,exterior,mask_i);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data_list[band_i]->n_mask_pixels[mask_i] << endl;
@@ -10610,7 +10610,7 @@ void QLens::process_commands(bool read_file)
 				if (nwords == 3) {
 					if (!(ws[2] >> ntimes)) Complain("invalid number of neighbor pixels");
 				}
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (mask_i >= image_pixel_data_list[band_i]->n_masks) Complain("mask index has not been created");
 				image_pixel_data_list[band_i]->invert_mask(mask_i);
 				for (int i=0; i < ntimes; i++) image_pixel_data_list[band_i]->set_neighbor_pixels(false,false,mask_i);
@@ -10621,7 +10621,7 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="unset_low_sn_pixels")
 			{
 				if (nwords != 3) Complain("one argument allowed for command 'sbmap unset_low_sn_pixels' (sb_threshold)");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				double sbthresh;
 				if (!(ws[2] >> sbthresh)) Complain("invalid surface brightness threshold");
 				if (!image_pixel_data_list[band_i]->unset_low_signal_pixels(sbthresh,mask_i)) Complain("could not alter mask");
@@ -10631,7 +10631,7 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="trim_mask_windows")
 			{
 				if ((nwords < 3) or (nwords > 4)) Complain("one argument allowed for command 'sbmap trim_mask_windows' (noise threshold)");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				double noise_threshold;
 				int threshold_size = 0;
 				if (!(ws[2] >> noise_threshold)) Complain("invalid noise threshold for keeping mask windows");
@@ -10670,7 +10670,7 @@ void QLens::process_commands(bool read_file)
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data_list[band_i]->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false,fgmask,mask_i)) Complain("coult not alter mask");
 				//image_pixel_data_list[band_i]->plot_surface_brightness("data_pixel",true,false,true);
 				//run_plotter_range("datapixel","","");
@@ -10718,7 +10718,7 @@ void QLens::process_commands(bool read_file)
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax)");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data_list[band_i]->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true,fgmask,mask_i)) Complain("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data_list[band_i]->n_mask_pixels[mask_i] << endl;
 			}
@@ -10739,21 +10739,21 @@ void QLens::process_commands(bool read_file)
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data_list[band_i]->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,mask_i)) Complain("could not alter extended mask");
 				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data_list[band_i]->get_size_of_extended_mask(mask_i) << endl;
 				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="remove_mask_overlap")
 			{
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				image_pixel_data_list[band_i]->remove_overlapping_pixels_from_other_masks(mask_i);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data_list[band_i]->n_mask_pixels[mask_i] << endl;
 				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="activate_partner_imgpixels")
 			{
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				image_pixel_data_list[band_i]->activate_partner_image_pixels(mask_i,false);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data_list[band_i]->n_mask_pixels[mask_i] << endl;
 			}
@@ -10774,14 +10774,14 @@ void QLens::process_commands(bool read_file)
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!image_pixel_data_list[band_i]->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true,mask_i)) Complain("could not alter extended mask");
 				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data_list[band_i]->get_size_of_extended_mask(mask_i) << endl;
 				if (n_extended_src_redshifts > 0) update_imggrid_mask_values(mask_i);
 			}
 			else if (words[1]=="set_fgmask_to_primary")
 			{
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				image_pixel_data_list[band_i]->set_foreground_mask_to_primary_mask();
 			}
 			else if (words[1]=="set_fgmask_annulus")
@@ -10801,7 +10801,7 @@ void QLens::process_commands(bool read_file)
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				image_pixel_data_list[band_i]->set_foreground_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false);
 				if (mpi_id==0) cout << "Number of pixels in foreground mask: " << image_pixel_data_list[band_i]->get_size_of_foreground_mask() << endl;
 			}
@@ -10822,7 +10822,7 @@ void QLens::process_commands(bool read_file)
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-				if (n_bands==0) Complain("no image pixel data has been loaded");
+				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				image_pixel_data_list[band_i]->set_foreground_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true);
 				if (mpi_id==0) cout << "Number of pixels in foreground mask: " << image_pixel_data_list[band_i]->get_size_of_foreground_mask() << endl;
 			}
@@ -10834,7 +10834,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> xmax)) Complain("invalid rectangle xmax");
 					if (!(ws[4] >> ymin)) Complain("invalid rectangle ymin");
 					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
-					if (n_bands==0) Complain("no image pixel data has been loaded");
+					if (n_data_bands==0) Complain("no image pixel data has been loaded");
 					if (!image_pixel_data_list[band_i]->set_mask_window(xmin,xmax,ymin,ymax,mask_i)) Complain("could not alter mask");
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap set_data_window'");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data_list[band_i]->n_mask_pixels[mask_i] << endl;
@@ -10848,7 +10848,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> xmax)) Complain("invalid rectangle xmax");
 					if (!(ws[4] >> ymin)) Complain("invalid rectangle ymin");
 					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
-					if (n_bands==0) Complain("no image pixel data has been loaded");
+					if (n_data_bands==0) Complain("no image pixel data has been loaded");
 					if (!image_pixel_data_list[band_i]->set_mask_window(xmin,xmax,ymin,ymax,true,mask_i)) Complain("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap unset_data_window'");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data_list[band_i]->n_mask_pixels[mask_i] << endl;
@@ -10862,7 +10862,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> xmax)) Complain("invalid rectangle xmax");
 					if (!(ws[4] >> ymin)) Complain("invalid rectangle ymin");
 					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
-					if (n_bands==0) Complain("no image pixel data has been loaded");
+					if (n_data_bands==0) Complain("no image pixel data has been loaded");
 					if (!image_pixel_data_list[band_i]->estimate_pixel_noise(xmin,xmax,ymin,ymax,sig_sb,mean_sb,mask_i)) Complain("could not find pixel noise in mask");;
 					if (mpi_id==0) {
 						cout << "Mean surface brightness in mask: " << mean_sb << endl;
@@ -11073,7 +11073,7 @@ void QLens::process_commands(bool read_file)
 					ymaxstr >> ymaxstring;
 					range1 = "[" + xminstring + ":" + xmaxstring + "][" + yminstring + ":" + ymaxstring + "]";
 				}
-				if ((range2.empty()) and (n_bands > 0)) {
+				if ((range2.empty()) and (n_data_bands > 0)) {
 					stringstream xminstream, xmaxstream, yminstream, ymaxstream;
 					string xminstr, xmaxstr, yminstr, ymaxstr;
 					xminstream << image_pixel_data_list[band_i]->xvals[0]; xminstream >> xminstr;
@@ -14130,7 +14130,7 @@ void QLens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> pnoise)) Complain("invalid image pixel surface brightness noise");
 				background_pixel_noise = pnoise;
-				if ((n_bands > 0) and (!use_noise_map)) image_pixel_data_list[0]->set_uniform_pixel_noise(pnoise);
+				if ((n_data_bands > 0) and (!use_noise_map)) image_pixel_data_list[0]->set_uniform_pixel_noise(pnoise);
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "background image pixel surface brightness dispersion = " << background_pixel_noise << endl;
 			} else Complain("must specify either zero or one argument (background image pixel surface brightness dispersion)");
@@ -14185,7 +14185,7 @@ void QLens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> sbthresh)) Complain("invalid surface brightness fraction threshold for high S/N window");
 				high_sn_frac = sbthresh;
-				if (n_bands > 0) image_pixel_data_list[0]->assign_high_sn_pixels();
+				if (n_data_bands > 0) image_pixel_data_list[0]->assign_high_sn_pixels();
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "high signal frac threshold = " << high_sn_frac << endl;
 			} else Complain("must specify either zero or one argument");
@@ -14223,7 +14223,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="emask_n_neighbors")
 		{
 			// This command should be made obsolete. Should just do this with 'set_neighbor_pixels' command together with an -emask option, and an option to reset emask to be same as regular mask. IMPLEMENT THIS!!
-			if (n_bands==0) Complain("must load image pixel data before setting emask_n_neighbors");
+			if (n_data_bands==0) Complain("must load image pixel data before setting emask_n_neighbors");
 			int mask_i=0;
 			for (int i=1; i < nwords; i++) {
 				int pos;
@@ -14263,16 +14263,16 @@ void QLens::process_commands(bool read_file)
 					if ((emask_n != -1) and (adaptive_subgrid)) Complain("emask_n_neighbors must be set to 'all' for adaptive Cartesian grid");
 					image_pixel_data_list[0]->extended_mask_n_neighbors[mask_i] = emask_n;
 				}
-				if (n_bands > 0) image_pixel_data_list[0]->set_extended_mask(emask_n,add_to_emask,only_interior_pixels,mask_i);
+				if (n_data_bands > 0) image_pixel_data_list[0]->set_extended_mask(emask_n,add_to_emask,only_interior_pixels,mask_i);
 				int npix;
-				if (n_bands > 0) npix = image_pixel_data_list[0]->get_size_of_extended_mask(mask_i);
+				if (n_data_bands > 0) npix = image_pixel_data_list[0]->get_size_of_extended_mask(mask_i);
 				if (mpi_id==0) cout << "number of pixels in extended mask: " << npix << endl;
 			} else if (nwords==1) {
 				if (mpi_id==0) {
 					if (image_pixel_data_list[0]->extended_mask_n_neighbors[mask_i]==-1) cout << "number of neighbor pixels for extended mask: emask_n_neighbors = all" << endl;
 					else cout << "number of neighbor pixels for extended mask: emask_n_neighbors = " << image_pixel_data_list[0]->extended_mask_n_neighbors[mask_i] << endl;
 					int npix;
-					if (n_bands > 0) npix = image_pixel_data_list[0]->get_size_of_extended_mask(mask_i);
+					if (n_data_bands > 0) npix = image_pixel_data_list[0]->get_size_of_extended_mask(mask_i);
 					cout << "number of pixels in extended mask: " << npix << endl;
 				}
 			} else Complain("must specify either zero or one argument for emask_n_neighbors");
@@ -14897,15 +14897,15 @@ void QLens::process_commands(bool read_file)
 				set_switch(use_non_negative_least_squares,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="use_fnnls")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use non-negative least squares solver: " << display_switch(use_fnnls) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_fnnls' command; must specify 'on' or 'off'");
-				set_switch(use_fnnls,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
+		//else if (words[0]=="use_fnnls")
+		//{
+			//if (nwords==1) {
+				//if (mpi_id==0) cout << "Use non-negative least squares solver: " << display_switch(use_fnnls) << endl;
+			//} else if (nwords==2) {
+				//if (!(ws[1] >> setword)) Complain("invalid argument to 'use_fnnls' command; must specify 'on' or 'off'");
+				//set_switch(use_fnnls,setword);
+			//} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		//}
 		else if (words[0]=="nnls_it")
 		{
 			int param;
@@ -15321,7 +15321,7 @@ void QLens::process_commands(bool read_file)
 			*/
 			//test_inverts();
 		//} else if (words[0]=="test2") {
-			//if (n_bands==0) Complain("image pixel data not loaded");
+			//if (n_data_bands==0) Complain("image pixel data not loaded");
 			//if (nwords < 8) Complain("need 6 args");
 			//double xi0, xistep, qi, theta_i, xc_i, yc_i;
 			//int maxit = 100;
@@ -15634,7 +15634,7 @@ void QLens::process_commands(bool read_file)
 			}
 			update_anchored_parameters_and_redshift_data(); // For any lens that is anchored to the foreground source
 		} else if (words[0]=="isofit") {
-			if (n_bands==0) Complain("image pixel data not loaded");
+			if (n_data_bands==0) Complain("image pixel data not loaded");
 			if (nwords < 8) Complain("need 6 args");
 			double xi0, xistep, qi, theta_i, xc_i, yc_i;
 			int maxit = 100;

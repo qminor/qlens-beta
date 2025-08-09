@@ -369,7 +369,8 @@ QLens::QLens() : UCMC(), ModelParams()
 	sim_err_td = 1;
 	sim_err_shear = 0.1;
 
-	n_bands = 0;
+	n_model_bands = 1; // There can be one or more model bands to generate mock data, even if there are no "data" bands (i.e. no image data has been loaded)
+	n_data_bands = 0;
 	image_pixel_data_list = NULL;
 	image_pixel_grids = NULL;
 	srcgrids = NULL;
@@ -399,7 +400,7 @@ QLens::QLens() : UCMC(), ModelParams()
 	natural_neighbor_interpolation = true; // if false, uses 3-point interpolation
 	inversion_method = DENSE;
 	use_non_negative_least_squares = false;
-	use_fnnls = false;
+	//use_fnnls = false;
 	max_nnls_iterations = 1000;
 	nnls_tolerance = 1e-6;
 	parallel_mumps = false;
@@ -751,7 +752,8 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	image_data = NULL;
 	weak_lensing_data.input(lens_in->weak_lensing_data);
 
-	n_bands = 0;
+	n_model_bands = 1; // There can be one or more model bands to generate mock data, even if there are no "data" bands (i.e. no image data has been loaded)
+	n_data_bands = 0;
 	image_pixel_data_list = NULL;
 	image_pixel_grids = NULL;
 	srcgrids = NULL;
@@ -810,7 +812,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	ray_tracing_method = lens_in->ray_tracing_method;
 	inversion_method = lens_in->inversion_method;
 	use_non_negative_least_squares = lens_in->use_non_negative_least_squares;
-	use_fnnls = lens_in->use_fnnls;
+	//use_fnnls = lens_in->use_fnnls;
 	max_nnls_iterations = lens_in->max_nnls_iterations;
 	nnls_tolerance = lens_in->nnls_tolerance;
 	parallel_mumps = lens_in->parallel_mumps;
@@ -1949,15 +1951,34 @@ int QLens::add_new_extended_src_redshift(const double zs, const int src_i, const
 			if (pixellated_src_redshift_idx[j] >= znum) pixellated_src_redshift_idx[j]++;
 		}
 		if (n_extended_src_redshifts==1) {
-			image_pixel_grids = new ImagePixelGrid*[1];
-			image_pixel_grids[0] = NULL;
+			if (n_image_pixel_grids > 0) die("there shouldn't be any image pixel grids yet!");
+			image_pixel_grids = new ImagePixelGrid*[n_model_bands];
+			for (i=0; i < n_model_bands; i++) {
+				image_pixel_grids[i] = NULL;
+			}
+			n_image_pixel_grids = n_model_bands;
 		} else {
-			ImagePixelGrid** new_image_pixel_grid = new ImagePixelGrid*[n_extended_src_redshifts];
-			for (i=0; i < znum; i++) new_image_pixel_grid[i] = image_pixel_grids[i];
-			for (i=znum; i < n_extended_src_redshifts-1; i++) new_image_pixel_grid[i+1] = image_pixel_grids[i];
-			new_image_pixel_grid[znum] = NULL;
+			ImagePixelGrid** new_image_pixel_grid = new ImagePixelGrid*[n_image_pixel_grids+n_model_bands];
+			int i_old, istart, istart_old, znum_j, znum_j_old;
+			for (j=0; j < n_model_bands; j++) {
+				istart = j*n_extended_src_redshifts;
+				istart_old = j*(n_extended_src_redshifts-1);
+				znum_j = istart+znum;
+				znum_j_old = istart_old+znum;
+				for (i=istart, i_old=istart_old; i < znum_j; i++, i_old++) new_image_pixel_grid[i] = image_pixel_grids[i_old];
+				for (i=znum_j, i_old=znum_j_old; i < istart+n_extended_src_redshifts-1; i++, i_old++) new_image_pixel_grid[i+1] = image_pixel_grids[i_old];
+				new_image_pixel_grid[znum_j] = NULL;
+			}
 			delete[] image_pixel_grids;
 			image_pixel_grids = new_image_pixel_grid;
+			n_image_pixel_grids = n_model_bands*n_extended_src_redshifts;
+
+			//ImagePixelGrid** new_image_pixel_grid = new ImagePixelGrid*[n_extended_src_redshifts];
+			//for (i=0; i < znum; i++) new_image_pixel_grid[i] = image_pixel_grids[i];
+			//for (i=znum; i < n_extended_src_redshifts-1; i++) new_image_pixel_grid[i+1] = image_pixel_grids[i];
+			//new_image_pixel_grid[znum] = NULL;
+			//delete[] image_pixel_grids;
+			//image_pixel_grids = new_image_pixel_grid;
 		}
 	}
 	return znum;
@@ -3532,13 +3553,12 @@ void QLens::remove_psf(int psf_number)
 	PSF** newlist;
 	if (n_psf > 1) {
 		newlist = new PSF*[n_psf-1];
-	}
-
-	int i,j;
-	for (i=0, j=0; i < n_psf; i++) {
-		if (i != psf_number) {
-			newlist[j] = psf_list[i];
-			j++;
+		int i,j;
+		for (i=0, j=0; i < n_psf; i++) {
+			if (i != psf_number) {
+				newlist[j] = psf_list[i];
+				j++;
+			}
 		}
 	}
 
@@ -3554,41 +3574,40 @@ void QLens::remove_psf(int psf_number)
 
 void QLens::add_image_pixel_data()
 {
-	ImagePixelData** newlist = new ImagePixelData*[n_psf+1];
-	if (n_bands > 0) {
-		for (int i=0; i < n_bands; i++) {
+	ImagePixelData** newlist = new ImagePixelData*[n_data_bands+1];
+	if (n_data_bands > 0) {
+		for (int i=0; i < n_data_bands; i++) {
 			newlist[i] = image_pixel_data_list[i];
 		}
 		delete[] image_pixel_data_list;
 	}
 
-	newlist[n_bands] = new ImagePixelData(); 
-	newlist[n_bands]->set_lens(this);
+	newlist[n_data_bands] = new ImagePixelData(); 
+	newlist[n_data_bands]->set_lens(this);
 
-	n_bands++;
+	n_data_bands++;
 	image_pixel_data_list = newlist;
 }
 
 void QLens::remove_image_pixel_data(int band_number)
 {
-	if ((n_bands==0) or (band_number >= n_bands)) return;
+	if ((n_data_bands==0) or (band_number >= n_data_bands)) return;
 	ImagePixelData** newlist;
-	if (n_bands > 1) {
-		newlist = new ImagePixelData*[n_bands-1];
-	}
-
-	int i,j;
-	for (i=0, j=0; i < n_bands; i++) {
-		if (i != band_number) {
-			newlist[j] = image_pixel_data_list[i];
-			j++;
+	if (n_data_bands > 1) {
+		newlist = new ImagePixelData*[n_data_bands-1];
+		int i,j;
+		for (i=0, j=0; i < n_data_bands; i++) {
+			if (i != band_number) {
+				newlist[j] = image_pixel_data_list[i];
+				j++;
+			}
 		}
 	}
 
 	delete image_pixel_data_list[band_number];
 	delete[] image_pixel_data_list;
-	n_bands--;
-	if (n_bands > 0) {
+	n_data_bands--;
+	if (n_data_bands > 0) {
 		image_pixel_data_list = newlist;
 	} else {
 		image_pixel_data_list = NULL;
@@ -7108,7 +7127,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 
 	fitmodel->borrowed_image_data = true; // this is so we don't have to needlessly copy the data and masks every time we do a fit
 	if (source_fit_mode != Point_Source) {
-		fitmodel->n_bands = n_bands;
+		fitmodel->n_data_bands = n_data_bands;
 		fitmodel->image_pixel_data_list = image_pixel_data_list;
 		fitmodel->load_pixel_grid_from_data();
 	}
@@ -12064,7 +12083,7 @@ bool QLens::create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, con
 	if (src_i < 0) { warn("no pixellated source corresponding to given redshift has been created"); return false; }
 
 	ImagePixelData *image_pixel_data;
-	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	if (n_data_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
 	else image_pixel_data = NULL;
 
 	bool at_least_one_lensed_src = false;
@@ -12186,7 +12205,7 @@ bool QLens::create_sourcegrid_delaunay(const int src_i, const bool use_mask, con
 	int zsrc_i = pixellated_src_redshift_idx[src_i];
 
 	ImagePixelData *image_pixel_data;
-	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	if (n_data_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
 	else image_pixel_data = NULL;
 
 	double xmin,xmax,ymin,ymax;
@@ -12234,7 +12253,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	if (delaunay_srcgrids[src_i]==NULL) die("Delaunay source grid should not be NULL!"); // just for debugging; remove this line later
 
 	ImagePixelData *image_pixel_data;
-	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	if (n_data_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
 	else image_pixel_data = NULL;
 
 	double *srcpts_x, *srcpts_y;
@@ -12526,7 +12545,7 @@ bool QLens::create_lensgrid_cartesian(const int zsrc_i, const int pixlens_i, con
 	if (zsrc_i >= n_extended_src_redshifts) die("image grid index does not exist");
 
 	ImagePixelData *image_pixel_data;
-	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	if (n_data_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
 	else image_pixel_data = NULL;
 
 	double xmin,xmax,ymin,ymax;
@@ -12821,10 +12840,10 @@ void QLens::find_source_centroid(const int zsrc_i, double& xc_approx, double& yc
 bool QLens::load_image_surface_brightness_grid(const int band_i, string image_pixel_filename_root, const int hdu_indx, const bool show_fits_header)
 {
 	bool first_data_img = false;
-	if (band_i > n_bands) return false;
-	if (band_i==n_bands) {
+	if (band_i > n_data_bands) return false;
+	if (band_i==n_data_bands) {
 		add_image_pixel_data();
-		if (n_bands==1) first_data_img = true;
+		if (n_data_bands==1) first_data_img = true;
 	}
 
 	ImagePixelData *image_pixel_data = image_pixel_data_list[band_i];
@@ -12914,7 +12933,7 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 	if ((plot_foreground_only) and (omit_foreground)) { warn("cannot omit both foreground and lensed sources when plotting"); return false; }
 
 	ImagePixelData *image_pixel_data;
-	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	if (n_data_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
 	else image_pixel_data = NULL;
 
 	bool use_data = true;
@@ -13167,14 +13186,14 @@ bool QLens::plot_lensed_surface_brightness(string imagefile, bool output_fits, b
 				}
 			}
 		}
-		if (n_bands==0) {
+		if (n_data_bands==0) {
 			add_image_pixel_data();
 		}
 		image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
 		image_pixel_data->load_from_image_grid(image_pixel_grid);
 		if (specific_zsrc_i < 0) specific_zsrc_i = 0;
 		image_pixel_grid->assign_mask_pointers((*image_pixel_data),specific_zsrc_i); // this is just to give image_pixel_grid the mask pointers from image_pixel_data
-		if (n_bands==1) {
+		if (n_data_bands==1) {
 			// in case an image_pixel_grid has already been created (e.g. when making mock data)
 			for (int i=0; i < n_extended_src_redshifts; i++) {
 				image_pixel_grids[i]->set_image_pixel_data(image_pixel_data_list[0], 0); // mask index = 0, make this better?
@@ -13278,7 +13297,7 @@ int QLens::get_shapelet_nn(const int zsrc_i)
 bool QLens::load_pixel_grid_from_data()
 {
 	bool loaded_new_grid = false;
-	if (n_bands==0) { warn("No image data have been loaded"); return false; }
+	if (n_data_bands==0) { warn("No image data have been loaded"); return false; }
 	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		//if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
 		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
@@ -13300,7 +13319,7 @@ bool QLens::load_pixel_grid_from_data()
 
 void QLens::plot_image_pixel_grid(const int zsrc_i)
 {
-	if (n_bands==0) { warn("No image data have been loaded"); return; }
+	if (n_data_bands==0) { warn("No image data have been loaded"); return; }
 	if (image_pixel_grids == NULL) { warn("No extended sources have been created"); return; }
 	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		//if (mpi_id==0) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
@@ -13320,7 +13339,7 @@ void QLens::plot_image_pixel_grid(const int zsrc_i)
 
 double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool verbal, const bool zero_verbal)
 {
-	if (n_bands==0) { warn("No image data have been loaded"); return -1e30; }
+	if (n_data_bands==0) { warn("No image data have been loaded"); return -1e30; }
 	//if ((n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		//if ((mpi_id==0) and (verbal)) cout << "NOTE: automatically generating pixellated source object at zsrc=" << source_redshift << endl;
 		//add_pixellated_source(source_redshift); // Note, even if in sbprofile or shapelet mode, we'll still need a srcgrid object if we're modeling point images with PSF's
@@ -13373,14 +13392,14 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, const int ranchisq_i)
 {
 	// This function is too long, and should be further broken into a bunch of smaller functions.
-	if (n_bands==0) { warn("No image data have been loaded"); return -1e30; }
+	if (n_data_bands==0) { warn("No image data have been loaded"); return -1e30; }
 	if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift);
 	else if (n_extended_src_redshifts == 0) {
 		add_new_extended_src_redshift(source_redshift,-1,false);
 	}
 
 	ImagePixelData *image_pixel_data;
-	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	if (n_data_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
 	else image_pixel_data = NULL;
 
 	if (image_pixel_grids == NULL) { warn("No image surface brightness grid has been generated"); return -1e30; }
@@ -14235,7 +14254,7 @@ void QLens::add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_
 
 
 	ImagePixelData *image_pixel_data;
-	if (n_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
+	if (n_data_bands > 0) image_pixel_data = image_pixel_data_list[0]; // temporary until I sort out the band stuff
 	else image_pixel_data = NULL;
 
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
@@ -14574,8 +14593,8 @@ QLens::~QLens()
 	}
 	if ((image_data != NULL) and (borrowed_image_data==false)) delete[] image_data;
 	if ((image_pixel_data_list != NULL) and (borrowed_image_data==false)) {
-		if (n_bands > 0) {
-			for (i=0; i < n_bands; i++) {
+		if (n_data_bands > 0) {
+			for (i=0; i < n_data_bands; i++) {
 				if (image_pixel_data_list[i] != NULL) delete image_pixel_data_list[i];
 			}
 			delete[] image_pixel_data_list;
