@@ -12527,6 +12527,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	} else {
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid has n_pixels=" << npix << endl;
 		delaunay_srcgrids[src_i]->create_srcpixel_grid(srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y,find_invmag,zsrc_i);
+		double edge_sum = delaunay_srcgrids[src_i]->sum_edge_sqrlengths(avg_sb);
+		if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid edge_sum: " << edge_sum << endl;
 	}
 
 	delete[] include_in_delaunay_grid;
