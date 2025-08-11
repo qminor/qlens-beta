@@ -13150,7 +13150,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	}
 }
 
-void ImagePixelGrid::fill_surface_brightness_vector()
+void ImagePixelGrid::set_surface_brightness_vector_to_data()
 {
 	int column_j = 0;
 	int i,j;
@@ -18230,20 +18230,14 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const b
 		for (i=0; i < n_amps; i++) {
 			row = i*image_npixels;
 			for (j=0; j < image_npixels; j++) {
+				if (use_noise_map) covinv = imgpixel_covinv_vector[j];
 				if (Lmatrix_dense[j][i] != 0.0) {
-					if (use_noise_map) covinv = imgpixel_covinv_vector[j];
 					pix_i = image_pixel_grid->active_image_pixel_i[j];
 					pix_j = image_pixel_grid->active_image_pixel_j[j];
 					img_index_fgmask = image_pixel_grid->pixel_index_fgmask[pix_i][pix_j];
-					//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - sbprofile_surface_brightness[j])/cov_inverse;
-					//Dvector[i] += Lmatrix_dense[j][i]*(image_surface_brightness[j] - image_pixel_grid->foreground_surface_brightness[pix_i][pix_j])/cov_inverse;
-					if ((zero_sb_fgmask_prior) and (include_fgmask_in_inversion) and (image_pixel_data->foreground_mask[pix_i][pix_j]) and (!image_pixel_data->in_mask[assigned_mask[zsrc_i]][pix_i][pix_j])) ;  // "force" the pixels in the extended mask region to fit to zero surface brightness (note, this only works if we're not including an MGE in the the Lmatrix to fit foregorund!)
-					else {
-						sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
-						if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_ptsrc > 0)) sb_adj -= point_image_surface_brightness[j];
-						Dvector[i] += Lmatrix_dense[j][i]*sb_adj*covinv;
-						//if (sbprofile_surface_brightness[img_index_fgmask]*0.0 != 0.0) die("FUCK");
-					}
+					sb_adj = image_surface_brightness[j] - sbprofile_surface_brightness[img_index_fgmask];
+					if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_ptsrc > 0)) sb_adj -= point_image_surface_brightness[j];
+					Dvector[i] += Lmatrix_dense[j][i]*sb_adj*covinv;
 				}
 #ifdef USE_MKL
 				Ltrans_stacked[row+j] = Lmatrix_dense[j][i]*sqrt(covinv); // hack to get the cov_inverse in there

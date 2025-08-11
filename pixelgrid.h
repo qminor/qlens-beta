@@ -641,7 +641,7 @@ class ImagePixelGrid : private Sort
 
 	double find_approx_source_size(double& xcavg, double& ycavg, const bool verbal = false);
 	void find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal, double& sig, double& scaled_maxdist);
-	void fill_surface_brightness_vector();
+	void set_surface_brightness_vector_to_data();
 	void plot_grid(string filename, bool show_inactive_pixels);
 	void set_lens(QLens* lensptr) { lens = lensptr; }
 	void set_cartesian_srcgrid(SourcePixelGrid* source_pixel_ptr) { cartesian_srcgrid = source_pixel_ptr; }

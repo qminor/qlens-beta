@@ -13737,7 +13737,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					if (n_amps > source_npixels) cout << "Number of total amplitudes: " << n_amps << endl;
 				}
 
-				image_pixel_grids[zsrc_i]->fill_surface_brightness_vector(); // note that image_pixel_grids[0] just has the data pixel values stored in it
+				image_pixel_grids[zsrc_i]->set_surface_brightness_vector_to_data(); // note that image_pixel_grids[0] just has the data pixel values stored in it
 				PSF_convolution_Lmatrix_dense(zsrc_i,verbal);
 				if (zsrc_i==0) {
 					// currently only allowing point sources with first image grid...will extend later
@@ -14066,7 +14066,7 @@ bool QLens::generate_and_invert_lensing_matrix_cartesian(const int zsrc_i, const
 	} else {
 		PSF_convolution_Lmatrix(zsrc_i,verbal);
 	}
-	image_pixel_grids[zsrc_i]->fill_surface_brightness_vector(); // note that image_pixel_grids[zsrc_i] just has the data pixel values stored in it
+	image_pixel_grids[zsrc_i]->set_surface_brightness_vector_to_data(); // note that image_pixel_grids[zsrc_i] just has the data pixel values stored in it
 	if (!ignore_foreground_in_chisq) {
 		calculate_foreground_pixel_surface_brightness(zsrc_i,true);
 		store_foreground_pixel_surface_brightness(zsrc_i);
@@ -14134,7 +14134,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int zsrc_i, const 
 	} else {
 		PSF_convolution_Lmatrix(zsrc_i,verbal);
 	}
-	image_pixel_grids[zsrc_i]->fill_surface_brightness_vector(); // note that image_pixel_grids[zsrc_i] just has the data pixel values stored in it
+	image_pixel_grids[zsrc_i]->set_surface_brightness_vector_to_data(); // note that image_pixel_grids[zsrc_i] just has the data pixel values stored in it
 	if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 		// Note that if image fluxes are included as linear parameters, we don't need to add point images to the SB separately because
 		// they will be included in the Lmatrix. Otherwise, we add them using the code below.
@@ -14203,7 +14203,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int zsrc_i, const 
 		} else {
 			PSF_convolution_Lmatrix(zsrc_i,verbal);
 		}
-		image_pixel_grids[zsrc_i]->fill_surface_brightness_vector(); // note that image_pixel_grids[zsrc_i] just has the data pixel values stored in it
+		image_pixel_grids[zsrc_i]->set_surface_brightness_vector_to_data(); // note that image_pixel_grids[zsrc_i] just has the data pixel values stored in it
 		if (!ignore_foreground_in_chisq) {
 			calculate_foreground_pixel_surface_brightness(zsrc_i,true);
 			store_foreground_pixel_surface_brightness(zsrc_i);
