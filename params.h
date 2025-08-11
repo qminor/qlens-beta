@@ -261,7 +261,7 @@ struct DerivedParam
 				} else {
 					chisq_out = lens_in->chisq_single_evaluation(true,false,false,false);
 				}
-			}
+			} else chisq_out = -1e30;
 			return chisq_out;
 		}
 		else die("no user defined function yet");

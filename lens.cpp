@@ -233,7 +233,6 @@ QLens::QLens() : UCMC(), ModelParams()
 	assigned_mask = NULL;
 	extended_src_zfactors = NULL;
 	extended_src_beta_factors = NULL;
-	n_image_pixel_grids = 0;
 	n_extended_src_redshifts = 0;
 	sbprofile_redshift_idx = NULL;
 	pixellated_src_redshift_idx = NULL;
@@ -632,7 +631,6 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	assigned_mask = NULL;
 	extended_src_zfactors = NULL;
 	extended_src_beta_factors = NULL;
-	n_image_pixel_grids = lens_in->n_image_pixel_grids;
 	n_extended_src_redshifts = lens_in->n_extended_src_redshifts;
 	sbprofile_redshift_idx = NULL;
 	pixellated_src_redshift_idx = NULL;
@@ -1016,7 +1014,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 	// eparam can be either q (axis ratio) or epsilon (ellipticity) depending on the ellipticity mode
 	// if using ellipticity components, (eparam,theta) are actually (e1,e2)
 	
-	LensProfile* new_lens;
+	LensProfile* new_lens = NULL;
 
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
@@ -1082,6 +1080,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 		default:
 			die("Lens type not recognized");
 	}
+	if (new_lens==NULL) die("new_lens pointer was not set when creating lens");
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 	add_lens(new_lens,zl,zs);
 }
@@ -4714,16 +4713,14 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 	avgkap_scaled_to_primary_lensplane = 0;
 	double k0deriv=0;
 	//double avgkap_scaled2 = 0;
-	double kappa0;
+	double kappa0=0;
 	if (include_recursive_lensing) {
+		lensvector x;
+		x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
+		x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
+		kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 		if (zlsub < zlprim) {
-			//double kappa0, shear_tot, shear_angle;
-			lensvector x;
-			x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
-			x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
-			kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-			shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-
 			int i1,i2;
 			i1 = lens_redshift_idx[primary_lens_number];
 			i2 = lens_redshift_idx[perturber_lens_number];
@@ -4759,11 +4756,6 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 			//cout << "blergh=" << blergh2 << " approx=" << blergh2_approx << " better_approx=" << blergh2_approx0 << endl;
 		} else if (zlsub > zlprim) {
 			//double kappa0, shear_tot, shear_angle;
-			lensvector x;
-			x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
-			x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
-			kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-			shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			int i1,i2;
 			i1 = lens_redshift_idx[primary_lens_number];
 			i2 = lens_redshift_idx[perturber_lens_number];
@@ -11292,6 +11284,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 			}
 		}
 	} else {
+		chisq=0;
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (use_ansi_characters) cout << "\033[2A" << flush;
 			if ((fitmodel->chisq_it % chisq_display_frequency == 0) and (include_imgpos_chisq)) {
@@ -12404,7 +12397,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		else if (n_src_centroids == 0) n_src_centroids = npix_in_lensing_mask;
 
 		int data_reduce_factor;
-		int icent_offset;
+		int icent_offset=0;
 		double xrand;
 		if (!use_weighted_initial_centroids) {
 			int ncorig = n_src_centroids;
