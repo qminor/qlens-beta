@@ -3069,6 +3069,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sple");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 7; // this does not include redshift
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3177,6 +3179,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model dpie");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3432,6 +3436,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model nfw");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3593,6 +3599,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model tnfw");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3715,6 +3723,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						//if (p3 >= p2) Complain("core radius (p3) must be smaller than scale radius (p2) for model cnfw");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3812,6 +3822,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model expdisk");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3905,6 +3917,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model tophat");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4005,6 +4019,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[index] >> yc)) Complain("invalid y-center parameter for model kspline");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4098,6 +4114,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model hern");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4225,6 +4243,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[10] >> yc)) Complain("invalid y-center parameter for model corecusp");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 9;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4409,6 +4429,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sersic");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4515,6 +4537,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[11] >> yc)) Complain("invalid y-center parameter for model dsersic");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 10;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4618,6 +4642,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[9] >> yc)) Complain("invalid y-center parameter for model csersic");
 							}
 						}
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+
 						default_nparams = 8;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
