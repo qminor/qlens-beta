@@ -20902,7 +20902,7 @@ void QLens::matrix_determinant_dense(double& logdet, const dvector& matrix_in, c
 	if (status > 0) warn("cholesky decomposition of dense matrix was not successful; matrix is not positive definite");
 	Cholesky_logdet_packed(matrix_packed_copy,logdet,npixels);
 #else
-	repack_matrix_lower(matrix_packed_copy,ntot);
+	repack_matrix_lower(matrix_packed_copy,npixels);
 
 	bool status = Cholesky_dcmp_packed(matrix_packed_copy,npixels);
 	if (!status) die("Cholesky decomposition failed");
