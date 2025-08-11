@@ -233,6 +233,7 @@ QLens::QLens() : UCMC(), ModelParams()
 	assigned_mask = NULL;
 	extended_src_zfactors = NULL;
 	extended_src_beta_factors = NULL;
+	n_image_pixel_grids = 0;
 	n_extended_src_redshifts = 0;
 	sbprofile_redshift_idx = NULL;
 	pixellated_src_redshift_idx = NULL;
@@ -631,6 +632,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	assigned_mask = NULL;
 	extended_src_zfactors = NULL;
 	extended_src_beta_factors = NULL;
+	n_image_pixel_grids = lens_in->n_image_pixel_grids;
 	n_extended_src_redshifts = lens_in->n_extended_src_redshifts;
 	sbprofile_redshift_idx = NULL;
 	pixellated_src_redshift_idx = NULL;
