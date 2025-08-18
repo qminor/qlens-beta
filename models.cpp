@@ -1038,6 +1038,7 @@ double NFW::calculate_scaled_mass_3d(const double r)
 double NFW::concentration_prior()
 {
 	double ds, r200;
+	ds = ks * sigma_cr / rs;
 	qlens->cosmo.get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 	c200 = r200/rs_kpc;
 	double log_medc = log(qlens->cosmo.median_concentration_dutton(m200,zlens));

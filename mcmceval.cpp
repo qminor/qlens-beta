@@ -1983,7 +1983,7 @@ void McmcEval::MkHistTest(double al, double ah, const int N, const char *name, i
 	double smoothHix=0.0;
 	const int smoothSize = 1000;
 	const double res = 5.0;
-	int tot;
+	int tot=0;
 	smoothWidth = 1.0;
 	
 	if (flag&LOG)

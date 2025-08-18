@@ -118,7 +118,7 @@ class SourcePixel
 	void find_nearest_two_cells(SourcePixel* &cellptr1, SourcePixel* &cellptr2, const int& side);
 	SourcePixel* find_corner_cell(const int i, const int j);
 
-	void assign_surface_brightness_from_analytic_source(const int zsrc_i=-1);
+	void assign_surface_brightness_from_analytic_source(const int imggrid_i=-1);
 	void assign_surface_brightness_from_delaunay_grid(DelaunaySourceGrid* delaunay_grid, const bool add_sb = false);
 	void update_surface_brightness(int& index);
 	void fill_surface_brightness_vector();
@@ -333,7 +333,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
 
 	void find_pixel_magnifications();
 
-	void assign_surface_brightness_from_analytic_source(const int zsrc_i=-1);
+	void assign_surface_brightness_from_analytic_source(const int imggrid_i=-1);
 	void fill_surface_brightness_vector();
 	void update_surface_brightness(int& index);
 	double sum_edge_sqrlengths(const double min_sb);
@@ -421,7 +421,7 @@ class LensPixelGrid : public DelaunayGrid, public ModelParams
 
 	void fill_potential_correction_vector();
 	void update_potential(int& index);
-	void assign_potential_from_analytic_lens(const int zsrc_i, const bool add_potential);
+	void assign_potential_from_analytic_lens(const int imggrid_i, const bool add_potential);
 	void assign_potential_from_analytic_lenses();
 
 	double interpolate_potential(const double x, const double y, const int thread = 0);
@@ -570,6 +570,7 @@ class ImagePixelGrid : private Sort
 	int xy_N; // gives x_N*y_N if the entire pixel grid is used
 	double pixel_xlength, pixel_ylength;
 	inline bool test_if_between(const double& p, const double& a, const double& b);
+	int band_number;
 	int src_redshift_index; // each ImagePixelGrid object is associated with a specific redshift
 	double* imggrid_zfactors;
 	double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
@@ -588,13 +589,13 @@ class ImagePixelGrid : private Sort
 	double max_component(const lensvector&);
 
 	public:
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false, int src_redshift_index = -1);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false, const int band_number_in = 0, int src_redshift_index = -1);
 	//ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in, const int src_redshift_index = -1);
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_fgmask = false, const int src_redshift_index = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_fgmask = false, const int band_number_in = 0, const int src_redshift_index = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	void update_zfactors_and_beta_factors();
-	void set_include_in_Lmatrix(const int zsrc_i);
+	void set_include_in_Lmatrix(const int imggrid_i);
 	void set_include_only_one_pixsrc_in_Lmatrix();
 
 	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);

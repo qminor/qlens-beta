@@ -621,6 +621,13 @@ struct ParamSettings
 		}
 		transform_stepsizes();
 	}
+	void reset_stepsizes_no_transform(double *stepsizes_in)
+	{
+		for (int i=0; i < nparams; i++) {
+			stepsizes[i] = stepsizes_in[i];
+			auto_stepsize[i] = false;
+		}
+	}
 	void set_stepsize(const int i, const double step)
 	{
 		if (i >= nparams) die("parameter chosen for stepsize is greater than total number of parameters (%i vs %i)",i,nparams);

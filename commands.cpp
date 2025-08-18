@@ -998,12 +998,15 @@ void QLens::process_commands(bool read_file)
 						cout << "fit stepsizes\n"
 							"fit stepsizes <param_num/name> <stepsize>\n"
 							"fit stepsizes scale <factor>\n\n"
+							"fit stepsizes from_chain <factor>\n\n"
 							"Define initial stepsizes for the chi-square minimization methods (simplex or powell). Values are\n"
 							"automatically chosen for the stepsizes by default, but can be customized. Type 'fit stepsizes' to\n"
 							"see the currest list of fit parameters. For example, 'fit stepsizes 5 0.3' sets the initial stepsize\n"
 							"for parameter 5 to 0.3. You can also scale all the stepsizes by a certain factor, e.g. 'fit\n"
-							"stepsize scale 5' multiplies all stepsizes by 5. To reset all stepsizes to their automatic values,\n"
-							"type 'fit stepsize reset'.\n";
+							"stepsize scale 5' multiplies all stepsizes by 5. If you have an MCMC/nested sampling chain, then the\n"
+							"argument 'from_chain' will use the 95\% credible intervals in each parameter (divided by two; this\n"
+							"corresponds to the 2*sigma values for a Gaussian posterior) to set the stepsizes, times the scale\n"
+							"factor [factor]. To reset all stepsizes to their automatic values, type 'fit stepsize reset'.\n";
 					else if (words[2]=="params")
 						cout << "fit params [-nosci]\n"
 							"fit params update <param_num/name> <param_val>\n"
@@ -4824,7 +4827,6 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 						} else {
 							create_and_add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, 0, defx, defy, 0, 0, 0, 0);
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
 						}
@@ -5756,6 +5758,20 @@ void QLens::process_commands(bool read_file)
 				}	
 			}
 
+			int band = 0;
+			for (int i=1; i < nwords; i++) {
+				int pos;
+				if ((pos = words[i].find("band=")) != string::npos) {
+					if (update_specific_parameters) Complain("source band number cannot be updated (remove it and create a new one)");
+					string bstring = words[i].substr(pos+5);
+					stringstream bstr;
+					bstr << bstring;
+					if (!(bstr >> band)) Complain("incorrect format for band number");
+					if (band < 0) Complain("band number cannot be negative");
+					remove_word(i);
+					break;
+				}
+			}	
 
 			if (update_specific_parameters) ; // the updating has already been done, so just continue to the next command
 			else if (nwords==1) {
@@ -5904,7 +5920,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-						add_source_object(GAUSSIAN, is_lensed, zs_in, emode, sbmax, sig, 0, 0, q, theta, xc, yc);
+						add_source_object(GAUSSIAN, is_lensed, band, zs_in, emode, sbmax, sig, 0, 0, q, theta, xc, yc);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6017,7 +6033,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 						if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amplitudes may have changed, will redo FFT setup here
 					} else {
-						add_shapelet_source(is_lensed, zs_in, amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
+						add_shapelet_source(is_lensed, band, zs_in, amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
@@ -6095,7 +6111,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 						if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of mge amplitudes may have changed, will redo FFT setup here
 					} else {
-						add_mge_source(is_lensed, zs_in, reg, amp0, sig_i, sig_f, q, theta, xc, yc, nmax, pmode);
+						add_mge_source(is_lensed, band, zs_in, reg, amp0, sig_i, sig_f, q, theta, xc, yc, nmax, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
@@ -6175,7 +6191,8 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-						add_source_object(SERSIC, is_lensed, zs_in, emode, s0, reff, 0, n, q, theta, xc, yc);
+						cout << "PMODE=" << pmode << endl;
+						add_source_object(SERSIC, is_lensed, band, zs_in, emode, s0, reff, 0, n, q, theta, xc, yc, 0, 0, pmode);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6267,7 +6284,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-						add_source_object(CORE_SERSIC, is_lensed, zs_in, emode, s0, reff, rc, n, q, theta, xc, yc, gamma, alpha);
+						add_source_object(CORE_SERSIC, is_lensed, band, zs_in, emode, s0, reff, rc, n, q, theta, xc, yc, gamma, alpha);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6357,7 +6374,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-						add_source_object(CORED_SERSIC, is_lensed, zs_in, emode, s0, reff, rc, n, q, theta, xc, yc);
+						add_source_object(CORED_SERSIC, is_lensed, band, zs_in, emode, s0, reff, rc, n, q, theta, xc, yc);
 
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
@@ -6450,7 +6467,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-						add_source_object(DOUBLE_SERSIC, is_lensed, zs_in, emode, s0, reff1, reff2, ds, q, theta, xc, yc, n1, n2); // super-awkward to use the "add_source_object" function for this....
+						add_source_object(DOUBLE_SERSIC, is_lensed, band, zs_in, emode, s0, reff1, reff2, ds, q, theta, xc, yc, n1, n2); // super-awkward to use the "add_source_object" function for this....
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6539,7 +6556,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-						add_source_object(sple, is_lensed, zs_in, emode, bs, s, 0, alpha, q, theta, xc, yc);
+						add_source_object(sple, is_lensed, band, zs_in, emode, bs, s, 0, alpha, q, theta, xc, yc);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6628,7 +6645,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-						add_source_object(dpie, is_lensed, zs_in, emode, bs, a, s, 0, q, theta, xc, yc);
+						add_source_object(dpie, is_lensed, band, zs_in, emode, bs, a, s, 0, q, theta, xc, yc);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6716,7 +6733,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-						add_source_object(nfw_SOURCE, is_lensed, zs_in, emode, s0, rs, 0, 0, q, theta, xc, yc);
+						add_source_object(nfw_SOURCE, is_lensed, band, zs_in, emode, s0, rs, 0, 0, q, theta, xc, yc);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6809,7 +6826,7 @@ void QLens::process_commands(bool read_file)
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-						add_multipole_source(is_lensed, zs_in, m, a_m, r0, theta, xc, yc, sine_term);
+						add_multipole_source(is_lensed, band, zs_in, m, a_m, r0, theta, xc, yc, sine_term);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
@@ -6853,7 +6870,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-						add_source_object(TOPHAT, is_lensed, zs_in, emode, sb, rad, 0, 0, q, theta, xc, yc);
+						add_source_object(TOPHAT, is_lensed, band, zs_in, emode, sb, rad, 0, 0, q, theta, xc, yc);
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6895,7 +6912,7 @@ void QLens::process_commands(bool read_file)
 							}
 						} else if (nwords == 6) Complain("must specify qx and f parameters together");
 					}
-					add_source_object(words[2].c_str(), is_lensed, zs_in, emode, q, theta, qx, f, xc, yc);
+					add_source_object(words[2].c_str(), is_lensed, band, zs_in, emode, q, theta, qx, f, xc, yc);
 					for (int i=0; i < fourier_nmodes; i++) {
 						sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 					}
@@ -7018,6 +7035,21 @@ void QLens::process_commands(bool read_file)
 					break;
 				}
 			}	
+			int band = 0;
+			for (int i=1; i < nwords; i++) {
+				int pos;
+				if ((pos = words[i].find("band=")) != string::npos) {
+					if (update_specific_parameters) Complain("pixellated source band number cannot be updated (remove it and create a new one)");
+					string bstring = words[i].substr(pos+5);
+					stringstream bstr;
+					bstr << bstring;
+					if (!(bstr >> band)) Complain("incorrect format for band number");
+					if (band < 0) Complain("band number cannot be negative");
+					remove_word(i);
+					break;
+				}
+			}	
+
 
 			if (update_specific_parameters) {
 				if (nwords > 2) {
@@ -7130,7 +7162,7 @@ void QLens::process_commands(bool read_file)
 					} else Complain("only one argument allowed for 'pixsrc clear' (number of pixellated source to remove)");
 				}
 				else if (words[1]=="add") {
-					add_pixellated_source(zsrc);
+					add_pixellated_source(zsrc,band);
 					pixsrc_number = n_pixellated_src-1; // for setting vary flags (below)
 					added_new_pixsrc = true;
 
@@ -8773,6 +8805,12 @@ void QLens::process_commands(bool read_file)
 							double fac;
 							if (!(ws[3] >> fac)) Complain("Invalid scale factor");
 							param_settings->scale_stepsizes(fac);
+						} else if (words[2]=="from_chain") {
+							double fac;
+							if (!(ws[3] >> fac)) Complain("Invalid scale factor");
+							dvector stepsizes(nparams);
+							if (get_stepsizes_from_percentiles(fac,stepsizes)==false) Complain("could not get stepsizes from percentiles");
+							param_settings->reset_stepsizes_no_transform(stepsizes.array());
 						} else {
 							int param_num;
 							double stepsize;
@@ -9939,12 +9977,12 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="assign_masks")
 			{
+				int znum=0;
 				if (nwords==2) {
 					if (mpi_id==0) print_mask_assignments();
 				} else if (nwords==3) {
-					int znum = 0;
 					if (!(ws[2] >> znum)) Complain("invalid source redshift index");
-					if (!assign_mask(znum,mask_i)) Complain("could not assign mask");
+					if (!assign_mask(band_i,znum,mask_i)) Complain("could not assign mask");
 				}
 			}
 			//else if (words[1]=="savesrc") // DEPRECATED
@@ -10406,7 +10444,7 @@ void QLens::process_commands(bool read_file)
 				}
 				if (src_i < 0) {
 					if (mpi_id==0) cout << "Generating pixellated source at corresponding redshift (zsrc=" << extended_src_redshifts[zsrc_i] << ")" << endl;
-					add_pixellated_source(extended_src_redshifts[zsrc_i]);
+					add_pixellated_source(extended_src_redshifts[zsrc_i],0);
 					src_i = 0;
 				}
 
@@ -10429,7 +10467,7 @@ void QLens::process_commands(bool read_file)
 						create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
 						if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
 					} else {
-						create_sourcegrid_cartesian(zsrc_i,verbal_mode,use_mask);
+						create_sourcegrid_cartesian(band_i,zsrc_i,verbal_mode,use_mask);
 						cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source(zsrc_i);
 						if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids[zsrc_i] != NULL)) {
 							cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid(delaunay_srcgrids[zsrc_i],true);
@@ -11130,7 +11168,7 @@ void QLens::process_commands(bool read_file)
 					if (set_title) plot_title = temp_title;
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
+						if ((replot) or (plot_lensed_surface_brightness("img_pixel",band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
 							//if ((subcomp) and (show_cc)) {
 								//if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
 							//}
@@ -11176,9 +11214,9 @@ void QLens::process_commands(bool read_file)
 						}
 					} else if (nwords == 3) {
 						if ((terminal==TEXT) or (plot_fits)) {
-							if (!replot) plot_lensed_surface_brightness(words[2],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
+							if (!replot) plot_lensed_surface_brightness(words[2],band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range2,contstring,cbstring);
 								else if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural",words[2],range2,contstring,cbstring);
@@ -11191,11 +11229,11 @@ void QLens::process_commands(bool read_file)
 					} else if (nwords == 4) {
 						if ((terminal==TEXT) or (plot_fits)) {
 							if (!replot) {
-								plot_lensed_surface_brightness(words[3],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
+								plot_lensed_surface_brightness(words[3],band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
 								if ((plotted_src) and (mpi_id==0) and (src_i >= 0)) cartesian_srcgrids[src_i]->plot_surface_brightness(words[2]);
 							}
 						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
+						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
 							if ((!replot) and (plotted_src) and (mpi_id==0) and (src_i >= 0)) { cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel"); }
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring,cbstring);
@@ -14297,9 +14335,10 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) {
 					if (image_pixel_data_list[0]->extended_mask_n_neighbors[mask_i]==-1) cout << "number of neighbor pixels for extended mask: emask_n_neighbors = all" << endl;
 					else cout << "number of neighbor pixels for extended mask: emask_n_neighbors = " << image_pixel_data_list[0]->extended_mask_n_neighbors[mask_i] << endl;
-					int npix;
-					if (n_data_bands > 0) npix = image_pixel_data_list[0]->get_size_of_extended_mask(mask_i);
-					cout << "number of pixels in extended mask: " << npix << endl;
+					if (n_data_bands > 0) {
+						int npix = image_pixel_data_list[0]->get_size_of_extended_mask(mask_i);
+						cout << "number of pixels in extended mask: " << npix << endl;
+					}
 				}
 			} else Complain("must specify either zero or one argument for emask_n_neighbors");
 		}
@@ -16167,7 +16206,7 @@ void QLens::process_commands(bool read_file)
 					ImagePixelData mockdata_t;
 
 					if (n_extended_src_redshifts==0) {
-						load_pixel_grid_from_data();
+						load_pixel_grid_from_data(0);
 					}
 					if (image_pixel_grids==NULL) Complain("image pixel grids could not be generated from given data and masks");
 					if (image_pixel_grids[0] != NULL) delete image_pixel_grids[0];

@@ -299,14 +299,14 @@ class Sersic : public SB_Profile
 {
 	friend class SersicLens;
 	private:
-	double s0, b, n;
+	double s0, s_eff, b, n;
 	double Reff; // effective radius
 
 	double sb_rsq(const double);
 
 	public:
 	Sersic() : SB_Profile() {}
-	Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in);
+	Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, QLens* qlens_in);
 	Sersic(const Sersic* sb_in);
 	~Sersic() {}
 

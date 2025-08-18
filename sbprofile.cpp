@@ -2480,15 +2480,19 @@ double Gaussian::length_scale()
 	return sig_x;
 }
 
-Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in)
+Sersic::Sersic(const double &s_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, QLens* qlens_in)
 {
 	model_name = "sersic";
 	sbtype = SERSIC;
-	setup_base_source_properties(7,3,true);
+	setup_base_source_properties(7,3,true,parameter_mode_in);
 	qlens = qlens_in;
 	n = n_in;
 	Reff = Reff_in;
-	s0 = s0_in;
+	if (parameter_mode==0) {
+		s0 = s_in;
+	} else {
+		s_eff = s_in;
+	}
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
 }
@@ -2496,6 +2500,7 @@ Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, c
 Sersic::Sersic(const Sersic* sb_in)
 {
 	s0 = sb_in->s0;
+	s_eff = sb_in->s_eff;
 	n = sb_in->n;
 	Reff = sb_in->Reff;
 	copy_base_source_data(sb_in);
@@ -2505,6 +2510,9 @@ Sersic::Sersic(const Sersic* sb_in)
 void Sersic::update_meta_parameters()
 {
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
+	if (parameter_mode==1) {
+		s0 = s_eff * exp(b);
+	}
 	//k = b*pow(1.0/Reff,1.0/n);
 	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
 	update_ellipticity_meta_parameters();
@@ -2512,7 +2520,11 @@ void Sersic::update_meta_parameters()
 
 void Sersic::assign_paramnames()
 {
-	paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
+	if (parameter_mode==0) {
+		paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
+	} else {
+		paramnames[0] = "s_eff"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "eff";
+	}
 	paramnames[1] = "Reff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
 	set_geometric_paramnames(sbprofile_nparams);
@@ -2520,7 +2532,11 @@ void Sersic::assign_paramnames()
 
 void Sersic::assign_param_pointers()
 {
-	param[0] = &s0;
+	if (parameter_mode==0) {
+		param[0] = &s0;
+	} else {
+		param[0] = &s_eff;
+	}
 	param[1] = &Reff;
 	param[2] = &n;
 	set_geometric_param_pointers(sbprofile_nparams);
@@ -2529,7 +2545,11 @@ void Sersic::assign_param_pointers()
 void Sersic::set_auto_stepsizes()
 {
 	int index = 0;
-	stepsizes[index++] = (s0 > 0) ? 0.1*s0 : 0.1; 
+	if (parameter_mode==0) {
+		stepsizes[index++] = (s0 > 0) ? 0.1*s0 : 0.1; 
+	} else {
+		stepsizes[index++] = (s_eff > 0) ? 0.1*s_eff : 0.1; 
+	}
 	stepsizes[index++] = 0.1; // arbitrary
 	stepsizes[index++] = 0.3; // arbitrary
 	set_geometric_param_auto_stepsizes(index);

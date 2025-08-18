@@ -418,9 +418,12 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int n_sb;
 	SB_Profile** sb_list;
 	int* sbprofile_redshift_idx;
+	int* sbprofile_band_number;
+	int* sbprofile_imggrid_idx;
 
 	int n_pixellated_src;
 	int* pixellated_src_redshift_idx;
+	int* pixellated_src_band;
 	ModelParams **srcgrids; // this is the base class for Delaunay and cartesian source grids
 	DelaunaySourceGrid **delaunay_srcgrids;
 	SourcePixelGrid **cartesian_srcgrids;
@@ -451,6 +454,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	int n_extended_src_redshifts;
 	double *extended_src_redshifts; // used for modeling extended sources 
+	int n_assigned_masks;
 	int *assigned_mask;
 	//int *extended_zsrc_group_size;
 	//int **extended_zsrc_group_src_index;
@@ -750,7 +754,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int shapelet_scale_mode;
 	double shapelet_max_scale;
 	double shapelet_window_scaling;
-	void plot_source_pixel_grid(const int zsrc_i, const char filename[]);
+	void plot_source_pixel_grid(const int imggrid_i, const char filename[]);
 
 	int n_image_pixel_grids;
 	ImagePixelGrid **image_pixel_grids;
@@ -784,8 +788,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	std::vector<double> *Lmatrix_rows;
 	std::vector<int> *Lmatrix_index_rows;
 
-	bool assign_pixel_mappings(const int zsrc_i, const bool potential_perturbations=false, const bool verbal=false);
-	void assign_foreground_mappings(const int zsrc_i, const bool use_data = true);
+	bool assign_pixel_mappings(const int imggrid_i, const bool potential_perturbations=false, const bool verbal=false);
+	void assign_foreground_mappings(const int imggrid_i, const bool use_data = true);
 	double *Dvector;
 	double *Dvector_cov;
 	double *Dvector_cov_copy;
@@ -876,36 +880,36 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 #endif
 
 	void convert_Lmatrix_to_dense();
-	void construct_Lmatrix_shapelets(const int zsrc_i);
-	void add_MGE_amplitudes_to_Lmatrix(const int zsrc_i);
-	void PSF_convolution_Lmatrix_dense(const int zsrc_i, const bool verbal=false);
-	void create_lensing_matrices_from_Lmatrix_dense(const int zsrc_i, const bool potential_perturbations=false, const bool verbal=false);
-	void get_source_regparam_ptr(const int zsrc_i, const int imggrid_include_i, double* &regparam);
+	void construct_Lmatrix_shapelets(const int imggrid_i);
+	void add_MGE_amplitudes_to_Lmatrix(const int imggrid_i);
+	void PSF_convolution_Lmatrix_dense(const int imggrid_i, const bool verbal=false);
+	void create_lensing_matrices_from_Lmatrix_dense(const int imggrid_i, const bool potential_perturbations=false, const bool verbal=false);
+	void get_source_regparam_ptr(const int imggrid_i, const int imggrid_include_i, double* &regparam);
 	void generate_Gmatrix();
 	void add_regularization_term_to_dense_Fmatrix(double *regparam, const bool potential_perturbations=false);
-	void add_MGE_regularization_terms_to_dense_Fmatrix(const int zsrc_i);
+	void add_MGE_regularization_terms_to_dense_Fmatrix(const int imggrid_i);
 	double calculate_regularization_prior_term(double *regparam_ptr, const bool potential_perturbations=false);
-	double calculate_MGE_regularization_prior_term(const int zsrc_i);
+	double calculate_MGE_regularization_prior_term(const int imggrid_i);
 
-	bool optimize_regularization_parameter(const int zsrc_i, const bool dense_Fmatrix=false, const bool verbal=false, const bool pre_srcgrid = false);
-	void setup_regparam_optimization(const int zsrc_i, const bool dense_Fmatrix=false);
-	void calculate_subpixel_sbweights(const int zsrc_i, const bool save_sbweights = false, const bool verbal = false);
-	void calculate_subpixel_distweights(const int zsrc_i=-1);
-	void find_srcpixel_weights(const int zsrc_i=-1);
-	void load_pixel_sbweights(const int zsrc_i=-1);
+	bool optimize_regularization_parameter(const int imggrid_i, const bool dense_Fmatrix=false, const bool verbal=false, const bool pre_srcgrid = false);
+	void setup_regparam_optimization(const int imggrid_i, const bool dense_Fmatrix=false);
+	void calculate_subpixel_sbweights(const int imggrid_i, const bool save_sbweights = false, const bool verbal = false);
+	void calculate_subpixel_distweights(const int imggrid_i=-1);
+	void find_srcpixel_weights(const int imggrid_i=-1);
+	void load_pixel_sbweights(const int imggrid_i=-1);
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
-	void calculate_lumreg_srcpixel_weights(const int zsrc_i, const bool use_sbweights=false);
-	void calculate_distreg_srcpixel_weights(const int zsrc_i, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
+	void calculate_lumreg_srcpixel_weights(const int imggrid_i, const bool use_sbweights=false);
+	void calculate_distreg_srcpixel_weights(const int imggrid_i, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
 	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
-	void calculate_mag_srcpixel_weights(const int zsrc_i);
+	void calculate_mag_srcpixel_weights(const int imggrid_i);
 
 	//void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
-	void create_regularization_matrix_shapelet(const int zsrc_i=-1);
-	void create_MGE_regularization_matrices(const int zsrc_i=-1);
-	void generate_Rmatrix_shapelet_gradient(const int zsrc_i=-1);
-	void generate_Rmatrix_shapelet_curvature(const int zsrc_i=-1);
+	void create_regularization_matrix_shapelet(const int imggrid_i=-1);
+	void create_MGE_regularization_matrices(const int imggrid_i=-1);
+	void generate_Rmatrix_shapelet_gradient(const int imggrid_i=-1);
+	void generate_Rmatrix_shapelet_curvature(const int imggrid_i=-1);
 	//void set_corrlength_for_given_matscale();
 	//double corrlength_eq_matern_factor(const double log_corr_length);
 
@@ -945,43 +949,43 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	double Fmatrix_log_determinant;
 	double Gmatrix_log_determinant;
-	void initialize_pixel_matrices(const int zsrc_i, const bool potential_perturbations=false, bool verbal=false);
-	void initialize_pixel_matrices_shapelets(const int zsrc_i, bool verbal=false);
-	void count_shapelet_amplitudes(const int zsrc_i=-1);
-	void count_MGE_amplitudes(int& n_mge_objects, int& n_gaussians, const int zsrc_i=-1);
+	void initialize_pixel_matrices(const int imggrid_i, const bool potential_perturbations=false, bool verbal=false);
+	void initialize_pixel_matrices_shapelets(const int imggrid_i, bool verbal=false);
+	void count_shapelet_amplitudes(const int imggrid_i=-1);
+	void count_MGE_amplitudes(int& n_mge_objects, int& n_gaussians, const int imggrid_i=-1);
 	void clear_pixel_matrices();
 	void clear_sparse_lensing_matrices();
 	double find_sbprofile_surface_brightness(lensvector &pt);
-	void construct_Lmatrix(const int zsrc_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
-	void construct_Lmatrix_supersampled(const int zsrc_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
-	void PSF_convolution_Lmatrix(const int zsrc_i, bool verbal = false);
-	void PSF_convolution_pixel_vector(const int zsrc_i, const bool foreground = false, const bool verbal = false, const bool use_fft = false);
-	void average_supersampled_image_surface_brightness(const int zsrc_i=-1);
-	void average_supersampled_dense_Lmatrix(const int zsrc_i=-1);
+	void construct_Lmatrix(const int imggrid_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
+	void construct_Lmatrix_supersampled(const int imggrid_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
+	void PSF_convolution_Lmatrix(const int imggrid_i, bool verbal = false);
+	void PSF_convolution_pixel_vector(const int imggrid_i, const bool foreground = false, const bool verbal = false, const bool use_fft = false);
+	void average_supersampled_image_surface_brightness(const int imggrid_i=-1);
+	void average_supersampled_dense_Lmatrix(const int imggrid_i=-1);
 	void cleanup_FFT_convolution_arrays();
 	void copy_FFT_convolution_arrays(QLens* lens_in);
 	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
 	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
 
-	bool create_regularization_matrix(const int zsrc_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool potential_perturbations = false, const bool verbal = false);
-	void generate_Rmatrix_from_gmatrices(const int zsrc_i=-1, const bool interpolate = false, const bool potential_perturbations = false);
-	void generate_Rmatrix_from_hmatrices(const int zsrc_i=-1, const bool interpolate = false, const bool potential_perturbations = false);
+	bool create_regularization_matrix(const int imggrid_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool potential_perturbations = false, const bool verbal = false);
+	void generate_Rmatrix_from_gmatrices(const int imggrid_i=-1, const bool interpolate = false, const bool potential_perturbations = false);
+	void generate_Rmatrix_from_hmatrices(const int imggrid_i=-1, const bool interpolate = false, const bool potential_perturbations = false);
 	void generate_Rmatrix_norm(const bool potential_perturbations = false);
-	bool generate_Rmatrix_from_covariance_kernel(const int zsrc_i, const int kernel_type=0, const bool include_lum_weighting=false, const bool potential_perturbations = false, const bool verbal = false);
-	void find_source_centroid(const int zsrc_i, double& xc_approx, double& yc_approx, const bool verbal);
+	bool generate_Rmatrix_from_covariance_kernel(const int imggrid_i, const int kernel_type=0, const bool include_lum_weighting=false, const bool potential_perturbations = false, const bool verbal = false);
+	void find_source_centroid(const int imggrid_i, double& xc_approx, double& yc_approx, const bool verbal);
 
-	void create_lensing_matrices_from_Lmatrix(const int zsrc_i, const bool dense_Fmatrix=false, const bool potential_perturbations=false, const bool verbal=false);
-	void invert_lens_mapping_dense(const int zsrc_i, bool verbal=false);
-	void invert_lens_mapping_MUMPS(const int zsrc_i, double& logdet, bool verbal, bool use_copy = false);
-	void invert_lens_mapping_UMFPACK(const int zsrc_i, double& logdet, bool verbal, bool use_copy = false);
+	void create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool dense_Fmatrix=false, const bool potential_perturbations=false, const bool verbal=false);
+	void invert_lens_mapping_dense(const int imggrid_i, bool verbal=false);
+	void invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, bool verbal, bool use_copy = false);
+	void invert_lens_mapping_UMFPACK(const int imggrid_i, double& logdet, bool verbal, bool use_copy = false);
 	void convert_Rmatrix_to_dense();
 	void convert_Rmatrix_pot_to_dense();
 	void Rmatrix_determinant_MUMPS(const bool potential_perturbations);
 	void Rmatrix_determinant_UMFPACK(const bool potential_perturbations);
 	void matrix_determinant_dense(double& logdet, const dvector& matrix_in, const int npixels);
 
-	void invert_lens_mapping_CG_method(const int zsrc_i, bool verbal);
-	void update_source_and_lensgrid_amplitudes(const int zsrc_i, const bool verbal=false);
+	void invert_lens_mapping_CG_method(const int imggrid_i, bool verbal);
+	void update_source_and_lensgrid_amplitudes(const int imggrid_i, const bool verbal=false);
 	void indexx(int* arr, int* indx, int nn);
 
 	double set_required_data_pixel_window(bool verbal);
@@ -989,40 +993,38 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void calculate_source_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness_dense();
-	void calculate_foreground_pixel_surface_brightness(const int zsrc_i, const bool allow_lensed_nonshapelet_sources = true);
+	void calculate_foreground_pixel_surface_brightness(const int imggrid_i, const bool allow_lensed_nonshapelet_sources = true);
 	void add_foreground_to_image_pixel_vector();
-	void store_image_pixel_surface_brightness(const int zsrc_i=-1);
-	void store_foreground_pixel_surface_brightness(const int zsrc_i=-1);
-	void vectorize_image_pixel_surface_brightness(const int zsrc_i, bool use_mask = false);
-	void plot_image_pixel_surface_brightness(string outfile_root, const int zsrc_i=-1);
+	void store_image_pixel_surface_brightness(const int imggrid_i=-1);
+	void store_foreground_pixel_surface_brightness(const int imggrid_i=-1);
+	void vectorize_image_pixel_surface_brightness(const int imggrid_i, bool use_mask = false);
+	void plot_image_pixel_surface_brightness(string outfile_root, const int imggrid_i=-1);
 	double pixel_log_evidence_times_two(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
 	void setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bool verbal);
-	bool setup_cartesian_sourcegrid(const int zsrc_i, const int src_i, int& n_expected_imgpixels, const bool verbal);
-	bool generate_and_invert_lensing_matrix_cartesian(const int zsrc_i, const int src_i, double& tot_wtime, double& tot_wtime0, const bool verbal);
-	bool generate_and_invert_lensing_matrix_delaunay(const int zsrc_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
-	void add_outside_sb_prior_penalty(bool& sb_outside_window, double& logev_times_two, const bool verbal);
-	void add_regularization_prior_terms_to_logev(const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
+	bool setup_cartesian_sourcegrid(const int imggrid_i, const int src_i, int& n_expected_imgpixels, const bool verbal);
+	bool generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, const int src_i, double& tot_wtime, double& tot_wtime0, const bool verbal);
+	bool generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
+	void add_outside_sb_prior_penalty(const int band_number, bool& sb_outside_window, double& logev_times_two, const bool verbal);
+	void add_regularization_prior_terms_to_logev(const int band_number, const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
 	void set_n_imggrids_to_include_in_inversion();
 
-	bool load_pixel_grid_from_data();
+	bool load_pixel_grid_from_data(const int band_number);
 	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal, const bool zero_verbal = false);
-	void plot_image_pixel_grid(const int zsrc_i=-1);
-	bool find_shapelet_scaling_parameters(const int i_shapelet, const int zsrc_i, const bool verbal=false);
-	bool set_shapelet_imgpixel_nsplit(const int zsrc_i=-1);
+	void plot_image_pixel_grid(const int imggrid_i=-1);
+	bool find_shapelet_scaling_parameters(const int i_shapelet, const int imggrid_i, const bool verbal=false);
+	bool set_shapelet_imgpixel_nsplit(const int imggrid_i=-1);
 
-	int get_shapelet_nn(const int zsrc_i=-1);
+	int get_shapelet_nn(const int imggrid_i=-1);
 
 	void find_optimal_sourcegrid_for_analytic_source();
-	bool create_sourcegrid_cartesian(const int zsrc_i, const bool verbal, const bool use_mask, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
-	bool create_sourcegrid_cartesian_old(const int zsrc_i, const bool verbal, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
+	bool create_sourcegrid_cartesian(const int band_number, const int zsrc_i, const bool verbal, const bool use_mask, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
 	bool create_sourcegrid_delaunay(const int src_i, const bool use_mask, const bool verbal);
-	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int zsrc_i, const bool verbal=false);
-	void create_sourcegrid_from_imggrid_delaunay_old(const bool use_weighted_srcpixel_clustering, const bool verbal);
-	bool create_lensgrid_cartesian(const int zsrc_i, const int pixlens_i, const bool verbal, const bool use_mask = true);
+	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal=false);
+	bool create_lensgrid_cartesian(const int band_number, const int zsrc_i, const int pixlens_i, const bool verbal, const bool use_mask = true);
 	//void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_surface_brightness_grid(const int band_i, string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
 	//bool make_image_surface_brightness_data();
-	bool plot_lensed_surface_brightness(string imagefile, bool output_fits = false, bool plot_residual = false, bool plot_foreground_only = false, bool omit_foreground = false, bool show_mask_only = true, bool normalize_residuals = false, bool offload_to_data = false, bool show_extended_mask = false, bool show_foreground_mask = false, bool show_noise_thresh = false, bool exclude_ptimgs = false, bool show_only_ptimgs = false, int specific_zsrc_i = -1, bool show_only_first_order_corrections = false, bool plot_log = false, bool plot_current_sb = false, bool verbose = true);
+	const bool plot_lensed_surface_brightness(string imagefile, const int band_number, const bool output_fits = false, const bool plot_residual = false, bool plot_foreground_only = false, const bool omit_foreground = false, const bool show_mask_only = true, const bool normalize_residuals = false, const bool offload_to_data = false, const bool show_extended_mask = false, const bool show_foreground_mask = false, const bool show_noise_thresh = false, const bool exclude_ptimgs = false, const bool show_only_ptimgs = false, int specific_zsrc_i = -1, const bool show_only_first_order_corrections = false, const bool plot_log = false, const bool plot_current_sb = false, const bool verbose = true);
 
 	//void plot_Lmatrix();
 	//void check_Lmatrix_columns();
@@ -1183,7 +1185,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void update_lens_redshift_data();
 	int add_new_extended_src_redshift(const double zs, const int src_i, const bool pixellated_src);
 	void remove_old_extended_src_redshift(const int znum, const bool removing_pixellated_src);
-	bool assign_mask(const int znum, const int mask_i);
+	bool assign_mask(const int band, const int znum, const int mask_i);
 	void print_mask_assignments();
 	int add_new_ptsrc_redshift(const double zs, const int src_i);
 	void remove_old_ptsrc_redshift(const int znum);
@@ -1244,18 +1246,21 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double mass3d_r(const double r_arcsec, const int lensnum, const bool use_kpc);
 	double calculate_average_log_slope(const int lensnum, const double rmin, const double rmax, const bool use_kpc);
 
-	void add_source_object(SB_ProfileName name, const bool is_lensed, const double zsrc_in, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1);
-	void add_source_object(const char *splinefile, const bool is_lensed, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
-	void add_multipole_source(const bool is_lensed, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
-	void add_shapelet_source(const bool is_lensed, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
-	void add_mge_source(const bool is_lensed, const double zsrc_in, const double reg, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode = 0);
+	void add_source_object(SB_ProfileName name, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1, const int pmode = 0);
+	void add_source_object(const char *splinefile, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
+	void add_multipole_source(const bool is_lensed, const int band_number, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
+	void add_shapelet_source(const bool is_lensed, const int band_number, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
+	void add_mge_source(const bool is_lensed, const int band_number, const double zsrc_in, const double reg, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode = 0);
 
 
 	void remove_source_object(int sb_number);
 	void clear_source_objects();
 	void print_source_list(bool show_vary_params);
 
-	void add_pixellated_source(const double zsrc);
+	void add_new_model_band();
+	void remove_model_band(const int band_number, const bool removing_pixellated_src);
+
+	void add_pixellated_source(const double zsrc, const int band_number = 0);
 	void remove_pixellated_source(int src_number);
 	void print_pixellated_source_list(bool show_vary_params);
 	void find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& xavg, double& yavg);
@@ -1315,6 +1320,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool adopt_point_from_chain_paramrange(const int paramnum, const double minval, const double maxval);
 	bool plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, double rmax, int nbins, const string kappa_filename);
 	bool output_scaled_percentiles_from_chain(const double pct_scaling);
+	bool get_stepsizes_from_percentiles(const double pct_scaling, dvector& stepsizes);
+	bool find_scaled_percentiles_from_chain(const double pct_scaling, double *scaled_lopct, double *scaled_hipct);
 	double find_percentile(const unsigned long npoints, const double pct, const double tot, double *pts, double *weights);
 	bool output_scaled_percentiles_from_egrad_fits(const int srcnum, const double xcavg, const double ycavg, const double qtheta_pct_scaling = 1.0, const double fmode_pct_scaling = 1.0, const bool include_m3_fmode = false, const bool include_m4_fmode = false);
 	bool output_egrad_values_and_knots(const int srcnum,const string suffix);
