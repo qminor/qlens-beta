@@ -8,7 +8,7 @@ sbmap load_noisemap demo_noisemap.fits
 #sbmap generate_uniform_noisemap   # This generates a noise map where each pixel has noise dispersion equal to 'bg_pixel_noise'
 #sbmap load_noisemap <file>       # if there's a noise map, load it here
 
-psf_threshold 1e-2             # This truncates the PSF when it falls below threshold*peak_height, to save computation time
+psf_threshold 1e-3             # This truncates the PSF when it falls below threshold*peak_height, to save computation time
 sbmap loadpsf hst_psf.fits
 sbmap loadmask mask.fits     # Loads a pixel mask
 

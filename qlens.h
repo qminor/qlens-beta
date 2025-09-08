@@ -602,7 +602,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double imgpixel_himag_threshold, imgpixel_lomag_threshold, imgpixel_sb_threshold;
 
 	bool fits_format;
-	double data_pixel_size;
+	double default_data_pixel_size;
 	bool add_simulated_image_data(const lensvector &sourcept, const double srcflux = 1);
 	bool add_image_data_from_unlensed_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
 	//bool add_fit_sourcept(const lensvector &sourcept, const double zsrc);
@@ -762,9 +762,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int* imggrid_band;
 
 	int n_model_bands, n_data_bands;
-	ImagePixelData **image_pixel_data_list;
+	ImagePixelData **imgpixel_data_list;
 
-	int image_npixels, source_npixels, lensgrid_npixels, source_and_lens_n_amps, n_mge_sets, n_mge_amps, n_amps;
+	int image_npixels, source_npixels, lensgrid_npixels, n_mge_sets, n_mge_amps, source_and_lens_n_amps, n_amps; // note, n_amps can also include point image fluxes
 	SB_Profile** mge_list;
 	int image_n_subpixels; // for supersampling
 	int image_npixels_fgmask;
@@ -1004,13 +1004,13 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool setup_cartesian_sourcegrid(const int imggrid_i, const int src_i, int& n_expected_imgpixels, const bool verbal);
 	bool generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, const int src_i, double& tot_wtime, double& tot_wtime0, const bool verbal);
 	bool generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
-	void add_outside_sb_prior_penalty(const int band_number, bool& sb_outside_window, double& logev_times_two, const bool verbal);
+	void add_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, double& logev_times_two, const bool verbal);
 	void add_regularization_prior_terms_to_logev(const int band_number, const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
 	void set_n_imggrids_to_include_in_inversion();
 
 	bool load_pixel_grid_from_data(const int band_number);
 	double invert_surface_brightness_map_from_data(double& chisq0, const bool verbal, const bool zero_verbal = false);
-	void plot_image_pixel_grid(const int imggrid_i=-1);
+	void plot_image_pixel_grid(const int band_i, const int zsrc_i=-1);
 	bool find_shapelet_scaling_parameters(const int i_shapelet, const int imggrid_i, const bool verbal=false);
 	bool set_shapelet_imgpixel_nsplit(const int imggrid_i=-1);
 
@@ -1022,7 +1022,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal=false);
 	bool create_lensgrid_cartesian(const int band_number, const int zsrc_i, const int pixlens_i, const bool verbal, const bool use_mask = true);
 	//void load_source_surface_brightness_grid(string source_inputfile);
-	bool load_image_surface_brightness_grid(const int band_i, string image_pixel_filename_root, const int hdu_indx = 1, const bool show_fits_header = false);
+	bool load_image_surface_brightness_grid(const int band_i, string image_pixel_filename_root, const double pixsize, const double pix_xy_ratio = 1.0, const double x_offset = 0.0, const double y_offset = 0.0, const int hdu_indx = 1, const bool show_fits_header = false);
 	//bool make_image_surface_brightness_data();
 	const bool plot_lensed_surface_brightness(string imagefile, const int band_number, const bool output_fits = false, const bool plot_residual = false, bool plot_foreground_only = false, const bool omit_foreground = false, const bool show_mask_only = true, const bool normalize_residuals = false, const bool offload_to_data = false, const bool show_extended_mask = false, const bool show_foreground_mask = false, const bool show_noise_thresh = false, const bool exclude_ptimgs = false, const bool show_only_ptimgs = false, int specific_zsrc_i = -1, const bool show_only_first_order_corrections = false, const bool plot_log = false, const bool plot_current_sb = false, const bool verbose = true);
 

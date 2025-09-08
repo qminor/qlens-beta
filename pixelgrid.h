@@ -327,7 +327,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
 	DelaunaySourceGrid(QLens* lens_in);
 	void copy_pixsrc_data(DelaunaySourceGrid* grid_in);
 	void update_meta_parameters(const bool varied_only_fitparams);
-	void create_srcpixel_grid(double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0, const bool find_pixel_magnification = false, const int redshift_indx = -1);
+	void create_srcpixel_grid(double* srcpts_x, double* srcpts_y, const int n_srcpts, int* ivals_in = NULL, int* jvals_in = NULL, const int ni=0, const int nj=0, const bool find_pixel_magnification = false, const int imggrid_indx = -1);
 
 	void setup_parameters(const bool initial_setup);
 
@@ -553,7 +553,7 @@ class ImagePixelGrid : private Sort
 	long int ntot_subpixels, ntot_subpixels_in_mask;
 
 	int n_pixsrc_to_include_in_Lmatrix;
-	vector<int> pixsrc_indx_to_include_in_Lmatrix;
+	vector<int> imggrid_indx_to_include_in_Lmatrix;
 
 	vector<SourcePixel*> **mapped_cartesian_srcpixels; // since the Cartesian grid uses recursion (if adaptive_subgrid is on), a pointer to each mapped source pixel is needed
 	vector<PtsWgts> **mapped_delaunay_srcpixels; // for the Delaunay grid, it only needs to record the index of each mapped source pixel (no pointer needed)
@@ -572,6 +572,7 @@ class ImagePixelGrid : private Sort
 	inline bool test_if_between(const double& p, const double& a, const double& b);
 	int band_number;
 	int src_redshift_index; // each ImagePixelGrid object is associated with a specific redshift
+	int imggrid_index;
 	double* imggrid_zfactors;
 	double** imggrid_betafactors; // kappa ratio used for modeling source points at different redshifts
 
@@ -589,9 +590,9 @@ class ImagePixelGrid : private Sort
 	double max_component(const lensvector&);
 
 	public:
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false, const int band_number_in = 0, int src_redshift_index = -1);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false, const int band_number_in = 0, int src_redshift_index = -1, const int imggrid_index_in = -1);
 	//ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in, const int src_redshift_index = -1);
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_fgmask = false, const int band_number_in = 0, const int src_redshift_index = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_fgmask = false, const int band_number_in = 0, const int src_redshift_index = -1, const int imggrid_index_in = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	void update_zfactors_and_beta_factors();
@@ -708,10 +709,11 @@ class PSF : public ModelParams
 	bool generate_PSF_matrix(const double pixel_xlength, const double pixel_ylength, const bool supersampling);
 	void generate_supersampled_PSF_matrix(const bool downsample = false, const int downsample_fac = 1);
 	bool spline_PSF_matrix(const double xstep, const double ystep);
-	double interpolate_PSF_matrix(const double x, const double y, const bool supersampled);
+	double interpolate_PSF_matrix(double x, double y, const bool supersampled);
 	bool load_psf_fits(string fits_filename, const int hdu_indx, const bool supersampled, const bool show_header = false, const bool verbal = false);
 	bool save_psf_fits(string fits_filename, const bool supersampled = false);
-	bool plot_psf(string filename, const bool supersampled);
+	bool plot_psf(string filename, const bool supersampled, const double xstep=1.0, const double ystep=1.0);
+	void set_image_pixel_grid(ImagePixelGrid* image_pixel_ptr) { image_pixel_grid = image_pixel_ptr; }
 };
 
 class SB_Profile;
@@ -735,7 +737,7 @@ struct ImagePixelData : private Sort
 	double *xvals, *yvals, *pixel_xcvals, *pixel_ycvals;
 	int n_high_sn_pixels;
 	double xmin, xmax, ymin, ymax;
-	double pixel_size;
+	double pixel_size, pixel_xy_ratio; // pixel_xy_ratio is ratio of pixel y/x lengths
 	double emask_rmax; // used only when splining Fourier mode integrals for non-elliptical structure
 	string data_fits_filename;
 	string noise_map_fits_filename;
@@ -744,6 +746,9 @@ struct ImagePixelData : private Sort
 	{
 		npixels_x = 0;
 		npixels_y = 0;
+		pixel_size = 0.0;
+		xmin=xmax=ymin=ymax=0.0;
+		pixel_xy_ratio = 1.0;
 		surface_brightness = NULL;
 		noise_map = NULL;
 		covinv_map = NULL;
@@ -766,14 +771,6 @@ struct ImagePixelData : private Sort
 	~ImagePixelData();
 	void load_data(string root);
 	void load_from_image_grid(ImagePixelGrid* image_pixel_grid);
-	bool load_data_fits(const double xmin_in, const double xmax_in, const double ymin_in, const double ymax_in, string fits_filename, const int hdu_indx = 1, const bool show_header = false) {
-		xmin=xmin_in; xmax=xmax_in; ymin=ymin_in; ymax=ymax_in;
-		return load_data_fits(false,fits_filename,hdu_indx,show_header);
-	}
-	bool load_data_fits(const double pixel_size_in, string fits_filename, const int hdu_indx = 1, const bool show_header = false) {
-		pixel_size = pixel_size_in;
-		return load_data_fits(true,fits_filename, hdu_indx, show_header);
-	}
 	bool load_noise_map_fits(string fits_filename, const int hdu_indx = 1, const bool show_header = false);
 	bool save_noise_map_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	void unload_noise_map();
@@ -791,7 +788,7 @@ struct ImagePixelData : private Sort
 			}
 		}
 	}
-	bool load_data_fits(bool use_pixel_size, string fits_filename, const int hdu_indx, const bool show_header = false);
+	bool load_data_fits(string fits_filename, const double pixel_size_in, const double pixel_xy_ratio_in = 1.0, const double x_offset = 0.0, const double y_offset = 0.0, const int hdu_indx = 0, const bool show_header = false);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	bool load_mask_fits(const int mask_k, string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false);
 	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const int mask_k=0, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
@@ -825,7 +822,7 @@ struct ImagePixelData : private Sort
 	bool test_if_in_fit_region(const double& x, const double& y, const int mask_k = 0);
 	void set_lens(QLens* lensptr) {
 		lens = lensptr;
-		pixel_size = lens->data_pixel_size;
+		//pixel_size = lens->default_data_pixel_size;
 	}
 
 	bool estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb, const int mask_k = 0);

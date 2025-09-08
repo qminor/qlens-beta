@@ -220,7 +220,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
 
 	void plot_sb_profile(double rmin, double rmax, int steps, std::ofstream &sbout);
-	void print_parameters(const double zs = -1);
+	void print_parameters(const double zs = -1, const bool show_band = false, const int band = 0);
 	void print_vary_parameters();
 
 	// the following items MUST be redefined in all derived classes

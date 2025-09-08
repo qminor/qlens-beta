@@ -2226,7 +2226,7 @@ void SB_Profile::plot_sb_profile(double rmin, double rmax, int steps, ofstream &
 	}
 }
 
-void SB_Profile::print_parameters(const double zs)
+void SB_Profile::print_parameters(const double zs, const bool show_band, const int band)
 {
 	cout << model_name;
 	bool parenthesis = false;
@@ -2270,6 +2270,9 @@ void SB_Profile::print_parameters(const double zs)
 		}
 	}
 	if (lensed_center_coords) cout << " (xc=" << x_center << ", yc=" << y_center << ")";
+	if (show_band) {
+		cout << " (band=" << band << ")";
+	}
 	cout << endl;
 	if ((ellipticity_gradient) and (egrad_mode==0)) {
 		cout << "   q-knots: ";
