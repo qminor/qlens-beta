@@ -222,7 +222,7 @@ class DelaunayGrid : private Sort
 {
 	protected:
 	static int nthreads;
-	static const int nmax_pts_interp = 240;
+	static const int nmax_pts_interp = 1000;
 	static lensvector **interpolation_pts[nmax_pts_interp];
 	static double *interpolation_wgts[nmax_pts_interp];
 	static int *interpolation_indx[nmax_pts_interp];
