@@ -68,7 +68,7 @@ int *DelaunayGrid::triangles_in_envelope[nmax_pts_interp];
 lensvector **DelaunayGrid::polygon_vertices[nmax_pts_interp+2];
 lensvector *DelaunayGrid::new_circumcenter[nmax_pts_interp];
 
-bool DelaunayGrid::zero_outside_border = false;
+bool DelaunayGrid::zero_outside_border = true;
 
 // variables for root finding to get point images (for combining with extended pixel images)
 int ImagePixelGrid::nthreads = 0;
@@ -3628,7 +3628,7 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector &input_pt, con
 	int k,l,m;
 
 	// recursive lambda function for finding triangles that belong inside the Bowyer-Watson envelope (this will be called below)
-	function<void(Triangle*, const int, const int, int &, int &)> find_triangles_in_envelope = [&](Triangle *neighbor_ptr, const int trinum, const int neighbor_num, int &npt, int &ntri) 
+	function<bool(Triangle*, const int, const int, int &, int &)> find_triangles_in_envelope = [&](Triangle *neighbor_ptr, const int trinum, const int neighbor_num, int &npt, int &ntri) 
 	{
 		int idx;
 		Triangle *neighbor_ptr2;
@@ -3653,21 +3653,25 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector &input_pt, con
 			neighbor_ptr2 = &triangle[neighbor_num2];
 			distsq = SQR(input_pt[0]-neighbor_ptr2->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr2->circumcenter[1]);
 			if (distsq < neighbor_ptr2->circumcircle_radsq) {
-				find_triangles_in_envelope(neighbor_ptr2,neighbor_num,neighbor_num2,npt,ntri);
+				if (!find_triangles_in_envelope(neighbor_ptr2,neighbor_num,neighbor_num2,npt,ntri)) return false;
 			}
 		}
 		triangles_in_envelope[ntri++][thread] = neighbor_num;
 		interpolation_indx[npt][thread] = neighbor_ptr->vertex_index[l_new_vertex];
 		npt++;
-		if (npt > nmax_pts_interp) die("exceeded max number of points (%i versus %i)",npt,nmax_pts_interp);
+		if (npt > nmax_pts_interp) {
+			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point",npt,nmax_pts_interp);
+			return false;
+		}
 		neighbor_num2 = neighbor_ptr->neighbor_index[l_left];
 		if (neighbor_num2 != -1) {
 			neighbor_ptr2 = &triangle[neighbor_num2];
 			distsq = SQR(input_pt[0]-neighbor_ptr2->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr2->circumcenter[1]);
 			if (distsq < neighbor_ptr2->circumcircle_radsq) {
-				find_triangles_in_envelope(neighbor_ptr2,neighbor_num,neighbor_num2,npt,ntri);
+				if (!find_triangles_in_envelope(neighbor_ptr2,neighbor_num,neighbor_num2,npt,ntri)) return false;
 			}
 		}
+		return true;
 	};
 
 	Triangle *neighbor_ptr;
@@ -3676,7 +3680,12 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector &input_pt, con
 	for (k=0; k < 3; k++) {
 		interpolation_indx[npts][thread] = triptr->vertex_index[k];
 		npts++;
-		if (npts > nmax_pts_interp) die("exceeded max number of points");
+		if (npts > nmax_pts_interp) {
+			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point",npts,nmax_pts_interp);
+			find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+			return;
+		}
+
 		kleft = k-1;
 		if (kleft==-1) kleft = 2;
 		neighbor_num = triptr->neighbor_index[kleft];
@@ -3684,7 +3693,11 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector &input_pt, con
 			neighbor_ptr = &triangle[neighbor_num];
 			distsq = SQR(input_pt[0]-neighbor_ptr->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr->circumcenter[1]);
 			if (distsq < neighbor_ptr->circumcircle_radsq) {
-				find_triangles_in_envelope(neighbor_ptr,trinum,neighbor_num,npts,ntri_in_envelope);
+				if (!find_triangles_in_envelope(neighbor_ptr,trinum,neighbor_num,npts,ntri_in_envelope)) {
+					// exceeded max number of points allowed, so just using 3-pt interpolation instead
+					find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+					return;
+				}
 			}
 		}
 	}
@@ -4588,23 +4601,27 @@ bool DelaunaySourceGrid::assign_source_mapping_flags(lensvector &input_pt, vecto
 			n_mapped_srcpixels = 0;
 			return true;
 		}
-		PtsWgts pt(triptr->vertex_index[kmin],1);
-		mapped_delaunay_srcpixels_ij.push_back(pt);
-		maps_to_image_pixel[triptr->vertex_index[kmin]] = true;
-		n_mapped_srcpixels = 1;
+		// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
+		lensvector dist = input_pt - gridpts[triptr->vertex_index[kmin]];
+		if ((!lens->natural_neighbor_interpolation) or (dist.norm() < 1e-6)) {
+			PtsWgts pt(triptr->vertex_index[kmin],1);
+			mapped_delaunay_srcpixels_ij.push_back(pt);
+			maps_to_image_pixel[triptr->vertex_index[kmin]] = true;
+			n_mapped_srcpixels = 1;
+			return true;
+		}
+	}
+	if (lens->natural_neighbor_interpolation) {
+		find_interpolation_weights_nn(input_pt, trinum, n_mapped_srcpixels, thread);
 	} else {
-		if (lens->natural_neighbor_interpolation) {
-			find_interpolation_weights_nn(input_pt, trinum, n_mapped_srcpixels, thread);
-		} else {
-			find_interpolation_weights_3pt(input_pt, trinum, n_mapped_srcpixels, thread);
-		}
-		PtsWgts pt;
-		//cout << "n_mapped_srcpixels=" << n_mapped_srcpixels << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
-		for (int i=0; i < n_mapped_srcpixels; i++) {
-			maps_to_image_pixel[interpolation_indx[i][thread]] = true;
-			mapped_delaunay_srcpixels_ij.push_back(pt.assign(interpolation_indx[i][thread],interpolation_wgts[i][thread]));
-			//cout << "point: " << interpolation_indx[i][thread] << " active_index=" << active_index[interpolation_indx[i][thread]] << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
-		}
+		find_interpolation_weights_3pt(input_pt, trinum, n_mapped_srcpixels, thread);
+	}
+	PtsWgts pt;
+	//cout << "n_mapped_srcpixels=" << n_mapped_srcpixels << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
+	for (int i=0; i < n_mapped_srcpixels; i++) {
+		maps_to_image_pixel[interpolation_indx[i][thread]] = true;
+		mapped_delaunay_srcpixels_ij.push_back(pt.assign(interpolation_indx[i][thread],interpolation_wgts[i][thread]));
+		//cout << "point: " << interpolation_indx[i][thread] << " active_index=" << active_index[interpolation_indx[i][thread]] << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
 	}
 	return true;
 }
@@ -4635,8 +4652,10 @@ double DelaunaySourceGrid::find_lensed_surface_brightness(const lensvector &inpu
 		if ((zero_outside_border) and (!on_vertex)) {
 			return 0;
 		} else {
+			// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
 			lensvector dist = input_pt - gridpts[triptr->vertex_index[kmin]];
-			if (dist.norm() < 1e-6) return *triptr->sb[kmin];
+			if ((!lens->natural_neighbor_interpolation) or (dist.norm() < 1e-6)) return *triptr->sb[kmin];
+
 		}
 	}
 	int npts;
@@ -4664,8 +4683,9 @@ double DelaunaySourceGrid::interpolate_surface_brightness(const lensvector &inpu
 		if ((zero_outside_border) and (!on_vertex)) {
 			return 0;
 		} else {
+			// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
 			lensvector dist = input_pt - gridpts[triptr->vertex_index[kmin]];
-			if (dist.norm() < 1e-6) return *triptr->sb[kmin];
+			if ((!lens->natural_neighbor_interpolation) or (dist.norm() < 1e-6)) return *triptr->sb[kmin];
 		}
 	}
 
