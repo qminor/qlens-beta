@@ -14365,7 +14365,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					double chisq_penalty;
 					if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
 					if (pixel_avg_n_images < n_image_threshold) {
-						chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,40) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
+						chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,60) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
 						logev_times_two_band += chisq_penalty;
 						if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_images << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 					}
