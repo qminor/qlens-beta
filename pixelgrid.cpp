@@ -3657,12 +3657,12 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector &input_pt, con
 			}
 		}
 		triangles_in_envelope[ntri++][thread] = neighbor_num;
-		interpolation_indx[npt][thread] = neighbor_ptr->vertex_index[l_new_vertex];
-		npt++;
-		if (npt > nmax_pts_interp) {
-			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point",npt,nmax_pts_interp);
+		if ((npt+1) > nmax_pts_interp) {
+			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point",(npt+1),nmax_pts_interp);
 			return false;
 		}
+		interpolation_indx[npt][thread] = neighbor_ptr->vertex_index[l_new_vertex];
+		npt++;
 		neighbor_num2 = neighbor_ptr->neighbor_index[l_left];
 		if (neighbor_num2 != -1) {
 			neighbor_ptr2 = &triangle[neighbor_num2];
@@ -3678,13 +3678,13 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector &input_pt, con
 	double distsq;
 	int kleft,neighbor_num;
 	for (k=0; k < 3; k++) {
-		interpolation_indx[npts][thread] = triptr->vertex_index[k];
-		npts++;
-		if (npts > nmax_pts_interp) {
-			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point",npts,nmax_pts_interp);
+		if ((npts+1) > nmax_pts_interp) {
+			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point",(npts+1),nmax_pts_interp);
 			find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
 			return;
 		}
+		interpolation_indx[npts][thread] = triptr->vertex_index[k];
+		npts++;
 
 		kleft = k-1;
 		if (kleft==-1) kleft = 2;
