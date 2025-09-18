@@ -13305,6 +13305,7 @@ bool QLens::load_image_surface_brightness_grid(const int band_i, string image_pi
 		return false;
 	}
 	image_pixel_data->get_npixels(n_image_pixels_x,n_image_pixels_y);
+	/*
 	if ((status==true) and (image_pixel_grids != NULL)) {
 		// delete the image pixel grids so that they will be remade according to the dimensions in the image data
 		for (int i=0; i < n_extended_src_redshifts; i++) {
@@ -13322,6 +13323,7 @@ bool QLens::load_image_surface_brightness_grid(const int band_i, string image_pi
 			if ((lensgrids != NULL) and (lensgrids[i] != NULL)) lensgrids[i]->image_pixel_grid = NULL;
 		}
 	}
+	*/	
 	// Make sure the grid size & center are fixed now
 	if (autocenter) autocenter = false;
 	if (auto_gridsize_from_einstein_radius) auto_gridsize_from_einstein_radius = false;
@@ -14041,7 +14043,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				}
 			}
 		} else if (source_fit_mode == Delaunay_Source) {
-			if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
+			if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings..." << endl;
 			for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
 				//cout << "BAND_I=" << band_number << ", ZSRC_I=" << zsrc_i << " imggrid_i=" << imggrid_i << endl;
 				src_i = src_i_list[imggrid_i];
@@ -14080,7 +14082,6 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					}
 				}
 			}
-			//cout << "NEXT..." << endl;
 			for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
 				//cout << "BAND_I=" << band_number << ", ZSRC_I=" << zsrc_i << " imggrid_i=" << imggrid_i << endl;
 				src_i = src_i_list[imggrid_i];

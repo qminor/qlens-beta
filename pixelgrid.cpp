@@ -3657,7 +3657,7 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector &input_pt, con
 			}
 		}
 		triangles_in_envelope[ntri++][thread] = neighbor_num;
-		if ((npt+1) > nmax_pts_interp) {
+		if (npt >= nmax_pts_interp) {
 			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point",(npt+1),nmax_pts_interp);
 			return false;
 		}
@@ -3678,7 +3678,7 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector &input_pt, con
 	double distsq;
 	int kleft,neighbor_num;
 	for (k=0; k < 3; k++) {
-		if ((npts+1) > nmax_pts_interp) {
+		if (npts >= nmax_pts_interp) {
 			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point",(npts+1),nmax_pts_interp);
 			find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
 			return;
@@ -7537,7 +7537,7 @@ double ImagePixelData::find_avg_sb(const double sb_threshold, const int mask_k)
 	return avg_sb;
 }
 
-bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, const bool foreground, const bool emask, const bool add_mask_pixels) // if 'add_mask_pixels' is true, then doesn't unmask any pixels that are already masked
+bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, const bool foreground, const bool emask, const bool add_mask_pixels, const bool subtract_mask_pixels) // if 'add_mask_pixels' is true, then doesn't unmask any pixels that are already masked
 {
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
@@ -7660,9 +7660,11 @@ bool ImagePixelData::load_mask_fits(const int mask_k, string fits_filename, cons
 								else if (in_mask[mask_k][iprime][jprime]==true) n_maskpixels++;
 							}
 							else {
-								in_mask[mask_k][iprime][jprime] = true;
-								if (!extended_mask[mask_k][iprime][jprime]) extended_mask[mask_k][iprime][jprime] = true; // the extended mask MUST contain all the primary mask pixels
-								n_maskpixels++;
+								if (!subtract_mask_pixels) {
+									in_mask[mask_k][iprime][jprime] = true;
+									if (!extended_mask[mask_k][iprime][jprime]) extended_mask[mask_k][iprime][jprime] = true; // the extended mask MUST contain all the primary mask pixels
+									n_maskpixels++;
+								}
 							//cout << pixels[iprime] << endl;
 							}
 							if (new_mask) extended_mask[mask_k][iprime][jprime] = true; // if new mask was created, then extended mask contains all the pixels by default
@@ -8555,8 +8557,7 @@ bool ImagePixelData::activate_partner_image_pixels(const int mask_k, const bool 
 						if (rsq < innermost_rsq) innermost_rsq = rsq;
 					}
 				}
-				if (found_itself) cout << "Found itself! Yay!" << endl;
-				else cout << "NOTE: pixel couldn't find itself" << endl;
+				if (!found_itself) warn("pixel couldn't find itself");
 			}
 		}
 	}
@@ -17630,9 +17631,9 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int imggrid_i, const i
 	Cholesky_logdet_lower_packed(new_covmatrix_factored_ptr->array(),(*new_Rmatrix_logdet_ptr),n_amps);
 	(*new_Rmatrix_logdet_ptr) = -(*new_Rmatrix_logdet_ptr); // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
 	repack_matrix_upper(new_covmatrix_factored_ptr->array(),n_amps);
-	//for (int i=0; i < ntot; i++) Rmatrix_packed[i] = covmatrix_factored[i];
-	//Cholesky_invert_upper_packed(Rmatrix_packed.array(),npixels); // invert the triangular matrix to get U_inverse
-	//upper_triangular_syrk(Rmatrix_packed.array(),npixels); // Now take U_inverse * U_inverse_transpose to get C_inverse (the regularization matrix)
+	for (int i=0; i < ntot; i++) (*new_Rmatrix_packed_ptr)[i] = (*new_covmatrix_factored_ptr)[i];
+	Cholesky_invert_upper_packed(new_Rmatrix_packed_ptr->array(),npixels); // invert the triangular matrix to get U_inverse
+	upper_triangular_syrk(new_Rmatrix_packed_ptr->array(),npixels); // Now take U_inverse * U_inverse_transpose to get C_inverse (the regularization matrix)
 #endif
 
 #ifdef USE_OPENMP

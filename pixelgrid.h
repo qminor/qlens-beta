@@ -790,7 +790,7 @@ struct ImagePixelData : private Sort
 	}
 	bool load_data_fits(string fits_filename, const double pixel_size_in, const double pixel_xy_ratio_in = 1.0, const double x_offset = 0.0, const double y_offset = 0.0, const int hdu_indx = 0, const bool show_header = false);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
-	bool load_mask_fits(const int mask_k, string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false);
+	bool load_mask_fits(const int mask_k, string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false, const bool subtract_mask_pixels=false);
 	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const int mask_k=0, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	bool copy_mask(ImagePixelData* data, const int mask_k = 0);
 	void assign_high_sn_pixels();

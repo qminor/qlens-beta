@@ -189,7 +189,7 @@ void QLens::process_commands(bool read_file)
 						"img_npixels -- set number of pixels for images produced by 'sbmap plotimg'\n"
 						"src_npixels -- set # of source grid pixels for plotting or inverting lensed pixel images\n"
 						"srcgrid -- set source grid size and location for inverting or plotting lensed pixel images\n"
-						"raytrace_method -- set method for ray tracing image pixels to source pixels\n"
+						"interpolation_method -- set method for interpolating over source pixels\n"
 						"simulate_pixel_noise -- add simulated pixel noise to images produced by 'sbmap plotimg'\n"
 						"psf_width -- width of Gaussian point spread function (PSF) along x- and y-axes\n"
 						"psf_threshold -- threshold below which PSF is approximated as zero (sets pixel width of PSF)\n"
@@ -1291,6 +1291,7 @@ void QLens::process_commands(bool read_file)
 							"sbmap trim_mask_windows [...]\n"
 							"sbmap set_neighbor_pixels [...]\n"
 							"sbmap set_posrg_pixels [...]\n"
+							"sbmap activate_partner_imgpixels\n"
 							"sbmap find_noise [...]\n\n"
 							"Commands for loading, simulating, plotting and inverting surface brightness pixel maps. For\n"
 							"help on individual subcommands, type 'help sbmap <command>'. If 'sbmap' is typed with no\n"
@@ -1985,8 +1986,14 @@ void QLens::process_commands(bool read_file)
 					cout << "data_pixel_size <##>\n\n"
 						"Set the pixel size for files in FITS format. If no size is specified, the pixel grid will\n"
 						"assume the same dimensions that are set by the 'grid' command.\n";
+				else if (words[1]=="interpolation_method")
+					cout << "interpolation_method <method>   *** NOTE: deprecated (use 'interpolation_method' instead) *** \n\n"
+						"Set method for interpolating over source pixels after ray-tracing image pixels to the source plane.\n"
+						"Available methods are:\n\n"
+						"3pt -- interpolate surface brightness using linear interpolation in the three nearest source pixels.\n"
+						"nn -- interpolate surface brightness using natural neighbor interpolation (for Delaunay grids only.)\n";
 				else if (words[1]=="raytrace_method")
-					cout << "raytrace_method <method>\n\n"
+					cout << "raytrace_method <method>   *** NOTE: deprecated (use 'interpolation_method' instead) *** \n\n"
 						"Set method for ray tracing image pixels to source pixels (for either cartesian or delaunay grids).\n"
 						"Available methods are:\n\n"
 						"interpolate_3pt -- interpolate surface brightness using linear interpolation in the three nearest\n"
@@ -8797,6 +8804,7 @@ void QLens::process_commands(bool read_file)
 							get_automatic_initial_stepsizes(stepsizes);
 							param_settings->reset_stepsizes(stepsizes.array());
 						}
+						else if (words[2]=="from_chain") Complain("command 'fit stepsizes from_chain' requires an additional argument (scaling factor)");
 						else Complain("argument to 'fit stepsizes' not recognized");
 					}
 					else if (nwords == 4) {
@@ -9960,8 +9968,8 @@ void QLens::process_commands(bool read_file)
 					string bnumstring = words[i].substr(pos+5);
 					stringstream bnumstr;
 					bnumstr << bnumstring;
-					if (!(bnumstr >> band_i)) Complain("incorrect format for lens redshift");
-					if (band_i < 0) Complain("lens redshift cannot be negative");
+					if (!(bnumstr >> band_i)) Complain("incorrect format for band number");
+					if (band_i < 0) Complain("band number cannot be negative");
 					remove_word(i);
 					break;
 				}
@@ -10074,6 +10082,7 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="loadmask")
 			{
 				bool add_mask = false;
+				bool subtract_mask = false;
 				bool foreground_mask = false;
 				bool emask = false;
 				vector<string> args;
@@ -10081,6 +10090,7 @@ void QLens::process_commands(bool read_file)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-add") add_mask = true;
+						if (args[i]=="-subtract") subtract_mask = true;
 						else if ((args[i]=="-fg") or (args[i]=="-fgmask")) foreground_mask = true;
 						else if (args[i]=="-emask") emask = true;
 						else Complain("argument '" << args[i] << "' not recognized");
@@ -10092,7 +10102,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
 				} else Complain("too many arguments to 'sbmap loadmask'");
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
-				if (imgpixel_data_list[band_i]->load_mask_fits(mask_i,filename,foreground_mask,emask,add_mask)==false) Complain("could not load mask file");
+				if (imgpixel_data_list[band_i]->load_mask_fits(mask_i,filename,foreground_mask,emask,add_mask,subtract_mask)==false) Complain("could not load mask file");
 				if (foreground_mask) {
 					if (fgmask_padding > 0) {
 						imgpixel_data_list[band_i]->expand_foreground_mask(fgmask_padding);
@@ -13105,8 +13115,8 @@ void QLens::process_commands(bool read_file)
 					string bnumstring = words[i].substr(pos+5);
 					stringstream bnumstr;
 					bnumstr << bnumstring;
-					if (!(bnumstr >> band_i)) Complain("incorrect format for lens redshift");
-					if (band_i < 0) Complain("lens redshift cannot be negative");
+					if (!(bnumstr >> band_i)) Complain("incorrect format for band number");
+					if (band_i < 0) Complain("band number cannot be negative");
 					remove_word(i);
 					break;
 				}
@@ -14332,6 +14342,7 @@ void QLens::process_commands(bool read_file)
 			// This command should be made obsolete. Should just do this with 'set_neighbor_pixels' command together with an -emask option, and an option to reset emask to be same as regular mask. IMPLEMENT THIS!!
 			if (n_data_bands==0) Complain("must load image pixel data before setting emask_n_neighbors");
 			int mask_i=0;
+			int band_i=0;
 			for (int i=1; i < nwords; i++) {
 				int pos;
 				if ((pos = words[i].find("mask=")) != string::npos) {
@@ -14340,6 +14351,18 @@ void QLens::process_commands(bool read_file)
 					mnumstr << mnumstring;
 					if (!(mnumstr >> mask_i)) Complain("incorrect format for lens redshift");
 					if (mask_i < 0) Complain("lens redshift cannot be negative");
+					remove_word(i);
+					break;
+				}
+			}
+			for (int i=1; i < nwords; i++) {
+				int pos;
+				if ((pos = words[i].find("band=")) != string::npos) {
+					string bnumstring = words[i].substr(pos+5);
+					stringstream bnumstr;
+					bnumstr << bnumstring;
+					if (!(bnumstr >> band_i)) Complain("incorrect format for band number");
+					if (band_i < 0) Complain("band number cannot be negative");
 					remove_word(i);
 					break;
 				}
@@ -14355,7 +14378,7 @@ void QLens::process_commands(bool read_file)
 			}
 			if (nwords >= 2) {
 				if (words[1]=="all") {
-					imgpixel_data_list[0]->extended_mask_n_neighbors[mask_i] = emask_n = -1;
+					imgpixel_data_list[band_i]->extended_mask_n_neighbors[mask_i] = emask_n = -1;
 				}
 				else if (words[1]=="interior") {
 					only_interior_pixels = true;
@@ -14368,20 +14391,18 @@ void QLens::process_commands(bool read_file)
 				else {
 					if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels for extended mask");
 					if ((emask_n != -1) and (adaptive_subgrid)) Complain("emask_n_neighbors must be set to 'all' for adaptive Cartesian grid");
-					imgpixel_data_list[0]->extended_mask_n_neighbors[mask_i] = emask_n;
+					imgpixel_data_list[band_i]->extended_mask_n_neighbors[mask_i] = emask_n;
 				}
-				if (n_data_bands > 0) imgpixel_data_list[0]->set_extended_mask(emask_n,add_to_emask,only_interior_pixels,mask_i);
+				imgpixel_data_list[band_i]->set_extended_mask(emask_n,add_to_emask,only_interior_pixels,mask_i);
 				int npix;
-				if (n_data_bands > 0) npix = imgpixel_data_list[0]->get_size_of_extended_mask(mask_i);
+				npix = imgpixel_data_list[band_i]->get_size_of_extended_mask(mask_i);
 				if (mpi_id==0) cout << "number of pixels in extended mask: " << npix << endl;
 			} else if (nwords==1) {
 				if (mpi_id==0) {
-					if (imgpixel_data_list[0]->extended_mask_n_neighbors[mask_i]==-1) cout << "number of neighbor pixels for extended mask: emask_n_neighbors = all" << endl;
-					else cout << "number of neighbor pixels for extended mask: emask_n_neighbors = " << imgpixel_data_list[0]->extended_mask_n_neighbors[mask_i] << endl;
-					if (n_data_bands > 0) {
-						int npix = imgpixel_data_list[0]->get_size_of_extended_mask(mask_i);
-						cout << "number of pixels in extended mask: " << npix << endl;
-					}
+					if (imgpixel_data_list[band_i]->extended_mask_n_neighbors[mask_i]==-1) cout << "number of neighbor pixels for extended mask: emask_n_neighbors = all" << endl;
+					else cout << "number of neighbor pixels for extended mask: emask_n_neighbors = " << imgpixel_data_list[band_i]->extended_mask_n_neighbors[mask_i] << endl;
+					int npix = imgpixel_data_list[band_i]->get_size_of_extended_mask(mask_i);
+					cout << "number of pixels in extended mask: " << npix << endl;
 				}
 			} else Complain("must specify either zero or one argument for emask_n_neighbors");
 		}
@@ -14970,6 +14991,20 @@ void QLens::process_commands(bool read_file)
 				}
 				else Complain("invalid argument to 'raytrace_method' command; must specify valid ray tracing method");
 			} else Complain("invalid number of arguments; can only specify ray tracing method");
+			warn("'raytrace_method' is deprecated; use 'interpolation_method' instead");
+		}
+		else if (words[0]=="interpolation_method") {
+			if (nwords==1) {
+				if (mpi_id==0) {
+					if (!natural_neighbor_interpolation) cout << "Interpolation method: 3pt (linear 3-point interpolation)" << endl;
+					else cout << "Interpolation method: nn (natural neighbor interpolation; for Delaunay grid only)" << endl;
+				}
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'interpolation_method' command; must specify valid interpolation method");
+				if (setword=="3pt") natural_neighbor_interpolation = false;
+				else if (setword=="nn") natural_neighbor_interpolation = true;
+				else Complain("invalid argument to 'interpolation_method'; must specify either '3pt' or 'nn'");
+			} else Complain("invalid number of arguments; can only specify one argument ('3pt' or 'nn')");
 		}
 		else if (words[0]=="inversion_method") {
 			if (nwords==1) {
