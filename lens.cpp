@@ -3615,7 +3615,7 @@ void QLens::print_pixellated_lens_list(bool show_vary_params)
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
-void QLens::find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& xavg, double& yavg)
+void QLens::find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& sigavg, double& xavg, double& yavg)
 {
 	if ((source_fit_mode==Delaunay_Source) and (auto_sourcegrid)) {
 		for (int imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
@@ -3624,7 +3624,7 @@ void QLens::find_pixellated_source_moments(const int npix, double& qs, double& p
 	}
 
 	if ((delaunay_srcgrids) and (delaunay_srcgrids[0])) {
-		delaunay_srcgrids[0]->find_source_moments(npix,qs,phi_s,xavg,yavg);
+		delaunay_srcgrids[0]->find_source_moments(npix,qs,phi_s,sigavg,xavg,yavg);
 	} else {
 		qs = 0;
 		phi_s = 0;

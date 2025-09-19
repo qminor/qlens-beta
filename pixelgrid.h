@@ -349,7 +349,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
 	void plot_surface_brightness(string root, const int npix = 600, const bool interpolate = false, const bool plot_magnification = false, const bool plot_fits = false);
 	void plot_voronoi_grid(string root);
 	double find_moment(const int p, const int q, const int npix, const double xc, const double yc, const double b, const double a, const double phi);
-	void find_source_moments(const int npix, double &qs, double &phi_s, double &xavg, double &yavg);
+	void find_source_moments(const int npix, double &qs, double &phi_s, double &sigavg, double &xavg, double &yavg);
 
 	void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
 	void generate_gmatrices(const bool interpolate);

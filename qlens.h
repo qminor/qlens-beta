@@ -74,6 +74,7 @@ enum DerivedParamType {
 	Robust_Perturbation_Density,
 	Adaptive_Grid_qs,
 	Adaptive_Grid_phi_s,
+	Adaptive_Grid_sig_s,
 	Adaptive_Grid_xavg,
 	Adaptive_Grid_yavg,
 	Chi_Square,
@@ -1263,7 +1264,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_pixellated_source(const double zsrc, const int band_number = 0);
 	void remove_pixellated_source(int src_number);
 	void print_pixellated_source_list(bool show_vary_params);
-	void find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& xavg, double& yavg);
+	void find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& sigavg, double& xavg, double& yavg);
 
 	bool add_pixellated_lens(const double zlens);
 	void remove_pixellated_lens(int pixlens_number);

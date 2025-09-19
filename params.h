@@ -141,6 +141,9 @@ struct DerivedParam
 		} else if (derived_param_type == Adaptive_Grid_phi_s) {
 			name = "phi_s"; latex_name = "\\phi_{s}";
 			funcparam = -1e30; // no input parameter for this dparam
+		} else if (derived_param_type == Adaptive_Grid_sig_s) {
+			name = "sig_s"; latex_name = "\\sigma_{s}";
+			funcparam = -1e30; // no input parameter for this dparam
 		} else if (derived_param_type == Adaptive_Grid_xavg) {
 			name = "xavg_s"; latex_name = "x_{avg,s}";
 			funcparam = -1e30; // no input parameter for this dparam
@@ -213,9 +216,9 @@ struct DerivedParam
 			} else if (lens_in->raw_chisq==-1e30) {
 				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
 			}
-			double qs,phi_s,xavg,yavg;
+			double qs,phi_s,sig_s,xavg,yavg;
 			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
-			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
+			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,sig_s,xavg,yavg);
 			return qs;
 		} else if (derived_param_type == Adaptive_Grid_phi_s) {
 			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
@@ -225,10 +228,21 @@ struct DerivedParam
 			} else if (lens_in->raw_chisq==-1e30) {
 				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
 			}
-			double qs,phi_s,phi_s_deg,xavg,yavg;
-			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
+			double qs,phi_s,phi_s_deg,sig_s,xavg,yavg;
+			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,sig_s,xavg,yavg);
 			phi_s_deg = phi_s*180.0/M_PI;
 			return phi_s_deg;
+		} else if (derived_param_type == Adaptive_Grid_sig_s) {
+			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
+			if (lens_in->lens_parent != NULL) {
+				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
+				if (lens_in->raw_chisq==-1e30) lens_in->lens_parent->LogLikeFunc(NULL); // If a source inversion hasn't been performed yet, do it here
+			} else if (lens_in->raw_chisq==-1e30) {
+				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
+			}
+			double qs,phi_s,sig_s,xavg,yavg;
+			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,sig_s,xavg,yavg);
+			return sig_s;
 		} else if (derived_param_type == Adaptive_Grid_xavg) {
 			if (lens_in->lens_parent != NULL) {
 				// this means we're running it from the "fitmodel" QLens object, so the likelihood needs to be run from the parent QLens object
@@ -236,9 +250,9 @@ struct DerivedParam
 			} else if (lens_in->raw_chisq==-1e30) {
 				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
 			}
-			double qs,phi_s,xavg,yavg;
+			double qs,phi_s,sig_s,xavg,yavg;
 			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
-			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
+			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,sig_s,xavg,yavg);
 			return xavg;
 		} else if (derived_param_type == Adaptive_Grid_yavg) {
 			if (lens_in->lens_parent != NULL) {
@@ -247,9 +261,9 @@ struct DerivedParam
 			} else if (lens_in->raw_chisq==-1e30) {
 				lens_in->invert_surface_brightness_map_from_data(lens_in->raw_chisq, false, true); // If a source inversion hasn't been performed yet, do it here
 			}
-			double qs,phi_s,xavg,yavg;
+			double qs,phi_s,sig_s,xavg,yavg;
 			// Here, int_param is the number of pixels per side being sampled (so if funcparam=200, it's a 200x200 grid being sampled)
-			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,xavg,yavg);
+			lens_in->find_pixellated_source_moments(int_param,qs,phi_s,sig_s,xavg,yavg);
 			return yavg;
 		} else if (derived_param_type == Chi_Square) {
 			double chisq_out;
@@ -308,6 +322,8 @@ struct DerivedParam
 			std::cout << "Axis ratio derived from source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
 		} else if (derived_param_type == Adaptive_Grid_phi_s) {
 			std::cout << "Orientation angle derived of source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
+		} else if (derived_param_type == Adaptive_Grid_sig_s) {
+			std::cout << "Dispersion of source using a " << int_param << "x" << int_param << " sampling" << std::endl;
 		} else if (derived_param_type == Adaptive_Grid_xavg) {
 			std::cout << "Centroid x-coordinate of pixellated source using a " << int_param << "x" << int_param << " sampling" << std::endl;
 		} else if (derived_param_type == Adaptive_Grid_yavg) {

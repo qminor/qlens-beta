@@ -5298,7 +5298,7 @@ double DelaunaySourceGrid::find_moment(const int p, const int q, const int npix,
 	return moment;
 }
 
-void DelaunaySourceGrid::find_source_moments(const int npix, double &qs, double &phi_s, double &xavg, double &yavg)
+void DelaunaySourceGrid::find_source_moments(const int npix, double &qs, double &phi_s, double &sigavg, double &xavg, double &yavg)
 {
 	double M00, M10, M01, M20, M02, M11;
 #ifdef USE_OPENMP
@@ -5349,9 +5349,10 @@ void DelaunaySourceGrid::find_source_moments(const int npix, double &qs, double 
 			phi_s = atan(2*mu11/(mu20-mu02))/2;
 			if (mu02 > mu20) phi_s += M_HALFPI;
 		}
-		cout << "b=" << sig_minor << " a=" << sig_major << endl;
-		cout << "qs=" << qs << " phi_s=" << phi_s << endl;
+		//cout << "b=" << sig_minor << " a=" << sig_major << endl;
+		//cout << "qs=" << qs << " phi_s=" << phi_s << endl;
 	} while ((abs(qs-qs_old) > qstol*qs) and (++index < max_it));
+	sigavg = sqrt(sig_major*sig_minor);
 	//} while (index++ < 2);
 #ifdef USE_OPENMP
 		if (lens->show_wtime) {

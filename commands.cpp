@@ -1104,6 +1104,7 @@ void QLens::process_commands(bool read_file)
 							"r_perturb_rel -- Same as r_perturb, except it's subtracted from the unperturbed critical curve location\n"
 							"qs -- axis ratio derived from source pixel covariance matrix; [param1] gives # of points sampled\n" 
 							"phi_s -- orientation derived from source pixel covariance matrix; [param1] gives # of points sampled\n" 
+							"sig_s -- source dispersion from source pixel covariance matrix; [param1] gives # of points sampled\n" 
 							"xavg_s -- centroid x-coordinate derived from adaptive source grid; [param1] gives # of points sampled\n" 
 							"yavg_s -- centroid y-coordinate derived from adaptive source grid; [param1] gives # of points sampled\n" 
 							"\n";
@@ -8342,7 +8343,7 @@ void QLens::process_commands(bool read_file)
 					if (weak_lensing_data.n_sources==0) Complain("no weak lensing data has been loaded");
 					string range;
 					extract_word_starts_with('[',2,range); // allow for ranges to be specified (if it's not, then ranges are set to "")
-					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotshear' requires either zero or one arguments (shear_filename)");
+					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotshear' requires either zero or one argument (shear_filename)");
 					string filename = "shear.dat";
 					if ((terminal==TEXT) and (nwords==3)) filename = words[2];
 					plot_weak_lensing_shear_data(true,filename);
@@ -8964,47 +8965,52 @@ void QLens::process_commands(bool read_file)
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								add_derived_param(LensParam,paramnum,lensnum,pmode,use_kpc);
 							} else if (words[3]=="r_perturb") {
-								if (nwords != 5) Complain("derived parameter r_perturb requires only one arguments (lens_number)");
+								if (nwords != 5) Complain("derived parameter r_perturb requires only one argument (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
 								add_derived_param(Perturbation_Radius,0.0,lensnum,-1,use_kpc);
 							} else if (words[3]=="r_perturb_rel") {
-								if (nwords != 5) Complain("derived parameter r_perturb_rel requires only one arguments (lens_number)");
+								if (nwords != 5) Complain("derived parameter r_perturb_rel requires only one argument (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
 								add_derived_param(Relative_Perturbation_Radius,0.0,lensnum,-1,use_kpc);
 							} else if (words[3]=="mass_perturb") {
-								if (nwords != 5) Complain("derived parameter mass_perturb requires only one arguments (lens_number)");
+								if (nwords != 5) Complain("derived parameter mass_perturb requires only one argument (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
 								add_derived_param(Robust_Perturbation_Mass,0.0,lensnum,-1,use_kpc);
 							} else if (words[3]=="sigma_perturb") {
-								if (nwords != 5) Complain("derived parameter sigma_perturb requires only one arguments (lens_number)");
+								if (nwords != 5) Complain("derived parameter sigma_perturb requires only one argument (lens_number)");
 								if (!(ws[4] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								if (lensnum == 0) Complain("specified lens number cannot be 0 (since lens 0 is assumed to be primary lens)");
 								add_derived_param(Robust_Perturbation_Density,0.0,lensnum,-1,use_kpc);
 							} else if (words[3]=="qs") {
 								double npix;
-								if (nwords != 5) Complain("derived parameter qs requires only one arguments (pixel number)");
+								if (nwords != 5) Complain("derived parameter qs requires only one argument (pixel number)");
 								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
 								add_derived_param(Adaptive_Grid_qs,-1,npix,-1,false);
 							} else if (words[3]=="phi_s") {
 								double npix;
-								if (nwords != 5) Complain("derived parameter phi_s requires only one arguments (pixel number)");
+								if (nwords != 5) Complain("derived parameter phi_s requires only one argument (pixel number)");
 								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
 								add_derived_param(Adaptive_Grid_phi_s,-1,npix,-1,false);
+							} else if (words[3]=="sig_s") {
+								double npix;
+								if (nwords != 5) Complain("derived parameter sig_s requires only one argument (pixel number)");
+								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
+								add_derived_param(Adaptive_Grid_sig_s,-1,npix,-1,false);
 							} else if (words[3]=="xavg_s") {
 								double npix;
-								if (nwords != 5) Complain("derived parameter qs requires only one arguments (pixel number)");
+								if (nwords != 5) Complain("derived parameter qs requires only one argument (pixel number)");
 								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
 								add_derived_param(Adaptive_Grid_xavg,-1,npix,-1,false);
 							} else if (words[3]=="yavg_s") {
 								double npix;
-								if (nwords != 5) Complain("derived parameter qs requires only one arguments (pixel number)");
+								if (nwords != 5) Complain("derived parameter qs requires only one argument (pixel number)");
 								if (!(ws[4] >> npix)) Complain("invalid number of pixels");
 								add_derived_param(Adaptive_Grid_yavg,-1,npix,-1,false);
 							} else if (words[3]=="raw_chisq") {
