@@ -388,7 +388,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double mcmc_tolerance; // for Metropolis-Hastings
 	bool mcmc_logfile;
 	bool open_chisq_logfile;
-	bool psf_convolution_mpi;
+	//bool psf_convolution_mpi;
 	bool fft_convolution;
 	bool use_mumps_subcomm;
 	int fgmask_padding;
@@ -578,6 +578,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool clustering_random_initialization;
 	bool weight_initial_centroids;
 	bool use_dualtree_kmeans;
+	bool use_f_src_clusters;
+	double f_src_clusters;
 	int n_src_clusters;
 	int n_cluster_iterations;
 	bool include_potential_perturbations;

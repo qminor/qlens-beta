@@ -11947,10 +11947,10 @@ inline bool ImagePixelGrid::test_if_between(const double& p, const double& a, co
 
 void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_centers, const bool verbal)
 {
-#ifdef USE_MPI
-	MPI_Comm sub_comm;
-	MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm sub_comm;
+	//MPI_Comm_create(*(lens->group_comm), *(lens->mpi_group), &sub_comm);
+//#endif
 
 	//long int ntot_cells_check = 0;
 	//long int ntot_corners_check = 0;
@@ -12006,22 +12006,22 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 			//cout << i << " " << j << " " << n << " " << ntot_corners << " " << mpi_end << endl;
 			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
 		}
-#ifdef USE_MPI
-		#pragma omp master
-		{
-			if (lens->group_np > 1) {
-				int id, chunk, start;
-				for (id=0; id < lens->group_np; id++) {
-					chunk = ntot_corners / lens->group_np;
-					start = id*chunk;
-					if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
-					MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
-					MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
-				}
-			}
-		}
-		#pragma omp barrier
-#endif
+//#ifdef USE_MPI
+		//#pragma omp master
+		//{
+			//if (lens->group_np > 1) {
+				//int id, chunk, start;
+				//for (id=0; id < lens->group_np; id++) {
+					//chunk = ntot_corners / lens->group_np;
+					//start = id*chunk;
+					//if (id == lens->group_np-1) chunk += (ntot_corners % lens->group_np); // assign the remainder elements to the last mpi process
+					//MPI_Bcast(defx_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+					//MPI_Bcast(defy_corners+start,chunk,MPI_DOUBLE,id,sub_comm);
+				//}
+			//}
+		//}
+		//#pragma omp barrier
+//#endif
 		#pragma omp for private(n_cell,i,j,n,n_yp) schedule(dynamic)
 		for (n_cell=mpi_start2; n_cell < mpi_end2; n_cell++) {
 			j = masked_pixels_j[n_cell];
@@ -12088,28 +12088,28 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 		}
 	}
 
-#ifdef USE_MPI
-	if (lens->group_np > 1) {
-		int id, chunk, start;
-		int id2, chunk2, start2;
-		for (id=0; id < lens->group_np; id++) {
-			chunk = ntot_cells / lens->group_np;
-			start = id*chunk;
-			if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
-			if ((!lens->split_imgpixels) or (raytrace_pixel_centers)) {
-				chunk2 = ntot_cells_emask / lens->group_np;
-				start2 = id*chunk2;
-				MPI_Bcast(defx_centers+start2,chunk2,MPI_DOUBLE,id,sub_comm);
-				MPI_Bcast(defy_centers+start2,chunk2,MPI_DOUBLE,id,sub_comm);
-			}
-			MPI_Bcast(area_tri1+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(area_tri2+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(twistx+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(twisty+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(twiststat+start,chunk,MPI_INT,id,sub_comm);
-		}
-	}
-#endif
+//#ifdef USE_MPI
+	//if (lens->group_np > 1) {
+		//int id, chunk, start;
+		//int id2, chunk2, start2;
+		//for (id=0; id < lens->group_np; id++) {
+			//chunk = ntot_cells / lens->group_np;
+			//start = id*chunk;
+			//if (id == lens->group_np-1) chunk += (ntot_cells % lens->group_np); // assign the remainder elements to the last mpi process
+			//if ((!lens->split_imgpixels) or (raytrace_pixel_centers)) {
+				//chunk2 = ntot_cells_emask / lens->group_np;
+				//start2 = id*chunk2;
+				//MPI_Bcast(defx_centers+start2,chunk2,MPI_DOUBLE,id,sub_comm);
+				//MPI_Bcast(defy_centers+start2,chunk2,MPI_DOUBLE,id,sub_comm);
+			//}
+			//MPI_Bcast(area_tri1+start,chunk,MPI_DOUBLE,id,sub_comm);
+			//MPI_Bcast(area_tri2+start,chunk,MPI_DOUBLE,id,sub_comm);
+			//MPI_Bcast(twistx+start,chunk,MPI_DOUBLE,id,sub_comm);
+			//MPI_Bcast(twisty+start,chunk,MPI_DOUBLE,id,sub_comm);
+			//MPI_Bcast(twiststat+start,chunk,MPI_INT,id,sub_comm);
+		//}
+	//}
+//#endif
 	src_xmin = 1e30; src_xmax = -1e30;
 	src_ymin = 1e30; src_ymax = -1e30;
 	for (n=0; n < ntot_corners; n++) {
@@ -12200,19 +12200,19 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 			}
 		}
 	}
-#ifdef USE_MPI
-	if ((lens->group_np > 1) and (lens->split_imgpixels)) {
-		int id, chunk, start;
-		for (id=0; id < lens->group_np; id++) {
-			chunk = ntot_subpixels / lens->group_np;
-			start = id*chunk;
-			if (id == lens->group_np-1) chunk += (ntot_subpixels % lens->group_np); // assign the remainder elements to the last mpi process
-			MPI_Bcast(defx_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(defy_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
-		}
-	}
-	MPI_Comm_free(&sub_comm);
-#endif
+//#ifdef USE_MPI
+	//if ((lens->group_np > 1) and (lens->split_imgpixels)) {
+		//int id, chunk, start;
+		//for (id=0; id < lens->group_np; id++) {
+			//chunk = ntot_subpixels / lens->group_np;
+			//start = id*chunk;
+			//if (id == lens->group_np-1) chunk += (ntot_subpixels % lens->group_np); // assign the remainder elements to the last mpi process
+			//MPI_Bcast(defx_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+			//MPI_Bcast(defy_subpixel_centers+start,chunk,MPI_DOUBLE,id,sub_comm);
+		//}
+	//}
+	//MPI_Comm_free(&sub_comm);
+//#endif
 	if ((!lens->split_imgpixels) or (raytrace_pixel_centers)) {
 		for (n=0; n < ntot_cells_emask; n++) {
 			//n_cell = j*x_N+i;
@@ -15710,12 +15710,12 @@ void QLens::PSF_convolution_Lmatrix(const int imggrid_i, bool verbal)
 {
 	ImagePixelGrid *image_pixel_grid = image_pixel_grids[imggrid_i];
 	PSF *psf = image_pixel_grid->psf;
-#ifdef USE_MPI
-	MPI_Comm sub_comm;
-	if (psf_convolution_mpi) {
-		MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
-	}
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm sub_comm;
+	//if (psf_convolution_mpi) {
+		//MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
+	//}
+//#endif
 	if (psf_supersampling) die("PSF supersampling has not been implemented with sparse Lmatrix");
 	if (psf->use_input_psf_matrix) {
 		if (psf->psf_matrix == NULL) return;
@@ -15732,14 +15732,14 @@ void QLens::PSF_convolution_Lmatrix(const int imggrid_i, bool verbal)
 
 	// If the PSF is sufficiently wide, it may save time to MPI the PSF convolution by setting psf_convolution_mpi to 'true'. This option is off by default.
 	int mpi_chunk, mpi_start, mpi_end;
-	if (psf_convolution_mpi) {
-		mpi_chunk = image_npixels / group_np;
-		mpi_start = group_id*mpi_chunk;
-		if (group_id == group_np-1) mpi_chunk += (image_npixels % group_np); // assign the remainder elements to the last mpi process
-		mpi_end = mpi_start + mpi_chunk;
-	} else {
+	//if (psf_convolution_mpi) {
+		//mpi_chunk = image_npixels / group_np;
+		//mpi_start = group_id*mpi_chunk;
+		//if (group_id == group_np-1) mpi_chunk += (image_npixels % group_np); // assign the remainder elements to the last mpi process
+		//mpi_end = mpi_start + mpi_chunk;
+	//} else {
 		mpi_start = 0; mpi_end = image_npixels;
-	}
+	//}
 
 	int i,j,k,l,m;
 	int Lmatrix_psf_nn=0;
@@ -15795,26 +15795,26 @@ void QLens::PSF_convolution_Lmatrix(const int imggrid_i, bool verbal)
 			Lmatrix_psf_nn_part += col_i;
 		}
 
-#ifdef USE_MPI
-		if (psf_convolution_mpi)
-			MPI_Allreduce(&Lmatrix_psf_nn_part, &Lmatrix_psf_nn, 1, MPI_INT, MPI_SUM, sub_comm);
-		else
-			Lmatrix_psf_nn = Lmatrix_psf_nn_part;
-#else
+//#ifdef USE_MPI
+		//if (psf_convolution_mpi)
+			//MPI_Allreduce(&Lmatrix_psf_nn_part, &Lmatrix_psf_nn, 1, MPI_INT, MPI_SUM, sub_comm);
+		//else
+			//Lmatrix_psf_nn = Lmatrix_psf_nn_part;
+//#else
 		Lmatrix_psf_nn = Lmatrix_psf_nn_part;
-#endif
+//#endif
 
-#ifdef USE_MPI
-		if (psf_convolution_mpi) {
-			int id, chunk, start, end, length;
-			for (id=0; id < group_np; id++) {
-				chunk = image_npixels / group_np;
-				start = id*chunk;
-				if (id == group_np-1) chunk += (image_npixels % group_np); // assign the remainder elements to the last mpi process
-				MPI_Bcast(Lmatrix_psf_row_nn + start,chunk,MPI_INT,id,sub_comm);
-			}
-		}
-#endif
+//#ifdef USE_MPI
+		//if (psf_convolution_mpi) {
+			//int id, chunk, start, end, length;
+			//for (id=0; id < group_np; id++) {
+				//chunk = image_npixels / group_np;
+				//start = id*chunk;
+				//if (id == group_np-1) chunk += (image_npixels % group_np); // assign the remainder elements to the last mpi process
+				//MPI_Bcast(Lmatrix_psf_row_nn + start,chunk,MPI_INT,id,sub_comm);
+			//}
+		//}
+//#endif
 	} else {
 		for (int img_index=0; img_index < image_npixels; img_index++) {
 			Lmatrix_psf_row_nn[img_index] = 0;
@@ -15891,21 +15891,21 @@ void QLens::PSF_convolution_Lmatrix(const int imggrid_i, bool verbal)
 		}
 	}
 
-#ifdef USE_MPI
-	if (psf_convolution_mpi) {
-		int id, chunk, start, end, length;
-		for (id=0; id < group_np; id++) {
-			chunk = image_npixels / group_np;
-			start = id*chunk;
-			if (id == group_np-1) chunk += (image_npixels % group_np); // assign the remainder elements to the last mpi process
-			end = start + chunk;
-			length = image_pixel_location_Lmatrix_psf[end] - image_pixel_location_Lmatrix_psf[start];
-			MPI_Bcast(Lmatrix_psf + image_pixel_location_Lmatrix_psf[start],length,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(Lmatrix_index_psf + image_pixel_location_Lmatrix_psf[start],length,MPI_INT,id,sub_comm);
-		}
-		MPI_Comm_free(&sub_comm);
-	}
-#endif
+//#ifdef USE_MPI
+	//if (psf_convolution_mpi) {
+		//int id, chunk, start, end, length;
+		//for (id=0; id < group_np; id++) {
+			//chunk = image_npixels / group_np;
+			//start = id*chunk;
+			//if (id == group_np-1) chunk += (image_npixels % group_np); // assign the remainder elements to the last mpi process
+			//end = start + chunk;
+			//length = image_pixel_location_Lmatrix_psf[end] - image_pixel_location_Lmatrix_psf[start];
+			//MPI_Bcast(Lmatrix_psf + image_pixel_location_Lmatrix_psf[start],length,MPI_DOUBLE,id,sub_comm);
+			//MPI_Bcast(Lmatrix_index_psf + image_pixel_location_Lmatrix_psf[start],length,MPI_INT,id,sub_comm);
+		//}
+		//MPI_Comm_free(&sub_comm);
+	//}
+//#endif
 
 	if ((mpi_id==0) and (verbal)) cout << "Lmatrix after PSF convolution: Lmatrix now has " << indx << " nonzero elements\n";
 
@@ -16199,12 +16199,12 @@ void QLens::PSF_convolution_Lmatrix_dense(const int imggrid_i, const bool verbal
 	ImagePixelGrid *image_pixel_grid = image_pixel_grids[imggrid_i];
 	ImagePixelData *image_pixel_data = image_pixel_grid->image_pixel_data;
 	PSF *psf = image_pixel_grid->psf;
-#ifdef USE_MPI
-	MPI_Comm sub_comm;
-	if (psf_convolution_mpi) {
-		MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
-	}
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm sub_comm;
+	//if (psf_convolution_mpi) {
+		//MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
+	//}
+//#endif
 
 	if (source_and_lens_n_amps > 0) {
 		if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution (dense)...\n";
@@ -17733,10 +17733,10 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool
 {
 	ImagePixelGrid *image_pixel_grid;
 	image_pixel_grid = image_pixel_grids[imggrid_i];
-#ifdef USE_MPI
-	MPI_Comm sub_comm;
-	MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm sub_comm;
+	//MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
+//#endif
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -18068,26 +18068,26 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool
 			}
 		}
 
-#ifdef USE_MPI
-		MPI_Allreduce(&Fmatrix_nn_part, &Fmatrix_nn, 1, MPI_INT, MPI_SUM, sub_comm);
-#else
+//#ifdef USE_MPI
+		//MPI_Allreduce(&Fmatrix_nn_part, &Fmatrix_nn, 1, MPI_INT, MPI_SUM, sub_comm);
+//#else
 		Fmatrix_nn = Fmatrix_nn_part;
-#endif
+//#endif
 		Fmatrix_nn += n_amps+1;
 
 		Fmatrix = new double[Fmatrix_nn];
 		Fmatrix_index = new int[Fmatrix_nn];
 
-#ifdef USE_MPI
-		int id, chunk, start, end, length;
-		for (id=0; id < group_np; id++) {
-			chunk = n_amps / group_np;
-			start = id*chunk;
-			if (id == group_np-1) chunk += (n_amps % group_np); // assign the remainder elements to the last mpi process
-			MPI_Bcast(Fmatrix_row_nn + start,chunk,MPI_INT,id,sub_comm);
-			MPI_Bcast(Fmatrix_diags + start,chunk,MPI_DOUBLE,id,sub_comm);
-		}
-#endif
+//#ifdef USE_MPI
+		//int id, chunk, start, end, length;
+		//for (id=0; id < group_np; id++) {
+			//chunk = n_amps / group_np;
+			//start = id*chunk;
+			//if (id == group_np-1) chunk += (n_amps % group_np); // assign the remainder elements to the last mpi process
+			//MPI_Bcast(Fmatrix_row_nn + start,chunk,MPI_INT,id,sub_comm);
+			//MPI_Bcast(Fmatrix_diags + start,chunk,MPI_DOUBLE,id,sub_comm);
+		//}
+//#endif
 
 		Fmatrix_index[0] = n_amps+1;
 		for (i=0; i < n_amps; i++) {
@@ -18107,17 +18107,17 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool
 			}
 		}
 
-#ifdef USE_MPI
-		for (id=0; id < group_np; id++) {
-			chunk = n_amps / group_np;
-			start = id*chunk;
-			if (id == group_np-1) chunk += (n_amps % group_np); // assign the remainder elements to the last mpi process
-			end = start + chunk;
-			length = Fmatrix_index[end] - Fmatrix_index[start];
-			MPI_Bcast(Fmatrix + Fmatrix_index[start],length,MPI_DOUBLE,id,sub_comm);
-			MPI_Bcast(Fmatrix_index + Fmatrix_index[start],length,MPI_INT,id,sub_comm);
-		}
-#endif
+//#ifdef USE_MPI
+		//for (id=0; id < group_np; id++) {
+			//chunk = n_amps / group_np;
+			//start = id*chunk;
+			//if (id == group_np-1) chunk += (n_amps % group_np); // assign the remainder elements to the last mpi process
+			//end = start + chunk;
+			//length = Fmatrix_index[end] - Fmatrix_index[start];
+			//MPI_Bcast(Fmatrix + Fmatrix_index[start],length,MPI_DOUBLE,id,sub_comm);
+			//MPI_Bcast(Fmatrix_index + Fmatrix_index[start],length,MPI_INT,id,sub_comm);
+		//}
+//#endif
 
 #ifdef USE_OPENMP
 		if (show_wtime) {
@@ -18224,9 +18224,9 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool
 	delete[] Fmatrix_rows;
 	delete[] Fmatrix_diags;
 	delete[] Fmatrix_row_nn;
-#ifdef USE_MPI
-	MPI_Comm_free(&sub_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm_free(&sub_comm);
+//#endif
 }
 
 void QLens::create_lensing_matrices_from_Lmatrix_dense(const int imggrid_i, const bool potential_perturbations, const bool verbal)
@@ -20157,14 +20157,14 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 
 void QLens::invert_lens_mapping_CG_method(const int imggrid_i, bool verbal)
 {
-#ifdef USE_MPI
-	MPI_Comm sub_comm;
-	MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm sub_comm;
+	//MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
+//#endif
 
-#ifdef USE_MPI
-	MPI_Barrier(sub_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Barrier(sub_comm);
+//#endif
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -20175,9 +20175,9 @@ void QLens::invert_lens_mapping_CG_method(const int imggrid_i, bool verbal)
 	double *temp = new double[n_amps];
 	// it would be prettier to just pass the MPI communicator in, and have CG_sparse figure out the rank and # of processes internally--implement this later
 	CG_sparse cg_method(Fmatrix,Fmatrix_index,1e-4,100000,inversion_nthreads,group_np,group_id);
-#ifdef USE_MPI
-	cg_method.set_MPI_comm(&sub_comm);
-#endif
+//#ifdef USE_MPI
+	//cg_method.set_MPI_comm(&sub_comm);
+//#endif
 	for (int i=0; i < n_amps; i++) temp[i] = 0;
 	if ((regularization_method != None) and (source_npixels > 0))
 		cg_method.set_determinant_mode(true);
@@ -20206,9 +20206,9 @@ void QLens::invert_lens_mapping_CG_method(const int imggrid_i, bool verbal)
 
 		for (int i=0; i < n_src_inv; i++) {
 			CG_sparse cg_det((*Rmatrix_ptr),(*Rmatrix_index_ptr),3e-4,100000,inversion_nthreads,group_np,group_id);
-#ifdef USE_MPI
-			cg_det.set_MPI_comm(&sub_comm);
-#endif
+//#ifdef USE_MPI
+			//cg_det.set_MPI_comm(&sub_comm);
+//#endif
 			(*Rmatrix_log_determinant_ptr) = cg_det.calculate_log_determinant();
 			if ((mpi_id==0) and (verbal)) cout << "Rmatrix log determinant = " << (*Rmatrix_log_determinant_ptr) << endl;
 		}
@@ -20228,9 +20228,9 @@ void QLens::invert_lens_mapping_CG_method(const int imggrid_i, bool verbal)
 
 	delete[] temp;
 	update_source_and_lensgrid_amplitudes(imggrid_i,verbal);
-#ifdef USE_MPI
-	MPI_Comm_free(&sub_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm_free(&sub_comm);
+//#endif
 }
 
 void QLens::invert_lens_mapping_UMFPACK(const int imggrid_i, double& logdet, bool verbal, bool use_copy)
@@ -20415,15 +20415,15 @@ void QLens::invert_lens_mapping_UMFPACK(const int imggrid_i, double& logdet, boo
 
 void QLens::invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, bool verbal, bool use_copy)
 {
-#ifdef USE_MPI
-	MPI_Comm sub_comm;
-	MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm sub_comm;
+	//MPI_Comm_create(*group_comm, *mpi_group, &sub_comm);
+//#endif
 
-#ifdef USE_MPI
-	MPI_Comm this_comm;
-	MPI_Comm_create(*my_comm, *my_group, &this_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm this_comm;
+	//MPI_Comm_create(*my_comm, *my_group, &this_comm);
+//#endif
 
 #ifndef USE_MUMPS
 	die("QLens requires compilation with MUMPS for Cholesky factorization");
@@ -20473,13 +20473,13 @@ void QLens::invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, bool 
 		}
 	}
 
-#ifdef USE_MPI
-	if (use_mumps_subcomm) {
-		mumps_solver->comm_fortran=(MUMPS_INT) MPI_Comm_c2f(sub_comm);
-	} else {
-		mumps_solver->comm_fortran=(MUMPS_INT) MPI_Comm_c2f(this_comm);
-	}
-#endif
+//#ifdef USE_MPI
+	//if (use_mumps_subcomm) {
+		//mumps_solver->comm_fortran=(MUMPS_INT) MPI_Comm_c2f(sub_comm);
+	//} else {
+		//mumps_solver->comm_fortran=(MUMPS_INT) MPI_Comm_c2f(this_comm);
+	//}
+//#endif
 	mumps_solver->job = JOB_INIT; // initialize
 	mumps_solver->sym = 2; // specifies that matrix is symmetric and positive-definite
 	//cout << "ICNTL = " << mumps_solver->icntl[13] << endl;
@@ -20502,16 +20502,16 @@ void QLens::invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, bool 
 		mumps_solver->icntl[28]=2; // parallel analysis phase
 	}
 	mumps_solver->job = 6; // specifies to factorize and solve linear equation
-#ifdef USE_MPI
-	MPI_Barrier(sub_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Barrier(sub_comm);
+//#endif
 	dmumps_c(mumps_solver);
-#ifdef USE_MPI
-	if (use_mumps_subcomm) {
-		MPI_Bcast(temp,n_amps,MPI_DOUBLE,0,sub_comm);
-		MPI_Barrier(sub_comm);
-	}
-#endif
+//#ifdef USE_MPI
+	//if (use_mumps_subcomm) {
+		//MPI_Bcast(temp,n_amps,MPI_DOUBLE,0,sub_comm);
+		//MPI_Barrier(sub_comm);
+	//}
+//#endif
 
 	if (mumps_solver->info[0] < 0) {
 		if (mumps_solver->info[0]==-10) die("Singular matrix, cannot invert");
@@ -20603,10 +20603,10 @@ void QLens::invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, bool 
 	delete[] Fmatrix_elements;
 	if (imggrid_i >=0) update_source_and_lensgrid_amplitudes(imggrid_i,verbal);
 #endif
-#ifdef USE_MPI
-	MPI_Comm_free(&sub_comm);
-	MPI_Comm_free(&this_comm);
-#endif
+//#ifdef USE_MPI
+	//MPI_Comm_free(&sub_comm);
+	//MPI_Comm_free(&this_comm);
+//#endif
 
 }
 

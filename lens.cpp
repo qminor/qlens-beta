@@ -277,7 +277,7 @@ QLens::QLens() : UCMC(), ModelParams()
 	mcmc_tolerance = 1.01; // Gelman-Rubin statistic for T-Walk sampler
 	mcmc_logfile = false;
 	open_chisq_logfile = false;
-	psf_convolution_mpi = false;
+	//psf_convolution_mpi = false;
 	//use_input_psf_matrix = false;
 	n_psf = 0;
 	psf_list = NULL;
@@ -506,6 +506,8 @@ QLens::QLens() : UCMC(), ModelParams()
 	weight_initial_centroids = false;
 	use_random_delaunay_srcgrid = false;
 	use_dualtree_kmeans = true;
+	use_f_src_clusters = true;
+	f_src_clusters = 0.5;
 	n_src_clusters = -1;
 	n_cluster_iterations = 20;
 	regrid_if_unmapped_source_subpixels = false;
@@ -666,7 +668,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	mcmc_tolerance = lens_in->mcmc_tolerance; // for T-Walk sampler
 	mcmc_logfile = lens_in->mcmc_logfile;
 	open_chisq_logfile = lens_in->open_chisq_logfile;
-	psf_convolution_mpi = lens_in->psf_convolution_mpi;
+	//psf_convolution_mpi = lens_in->psf_convolution_mpi;
 	//use_input_psf_matrix = lens_in->use_input_psf_matrix;
 	psf_threshold = lens_in->psf_threshold;
 	psf_ptsrc_threshold = lens_in->psf_ptsrc_threshold;
@@ -903,6 +905,8 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	weight_initial_centroids = lens_in->weight_initial_centroids;
 	use_random_delaunay_srcgrid = lens_in->use_random_delaunay_srcgrid;
 	use_dualtree_kmeans = lens_in->use_dualtree_kmeans;
+	use_f_src_clusters = lens_in->use_f_src_clusters;
+	f_src_clusters = lens_in->f_src_clusters;
 	n_src_clusters = lens_in->n_src_clusters;
 	n_cluster_iterations = lens_in->n_cluster_iterations;
 	regrid_if_unmapped_source_subpixels = lens_in->regrid_if_unmapped_source_subpixels;
@@ -11284,7 +11288,6 @@ bool QLens::get_stepsizes_from_percentiles(const double pct_scaling, dvector& st
 	return status;
 }
 
-
 bool QLens::output_scaled_percentiles_from_chain(const double pct_scaling)
 {
 	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
@@ -11316,8 +11319,6 @@ bool QLens::output_scaled_percentiles_from_chain(const double pct_scaling)
 
 	return status;
 }
-
-
 
 bool QLens::output_coolest_files(const string filename)
 {
@@ -12808,9 +12809,14 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		if ((use_weighted_srcpixel_clustering) and (weight_initial_centroids) and (min_weight != 0)) use_weighted_initial_centroids = true;
 		else use_weighted_initial_centroids = false;
 
-		int n_src_centroids = n_src_clusters;	
-		if (n_src_centroids < 0) n_src_centroids = npix_in_lensing_mask / 2;
-		else if (n_src_centroids == 0) n_src_centroids = npix_in_lensing_mask;
+		int n_src_centroids;
+		if (use_f_src_clusters) {
+			n_src_centroids = (int) (npix_in_lensing_mask * f_src_clusters);
+		} else {
+			n_src_centroids = n_src_clusters;	
+			if (n_src_centroids < 0) n_src_centroids = npix_in_lensing_mask / 2;
+			else if (n_src_centroids == 0) n_src_centroids = npix_in_lensing_mask;
+		}
 
 		int data_reduce_factor;
 		int icent_offset=0;
@@ -14604,8 +14610,8 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 
 	bool include_lum_weighting = ((use_lum_weighted_regularization) and (get_lumreg_from_sbweights)) ? true : false;
 	if ((regularization_method != None) and (image_pixel_grids[imggrid_i]->delaunay_srcgrid != NULL)) {
-		if (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,false,verbal)==false) { clear_pixel_matrices(); return false; } // in this case, covariance matrix was not positive definite 
-		if ((potential_perturbations) and (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { clear_pixel_matrices(); return false; } // in this case, covariance matrix was not positive definite 
+		if (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,false,verbal)==false) { clear_pixel_matrices(); clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
+		if ((potential_perturbations) and (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { clear_pixel_matrices(); clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
 	}
 
 	if ((mpi_id==0) and (verbal)) {
@@ -14668,6 +14674,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings (with lum weighting)...\n";
 		if (assign_pixel_mappings(imggrid_i,potential_perturbations,verbal)==false) {
 			clear_pixel_matrices();
+			clear_sparse_lensing_matrices();
 			return false;
 		}
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings (with lum weighting)... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
@@ -14680,8 +14687,8 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices (with lum weighting)...\n";
 		initialize_pixel_matrices(imggrid_i,verbal);
 		if (regularization_method != None) {
-			if (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,false,verbal)==false) { clear_pixel_matrices(); return false; } // in this case, covariance matrix was not positive definite 
-			if ((potential_perturbations) and (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { clear_pixel_matrices(); return false; } // in this case, covariance matrix was not positive definite 
+			if (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,false,verbal)==false) { clear_pixel_matrices(); clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
+			if ((potential_perturbations) and (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { clear_pixel_matrices(); clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
 		}
 		if (inversion_method==DENSE) {
 			PSF_convolution_Lmatrix_dense(imggrid_i,verbal);

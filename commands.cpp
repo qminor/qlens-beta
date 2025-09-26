@@ -2172,7 +2172,7 @@ void QLens::process_commands(bool read_file)
 					cout << "simulate_pixel_noise = " << display_switch(simulate_pixel_noise) << endl;
 					//cout << "psf_width: (" << psf_list[0]->psf_width_x << "," << psf_list[0]->psf_width_y << ")\n";
 					cout << "psf_threshold = " << psf_threshold << endl;
-					cout << "psf_mpi: " << display_switch(psf_convolution_mpi) << endl;
+					//cout << "psf_mpi: " << display_switch(psf_convolution_mpi) << endl;
 					cout << endl;
 					cout << "\033[4mSource pixel reconstruction settings\033[0m\n";
 					cout << "inversion_method: " << ((inversion_method==MUMPS) ? "LDL factorization (MUMPS)\n" : (inversion_method==UMFPACK) ? "LU factorization (UMFPACK)\n" : (inversion_method==CG_Method) ? "conjugate gradient method\n" : "unknown\n");
@@ -2478,6 +2478,7 @@ void QLens::process_commands(bool read_file)
 					n_src_clusters = n_clusters;
 					if (n_clusters < 0) n_src_clusters = HALF_DATAPIXELS;
 				}
+				if (use_f_src_clusters) use_f_src_clusters = false;
 			} else if (nwords==1) {
 				if (mpi_id==0) {
 					if (n_src_clusters == ALL_DATAPIXELS) cout << "Number of source clusters for Delaunay grid = 'all' (number of data pixels within mask)" << endl;
@@ -2485,6 +2486,19 @@ void QLens::process_commands(bool read_file)
 					else cout << "Number of source clusters for Delaunay grid = " << n_src_clusters << endl;
 				}
 			} else Complain("must specify either zero or one argument (number of source clusters)");
+		}
+		else if (words[0]=="f_src_clusters")
+		{
+			double f_clusters;
+			if (nwords == 2) {
+				if (!(ws[1] >> f_clusters)) Complain("invalid fraction of source clusters for Delaunay grid");
+				f_src_clusters = f_clusters;
+				if (!use_f_src_clusters) use_f_src_clusters = true;
+			} else if (nwords==1) {
+				if (mpi_id==0) {
+					cout << "Fraction of source clusters versus data pixels for Delaunay grid = " << f_src_clusters << endl;
+				}
+			} else Complain("must specify either zero or one argument (fraction of source clusters)");
 		}
 		else if (words[0]=="n_cluster_it")
 		{
@@ -13426,15 +13440,15 @@ void QLens::process_commands(bool read_file)
 				set_switch(simplex_show_bestfit,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="psf_mpi")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use parallel PSF convolution with MPI: " << display_switch(psf_convolution_mpi) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'psf_mpi' command; must specify 'on' or 'off'");
-				set_switch(psf_convolution_mpi,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
+		//else if (words[0]=="psf_mpi")
+		//{
+			//if (nwords==1) {
+				//if (mpi_id==0) cout << "Use parallel PSF convolution with MPI: " << display_switch(psf_convolution_mpi) << endl;
+			//} else if (nwords==2) {
+				//if (!(ws[1] >> setword)) Complain("invalid argument to 'psf_mpi' command; must specify 'on' or 'off'");
+				//set_switch(psf_convolution_mpi,setword);
+			//} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		//}
 		else if (words[0]=="parallel_mumps")
 		{
 			if (nwords==1) {
@@ -14658,6 +14672,15 @@ void QLens::process_commands(bool read_file)
 				set_switch(use_srcpixel_clustering,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
+		}
+		else if (words[0]=="use_f_src_clusters")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Define number of src clusters in terms of fraction of data pixels: " << display_switch(use_f_src_clusters) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_f_src_clusters' command; must specify 'on' or 'off'");
+				set_switch(use_f_src_clusters,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="use_saved_sbweights")
 		{
