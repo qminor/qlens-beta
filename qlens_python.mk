@@ -9,7 +9,9 @@
 #MULTINEST_LIB = L/.../MultiNest/lib -lmultinest_mpi # enter in multinest library path, and add the folder to LD_LIBRARY_PATH
 #POLYCHORD_LIB = -L/.../PolyChord/lib -lchord # enter in polychord library path, and add the folder to LD_LIBRARY_PATH
 
+INC = -I/usr/local/Cellar/python@3.9/3.9.22/Frameworks/Python.framework/Versions/3.9/include/python3.9/
 # Version without MUMPS
+#default: qlens mkdist cosmocalc qlens-wrap
 default: qlens mkdist cosmocalc qlens-wrap
 CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
@@ -22,8 +24,8 @@ OPTS_NO_OPT = -Wno-write-strings -std=c++11
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
 #FLAGS = -DUSE_READLINE
 FLAGS = -I/usr/local/include/python3.7m/
-#OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
-OTHERLIBS =  -lm -lreadline -ltcmalloc_minimal
+#OTHERLIBS =  -lm -lreadline -ltcmalloc_minimal -lcfitsio
+OTHERLIBS =  -lm -lreadline 
 LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 
 # Version with MUMPS
@@ -40,22 +42,22 @@ LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 
 CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
-CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
+CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(INC)
 
-objects = profile.o sbprofile.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
-				cg.o mcmchdr.o errors.o brent.o sort.o gauss.o romberg.o spline.o \
-				trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
+objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o params.o modelparams.o lenscalc.o \
+				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o errors.o brent.o sort.o gauss.o \
+				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
 
-wrapper_objects = profile.o mcmceval.o commands.o lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o \
-				models.o sbprofile.o errors.o brent.o sort.o gauss.o \
-				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
+wrapper_objects = profile.o mcmceval.o egrad.o commands.o params.o modelparams.o lenscalc.o \
+				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o models.o sbprofile.o errors.o brent.o \
+				sort.o gauss.o romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o 
 
 mkdist_objects = mkdist.o
 mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
 cosmocalc_objects = cosmocalc.o
-cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
+cosmocalc_shared_objects = errors.o spline.o romberg.o modelparams.o cosmo.o brent.o
 
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS)  
@@ -64,7 +66,7 @@ qlens_wrapper.o: $(objects)
 	$(CL) -o qlens_wrapper.o `python3 -m pybind11 --includes` -Wall -shared -std=c++11 qlens_wrapper.cpp $(objects)
 
 qlens-wrap: $(wrapper_objects) 
-	$(CL) -o qlens`python3-config --extension-suffix` `python3 -m pybind11 --includes` -Wall -shared -std=c++11 qlens_export.cpp qlens_wrapper.cpp $(wrapper_objects) $(LINKLIBS) -L/usr/local/Cellar/python/3.7.7/Frameworks/Python.framework/Versions/3.7/lib -lpython3.7
+	$(CL) -o qlens`python3-config --extension-suffix` `python3 -m pybind11 --includes` -Wall -shared -std=c++11 qlens_export.cpp qlens_wrapper.cpp $(wrapper_objects) $(LINKLIBS) -L/usr/local/Cellar/python@3.9/3.9.22/Frameworks/Python.framework/Versions/3.9/lib -lpython3.9
 
 mkdist: $(mkdist_objects)
 	$(CC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
@@ -81,13 +83,22 @@ qlens.o: qlens.cpp qlens.h
 commands.o: commands.cpp qlens.h lensvec.h profile.h
 	$(CC_NO_OPT) -c commands.cpp
 
-lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h
+params.o: params.cpp params.h 
+	$(CC) -c params.cpp
+
+modelparams.o: modelparams.cpp modelparams.h 
+	$(CC) -c modelparams.cpp
+
+lenscalc.o: lenscalc.cpp qlens.h lensvec.h
+	$(CC) -c lenscalc.cpp
+
+lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h modelparams.h
 	$(CC) -c lens.cpp
 
 imgsrch.o: imgsrch.cpp qlens.h lensvec.h
 	$(CC) -c imgsrch.cpp
 
-pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h
+pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h modelparams.h
 	$(CC) -c pixelgrid.cpp
 
 cg.o: cg.cpp cg.h
@@ -144,7 +155,7 @@ mkdist.o: mkdist.cpp mcmceval.h errors.h
 hyp_2F1.o: hyp_2F1.cpp hyp_2F1.h complex_functions.h
 	$(CC) -c hyp_2F1.cpp
 
-cosmocalc.o: cosmocalc.cpp errors.h cosmo.h
+cosmocalc.o: cosmocalc.cpp errors.h cosmo.h modelparams.h
 	$(CC) -c cosmocalc.cpp
 
 cosmo.o: cosmo.cpp cosmo.h

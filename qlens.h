@@ -383,6 +383,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int n_livepts; // for nested sampling
 	bool multinest_constant_eff_mode;
 	double multinest_target_efficiency;
+	bool multinest_mode_separation;
 	int polychord_nrepeats;
 	int mcmc_threads;
 	double mcmc_tolerance; // for Metropolis-Hastings
@@ -1226,11 +1227,13 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags);
 	bool set_pixellated_src_vary_parameters(const int src_number, boolvector &vary_flags);
 	bool set_pixellated_lens_vary_parameters(const int pixlens_number, boolvector &vary_flags);
-	bool set_sourcept_vary_parameters(const int sptnumber, const bool vary_x, const bool vary_y); // old--replace with below
 	bool set_ptsrc_vary_parameters(const int src_number, boolvector &vary_flags);
+	bool set_psf_vary_parameters(const int psf_number, boolvector &vary_flags);
 	bool update_pixellated_src_varyflag(const int src_number, const string name, const bool flag);
-	bool update_pixellated_lens_varyflag(const int src_number, const string name, const bool flag);
-	bool update_ptsrc_varyflag(const int src_number, const string name, const bool flag);
+	bool update_pixellated_lens_varyflag(const int pixlens_number, const string name, const bool flag);
+	bool update_ptsrc_varyflag(const int ptsrc_number, const string name, const bool flag);
+	bool update_psf_varyflag(const int psf_number, const string name, const bool flag);
+
 	bool update_cosmo_varyflag(const string name, const bool flag);
 	bool update_misc_varyflag(const string name, const bool flag);
 
@@ -1278,6 +1281,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	void add_psf();
 	void remove_psf(int psf_number);
+	void print_psf_list(bool show_vary_params);
+
 	void add_image_pixel_data();
 	void remove_image_pixel_data(int band_number);
 

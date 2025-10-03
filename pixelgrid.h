@@ -692,6 +692,7 @@ class PSF : public ModelParams
 	double **psf_matrix;
 	double **supersampled_psf_matrix;
 	double psf_width_x, psf_width_y;
+	double psf_offset_x, psf_offset_y;
 
 	bool use_input_psf_matrix;
 	Spline2D psf_spline;

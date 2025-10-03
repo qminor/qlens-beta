@@ -272,6 +272,7 @@ QLens::QLens() : UCMC(), ModelParams()
 	n_livepts = 1000; // for nested sampling
 	multinest_constant_eff_mode = false;
 	multinest_target_efficiency = 0.1;
+	multinest_mode_separation = false;
 	polychord_nrepeats = 5;
 	mcmc_threads = 1;
 	mcmc_tolerance = 1.01; // Gelman-Rubin statistic for T-Walk sampler
@@ -664,6 +665,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	n_livepts = lens_in->n_livepts; // for nested sampling
 	multinest_constant_eff_mode = lens_in->multinest_constant_eff_mode;
 	multinest_target_efficiency = lens_in->multinest_target_efficiency;
+	multinest_mode_separation = lens_in->multinest_mode_separation;
 	polychord_nrepeats = lens_in->polychord_nrepeats;
 	mcmc_tolerance = lens_in->mcmc_tolerance; // for T-Walk sampler
 	mcmc_logfile = lens_in->mcmc_logfile;
@@ -2709,6 +2711,51 @@ bool QLens::set_ptsrc_vary_parameters(const int src_number, boolvector &vary_fla
 	return true;
 }
 
+bool QLens::update_psf_varyflag(const int psf_number, const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf, nparams;
+	psf_list[psf_number]->get_parameter_vary_index(name,pnum);
+	get_psf_parameter_numbers(psf_number,pi,pf);
+	pnum += pi;
+	bool flag0;
+	psf_list[psf_number]->get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (psf_list[psf_number]->update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_settings->remove_params(pnum,pnum+1);
+	} else {
+		get_n_fit_parameters(nparams);
+		get_all_parameter_names();
+		dvector stepsizes(nparams);
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
+	}
+	return true;
+}
+
+bool QLens::set_psf_vary_parameters(const int psf_number, boolvector &vary_flags)
+{
+	int pi, pf, nparams;
+	get_psf_parameter_numbers(psf_number,pi,pf);
+	if (psf_list[psf_number]->set_varyflags(vary_flags)==false) return false;
+	if (pf > pi) param_settings->remove_params(pi,pf);
+	get_n_fit_parameters(nparams);
+	dvector stepsizes(nparams);
+	get_all_parameter_names();
+	if (get_psf_parameter_numbers(psf_number,pi,pf) == true) {
+		get_automatic_initial_stepsizes(stepsizes);
+		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		psf_list[psf_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
+		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
 bool QLens::update_cosmo_varyflag(const string name, const bool flag)
 {
 	// updates one specific parameter
@@ -3615,6 +3662,30 @@ void QLens::print_pixellated_lens_list(bool show_vary_params)
 		}
 	}
 	else cout << "No pixellated lens objects have been specified" << endl;
+	cout << endl;
+	if (use_scientific_notation) cout << setiosflags(ios::scientific);
+}
+
+void QLens::print_psf_list(bool show_vary_params)
+{
+	cout << resetiosflags(ios::scientific);
+	//cout << "N_ZSRC: "<< n_lens_redshifts << endl;
+	if (n_psf > 0) {
+		for (int i=0; i < n_psf; i++) {
+			//cout << "IDX=" << sbprofile_redshift_idx[i] << endl;
+			cout << i << ". ";
+			if (psf_list[i] == NULL) cout << "not created yet" << endl;
+			else if (psf_list[i]->use_input_psf_matrix==true) cout << "pixmap(" << psf_list[i]->psf_npixels_x << "," << psf_list[i]->psf_npixels_y;
+			else cout << "gaussian(" << psf_list[i]->psf_npixels_x << "," << psf_list[i]->psf_npixels_y;
+			if (psf_list[i] != NULL) {
+				cout << "): ";
+				psf_list[i]->print_parameters();
+				if (show_vary_params)
+					psf_list[i]->print_vary_parameters();
+			}
+		}
+	}
+	else cout << "No PSF objects have been specified" << endl;
 	cout << endl;
 	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
@@ -5756,8 +5827,6 @@ double QLens::get_xi_parameter(const double src_redshift, const int lensnum)
 	xi_param = lens_list[lensnum]->get_xi_parameter(zfac);
 	return xi_param;
 }
-
-
 
 double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 {
@@ -8570,6 +8639,7 @@ void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
 	}
 	for (i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_auto_stepsizes(stepsizes,index);
 	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_stepsizes(stepsizes,index);
+	for (i=0; i < n_psf; i++) psf_list[i]->get_auto_stepsizes(stepsizes,index);
 	cosmo.get_auto_stepsizes(stepsizes,index);
 	get_auto_stepsizes(stepsizes,index);
 
@@ -8591,6 +8661,7 @@ void QLens::set_default_plimits()
 	}
 	for (i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	for (i=0; i < n_psf; i++) psf_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
 	cosmo.get_auto_ranges(use_penalty_limits,lower,upper,index);
 	get_auto_ranges(use_penalty_limits,lower,upper,index);
 
@@ -8996,8 +9067,8 @@ bool QLens::get_ptsrc_parameter_numbers(const int ptsrc_i, int& pi, int& pf)
 	ptsrc_list[ptsrc_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 
 	pf = dummy.size();
-	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + ptsrc_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
-	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + ptsrc_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
 	if (pf==pi) return false;
 	return true;
 }
@@ -9015,8 +9086,8 @@ bool QLens::get_psf_parameter_numbers(const int psf_i, int& pi, int& pf)
 	psf_list[psf_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 
 	pf = dummy.size();
-	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + psf_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, psf, pixlens and ptsrc fit parameters come before the psf params
-	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + psf_fit_parameters + pixlens_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, psf, pixlens and ptsrc fit parameters come before the psf params
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, pixsrc, pixlens and ptsrc fit parameters come before the psf params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, pixsrc, pixlens and ptsrc fit parameters come before the psf params
 	if (pf==pi) return false;
 	return true;
 }
@@ -9807,7 +9878,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	double efr, tol, Ztol, logZero;
 
 	IS = 0;					// do Nested Importance Sampling (bad idea)
-	mmodal = 0;					// do mode separation?
+	mmodal = (multinest_mode_separation) ? 1 : 0;					// do mode separation?
 	ceff = (multinest_constant_eff_mode) ? 1 : 0;
 	efr = multinest_target_efficiency;				// set the required efficiency
 	nlive = n_livepts;
@@ -9818,14 +9889,14 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 							// note: posterior files are updated & dumper routine is called after every updInt*10 iterations
 	Ztol = -1e90;				// all the modes with logZ < Ztol are ignored
 	maxModes = 100;				// expected max no. of modes (used only for memory allocation)
-	seed = 11+group_num;					// random no. generator seed, if < 0 then take the seed from system clock
+	seed = random_seed+group_num;					// random no. generator seed, if < 0 then take the seed from system clock
 
 	fb = (mpi_id==0) ? 1 : 0;				// need feedback on standard output?
 	resume = (resume_previous) ? 1 : 0;				// resume from a previous job?
 
 	outfile = 1;				// write output files?
 	initMPI = 0;				// initialize MPI routines?, relevant only if compiling with MPI
-							// set it to F if you want your main program to handle MPI initialization
+							// set it to 0 if you want your main program to handle MPI initialization
 	logZero = -1e90;			// points with loglike < logZero will be ignored by MultiNest
 	maxiter = 0;				// max no. of iterations, a non-positive value means infinity. MultiNest will terminate if either it 
 							// has done max no. of iterations or convergence criterion (defined through tol) has been satisfied

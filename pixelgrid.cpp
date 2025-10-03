@@ -10490,10 +10490,10 @@ void PSF::setup_parameters(const bool initial_setup)
 {
 	if (initial_setup) {
 		// default initial values
+		psf_offset_x = 0;
+		psf_offset_y = 0;
 		psf_width_x = 0;
 		psf_width_y = 0;
-		//psf_offset_x = 0;
-		//psf_offset_y = 0;
 
 		setup_parameter_arrays(2);
 	} else {
@@ -10508,8 +10508,8 @@ void PSF::setup_parameters(const bool initial_setup)
 	int indx = 0;
 
 	if (initial_setup) {
-		param[indx] = &psf_width_x;
-		paramnames[indx] = "psf_sigx"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = "PSF,x";
+		param[indx] = &psf_offset_x;
+		paramnames[indx] = "x_offset"; latex_paramnames[indx] = "\\Delta"; latex_param_subscripts[indx] = "x,PSF";
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
 	}
@@ -10518,13 +10518,37 @@ void PSF::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		param[indx] = &psf_width_y;
-		paramnames[indx] = "psf_sigy"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = "PSF,y";
+		param[indx] = &psf_offset_y;
+		paramnames[indx] = "y_offset"; latex_paramnames[indx] = "\\Delta"; latex_param_subscripts[indx] = "y,PSF";
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
 	}
 	active_params[indx] = true; 
 	n_active_params++;
+	indx++;
+
+	if (initial_setup) {
+		param[indx] = &psf_width_x;
+		paramnames[indx] = "psf_sigx"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = "PSF,x";
+		set_auto_penalty_limits[indx] = false;
+		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
+	}
+	if (!use_input_psf_matrix) {
+		active_params[indx] = true; 
+		n_active_params++;
+	}
+	indx++;
+
+	if (initial_setup) {
+		param[indx] = &psf_width_y;
+		paramnames[indx] = "psf_sigy"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = "PSF,y";
+		set_auto_penalty_limits[indx] = false;
+		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
+	}
+	if (!use_input_psf_matrix) {
+		active_params[indx] = true; 
+		n_active_params++;
+	}
 	indx++;
 }
 
@@ -10950,6 +10974,7 @@ bool PSF::load_psf_fits(string fits_filename, const int hdu_indx, const bool sup
 	if (status) fits_report_error(stderr, status); // print any error message
 	if (image_load_status) psf_filename = fits_filename;
 
+	setup_parameters(false); // since now we're using a pixel map instead of analytic PSF
 	return image_load_status;
 #endif
 }
@@ -18730,6 +18755,8 @@ bool QLens::optimize_regularization_parameter(const int imggrid_i, const bool de
 				covmatrix_stacked_copy.input(n_amps*n_amps);
 				Dvector_cov_copy = new double[n_amps];
 			}
+			if (Rmatrix != NULL) { delete[] Rmatrix; Rmatrix = NULL; }
+			if (Rmatrix_index != NULL) { delete[] Rmatrix_index; Rmatrix_index = NULL; }
 			if (create_regularization_matrix(imggrid_i,true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
 			if (use_covariance_matrix) generate_Gmatrix();
 			regopt_chisqmin = 1e30;
@@ -18748,6 +18775,8 @@ bool QLens::optimize_regularization_parameter(const int imggrid_i, const bool de
 		}
 
 		for (int j=0; j < lumreg_max_it; j++) {
+			if (Rmatrix != NULL) { delete[] Rmatrix; Rmatrix = NULL; }
+			if (Rmatrix_index != NULL) { delete[] Rmatrix_index; Rmatrix_index = NULL; }
 			if (create_regularization_matrix(imggrid_i,true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
 			if (use_covariance_matrix) generate_Gmatrix();
 			regopt_chisqmin = 1e30;
@@ -19122,6 +19151,8 @@ void QLens::calculate_distreg_srcpixel_weights(const int imggrid_i, const double
 	double scaled_rcsq = SQR(rc/sig);
 	for (int i=0; i < source_npixels; i++) {
 		if (lum_weight_function==0) {
+			if (Rmatrix != NULL) { delete[] Rmatrix; Rmatrix = NULL; }
+			if (Rmatrix_index != NULL) { delete[] Rmatrix_index; Rmatrix_index = NULL; }
 			reg_weight_factor[i] = exp(-srcgrid->regparam_lsc*pow(sqrt(SQR(scaled_dists[i]) + scaled_rcsq),srcgrid->regparam_lum_index));
 		} else {
 			die("lumweight_func greater than 0 not supported in dist-weighted regularization");

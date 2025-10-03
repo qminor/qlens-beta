@@ -7853,7 +7853,221 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 			}
+		}
+		else if ((words[0]=="psf") or ((words[0]=="fit") and (nwords > 1) and (words[1]=="psf")))
+		{
+			bool update_specific_parameters = false; // option for user to update one (or more) specific parameters rather than update all of them at once
+			bool vary_parameters = false;
+			vector<string> specific_update_params;
+			vector<double> specific_update_param_vals;
+			int psf_number = -1;
+			bool entered_varyflags = false;
+			bool added_new_psf = false;
+			bool prompt_for_flags = true;
+			int nparams_to_vary = nwords;
+			boolvector vary_flags;
 
+			if (words[0]=="fit") {
+				vary_parameters = true;
+				// now remove the "fit" word from the line so we can add PSF's the same way,
+				// but with vary_parameters==true so we'll prompt for an extra line to vary parameters
+				stringstream* new_ws = new stringstream[nwords-1];
+				for (int i=0; i < nwords-1; i++) {
+					words[i] = words[i+1];
+					new_ws[i] << words[i];
+				}
+				words.pop_back();
+				nwords--;
+				delete[] ws;
+				ws = new_ws;
+			}
+
+			if ((nwords > 1) and (words[1]=="update")) update_specific_parameters = true;
+
+			if (update_specific_parameters) {
+				if (nwords > 2) {
+					if (!(ws[2] >> psf_number)) Complain("invalid PSF number");
+					if ((n_psf <= psf_number) or (psf_number < 0)) Complain("specified PSF number does not exist");
+					update_specific_parameters = true;
+					// Now we'll remove the "update" word
+					stringstream* new_ws = new stringstream[nwords-1];
+					for (int i=1; i < nwords-1; i++)
+						words[i] = words[i+1];
+					for (int i=0; i < nwords-1; i++)
+						new_ws[i] << words[i];
+					words.pop_back();
+					nwords--;
+					delete[] ws;
+					ws = new_ws;
+				} else Complain("must specify a psf number to update, followed by parameters");
+			}
+
+			if (update_specific_parameters) {
+				int pos, n_updates = 0;
+				double pval;
+				for (int i=2; i < nwords; i++) {
+					if ((pos = words[i].find("="))!=string::npos) {
+						n_updates++;
+						specific_update_params.push_back(words[i].substr(0,pos));
+						stringstream pvalstr;
+						pvalstr << words[i].substr(pos+1);
+						pvalstr >> pval;
+						specific_update_param_vals.push_back(pval);
+					} 
+				}
+				if (n_updates > 0) {
+					for (int i=0; i < n_updates; i++)
+						if (psf_list[psf_number]->update_specific_parameter(specific_update_params[i],specific_update_param_vals[i])==false) Complain("could not find parameter '" << specific_update_params[i] << "' in PSF " << psf_number);
+				}
+			} else if ((nwords > 1) and ((words[1]=="vary") or (words[1]=="changevary"))) {
+				vary_parameters = true;
+				bool set_vary_none = false;
+				bool set_vary_all = false;
+				if (words[nwords-1]=="none") {
+					set_vary_none=true;
+					remove_word(nwords-1);
+				}
+				if (words[nwords-1]=="all") {
+					set_vary_all=true;
+					remove_word(nwords-1);
+				}
+				if ((nwords==2) and (set_vary_none)) {
+					for (int psfnum=0; psfnum < n_psf; psfnum++) {
+						nparams_to_vary = psf_list[psfnum]->n_active_params;
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
+						set_psf_vary_parameters(psfnum,vary_flags);
+					}
+					entered_varyflags = true;
+					psf_number = -1; // so it prompts for limits for all PSF's
+				} else if ((nwords==2) and (set_vary_all)) {
+					for (int psfnum=0; psfnum < n_psf; psfnum++) {
+						nparams_to_vary = psf_list[psfnum]->n_active_params;
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = true;
+						set_psf_vary_parameters(psfnum,vary_flags);
+					}
+					entered_varyflags = true;
+					psf_number = -1; // so it prompts for limits for all PSF's
+				} else if (nwords==2) {
+					psf_number = -1; // so it prompts for limits for all PSF's
+				} else {
+					if (nwords != 3) Complain("one argument required for 'psf vary' (psf number)");
+					if (!(ws[2] >> psf_number)) Complain("Invalid psf number to change vary parameters");
+					if (psf_number >= n_psf) Complain("specified psf number does not exist");
+					nparams_to_vary = psf_list[psf_number]->n_active_params;
+					if ((!set_vary_none) and (!set_vary_all)) {
+						if (read_command(false)==false) return;
+						int nparams_entered = nwords;
+						if (nparams_entered != nparams_to_vary) Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified pixsrc");
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
+						if (set_psf_vary_parameters(psf_number,vary_flags)==false) {
+							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified psf");
+						}
+						entered_varyflags = true;
+					} else if (set_vary_none) {
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = false;
+						set_psf_vary_parameters(psf_number,vary_flags);
+						entered_varyflags = true;
+					} else if (set_vary_all) {
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) vary_flags[i] = true;
+						set_psf_vary_parameters(psf_number,vary_flags);
+						entered_varyflags = true;
+					}
+				}
+			} else if (nwords==1) {
+				if (mpi_id==0) print_psf_list(vary_parameters);
+				vary_parameters = false; // don't make it prompt for vary flags if they only put 'fit psf'
+			//} else {
+				//if (words[1]=="clear") {
+					//if (nwords==2) {
+						//while (n_psf > 0) {
+							//remove_psf(n_psf-1);
+						//}
+					//}
+					//else if (nwords==3) {
+						//int psf_number;
+						//if (!(ws[2] >> psf_number)) Complain("invalid psf number");
+						//remove_psf(psf_number);
+					//} else Complain("only one argument allowed for 'psf clear' (number of PSF to remove)");
+				//}
+				//else if (words[1]=="add") {
+					//add_psf(zlens);
+					//psf_number = n_psf-1; // for setting vary flags (below)
+					//added_new_psf = true;
+				//}
+			} else {
+				Complain("unrecognized argument to 'psf'");
+			}
+
+			if (vary_parameters) {
+				int nvary;
+				int psfnum, psfnum_i, psfnum_f;
+				bool print_line_for_each_lens = false;
+				if (psf_number < 0) {
+					// in this case, prompt for limits for all PSF's
+					psfnum_i = 0;
+					psfnum_f = n_psf;
+					print_line_for_each_lens = true;
+				} else {
+					psfnum_i = psf_number;
+					psfnum_f = psf_number+1;
+				}
+				for (psfnum=psfnum_i; psfnum < psfnum_f; psfnum++) {
+					if ((prompt_for_flags) and (!entered_varyflags)) {
+						nparams_to_vary = psf_list[psfnum]->n_active_params;
+						if ((mpi_id==0) and (print_line_for_each_lens)) cout << "Vary flags for pixellated source " << psfnum << ":" << endl;
+						if (read_command(false)==false) return;
+						int nparams_entered = nwords;
+						if (nparams_entered != nparams_to_vary) Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified psf");
+						vary_flags.input(nparams_to_vary);
+						for (int i=0; i < nparams_to_vary; i++) if (!(ws[i] >> vary_flags[i])) Complain("vary flag must be set to 0 or 1");
+						if (set_psf_vary_parameters(psfnum,vary_flags)==false) {
+							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified psf");
+						}
+					}
+					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST)) {
+						nvary = psf_list[psfnum]->n_vary_params;
+						psf_list[psfnum]->get_varyflags(vary_flags);
+						if (nvary != 0) {
+							dvector lower(nvary), upper(nvary), lower_initial(nvary), upper_initial(nvary);
+							vector<string> paramnames;
+							psf_list[psfnum]->get_fit_parameter_names(paramnames);
+							int i,j;
+							for (i=0, j=0; j < nparams_to_vary; j++) {
+								if (vary_flags[j]) {
+									if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
+									if (read_command(false)==false) { if (added_new_psf) remove_psf(psfnum); Complain("parameter limits could not be read"); }
+									if (nwords >= 2) {
+										if (!(ws[0] >> lower[i])) { if (added_new_psf) remove_psf(psfnum); Complain("invalid lower limit"); }
+										if (!(ws[1] >> upper[i])) { if (added_new_psf) remove_psf(psfnum); Complain("invalid upper limit"); }
+										if (nwords == 2) {
+											lower_initial[i] = lower[i];
+											upper_initial[i] = upper[i];
+										} else if (nwords == 4) {
+											if (!(ws[2] >> lower_initial[i])) { if (added_new_psf) remove_psf(psfnum); Complain("invalid initial lower limit"); }
+											if (!(ws[3] >> upper_initial[i])) { if (added_new_psf) remove_psf(psfnum); Complain("invalid initial upper limit"); }
+										} else {
+											if (added_new_psf) remove_psf(psfnum);
+											Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+										}
+									} else {
+										if (added_new_psf) remove_psf(psfnum);
+										Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
+									}
+									if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
+									if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
+									i++;
+								}
+							}
+							psf_list[psfnum]->set_limits(lower,upper,lower_initial,upper_initial);
+						}
+					}
+				}
+			}
 		}
 		else if (words[0]=="fit")
 		{
@@ -13310,6 +13524,15 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'multinest_constant_eff_mode' command; must specify 'on' or 'off'");
 				set_switch(multinest_constant_eff_mode,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="multinest_mode_separation")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "mode separation: " << display_switch(multinest_mode_separation) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'multinest_mode_separation' command; must specify 'on' or 'off'");
+				set_switch(multinest_mode_separation,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="polychord_nrepeats")
