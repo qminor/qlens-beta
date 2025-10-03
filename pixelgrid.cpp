@@ -10495,7 +10495,7 @@ void PSF::setup_parameters(const bool initial_setup)
 		psf_width_x = 0;
 		psf_width_y = 0;
 
-		setup_parameter_arrays(2);
+		setup_parameter_arrays(4);
 	} else {
 		// always reset the active parameter flags, since the active ones will be determined below
 		// NOTE: if (initial_setup==true), active params are reset in setup_parameter_arrays(..) above

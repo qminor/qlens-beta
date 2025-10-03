@@ -5828,6 +5828,21 @@ double QLens::get_xi_parameter(const double src_redshift, const int lensnum)
 	return xi_param;
 }
 
+double QLens::get_total_xi_parameter(const double src_redshift)
+{
+	double re_avg,zfac,xi_param;
+	zfac = cosmo.kappa_ratio(lens_list[primary_lens_number]->zlens,src_redshift,reference_source_redshift);
+	einstein_radius_of_primary_lens(zfac,re_avg);
+
+	re_sq = r_ein*r_ein;
+	kappa_e = zfactor*kappa_rsq(re_sq);
+	dkappa_e = 2*r_ein*zfactor*kappa_rsq_deriv(re_sq); // we express xi in terms of derivative of kappa, rather than second derivative of the deflection
+	zfac = 1.0;
+	return (2*r_ein*dkappa_e/(1-kappa_e)+2);
+}
+
+
+
 double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 {
 	// this is used by the DerivedParam class in qlens.h

@@ -2245,7 +2245,7 @@ double LensProfile::get_xi_parameter(const double zfactor)
 
 	re_sq = r_ein*r_ein;
 	kappa_e = zfactor*kappa_rsq(re_sq);
-	dkappa_e = 2*r_ein*zfactor*kappa_rsq_deriv(re_sq);
+	dkappa_e = 2*r_ein*zfactor*kappa_rsq_deriv(re_sq); // we express xi in terms of derivative of kappa, rather than second derivative of the deflection
 	zfac = 1.0;
 	return (2*r_ein*dkappa_e/(1-kappa_e)+2);
 }
