@@ -5691,7 +5691,7 @@ double QLens::einstein_radius_of_primary_lens(const double zfac, double &reav)
 		if (j==primary_lens_number) continue;
 		if ((include_secondary_lens) and (j==secondary_lens_number)) continue;
 		lens_list[j]->get_center_coords(xc,yc);
-		if (((xc==xc0) and (yc==yc0)) or ((include_secondary_lens) and ((xc==xc1) and (yc==yc1)))) {
+		if ((lens_list[j]->lenstype==SHEET) or ((xc==xc0) and (yc==yc0)) or ((include_secondary_lens) and ((xc==xc1) and (yc==yc1)))) {
 			// If a lens is selected as the "secondary" lens (e.g. a BCG), then it will be treated as co-centered with the primary even if there's an offset;
 			// the same is true for any other lenses co-centered with the secondary
 			if (lens_list[j]->kapavgptr_rsq_spherical != NULL) {
@@ -5825,34 +5825,61 @@ double QLens::get_xi_parameter(const double src_redshift, const int lensnum)
 	double re_avg,re_major,zfac,xi_param;
 	zfac = cosmo.kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
 	xi_param = lens_list[lensnum]->get_xi_parameter(zfac);
+	//double xitot = get_total_xi_parameter(src_redshift);
+	//cout << "CHECK: " << xitot << " " << xi_param << endl;
 	return xi_param;
 }
 
-/*
 double QLens::get_total_xi_parameter(const double src_redshift)
 {
-	double re_avg,zfac,xi_param;
+	double r_ein,zfac,xi_param;
 	zfac = cosmo.kappa_ratio(lens_list[primary_lens_number]->zlens,src_redshift,reference_source_redshift);
-	einstein_radius_of_primary_lens(zfac,re_avg);
+	einstein_radius_of_primary_lens(zfac,r_ein);
+	//cout << "RE=" << r_ein << endl;
+	double xc,yc,xcc,ycc;
+	lens_list[primary_lens_number]->get_center_coords(xc,yc);
 
+	int i,j;
 	const int n_theta = 100;
-	double theta_step = M_2PI/n_theta;
+	double theta, theta_step = M_2PI/n_theta;
 
-	double xifac = 0;
+	double xifac_avg = 0;
+	double dkappa_e_tot, kappa_e_tot, kap, dkap;
 
-	for (i=0, theta=0.0; i < n_theta; i++, theta += theta_step) {
-	re_sq = r_ein*r_ein;
-	kappa_e = zfactor*kappa_rsq(re_sq);
-	dkappa_e = 2*r_ein*zfactor*kappa_rsq_deriv(re_sq); // we express xi in terms of derivative of kappa, rather than second derivative of the deflection
-	zfac = 1.0;
-	return (2*r_ein*dkappa_e/(1-kappa_e)+2);
+	bool* include_lens = new bool[nlens];
+	for (i=0; i < nlens; i++) {
+		include_lens[i] = false;
+		if (i==primary_lens_number) include_lens[i] = true;
+		else if (lens_list[i]->lenstype==SHEET) include_lens[i] = true;
+		else {
+			if (lens_list[i]->ellipticity_mode != -1) { // this would mean it's an elliptical lens
+				lens_list[i]->get_center_coords(xcc,ycc);
+				if ((xcc==xc) and (ycc==yc)) include_lens[i] = true; // only include co-centered lenses
+			}
+		}
 	}
-	(2*r_ein*dkappa_e/(1-kappa_e)+2);
-	return xi;
+
+	double x,y;
+	for (i=0, theta=0.0; i < n_theta; i++, theta += theta_step) {
+		x = xc + r_ein*cos(theta);
+		y = yc + r_ein*sin(theta);
+		kappa_e_tot = 0;
+		dkappa_e_tot = 0;
+		for (j=0; j < nlens; j++) {
+			if (include_lens[j]) {
+				lens_list[j]->kappa_and_dkappa_dR(x,y,kap,dkap);
+				kappa_e_tot += zfac*kap;
+				dkappa_e_tot += zfac*dkap; // we express xi in terms of derivative of kappa, rather than second derivative of the deflection
+				//cout << "K=" << kap << " " << kappa_e_tot << endl;
+				//cout << "dK=" << dkap << " " << dkappa_e_tot << endl;
+			}
+		}
+		xifac_avg += dkappa_e_tot/(1-kappa_e_tot);
+	}
+	xifac_avg /= n_theta;
+	delete[] include_lens;
+	return (2*r_ein*xifac_avg+2);
 }
-*/
-
-
 
 double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 {

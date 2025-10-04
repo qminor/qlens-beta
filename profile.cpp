@@ -1934,6 +1934,22 @@ void LensProfile::deflection_and_hessian_together(const double x, const double y
 
 }
 
+void LensProfile::kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap)
+{
+	if (lenstype==SHEET) {
+		kap = kappa_rsq(0); // since R doesn't matter for a mass sheet
+		dkap = kappa_rsq_deriv(0);
+	} else {
+		// switch to coordinate system centered on lens profile
+		x -= x_center;
+		y -= y_center;
+		if ((!ellipticity_gradient) and (sintheta != 0)) rotate(x,y);
+		double ell_radius_sq = (x*x + y*y/(q*q))/(f_major_axis*f_major_axis);
+		kap = kappa_rsq(ell_radius_sq);
+		dkap = 2*ell_radius_sq*kappa_rsq_deriv(ell_radius_sq)/sqrt(x*x+y*y); // this gives dkappa_dR where R is simply radius, not elliptical radius
+	}
+}
+
 void LensProfile::add_fourier_mode(const int m_in, const double amp_in, const double amp2_in, const bool vary1, const bool vary2)
 {
 	n_fourier_modes++;

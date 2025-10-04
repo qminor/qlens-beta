@@ -1092,7 +1092,7 @@ void QLens::process_commands(bool read_file)
 							"mass2d_r -- The projected mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"re_zsrc -- The (spherically averaged) Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
-							"xi -- The xi parameter (from Kochanek 2020) of lens [lens#] for a source redshift <zsrc>\n"
+							"xi -- The xi parameter (from Kochanek 2020) for a source redshift <zsrc> (optional lens# can be specified)\n"
 							"mass_re -- The projected mass enclosed within Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"kappa_re -- kappa(R_ein) of primary lens (+lenses that are co-centered with primary), averaged over all angles\n"
 							"logslope -- The average log-slope of kappa between <r1> and <r2> (in arcsec) for a specific lens [lens#]\n"
@@ -9176,9 +9176,13 @@ void QLens::process_commands(bool read_file)
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								add_derived_param(Einstein_Mass,dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="xi") {
-								if (nwords != 6) Complain("derived parameter xi requires two arguments (zsrc,lens_number)");
+								if ((nwords != 5) and (nwords != 6)) Complain("derived parameter xi requires one or two arguments (zsrc, and optional lens number)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
-								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
+								if (nwords==6) {
+									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
+								} else {
+									lensnum = -1;
+								}
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								add_derived_param(Xi_Param,dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="kappa_re") {

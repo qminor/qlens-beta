@@ -375,6 +375,8 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 	virtual double kappa(double x, double y);
 	virtual void deflection(double x, double y, lensvector& def);
 	virtual void hessian(double x, double y, lensmatrix& hess); // the Hessian matrix of the lensing potential (*not* the arrival time surface)
+
+	void kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap); // this is just used for the 'xi' parameter
 	double kappa_from_fourier_modes(const double x, const double y);
 	void add_deflection_from_fourier_modes(const double x, const double y, lensvector& def);
 	void add_hessian_from_fourier_modes(const double x, const double y, lensmatrix& hess);
@@ -1192,8 +1194,8 @@ class MassSheet : public LensProfile
 	private:
 	double kext;
 
-	double kappa_rsq(const double rsq) { return 0; }
-	double kappa_rsq_deriv(const double rsq) { return 0; }
+	double kappa_rsq(const double rsq);
+	double kappa_rsq_deriv(const double rsq);
 	double kapavg_spherical_rsq(const double rsq);
 	double potential_spherical_rsq(const double rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);

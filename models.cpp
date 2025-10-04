@@ -3912,6 +3912,16 @@ double MassSheet::kappa(double x, double y)
 	return kext;
 }
 
+double MassSheet::kappa_rsq(const double rsq)
+{
+	return kext;
+}
+
+double MassSheet::kappa_rsq_deriv(const double rsq)
+{
+	return 0.0;
+}
+
 double MassSheet::kapavg_spherical_rsq(const double rsq)
 {
 	return kext;

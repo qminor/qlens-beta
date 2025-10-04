@@ -180,7 +180,10 @@ struct DerivedParam
 		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,int_param,use_kpc_units);
 		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,int_param,use_kpc_units);
 		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,int_param);
-		else if (derived_param_type == Xi_Param) return lens_in->get_xi_parameter(funcparam,int_param);
+		else if (derived_param_type == Xi_Param) {
+			if (int_param >= 0) return lens_in->get_xi_parameter(funcparam,int_param);
+			else return lens_in->get_total_xi_parameter(funcparam);
+		}
 		else if (derived_param_type == AvgLogSlope) return lens_in->calculate_average_log_slope(int_param,funcparam,funcparam2,use_kpc_units);
 		else if (derived_param_type == Einstein_Mass) {
 			double re = lens_in->einstein_radius_single_lens(funcparam,int_param);
@@ -303,7 +306,11 @@ struct DerivedParam
 		} else if (derived_param_type == Einstein_Mass) {
 			std::cout << "Projected mass within Einstein radius of lens " << int_param << " for source redshift zsrc = " << funcparam << std::endl;
 		} else if (derived_param_type == Xi_Param) {
-			std::cout << "Xi parameter of lens " << int_param << std::endl;
+			if (int_param >= 0) {
+				std::cout << "xi parameter of lens " << int_param << std::endl;
+			} else {
+				std::cout << "xi parameter of primary and co-centered lenses " << std::endl;
+			}
 		} else if (derived_param_type == Kappa_Re) {
 			std::cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << std::endl;
 		} else if (derived_param_type == LensParam) {
