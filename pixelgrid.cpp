@@ -7326,7 +7326,7 @@ bool ImagePixelData::load_noise_map_fits(string fits_filename, const int hdu_ind
 		for (i=0; i < npixels_x; i++) covinv_map[i] = new double[npixels_y];
 	}
 
-	double noise_bg = 1e30;
+	bg_pixel_noise = 1e30;
 	char card[FLEN_CARD];   // Standard string lengths defined in fitsio.h
 	int hdutype;
 	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
@@ -7366,7 +7366,7 @@ bool ImagePixelData::load_noise_map_fits(string fits_filename, const int hdu_ind
 						for (i=0; i < naxes[0]; i++) {
 							noise_map[i][j] = pixels[i];
 							//cout << "NOISE(" << i << "," << j << ")=" << pixels[i] << endl;
-							if (pixels[i] < noise_bg) noise_bg = pixels[i];
+							if (pixels[i] < bg_pixel_noise) bg_pixel_noise = pixels[i];
 						}
 					}
 					delete[] pixels;
@@ -7385,7 +7385,7 @@ bool ImagePixelData::load_noise_map_fits(string fits_filename, const int hdu_ind
 		}
 		fits_close_file(fptr, &status);
 	}
-	if (lens != NULL) lens->background_pixel_noise = noise_bg; // store the background noise separately
+	if (lens != NULL) lens->background_pixel_noise = bg_pixel_noise; // store the background noise separately
 
 	if (status) fits_report_error(stderr, status); // print any error message
 	if (image_load_status) noise_map_fits_filename = fits_filename;
@@ -10459,6 +10459,10 @@ PSF::PSF(QLens* lens_in) : ModelParams()
 
 void PSF::copy_psf_data(PSF* psf_in)
 {
+	psf_offset_x = psf_in->psf_offset_x;
+	psf_offset_y = psf_in->psf_offset_y;
+	psf_width_x = psf_in->psf_width_x;
+	psf_width_y = psf_in->psf_width_y;
 	use_input_psf_matrix = psf_in->use_input_psf_matrix;
 	if (psf_in->psf_matrix==NULL) psf_matrix = NULL;
 	else {
@@ -12021,6 +12025,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 		thread = 0;
 #endif
 		lensvector d1,d2,d3,d4;
+		lensvector offset_pt;
 		//int ii,jj;
 		#pragma omp for private(n,i,j) schedule(dynamic)
 		for (n=mpi_start; n < mpi_end; n++) {
@@ -12028,8 +12033,14 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 			//i = n % (x_N+1);
 			j = masked_pixel_corner_j[n];
 			i = masked_pixel_corner_i[n];
+			if (psf==NULL) {
+				offset_pt = corner_pts[i][j];
+			} else {
+				offset_pt[0] = corner_pts[i][j][0] - psf->psf_offset_x;
+				offset_pt[1] = corner_pts[i][j][1] - psf->psf_offset_y;
+			}
 			//cout << i << " " << j << " " << n << " " << ntot_corners << " " << mpi_end << endl;
-			lens->find_sourcept(corner_pts[i][j],defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
+			lens->find_sourcept(offset_pt,defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
 		}
 //#ifdef USE_MPI
 		//#pragma omp master
@@ -12108,7 +12119,13 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 			for (n_cell=mpi_start4; n_cell < mpi_end4; n_cell++) {
 				j = emask_pixels_j[n_cell];
 				i = emask_pixels_i[n_cell];
-				lens->find_sourcept(center_pts[i][j],defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
+				if (psf==NULL) {
+					offset_pt = center_pts[i][j];
+				} else {
+					offset_pt[0] = center_pts[i][j][0] - psf->psf_offset_x;
+					offset_pt[1] = center_pts[i][j][1] - psf->psf_offset_y;
+				}
+				lens->find_sourcept(offset_pt,defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
 			}
 		}
 	}
@@ -12214,13 +12231,20 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 #else
 			thread = 0;
 #endif
+			lensvector offset_pt;
 
 			#pragma omp for private(i,j,k,n_subcell) schedule(dynamic)
 			for (n_subcell=mpi_start3; n_subcell < mpi_end3; n_subcell++) {
 				j = extended_mask_subcell_j[n_subcell];
 				i = extended_mask_subcell_i[n_subcell];
 				k = extended_mask_subcell_index[n_subcell];
-				lens->find_sourcept(subpixel_center_pts[i][j][k],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell],thread,imggrid_zfactors,imggrid_betafactors);
+				if (psf==NULL) {
+					offset_pt = subpixel_center_pts[i][j][k];
+				} else {
+					offset_pt[0] = subpixel_center_pts[i][j][k][0] - psf->psf_offset_x;
+					offset_pt[1] = subpixel_center_pts[i][j][k][1] - psf->psf_offset_y;
+				}
+				lens->find_sourcept(offset_pt,defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell],thread,imggrid_zfactors,imggrid_betafactors);
 				//if (defx_subpixel_centers[n_subcell]*0.0 != 0.0) die("nonsense value for deflection (x=%g y=%g defx=%g defy=%g)",subpixel_center_pts[i][j][k][0],subpixel_center_pts[i][j][k][1],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell]);
 			}
 		}
@@ -12334,7 +12358,7 @@ void ImagePixelGrid::redo_lensing_calculations(const bool verbal)
 		wtime0 = omp_get_wtime();
 	}
 #endif
-	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) n_active_pixels = 0; // this line might not actually be necessary?
+	//if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) n_active_pixels = 0; // this line might not actually be necessary?
 	calculate_sourcepts_and_areas(true,verbal);
 
 #ifdef USE_OPENMP
@@ -18987,6 +19011,7 @@ void QLens::calculate_subpixel_distweights(const int imggrid_i)
 	ImagePixelGrid *image_pixel_grid;
 	image_pixel_grid = image_pixel_grids[imggrid_i];
 	DelaunaySourceGrid *srcgrid = image_pixel_grids[imggrid_i]->delaunay_srcgrid;
+	PSF *psfptr = image_pixel_grids[imggrid_i]->psf;
 	double xc, yc, xc_approx, yc_approx, sig, rc;
 	rc = srcgrid->distreg_rc;
 	sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx);
@@ -18999,6 +19024,10 @@ void QLens::calculate_subpixel_distweights(const int imggrid_i)
 			lensvector xl;
 			xl[0] = srcgrid->distreg_xcenter;
 			xl[1] = srcgrid->distreg_ycenter;
+			if (psfptr != 0) {
+				xl[0] -= psfptr->psf_offset_x;
+				xl[1] -= psfptr->psf_offset_y;
+			}
 			find_sourcept(xl,xc,yc,0,reference_zfactors,default_zsrc_beta_factors);
 			//if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
 			if (lensed_lumreg_rc) {
@@ -19009,6 +19038,10 @@ void QLens::calculate_subpixel_distweights(const int imggrid_i)
 				for (i=0, phi=0; i < phi_nn; i++, phi += phi_step) {
 					xl[0] = srcgrid->distreg_xcenter + srcgrid->distreg_rc*cos(phi);
 					xl[1] = srcgrid->distreg_ycenter + srcgrid->distreg_rc*sin(phi);
+					if (psfptr != 0) {
+						xl[0] -= psfptr->psf_offset_x;
+						xl[1] -= psfptr->psf_offset_y;
+					}
 					find_sourcept(xl,xc2,yc2,0,reference_zfactors,default_zsrc_beta_factors);
 					rc += SQR(xc2-xc)+SQR(yc2-yc);
 				}
@@ -19107,6 +19140,7 @@ void QLens::calculate_distreg_srcpixel_weights(const int imggrid_i, const double
 	ImagePixelGrid *image_pixel_grid;
 	image_pixel_grid = image_pixel_grids[imggrid_i];
 	DelaunaySourceGrid *srcgrid = image_pixel_grids[imggrid_i]->delaunay_srcgrid;
+	PSF *psfptr = image_pixel_grids[imggrid_i]->psf;
 	double xc, yc, rc;
 	rc = srcgrid->distreg_rc;
 	if (auto_lumreg_center) {
@@ -19123,6 +19157,10 @@ void QLens::calculate_distreg_srcpixel_weights(const int imggrid_i, const double
 			lensvector xl;
 			xl[0] = srcgrid->distreg_xcenter;
 			xl[1] = srcgrid->distreg_ycenter;
+			if (psfptr != 0) {
+				xl[0] -= psfptr->psf_offset_x;
+				xl[1] -= psfptr->psf_offset_y;
+			}
 			find_sourcept(xl,xc,yc,0,extended_src_zfactors[imggrid_i],extended_src_beta_factors[imggrid_i]);
 			if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
 			if ((lensed_lumreg_rc) and (srcgrid->distreg_rc > 0)) {
@@ -19133,6 +19171,10 @@ void QLens::calculate_distreg_srcpixel_weights(const int imggrid_i, const double
 				for (i=0, phi=0; i < phi_nn; i++, phi += phi_step) {
 					xl[0] = srcgrid->distreg_xcenter + srcgrid->distreg_rc*cos(phi);
 					xl[1] = srcgrid->distreg_ycenter + srcgrid->distreg_rc*sin(phi);
+					if (psfptr != 0) {
+						xl[0] -= psfptr->psf_offset_x;
+						xl[1] -= psfptr->psf_offset_y;
+					}
 					find_sourcept(xl,xc2,yc2,0,extended_src_zfactors[imggrid_i],extended_src_beta_factors[imggrid_i]);
 					rc += SQR(xc2-xc)+SQR(yc2-yc);
 				}

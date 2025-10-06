@@ -740,6 +740,7 @@ struct ImagePixelData : private Sort
 	double xmin, xmax, ymin, ymax;
 	double pixel_size, pixel_xy_ratio; // pixel_xy_ratio is ratio of pixel y/x lengths
 	double emask_rmax; // used only when splining Fourier mode integrals for non-elliptical structure
+	double bg_pixel_noise; // set using lowest noise dispersion in noise map
 	string data_fits_filename;
 	string noise_map_fits_filename;
 	std::ostream* isophote_fit_out;

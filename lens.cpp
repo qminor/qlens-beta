@@ -7746,6 +7746,9 @@ double QLens::update_model(const double* params)
 	for (i=0; i < n_ptsrc; i++) {
 		ptsrc_list[i]->update_fit_parameters(params,index);
 	}
+	for (i=0; i < n_psf; i++) {
+		psf_list[i]->update_fit_parameters(params,index);
+	}
 
 	cosmo.update_fit_parameters(params,index);
 	// *NOTE*: Maybe consider putting the cosmological parameters at the very FRONT of the parameter list? Then the cosmology is updated before updating the lenses
@@ -9171,7 +9174,7 @@ bool QLens::get_misc_parameter_numbers(int& pi, int& pf)
 
 void QLens::fit_set_optimizations()
 {
-	if (lensmodel_fit_parameters==0) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change and we're not shifting ray-tracing points
+	if ((lensmodel_fit_parameters==0) and (psf_fit_parameters==0)) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change and we're not shifting ray-tracing points (note, the offset in ray-tracing points is in the PSF object)
 	else redo_lensing_calculations_before_inversion = true;
 
 	temp_auto_store_cc_points = auto_store_cc_points;
@@ -12807,7 +12810,10 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		pixptr_j = image_pixel_grids[imggrid_i]->masked_pixels_j;
 	//}
 	double avg_sb = -1e30;
-	if (image_pixel_data) avg_sb = image_pixel_data->find_avg_sb(10*background_pixel_noise);
+	if (image_pixel_data) {
+		double bgnoise = (use_noise_map) ? image_pixel_data->bg_pixel_noise : background_pixel_noise;
+		avg_sb = image_pixel_data->find_avg_sb(10*bgnoise);
+	}
 
 	int i,j,k,l,n,npix=0,npix_in_lensing_mask=0; // npix_in_lensing_mask will be different from npix_in_mask if include_fgmask_in_inversion is turned on
 	bool include;
@@ -13515,6 +13521,8 @@ const bool QLens::plot_lensed_surface_brightness(string imagefile, const int ban
 		zsrc_i_0 = specific_zsrc_i;
 		zsrc_i_f = specific_zsrc_i+1;
 		specific_imggrid_i = primary_imggrid_i + specific_zsrc_i;
+		primary_imggrid_i = specific_imggrid_i;
+		//cout << "Specific zsrc_i=" << specific_zsrc_i << " specific imggrid=" << specific_imggrid_i << endl;
 	}
 	bool changed_mask = false;
 	int i,j,k,zsrc_i,imggrid_i;
@@ -13717,7 +13725,7 @@ const bool QLens::plot_lensed_surface_brightness(string imagefile, const int ban
 		for (zsrc_i=zsrc_i_0, imggrid_i=primary_imggrid_i; zsrc_i < zsrc_i_f; zsrc_i++, imggrid_i++) {
 			if ((changed_mask) or ((n_extended_src_redshifts > 1) and (zsrc_i==0) and (specific_zsrc_i < 0))) // explanation for the latter condition: if all the lensed images were combined in one plot, then masks were combined image_pixel_grid[0], so we should restore the original mask
 			{
-				if (!image_pixel_grid->set_fit_window((*image_pixel_data),true,assigned_mask[imggrid_i],false,include_fgmask_in_inversion)) {
+				if (!image_pixel_grids[imggrid_i]->set_fit_window((*image_pixel_data),true,assigned_mask[imggrid_i],false,include_fgmask_in_inversion)) {
 					warn("could not reset mask for imggrid index %i",imggrid_i);
 					//delete image_pixel_grids; // so when you invert, it will load a new image grid based on the data
 					//image_pixel_grids = NULL;
@@ -14043,9 +14051,11 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 	if ((redo_lensing_calculations_before_inversion) and (ranchisq_i==0)) {
 		for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
 			image_pixel_grids[imggrid_i]->redo_lensing_calculations(verbal);
-			if ((n_extended_src_redshifts > 1) and (imggrid_i==0)) {
-				update_lens_centers_from_pixsrc_coords();
-			}
+		}
+	}
+	for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
+		if ((n_extended_src_redshifts > 1) and (imggrid_i==0)) {
+			update_lens_centers_from_pixsrc_coords();
 		}
 	}
 
@@ -14926,6 +14936,7 @@ void QLens::add_outside_sb_prior_penalty(const int band_number, int* src_i_list,
 	}
 
 	bool **mask_for_inversion;
+	double bg_noise;
 	for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 		imggrid_i = band_number*n_extended_src_redshifts + zsrc_i;
 		if (src_i_list[imggrid_i] == -1) continue;
@@ -14944,7 +14955,8 @@ void QLens::add_outside_sb_prior_penalty(const int band_number, int* src_i_list,
 		}
 		 
 		// NOTE: by default, outside_sb_prior_noise_frac is a negative number so it isn't used. But it can be changed by the user (useful for low S/N sources)
-		double outside_sb_threshold = dmax(outside_sb_prior_noise_frac*background_pixel_noise,outside_sb_prior_threshold*max_sb);
+		bg_noise = (use_noise_map) ? image_pixel_data->bg_pixel_noise : background_pixel_noise;
+		double outside_sb_threshold = dmax(outside_sb_prior_noise_frac*bg_noise,outside_sb_prior_threshold*max_sb);
 		int isb, jsb;
 		if (n_image_pixel_grids==1) {
 			if ((verbal) and (mpi_id==0)) cout << "OUTSIDE SB THRESHOLD: " << outside_sb_threshold << endl;
