@@ -604,7 +604,7 @@ double EllipticityGradient::elliptical_radius_root(const double x, const double 
 		if (ximax < xi_initial_egrad) {
 			ellipticity_function(xi_initial_egrad,ep,th);
 			//qq = (this->*egrad_ptr)(xi_initial_egrad,geometric_param[0],0);
-		} else if (ximin > xi_final_egrad) {
+		} else {
 			ellipticity_function(xi_final_egrad,ep,th);
 			//qq = (this->*egrad_ptr)(xi_final_egrad,geometric_param[0],0);
 		}

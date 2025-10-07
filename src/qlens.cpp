@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 	n_omp_threads = 1;
 #endif
 	Grid::allocate_multithreaded_variables(n_omp_threads);
-	SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
+	SourcePixel::allocate_multithreaded_variables(n_omp_threads);
 	DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 	QLens::allocate_multithreaded_variables(n_omp_threads);
@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
 	int mpi_group_leaders[ngroups];
 	for (int i=0; i < ngroups; i++) mpi_group_leaders[i] = subgroup_rank[i][0];
 	lens.set_mpi_params(mpi_id,mpi_np,ngroups,group_number,subgroup_id,subgroup_size[group_number],mpi_group_leaders,&subgroup[group_number],&subgroup_comm[group_number],&onegroup[mpi_id],&onegroup_comm[mpi_id]);
-	if (load_cosmology_file) lens.set_cosmology(cosmology);
+	if (load_cosmology_file) lens.cosmo.set_cosmology(cosmology);
 	if (ngroups==mpi_np) {
 		lens.Set_MCMC_MPI(mpi_np,mpi_id);
 	} else {
@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
 	}
 
 	if ((mpi_id==0) and (verbal_mode==true)) {
-		cout << "QLens by Quinn Minor (2023)\n";
+		cout << "QLens by Quinn Minor (2025)\n";
 		cout << "Type 'help' for a list of commands, or 'demo1' or 'demo2' to see demos (or 'q' to quit).\n\n";
 	}
 
@@ -281,9 +281,9 @@ int main(int argc, char *argv[])
 	QLens::delete_mumps();
 #endif
 	Grid::deallocate_multithreaded_variables();
-	SourcePixelGrid::deallocate_multithreaded_variables();
 	ImagePixelGrid::deallocate_multithreaded_variables();
 	DelaunayGrid::deallocate_multithreaded_variables();
+	SourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
 	QLens::deallocate_multithreaded_variables();
 
 #ifdef USE_MPI

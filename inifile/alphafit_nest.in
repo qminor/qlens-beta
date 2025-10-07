@@ -30,6 +30,7 @@ imgdata                      # Shows the image data so you can see what it looks
 
 shear_components on # The parameter space is simpler to explore if we use the shear components, rather than shear magnitude and angle
 
+pause
 fit lens alpha 4.5 1 0 0.7 90 0.9 0.3 shear=0.0 0.1  # For the parameters we will vary, the initial "guess" value here is not actually used
                                                      #    by the nested sampling routine--only the ranges are important (see following lines)
 1 0 0 1 1 1 1 1 1                                   #vary flags; here we vary everything except for alpha and s (core size)

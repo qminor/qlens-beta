@@ -7,7 +7,9 @@
 
 namespace py = pybind11;
 
-class QLens_Wrap: public QLens {
+using namespace std;
+
+class Lens_Wrap: public QLens {
 public:
 #ifdef USE_MPI
 	MPI_Comm *subgroup_comm;
@@ -16,16 +18,19 @@ public:
 	MPI_Group *onegroup;
 #endif
 
-    QLens_Wrap() : QLens()
+	int mpi_id, mpi_np;
+	int ngroups;
+    Lens_Wrap() : QLens()
 	 {
-		int mpi_id=0, mpi_np=1;
+		mpi_id=0;
+		mpi_np=1;
 
 #ifdef USE_MPI
 		MPI_Init(NULL, NULL);
 		MPI_Comm_size(MPI_COMM_WORLD, &mpi_np);
 		MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
 #endif
-		int ngroups = mpi_np; // later, allow option to have mpi groups with multiple processes per group
+		ngroups = mpi_np; // later, allow option to have mpi groups with multiple processes per group
 
 		int n_omp_threads;
 #ifdef USE_OPENMP
@@ -140,19 +145,19 @@ public:
     }
 
     std::string imgdata_load_file(const std::string &name_) { 
-        if (load_image_data(name_)==false) throw runtime_error("Unable to read data");
+        if (load_point_image_data(name_)==false) throw runtime_error("Unable to read data");
         update_parameter_list();
         return name_;
     }
 
     void imgdata_display() {
-        if (n_sourcepts_fit==0) throw runtime_error("no image data has been loaded");
+        if (n_ptsrc==0) throw runtime_error("no image data has been loaded");
         print_image_data(true);
     }
 
     void imgdata_write_file(const std::string &name_) {
         try{
-            write_image_data(name_);
+            write_point_image_data(name_);
         } catch(...) {
             throw runtime_error("Unable to write to: " + name_);
         }
@@ -162,12 +167,12 @@ public:
         // No argument, clear all
         if (lower==-1) { clear_image_data(); return true; }
 
-        if (upper > n_sourcepts_fit) {throw runtime_error("Specified max image dataset number exceeds number of data sets in list");}
+        if (upper > n_ptsrc) {throw runtime_error("Specified max image dataset number exceeds number of data sets in list");}
         
         // Clear a range
         bool is_range_ok = upper > lower;
         if (is_range_ok && lower > -1 && upper != -1) {
-            for (int i=upper; i >= lower; i--) remove_image_data(i);
+            for (int i=upper; i >= lower; i--) remove_point_source(i);
             return true;
         }
 
@@ -212,15 +217,7 @@ public:
             
         // }
     }
-
-	double LogLikeListFunc(py::list param_list)
-	{
-		if (fitmodel == NULL) return -1e30;
-		vector<double> param_vec = py::cast<vector<double>>(param_list);
-		return LogLikeVecFunc(param_vec);
-	}
-
-    ~QLens_Wrap()
+    ~Lens_Wrap()
 	 {
 		Grid::deallocate_multithreaded_variables();
 		SourcePixelGrid::deallocate_multithreaded_variables();

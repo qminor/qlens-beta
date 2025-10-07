@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include "modelparams.h"
 #include "spline.h"
 #include "romberg.h"
 #include "brent.h"
@@ -43,7 +44,7 @@ struct CosmologyParams
 	void remove_comments(std::string& instring);
 };
 
-class Cosmology : public Spline, public Romberg, public Brent
+class Cosmology : public ModelParams, public Spline, public Romberg, public Brent
 {
 	private:
 	double omega_m, omega_b, omega_lambda, hubble, hubble_length, growth_factor, dcrit0;
@@ -75,24 +76,28 @@ class Cosmology : public Spline, public Romberg, public Brent
 	double tf_cb, tf_cbnu;
 
 	public:
-	Cosmology() { k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running; }
+	Cosmology() { setup_parameters(true); k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running; }
 	int set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double degen_hdm, double omega_lamb, double hub, double del_R, bool normalize_by_sigma8);
 	Cosmology(CosmologyParams &cosmo) {
 		k_pivot = default_k_pivot;
 		ns = cosmo.spectral_index;
 		running = cosmo.running;
+		setup_parameters(true);
 		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,cosmo.omega_lambda,cosmo.hubble,cosmo.A_s,true);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double hub, double del_R) {
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
+		setup_parameters(true);
 		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,del_R,true);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double omega_lamb, double hub, double del_R) {
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
+		setup_parameters(true);
 		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R,true);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double omega_hdm, int degen_hdm, double omega_lamb, double hub, double del_R) {
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
+		setup_parameters(true);
 		set_cosmology(omega_matter,omega_baryon,omega_hdm,degen_hdm,omega_lamb,hub,del_R,true);
 	}
 	void set_cosmology(double omega_matter, double omega_baryon, double hub, double del_R) {
@@ -109,6 +114,13 @@ class Cosmology : public Spline, public Romberg, public Brent
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
 		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s,true);
 	}
+	void set_cosmology(Cosmology &cosmo) {
+		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
+		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s,true);
+	}
+	void setup_parameters(const bool initial_setup);   // don't need this, unless we want to work with ModelParams pointers in lens.cpp for parameter manipulation?
+	void update_meta_parameters(const bool varied_only_fitparams); 
+	void copy_cosmo_data(Cosmology* cosmo_in);
 
 	void set_pivot_scale(double pscale) { k_pivot = pscale; }
 	void set_power_spectrum_scale_params(double index, double run) { ns = index; running = run; }
@@ -174,6 +186,9 @@ class Cosmology : public Spline, public Romberg, public Brent
 	double dt_dz(const double z) { return (hubble_length*pow(omega_m*CUBE(1+z)+1-omega_m, -0.5)/(1+z)); }
 	double h_over_h0(const double a) { return sqrt(omega_m/(a*a*a) + (1-omega_m-omega_lambda)/(a*a) + omega_lambda); }
 
+	double get_hubble() { return hubble; }
+	double get_omega_m() { return omega_m; }
+
 	private:
 	double growth_function_integrand(double a);
 	double tophat_window_k(double k);
@@ -223,4 +238,4 @@ class Cosmology : public Spline, public Romberg, public Brent
 	tf_cbnu						 The transfer function for density-weighted CDM + Baryon + Massive Neutrino perturbations. 
 */
 
-#endif
+#endif // COSMO_H

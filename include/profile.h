@@ -52,7 +52,7 @@ enum LensProfileName
 struct LensIntegral;
 class QLens;
 
-class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson, public ClenshawCurtis, public EllipticityGradient
+class LensProfile : private Romberg, private GaussLegendre, private GaussPatterson, private ClenshawCurtis, public EllipticityGradient
 {
 	friend struct LensIntegral;
 	friend class QLens;
@@ -94,7 +94,6 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	boolvector vary_params;
 	boolvector angle_param; // used to keep track of angle parameters so they can be easily converted to degrees and displayed
 	std::string model_name;
-	std::string special_parameter_command;
 	std::vector<std::string> paramnames;
 	std::vector<std::string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;
@@ -141,7 +140,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	void update_meta_parameters_and_pointers();
 	void update_angle_meta_params();
 	void update_ellipticity_meta_parameters();
-	void update_cosmology_meta_parameters();
+	void update_cosmology_meta_parameters(const bool force_update = false);
 	virtual void update_meta_parameters()
 	{
 		update_cosmology_meta_parameters();
@@ -340,9 +339,6 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	std::string mkstring_int(const int i);
 	std::string get_parameters_string();
 	void print_vary_parameters();
-	void output_field_in_sci_notation(double* num, std::ofstream& scriptout, const bool space);
-	virtual void print_lens_command(std::ofstream& scriptout, const bool use_limits);
-	void output_lens_command_nofit(std::string& command);
 	virtual void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
 
 	// the following function MUST be redefined in all derived classes
@@ -351,6 +347,7 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	// some of these functions can be redefined in the derived classes
 	virtual double kappa_rsq_deriv(const double rsq);
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
+	virtual double get_xi_parameter(const double zfactor);
 	virtual double get_inner_logslope();
 	virtual bool output_cosmology_info(const int lens_number = -1);
 	void change_pmode(const int pmode_in);
@@ -378,6 +375,8 @@ class LensProfile : public Romberg, public GaussLegendre, public GaussPatterson,
 	virtual double kappa(double x, double y);
 	virtual void deflection(double x, double y, lensvector& def);
 	virtual void hessian(double x, double y, lensmatrix& hess); // the Hessian matrix of the lensing potential (*not* the arrival time surface)
+
+	void kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap); // this is just used for the 'xi' parameter
 	double kappa_from_fourier_modes(const double x, const double y);
 	void add_deflection_from_fourier_modes(const double x, const double y, lensvector& def);
 	void add_hessian_from_fourier_modes(const double x, const double y, lensmatrix& hess);
@@ -496,7 +495,7 @@ struct LensIntegral : public Romberg
 	double PattersonIntegrate(double (LensIntegral::*func)(const double), const double a, const double b, bool &converged);
 	double FejerIntegrate(double (LensIntegral::*func)(double), double a, double b, bool &converged);
 
-	// Functions for doing multiple integrals simulataneously
+	// Functions for doing multiple integrals simultaneously
 	void GaussIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs);
 	void PattersonIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);
 	void FejerIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);
@@ -533,7 +532,6 @@ struct LensIntegral : public Romberg
 	double ileft_integrand(const double r);
 	double iright_integrand(const double u); // here, u = 1/r
 	double fourier_kappa_m(const double r, const double phi, const int mval_in, const double fourier_ival_in);
-
 };
 
 class SPLE_Lens : public LensProfile
@@ -1196,8 +1194,8 @@ class MassSheet : public LensProfile
 	private:
 	double kext;
 
-	double kappa_rsq(const double rsq) { return 0; }
-	double kappa_rsq_deriv(const double rsq) { return 0; }
+	double kappa_rsq(const double rsq);
+	double kappa_rsq_deriv(const double rsq);
 	double kapavg_spherical_rsq(const double rsq);
 	double potential_spherical_rsq(const double rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -1324,7 +1322,6 @@ class Tabulated_Model : public LensProfile
 	double grid_logrlength;
 	double *grid_logrvals, *grid_phivals;
 	double **kappa_vals, **pot_vals, **defx, **defy, **hess_xx, **hess_yy, **hess_xy;
-	std::string original_lens_command; // used for saving commands to reproduce this model
 	double original_kscale, original_rscale;
 	bool loaded_from_file;
 
@@ -1349,7 +1346,6 @@ class Tabulated_Model : public LensProfile
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
-	void print_lens_command(std::ofstream& scriptout, const bool use_limits);
 
 	double potential(double, double);
 	void potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess);

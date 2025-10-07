@@ -2,7 +2,7 @@
 #define TRIRECTANGLE_H
 
 #include "lensvec.h"
-using namespace std;
+//using namespace std;
 
 class TriRectangleOverlap
 {
@@ -41,10 +41,11 @@ class TriRectangleOverlap
 	public:
 	TriRectangleOverlap();
 	~TriRectangleOverlap();
-	double find_overlap_area(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax);
+	double find_overlap_area(lensvector& a, lensvector& b, lensvector& c, double xmin, double xmax, double ymin, double ymax);
 	bool determine_if_overlap(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax);
 	bool determine_if_overlap_rough(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax);
 	bool determine_if_in_neighborhood(lensvector& a, lensvector& b, lensvector& c, lensvector& d, const double& xmin, const double& xmax, const double& ymin, const double& ymax, bool &inside);
+	bool determine_if_in_neighborhood(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax, bool &inside);
 };
 
 #endif // TRIRECTANGLE_H

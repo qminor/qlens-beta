@@ -15,11 +15,12 @@
 
 struct ImagePixelData;
 class LensProfile;
+class PointSource;
 class QLens;
 
-enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, dpie, nfw_SOURCE, SHAPELET, TOPHAT, SB_MULTIPOLE };
+enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DOUBLE_SERSIC, sple, dpie, nfw_SOURCE, SHAPELET, MULTI_GAUSSIAN_EXPANSION, TOPHAT, SB_MULTIPOLE };
 
-class SB_Profile : public EllipticityGradient, UCMC, Simplex
+class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 {
 	friend class QLens;
 	friend class LensProfile;
@@ -29,6 +30,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	friend class SPLE_Lens;
 	friend class dPIE_Lens;
 	friend class NFW;
+	friend class ImagePixelGrid;
 	friend struct ImagePixelData;
 	private:
 	Spline sb_spline;
@@ -109,9 +111,10 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	int sb_number;
 	bool is_lensed; // Can be a lensed source, or a galaxy in the lens plane
 	bool zoom_subgridding; // Useful if pixels are large compared to profile--subgrids to prevent undersampling
-	bool center_anchored_to_lens, center_anchored_to_source;
+	bool center_anchored_to_lens, center_anchored_to_source, center_anchored_to_ptsrc;
 	LensProfile* center_anchor_lens;
 	SB_Profile* center_anchor_source;
+	PointSource* center_anchor_ptsrc;
 	SB_Profile** parameter_anchor_source;
 	int* parameter_anchor_paramnum;
 	double* parameter_anchor_ratio;
@@ -145,6 +148,7 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 
 	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
 	void anchor_center_to_source(SB_Profile** center_anchor_list, const int &center_anchor_source_number);
+	void anchor_center_to_ptsrc(PointSource** center_anchor_list, const int &center_anchor_ptsrc_number);
 	void delete_center_anchor();
 	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	void disable_ellipticity_gradient();
@@ -216,14 +220,12 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
 
 	void plot_sb_profile(double rmin, double rmax, int steps, std::ofstream &sbout);
-	void print_parameters(const double zs = -1);
+	void print_parameters(const double zs = -1, const bool show_band = false, const int band = 0);
 	void print_vary_parameters();
-	void output_field_in_sci_notation(double* num, std::ofstream& scriptout, const bool space);
-	virtual void print_source_command(std::ofstream& scriptout, const bool use_limits);
-	virtual bool get_special_command_arg(std::string &arg);
 
 	// the following items MUST be redefined in all derived classes
 	virtual double sb_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	virtual double sb_rsq_deriv(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
 	virtual void window_params(double& xmin, double& xmax, double& ymin, double& ymax);
 	virtual double window_rmax();
 	virtual double length_scale(); // retrieves characteristic length scale of object (used for zoom subgridding)
@@ -235,7 +237,10 @@ class SB_Profile : public EllipticityGradient, UCMC, Simplex
 	virtual void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight); // used by Shapelet subclass
 	virtual void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
 	virtual void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
+	virtual void calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements);
+
 	virtual void update_amplitudes(double*& ampvec); // used by Shapelet subclass
+	virtual void get_regularization_param_ptr(double*& regparam_ptr); // for source objects that are regularized
 	//virtual void get_amplitudes(double *ampvec); // used by Shapelet subclass
 	virtual void update_indxptr(const int newval);
 	virtual double surface_brightness_zeroth_order(double x, double y);
@@ -294,14 +299,14 @@ class Sersic : public SB_Profile
 {
 	friend class SersicLens;
 	private:
-	double s0, b, n;
+	double s0, s_eff, b, n;
 	double Reff; // effective radius
 
 	double sb_rsq(const double);
 
 	public:
 	Sersic() : SB_Profile() {}
-	Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in);
+	Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, QLens* qlens_in);
 	Sersic(const Sersic* sb_in);
 	~Sersic() {}
 
@@ -469,8 +474,10 @@ class NFW_Source : public SB_Profile
 
 class Shapelet : public SB_Profile
 {
+	friend class QLens;
 	private:
 	double sig; // sig is the average dispersion of the (0,0) shapelet which is Gaussian
+	double regparam; // regularization parameter for shapelets (if using)
 	double sig_factor; // used in pmode=2; sigma is set using a scaling factor of the dispersion of the source SB, instead of sigma itself
 	double **amps; // shapelet amplitudes
 	int n_shapelets;
@@ -502,13 +509,54 @@ class Shapelet : public SB_Profile
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
 	void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
 	void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
+	void get_regularization_param_ptr(double*& regparam_ptr);
 	double surface_brightness_zeroth_order(double x, double y);
 	void update_amplitudes(double*& ampvec);
 	//void get_amplitudes(double *ampvec);
 	double get_scale_parameter();
 	void update_scale_parameter(const double scale);
 	void update_indxptr(const int newval);
-	bool get_special_command_arg(std::string &arg);
+
+	double window_rmax();
+	double length_scale();
+};
+
+class MGE : public SB_Profile
+{
+	friend class QLens;
+	private:
+	int n_gaussians;
+	double *amps; // shapelet amplitudes
+	double *sigs; // shapelet widths
+	double logsig_i, logsig_f;
+	double regparam; // regularization parameter for MGE
+
+	double sb_rsq(const double);
+	double sb_rsq_deriv(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+
+	public:
+	MGE() : SB_Profile() { amps = NULL; sigs = NULL; }
+	MGE(const double reg, const double amp0, const double sig_i, const double sig_f, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const int parameter_mode_in, QLens* qlens_in);
+	MGE(const MGE* sb_in);
+	~MGE() {
+		if (amps != NULL) {
+			delete[] amps;
+			delete[] sigs;
+		}
+	}
+
+	void update_meta_parameters();
+	void assign_paramnames();
+	void assign_param_pointers();
+	void set_auto_stepsizes();
+	void set_auto_ranges();
+	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
+	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
+	void calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements);
+	void get_regularization_param_ptr(double*& regparam_ptr);
+	void update_amplitudes(double*& ampvec);
+	//void get_amplitudes(double *ampvec);
+	void update_indxptr(const int newval);
 
 	double window_rmax();
 	double length_scale();

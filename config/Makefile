@@ -16,6 +16,7 @@
 	#$(F77) -c -o  $@ $<
 
 # Version without MUMPS
+#default: qlens mkdist cosmocalc 
 default: qlens mkdist cosmocalc 
 CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
@@ -46,15 +47,15 @@ CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC)
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
-objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o lens.o imgsrch.o pixelgrid.o \
-				cg.o mcmchdr.o errors.o brent.o sort.o gauss.o romberg.o spline.o \
-				trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
+objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o params.o modelparams.o lenscalc.o \
+				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o errors.o brent.o sort.o gauss.o \
+				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
 
 mkdist_objects = mkdist.o
 mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
 cosmocalc_objects = cosmocalc.o
-cosmocalc_shared_objects = errors.o spline.o romberg.o cosmo.o brent.o
+cosmocalc_shared_objects = errors.o spline.o romberg.o modelparams.o cosmo.o brent.o
 
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
@@ -71,16 +72,25 @@ mumps:
 qlens.o: qlens.cpp qlens.h
 	$(CC) -c qlens.cpp
 
-commands.o: commands.cpp qlens.h lensvec.h profile.h sbprofile.h egrad.h pixelgrid.h
+commands.o: commands.cpp qlens.h lensvec.h profile.h sbprofile.h egrad.h pixelgrid.h modelparams.h
 	$(CC_NO_OPT) -c commands.cpp
 
-lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h
+params.o: params.cpp params.h 
+	$(CC) -c params.cpp
+
+modelparams.o: modelparams.cpp modelparams.h 
+	$(CC) -c modelparams.cpp
+
+lenscalc.o: lenscalc.cpp qlens.h lensvec.h
+	$(CC) -c lenscalc.cpp
+
+lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h modelparams.h
 	$(CC) -c lens.cpp
 
 imgsrch.o: imgsrch.cpp qlens.h lensvec.h
 	$(CC) -c imgsrch.cpp
 
-pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h egrad.h
+pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h egrad.h modelparams.h
 	$(CC) -c pixelgrid.cpp
 
 cg.o: cg.cpp cg.h
@@ -140,7 +150,7 @@ mkdist.o: mkdist.cpp mcmceval.h errors.h
 hyp_2F1.o: hyp_2F1.cpp hyp_2F1.h complex_functions.h
 	$(CC) -c hyp_2F1.cpp
 
-cosmocalc.o: cosmocalc.cpp errors.h cosmo.h
+cosmocalc.o: cosmocalc.cpp errors.h cosmo.h modelparams.h
 	$(CC) -c cosmocalc.cpp
 
 cosmo.o: cosmo.cpp cosmo.h

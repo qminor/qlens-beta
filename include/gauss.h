@@ -11,7 +11,7 @@ class GaussianIntegral
          int numberOfPoints;
 			static const double EPS;
 			static const double RT4M_PI_INV;
-			double Gamma(const double xx);
+			double GammaFunction(const double xx);
           
      public:
 			 GaussianIntegral();

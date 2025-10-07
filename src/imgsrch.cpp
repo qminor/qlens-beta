@@ -1761,7 +1761,7 @@ void QLens::find_images()
 	images_found = grid->tree_search();
 
 	if (include_time_delays) {
-		double td_factor = time_delay_factor_arcsec(lens_redshift,reference_source_redshift);
+		double td_factor = cosmo.time_delay_factor_arcsec(lens_redshift,reference_source_redshift);
 		double min_td=1e30;
 		int i;
 		for (i = 0; i < Grid::nfound; i++)
@@ -1787,7 +1787,7 @@ void QLens::output_images_single_source(const double &x_source, const double &y_
 	//cout << Grid::cc_neighbor_splittings << endl;
 	//double *Grid::grid_zfactors;
 	//double **Grid::grid_betafactors;
-	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << ptsrc_zfactors[0][0] << endl;
+	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << specific_ptsrc_zfactors[0][0] << endl;
 
 	// parameters for creating the recursive grid
 	//cout << Grid::rmin << endl;
@@ -1909,7 +1909,7 @@ image* QLens::get_images(const lensvector &source_in, int &n_images, bool verbal
 }
 
 // this is for the Python wrapper, but I would like to replace the above functions with this in qlens anyway (DO LATER)
-bool QLens::get_imageset(const double src_x, const double src_y, ImageSet& image_set, bool verbal)
+bool QLens::get_imageset(const double src_x, const double src_y, PointSource& image_set, bool verbal)
 {
 	if (grid==NULL) {
 		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return false;
@@ -1922,53 +1922,45 @@ bool QLens::get_imageset(const double src_x, const double src_y, ImageSet& image
 	return true;
 }
 
-vector<ImageSet> QLens::get_fit_imagesets(bool &status, int min_dataset, int max_dataset, bool verbal)
+vector<PointSource> QLens::get_fit_imagesets(bool &status, int min_dataset, int max_dataset, bool verbal)
 {
 	status = true;
-	if (n_sourcepts_fit==0) status = false;
-	if (max_dataset < 0) max_dataset = n_sourcepts_fit - 1;
+	if (n_ptsrc==0) status = false;
+	if (max_dataset < 0) max_dataset = n_ptsrc - 1;
 	if ((min_dataset < 0) or (min_dataset > max_dataset)) status = false;
-	vector<ImageSet> image_sets;
+	vector<PointSource> image_sets;
 	image_sets.clear();
 	if (!status) return image_sets;
-	image_sets.resize(n_sourcepts_fit);
+	image_sets.resize(n_ptsrc);
 
-	double* srcflux = new double[n_sourcepts_fit];
-	lensvector *srcpts = new lensvector[n_sourcepts_fit];
-	if (include_flux_chisq) {
-		output_model_source_flux(srcflux);
-	} else {
-		for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-	}
+	if (analytic_source_flux) set_analytic_srcflux(false);
+	if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 
-	if (!analytic_source_flux) srcflux[0] = source_flux;
-	if (use_analytic_bestfit_src) {
-		find_analytic_srcpos(srcpts);
-	} else {
-		for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
-	}
-
+	int redshift_idx;
 	for (int i=min_dataset; i <= max_dataset; i++) {
-		if ((i == min_dataset) or (ptsrc_zfactors[i] != ptsrc_zfactors[i-1]))
-			create_grid(false,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
+		redshift_idx = ptsrc_redshift_idx[i];
+		if ((i == min_dataset) or (redshift_idx != ptsrc_redshift_idx[i-1])) {
+			create_grid(false,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+		}
 
-		source[0] = srcpts[i][0];
-		source[1] = srcpts[i][1];
+		source[0] = ptsrc_list[i]->pos[0];
+		source[1] = ptsrc_list[i]->pos[1];
 
 		find_images();
-		image_sets[i].copy_imageset(source,ptsrc_redshifts[i],images_found,Grid::nfound,srcflux[i]);
+		image_sets[i].copy_imageset(source,ptsrc_redshifts[redshift_idx],images_found,Grid::nfound,ptsrc_list[i]->srcflux);
 	}
 	reset_grid();
-	delete[] srcpts;
-	delete[] srcflux;
 	return image_sets;
 }
-bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool verbal)
+
+bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal)
 {
 	if (plot_critical_curves("crit.dat")==false) warn(warnings,"no critical curves found");
 	if ((grid==NULL) and (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
 
-	ifstream sources(sourcefile);
+	//ifstream sources(sourcefile);
+	ifstream sources;
+	open_input_file(sources,sourcefile);
 	ofstream imagedat;
 	ofstream srcdat; // This is somewhat redundant, but the graphical plotter prefers to have a standard filename for the source
 
@@ -1987,32 +1979,34 @@ bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool verb
 		open_output_file(imagedat,imagefile);
 		open_output_file(srcdat,"src.dat"); // This is somewhat redundant, but the graphical plotter prefers to have a standard filename for the source
 
-		open_output_file(quads,"images.quads");
-		open_output_file(doubles,"images.doubles");
-		open_output_file(cusps,"images.cusps");
-		open_output_file(singles,"images.singles");
-		open_output_file(weird,"images.weird");
+		if (color_multiplicities) {
+			open_output_file(quads,"images.quads");
+			open_output_file(doubles,"images.doubles");
+			open_output_file(cusps,"images.cusps");
+			open_output_file(singles,"images.singles");
+			open_output_file(weird,"images.weird");
 
-		open_output_file(srcquads,"sources.quads");
-		open_output_file(srcdoubles,"sources.doubles");
-		open_output_file(srccusps,"sources.cusps");
-		open_output_file(srcsingles,"sources.singles");
-		open_output_file(srcweird,"sources.weird");
-		
-		quads << setiosflags(ios::scientific);
-		cusps << setiosflags(ios::scientific);
-		doubles << setiosflags(ios::scientific);
-		singles << setiosflags(ios::scientific);
-		weird << setiosflags(ios::scientific);
+			open_output_file(srcquads,"sources.quads");
+			open_output_file(srcdoubles,"sources.doubles");
+			open_output_file(srccusps,"sources.cusps");
+			open_output_file(srcsingles,"sources.singles");
+			open_output_file(srcweird,"sources.weird");
+			
+			quads << setiosflags(ios::scientific);
+			cusps << setiosflags(ios::scientific);
+			doubles << setiosflags(ios::scientific);
+			singles << setiosflags(ios::scientific);
+			weird << setiosflags(ios::scientific);
 
-		srcquads << setiosflags(ios::scientific);
-		srccusps << setiosflags(ios::scientific);
-		srcdoubles << setiosflags(ios::scientific);
-		srcsingles << setiosflags(ios::scientific);
-		srcweird << setiosflags(ios::scientific);
+			srcquads << setiosflags(ios::scientific);
+			srccusps << setiosflags(ios::scientific);
+			srcdoubles << setiosflags(ios::scientific);
+			srcsingles << setiosflags(ios::scientific);
+			srcweird << setiosflags(ios::scientific);
 
-		imagedat << setiosflags(ios::scientific);
-		srcdat << setiosflags(ios::scientific);
+			imagedat << setiosflags(ios::scientific);
+			srcdat << setiosflags(ios::scientific);
+		}
 	}
 
 	int nsources = 0;
@@ -2031,29 +2025,33 @@ bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool verb
 					imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].td << " " << images_found[i].parity << endl;
 				else
 					imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+				if (color_multiplicities) {
+					if (Grid::nfound==5) {
+						quads << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					}
+					else if (Grid::nfound==3) {
+						// this will count doubles and cusps
+						doubles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					}
+					else if (Grid::nfound==1) {
+						singles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					} else {
+						weird << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					}
+				}
+			}
+			if (color_multiplicities) {
 				if (Grid::nfound==5) {
-					quads << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					srcquads << source[0] << " " << source[1] << endl;
 				}
 				else if (Grid::nfound==3) {
-					// this will count doubles and cusps
-					doubles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					srcdoubles << source[0] << " " << source[1] << endl;
 				}
 				else if (Grid::nfound==1) {
-					singles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					srcsingles << source[0] << " " << source[1] << endl;
 				} else {
-					weird << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					srcweird << source[0] << " " << source[1] << endl;
 				}
-			}
-			if (Grid::nfound==5) {
-				srcquads << source[0] << " " << source[1] << endl;
-			}
-			else if (Grid::nfound==3) {
-				srcdoubles << source[0] << " " << source[1] << endl;
-			}
-			else if (Grid::nfound==1) {
-				srcsingles << source[0] << " " << source[1] << endl;
-			} else {
-				srcweird << source[0] << " " << source[1] << endl;
 			}
 
 			imagedat << endl;

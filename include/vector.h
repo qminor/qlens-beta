@@ -25,6 +25,7 @@ class Vector
 	void resize(const int &n);
 	void input(T*, const int&);
 	T* array(void) { return v; }
+	T* array_offset(const int offset) { return (v+offset); }
 	T* array(void) const { return v; }
 	T* end(void) { return v+nn; }
 	inline T norm(void);

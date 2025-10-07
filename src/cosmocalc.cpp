@@ -166,7 +166,15 @@ int main(int argc, char *argv[])
 	} else if (mode==Plot_MC_Relation) {
 		cosmo.plot_mc_relation_dutton_moline(redshift,xsub);
 	} else if (mode==Testing) {
-		cosmo.redshift_distribution();
+		int i,nzi = 100;
+		double zi=0.3, zf=5;
+		double zs, zstep = (zf-zi)/(nzi-1);
+		double sigcr;
+		for (i=0, zs=zi; i < nzi; i++, zs += zstep) {
+			sigcr = cosmo.sigma_crit_kpc(redshift,zs);
+			cout << zs << " " << sigcr << endl;
+		}
+		//cosmo.redshift_distribution();
 	}
 	return 0;
 }

@@ -9,7 +9,7 @@
 #include <iomanip>
 using namespace std;
 
-bool SB_Profile::orient_major_axis_north = false; // At the moment, this setting cannot be changed; it should probably be removed altogether
+bool SB_Profile::orient_major_axis_north = false;
 bool SB_Profile::use_sb_ellipticity_components = false;
 int SB_Profile::default_ellipticity_mode = 1;
 bool SB_Profile::use_fmode_scaled_amplitudes = false;
@@ -38,6 +38,7 @@ void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_
 	parameter_mode = pmode_in;
 	center_anchored_to_lens = false;
 	center_anchored_to_source = false;
+	center_anchored_to_ptsrc = false;
 	if (is_elliptical_source) {
 		ellipticity_mode = default_ellipticity_mode;
 	} else {
@@ -83,6 +84,7 @@ void SB_Profile::copy_base_source_data(const SB_Profile* sb_in)
 	center_anchored_to_lens = sb_in->center_anchored_to_lens;
 	center_anchor_lens = sb_in->center_anchor_lens;
 	center_anchored_to_source = sb_in->center_anchored_to_source;
+	center_anchored_to_ptsrc = sb_in->center_anchored_to_ptsrc;
 	center_anchor_source = sb_in->center_anchor_source;
 	is_lensed = sb_in->is_lensed;
 	zoom_subgridding = sb_in->zoom_subgridding;
@@ -273,9 +275,18 @@ void SB_Profile::anchor_center_to_source(SB_Profile** center_anchor_list, const 
 	y_center = center_anchor_source->y_center;
 }
 
+void SB_Profile::anchor_center_to_ptsrc(PointSource** center_anchor_list, const int &center_anchor_ptsrc_number)
+{
+	if (!center_anchored_to_ptsrc) center_anchored_to_ptsrc = true;
+	center_anchor_ptsrc = center_anchor_list[center_anchor_ptsrc_number];
+	x_center = center_anchor_ptsrc->pos[0];
+	y_center = center_anchor_ptsrc->pos[1];
+}
+
 int SB_Profile::get_center_anchor_number() {
 	if (center_anchored_to_lens) return center_anchor_lens->lens_number;
 	else if (center_anchored_to_source) return center_anchor_source->sb_number;
+	else if (center_anchored_to_ptsrc) return center_anchor_ptsrc->ptsrc_number;
 	else return -1;
 }
 
@@ -288,6 +299,9 @@ void SB_Profile::delete_center_anchor()
 	} else if (center_anchored_to_source) {
 		center_anchored_to_source = false;
 		center_anchor_source = NULL;
+	} else if (center_anchored_to_ptsrc) {
+		center_anchored_to_ptsrc = false;
+		center_anchor_ptsrc = NULL;
 	}
 }
 
@@ -884,6 +898,9 @@ void SB_Profile::update_anchor_center()
 	} else if (center_anchored_to_source) {
 		x_center = center_anchor_source->x_center;
 		y_center = center_anchor_source->y_center;
+	} else if (center_anchored_to_ptsrc) {
+		x_center = center_anchor_ptsrc->pos[0];
+		y_center = center_anchor_ptsrc->pos[1];
 	}
 }
 
@@ -1055,7 +1072,7 @@ void SB_Profile::copy_parameter_anchors(const SB_Profile* sb_in)
 
 void SB_Profile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source)
 {
-	if (paramnum >= n_params) die("Parameter does not exist for this source");
+	if (paramnum >= n_params) die("Parameter %i does not exist for this source (nparams=%i)",paramnum,n_params);
 	if (anchor_paramnum >= param_anchor_source->n_params) die("Parameter does not exist for source you are anchoring to");
 	anchor_parameter_to_source[paramnum] = true;
 	parameter_anchor_source[paramnum] = param_anchor_source;
@@ -1252,6 +1269,17 @@ double SB_Profile::sb_rsq(const double rsq) // this function should be redefined
 	return (f_parameter*sb_spline.splint(r/qx_parameter));
 }
 
+double SB_Profile::sb_rsq_deriv(const double rsq)
+{
+	static const double precision = 1e-6;
+	double temp, h;
+	h = precision*rsq;
+	temp = rsq + h;
+	h = temp - rsq; // silly NR trick
+	return (sb_rsq((rsq+h)/(qx_parameter*qx_parameter))-sb_rsq((rsq-h)/(qx_parameter*qx_parameter)))/(2*h);
+}
+
+
 void SB_Profile::shift_angle_90()
 {
 	// do this if the major axis orientation is changed (so the qlens angles values are changed appropriately, even though the qlens doesn't change)
@@ -1439,11 +1467,11 @@ double SB_Profile::surface_brightness(double x, double y)
 		double sbderiv, h = 1e-5;
 
 		if (fourier_use_eccentric_anomaly) {
-			// we evaluate SB at non-elliptical radius because that's what the corresponding lensing multipoles have to do (to get deflections).
 			if (xisq <= h) sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq))/(h);
 			else sbderiv = (sb_rsq(xisq + h) - sb_rsq(xisq-h))/(2*h);
 			sb += 2*fourier_factor*sbderiv*xisq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
 		} else {
+			// we evaluate SB at non-elliptical radius because that's what the corresponding lensing multipoles have to do (to get deflections).
 			if (rsq <= h) sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq))/(h);
 			else sbderiv = (sb_rsq(rsq + h) - sb_rsq(rsq-h))/(2*h);
 			sb += 2*fourier_factor*sbderiv*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
@@ -2118,13 +2146,13 @@ double SB_Profile::profile_fit_loglike_bspline(double *params)
 /*
 double SB_Profile::calculate_Lmatrix_element(double x, double y, const int amp_index)
 {
-	return 0.0; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+	return 0.0; // this is only used in the derived classes Shapelet, MGE
 }
 */
 
 void SB_Profile::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight)
 {
-	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+	return; // this is only used in the derived classes Shapelet, MGE
 }
 
 /*
@@ -2144,9 +2172,19 @@ void SB_Profile::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmat
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
-void SB_Profile::update_amplitudes(double*& ampvec)
+void SB_Profile::calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements)
+{
+	return; // this is only used in the derived class MGE (but may be used by more profiles later)
+}
+
+void SB_Profile::get_regularization_param_ptr(double*& regparam_ptr)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+
+void SB_Profile::update_amplitudes(double*& ampvec)
+{
+	return; // this is only used in the derived classes Shapelet, MGE
 }
 
 double SB_Profile::surface_brightness_zeroth_order(double x, double y)
@@ -2188,27 +2226,26 @@ void SB_Profile::plot_sb_profile(double rmin, double rmax, int steps, ofstream &
 	}
 }
 
-void SB_Profile::print_parameters(const double zs)
+void SB_Profile::print_parameters(const double zs, const bool show_band, const int band)
 {
 	cout << model_name;
 	bool parenthesis = false;
 	string divider = "(";
-	if (zs > 0) {
+	if (!is_lensed) {
+		cout << "(unlensed";
+		parenthesis = true;
+	} else if (zs > 0) {
 		stringstream zstr;
 		zstr << zs;
 		string zstring;
 		zstr >> zstring;
 		cout << "(zs=" << zstring;
 		parenthesis = true;
-	} else {
-		if (!is_lensed) {
-			cout << "(unlensed";
-			parenthesis = true;
-		}
 	}
 	if (parenthesis) divider = ",";
 	
 	if (sbtype==SHAPELET) { cout << divider << "n_shapelets=" << (*indxptr); parenthesis = true; }
+	else if (sbtype==MULTI_GAUSSIAN_EXPANSION) { cout << divider << "n_gaussians=" << (*indxptr); parenthesis = true; }
 	if (zoom_subgridding) { cout << divider << "zoom"; parenthesis = true; }
 	if (parenthesis) cout << ")";
 	cout << ": ";
@@ -2220,6 +2257,7 @@ void SB_Profile::print_parameters(const double zs)
 	}
 	if (center_anchored_to_lens) cout << " (center anchored to lens " << center_anchor_lens->lens_number << ")";
 	else if (center_anchored_to_source) cout << " (center anchored to source " << center_anchor_source->sb_number << ")";
+	else if (center_anchored_to_ptsrc) cout << " (center anchored to ptsrc " << center_anchor_ptsrc->ptsrc_number << ")";
 	if ((ellipticity_mode != default_ellipticity_mode) and (ellipticity_mode != -1)) {
 		cout << " (";
 		if (ellipticity_gradient) cout << "egrad=on,";
@@ -2232,6 +2270,9 @@ void SB_Profile::print_parameters(const double zs)
 		}
 	}
 	if (lensed_center_coords) cout << " (xc=" << x_center << ", yc=" << y_center << ")";
+	if (show_band) {
+		cout << " (band=" << band << ")";
+	}
 	cout << endl;
 	if ((ellipticity_gradient) and (egrad_mode==0)) {
 		cout << "   q-knots: ";
@@ -2367,81 +2408,6 @@ double SB_Profile::length_scale()
 	return qx_parameter*sb_spline.xmax();
 }
 
-void SB_Profile::print_source_command(ofstream& scriptout, const bool use_limits)
-{
-	scriptout << setprecision(16);
-	scriptout << "fit source " << model_name << " ";
-	if (!is_lensed) scriptout << "-unlensed ";
-	if (zoom_subgridding) scriptout << "-zoom ";
-	if (lensed_center_coords) scriptout << "-lensed_center ";
-
-	for (int i=0; i < n_params; i++) {
-		if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
-		else {
-			// If this is an optional parameter, need to specify parameter name before the value
-			if (paramnames[i]=="c0") scriptout << "c0="; // boxiness parameter
-			else if (paramnames[i]=="rt") scriptout << "rt="; // truncation radius
-			else {
-				for (int j=0; j < n_fourier_modes; j++) {
-					if (fourier_mode_paramnum[j]==i) scriptout << "f" << fourier_mode_mvals[j] << "="; // Fourier mode
-				}
-			}
-			if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
-			else scriptout << *(param[i]);
-		}
-		scriptout << " ";
-	}
-	string extra_arg;
-	if (get_special_command_arg(extra_arg)) scriptout << extra_arg << " ";
-	scriptout << endl;
-	for (int i=0; i < n_params; i++) {
-		if (vary_params[i]) scriptout << "1 ";
-		else scriptout << "0 ";
-	}
-	scriptout << endl;
-	if ((use_limits) and (include_limits)) {
-		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
-		else {
-			for (int i=0; i < n_vary_params; i++) {
-				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i])) {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
-					}
-				} else {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,true);
-						output_field_in_sci_notation(&lower_limits_initial[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits_initial[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
-					}
-
-				}
-			}
-		}
-	}
-}
-
-bool SB_Profile::get_special_command_arg(string &arg)
-{
-	return false; // overloaded for certain source objects to givce special command args
-}
-
-
-inline void SB_Profile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
-{
-	scriptout << setiosflags(ios::scientific);
-	scriptout << (*num);
-	scriptout << resetiosflags(ios::scientific);
-	if (space) scriptout << " ";
-}
-
 /********************************* Specific SB_Profile models (derived classes) *********************************/
 
 Gaussian::Gaussian(const double &max_sb_in, const double &sig_x_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in)
@@ -2517,15 +2483,19 @@ double Gaussian::length_scale()
 	return sig_x;
 }
 
-Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, QLens* qlens_in)
+Sersic::Sersic(const double &s_in, const double &Reff_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, QLens* qlens_in)
 {
 	model_name = "sersic";
 	sbtype = SERSIC;
-	setup_base_source_properties(7,3,true);
+	setup_base_source_properties(7,3,true,parameter_mode_in);
 	qlens = qlens_in;
 	n = n_in;
 	Reff = Reff_in;
-	s0 = s0_in;
+	if (parameter_mode==0) {
+		s0 = s_in;
+	} else {
+		s_eff = s_in;
+	}
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	update_meta_parameters();
 }
@@ -2533,6 +2503,7 @@ Sersic::Sersic(const double &s0_in, const double &Reff_in, const double &n_in, c
 Sersic::Sersic(const Sersic* sb_in)
 {
 	s0 = sb_in->s0;
+	s_eff = sb_in->s_eff;
 	n = sb_in->n;
 	Reff = sb_in->Reff;
 	copy_base_source_data(sb_in);
@@ -2542,6 +2513,9 @@ Sersic::Sersic(const Sersic* sb_in)
 void Sersic::update_meta_parameters()
 {
 	b = 2*n - 0.33333333333333 + 4.0/(405*n) + 46.0/(25515*n*n) + 131.0/(1148175*n*n*n); // from Cardone 2003 (or Ciotti 1999)
+	if (parameter_mode==1) {
+		s0 = s_eff * exp(b);
+	}
 	//k = b*pow(1.0/Reff,1.0/n);
 	//s0 = L0_in/(M_PI*Reff*Reff*2*n*Gamma(2*n)/pow(b,2*n));
 	update_ellipticity_meta_parameters();
@@ -2549,7 +2523,11 @@ void Sersic::update_meta_parameters()
 
 void Sersic::assign_paramnames()
 {
-	paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
+	if (parameter_mode==0) {
+		paramnames[0] = "s0"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "0";
+	} else {
+		paramnames[0] = "s_eff"; latex_paramnames[0] = "S"; latex_param_subscripts[0] = "eff";
+	}
 	paramnames[1] = "Reff"; latex_paramnames[1] = "R"; latex_param_subscripts[1] = "eff";
 	paramnames[2] = "n"; latex_paramnames[2] = "n"; latex_param_subscripts[2] = "";
 	set_geometric_paramnames(sbprofile_nparams);
@@ -2557,7 +2535,11 @@ void Sersic::assign_paramnames()
 
 void Sersic::assign_param_pointers()
 {
-	param[0] = &s0;
+	if (parameter_mode==0) {
+		param[0] = &s0;
+	} else {
+		param[0] = &s_eff;
+	}
 	param[1] = &Reff;
 	param[2] = &n;
 	set_geometric_param_pointers(sbprofile_nparams);
@@ -2566,7 +2548,11 @@ void Sersic::assign_param_pointers()
 void Sersic::set_auto_stepsizes()
 {
 	int index = 0;
-	stepsizes[index++] = (s0 > 0) ? 0.1*s0 : 0.1; 
+	if (parameter_mode==0) {
+		stepsizes[index++] = (s0 > 0) ? 0.1*s0 : 0.1; 
+	} else {
+		stepsizes[index++] = (s_eff > 0) ? 0.1*s_eff : 0.1; 
+	}
 	stepsizes[index++] = 0.1; // arbitrary
 	stepsizes[index++] = 0.3; // arbitrary
 	set_geometric_param_auto_stepsizes(index);
@@ -3118,15 +3104,11 @@ double NFW_Source::length_scale()
 	return rs;
 }
 
-
-
-
 Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate, const int parameter_mode_in, QLens* qlens_in)
 {
 	model_name = "shapelet";
 	sbtype = SHAPELET;
-	int npar = 5;
-	setup_base_source_properties(npar,1,false,parameter_mode_in);
+	setup_base_source_properties(6,1,false,parameter_mode_in);
 	qlens = qlens_in;
 	if (parameter_mode==0) {
 		sig = scale_in;
@@ -3135,6 +3117,7 @@ Shapelet::Shapelet(const double &amp00, const double &scale_in, const double &q_
 		sig_factor = scale_in;
 		sig = 1.0; // this will be set automatically using the 'find_shapelet_scaling_parameters' function in lens.cpp
 	}
+	regparam = 100; // default
 	n_shapelets = nn;
 	indxptr = &n_shapelets;
 	amps = new double*[n_shapelets];
@@ -3157,6 +3140,7 @@ Shapelet::Shapelet(const Shapelet* sb_in)
 	indxptr = &n_shapelets;
 	sig = sb_in->sig;
 	sig_factor = sb_in->sig_factor;
+	regparam = sb_in->regparam;
 	amps = new double*[n_shapelets];
 	for (int i=0; i < n_shapelets; i++) amps[i] = new double[n_shapelets];
 	for (int i=0; i < n_shapelets; i++) {
@@ -3182,6 +3166,7 @@ void Shapelet::assign_paramnames()
 	} else {
 		paramnames[indx] = "sigfac"; latex_paramnames[indx] = "f"; latex_param_subscripts[indx] = "\\sigma"; indx++;
 	}
+	paramnames[indx] = "regparam"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = ""; indx++;
 	set_geometric_paramnames(indx);
 }
 
@@ -3193,6 +3178,7 @@ void Shapelet::assign_param_pointers()
 	} else {
 		param[indx++] = &sig_factor;
 	}
+	param[indx++] = &regparam;
 	set_geometric_param_pointers(indx);
 }
 
@@ -3204,12 +3190,14 @@ void Shapelet::set_auto_stepsizes()
 	} else {
 		stepsizes[indx++] = (sig_factor != 0) ? 0.1*sig_factor : 0.1; // arbitrary
 	}
+	stepsizes[indx++] = 0.3*regparam; // arbitrary
 	set_geometric_param_auto_stepsizes(indx);
 }
 
 void Shapelet::set_auto_ranges()
 {
 	int indx=0;
+	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
 	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
 	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30; indx++;
 	set_geometric_param_auto_ranges(indx);
@@ -3355,6 +3343,11 @@ void Shapelet::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatri
 	Rmatrix_index[n] = indx;
 }
 
+void Shapelet::get_regularization_param_ptr(double*& regparam_ptr)
+{
+	regparam_ptr = &regparam;
+}
+
 void Shapelet::update_amplitudes(double*& ampvec)
 {
 	int i,j,k=0;
@@ -3423,16 +3416,213 @@ double Shapelet::length_scale()
 	return sig*sqrt(n_shapelets);
 }
 
-bool Shapelet::get_special_command_arg(string &arg)
+
+MGE::MGE(const double reg, const double amp0, const double sig_i_in, const double sig_f_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const int parameter_mode_in, QLens* qlens_in)
 {
-	stringstream nstr;
-	string nstring;
-	nstr << n_shapelets;
-	nstr >> nstring;
-	arg = "n=" + nstring;
-	if (truncate_at_3sigma) arg += " -truncate";
-	return true;
+	if (nn <= 0) die("must have n_gaussians > 0");
+	model_name = "mge";
+	sbtype = MULTI_GAUSSIAN_EXPANSION;
+	setup_base_source_properties(5,1,false,parameter_mode_in);
+	qlens = qlens_in;
+	logsig_i = log(sig_i_in)/ln10;
+	logsig_f = log(sig_f_in)/ln10;
+	n_gaussians = nn;
+	indxptr = &n_gaussians;
+	regparam = reg;
+	amps = new double[n_gaussians];
+	sigs = new double[n_gaussians];
+	int i;
+	double logsig, logsigstep = (logsig_f - logsig_i) / (n_gaussians-1);
+	for (i=0, logsig = logsig_i; i < n_gaussians; i++, logsig += logsigstep) {
+		sigs[i] = pow(10,logsig);
+		amps[i] = 0;
+	}
+	amps[0] = amp0;
+
+	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	update_meta_parameters();
 }
+
+MGE::MGE(const MGE* sb_in)
+{
+	n_gaussians = sb_in->n_gaussians;
+	logsig_i = sb_in->logsig_i;
+	logsig_f = sb_in->logsig_f;
+	indxptr = &n_gaussians;
+	regparam = sb_in->regparam;
+	amps = new double[n_gaussians];
+	sigs = new double[n_gaussians];
+	for (int i=0; i < n_gaussians; i++) {
+		amps[i] = sb_in->amps[i];
+		sigs[i] = sb_in->sigs[i];
+	}
+	copy_base_source_data(sb_in);
+	update_meta_parameters();
+}
+
+void MGE::update_meta_parameters()
+{
+	update_ellipticity_meta_parameters();
+}
+
+void MGE::assign_paramnames()
+{
+	int indx=0;
+	paramnames[indx] = "regparam"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = ""; indx++;
+	set_geometric_paramnames(indx);
+}
+
+void MGE::assign_param_pointers()
+{
+	int indx=0;
+	param[indx++] = &regparam;
+	set_geometric_param_pointers(indx);
+}
+
+void MGE::set_auto_stepsizes()
+{
+	int indx=0;
+	stepsizes[indx++] = 0.3*regparam; // arbitrary
+	set_geometric_param_auto_stepsizes(indx);
+}
+
+void MGE::set_auto_ranges()
+{
+	int indx=0;
+	set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 1e-6; penalty_upper_limits[indx] = 1e30; indx++; // regparam
+	set_geometric_param_auto_ranges(indx);
+}
+
+double MGE::sb_rsq(const double rsq)
+{
+	double sb=0;
+	for (int i=0; i < n_gaussians; i++) {
+		sb += amps[i]*exp(-rsq/SQR(sigs[i])/2)/M_SQRT_2PI/sigs[i];
+	}
+	return sb;
+}
+
+double MGE::sb_rsq_deriv(const double rsq)
+{
+	double sb_deriv=0;
+	for (int i=0; i < n_gaussians; i++) {
+		sb_deriv += -amps[i]*exp(-rsq/SQR(sigs[i])/2)/M_SQRT_2PI/CUBE(sigs[i])/2;
+	}
+	return sb_deriv;
+}
+
+void MGE::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight)
+{
+	x -= x_center;
+	y -= y_center;
+	if (theta != 0) rotate(x,y);
+
+	double xisq = x*x + y*y/(q*q);
+	for (int i=0; i < n_gaussians; i++) {
+		*(Lmatrix_elements++) += weight*exp(-xisq/SQR(sigs[i])/2)/M_SQRT_2PI/sigs[i];
+	}
+}
+
+void MGE::calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements)
+{
+	//int i,j;
+	//for (i=0; i < n_gaussians; i++) {
+		//for (j=i; j < n_gaussians; j++) {
+			//if ((i==0) and (j==0)) *(Rmatrix_elements) = 1;
+			//else if (j==i) *(Rmatrix_elements) = 2;
+			//else if (j==i+1) *(Rmatrix_elements) = -1;
+			//else (*Rmatrix_elements) = 0;
+			//Rmatrix_elements++;
+		//}
+	//}
+
+	int i,j,k,l;
+	double sigi5inv, sigj5inv, sigsqil, sigsqlj, sigl10inv;
+	double sum_i, sum_j;
+	for (i=0; i < n_gaussians; i++) {
+		sigi5inv = pow(sigs[i],-1);
+		for (j=i; j < n_gaussians; j++) {
+			sigj5inv = pow(sigs[j],-1);
+			//sigsqij = 1.0/(1.0/SQR(sigs[i]) + 1.0/SQR(sigs[j]));
+			*(Rmatrix_elements) = 0;
+			for (l=0; l < n_gaussians; l++) {
+				sigsqil = 1.0/(1.0/SQR(sigs[i]) + 1.0/SQR(sigs[l]));
+				sigsqlj = 1.0/(1.0/SQR(sigs[l]) + 1.0/SQR(sigs[j]));
+				sigl10inv = pow(sigs[l],-2);
+				sum_i = 0;
+				for (k=0; k < n_rvals; k++) {
+					sum_i += sqrt(rvalsq[k]*abs(rvalsq[k]-sigs[i]*sigs[i]))*exp(-rvalsq[k]*sigsqil/2);
+				}
+				sum_j = 0;
+				for (k=0; k < n_rvals; k++) {
+					sum_j += sqrt(rvalsq[k]*abs(rvalsq[k]-sigs[j]*sigs[j]))*exp(-rvalsq[k]*sigsqlj/2);
+				}
+				*(Rmatrix_elements) += sum_i*sum_j*sigi5inv*sigj5inv*sigl10inv;
+			}
+			Rmatrix_elements++;
+		}
+	}
+}
+
+void MGE::get_regularization_param_ptr(double*& regparam_ptr)
+{
+	regparam_ptr = &regparam;
+}
+
+void MGE::update_amplitudes(double*& ampvec)
+{
+	int i,j,k=0;
+
+	for (i=0; i < n_gaussians; i++) {
+		amps[i] = *(ampvec++);
+		//cout << "AMP " << i << ": " << amps[i] << endl;
+	}
+}
+
+/*
+void MGE::get_amplitudes(double *ampvec)
+{
+	int i,j,k=0;
+	for (i=0; i < n_gaussians; i++) {
+		for (j=0; j < n_gaussians; j++) {
+			ampvec[k++] = amps[i][j];
+		}
+	}
+}
+*/
+
+void MGE::update_indxptr(const int newval)
+{
+	// indxptr points to n_gaussians
+	int old_nn = n_gaussians;
+	n_gaussians = newval;
+	indxptr = &n_gaussians;
+
+	double *newamps = new double[n_gaussians];
+	double *newsigs = new double[n_gaussians];
+	int i;
+	double logsig, logsigstep = (logsig_f - logsig_i) / (n_gaussians-1);
+	for (i=0, logsig = logsig_i; i < n_gaussians; i++, logsig += logsigstep) {
+		newsigs[i] = pow(10,logsig);
+		newamps[i] = 0;
+	}
+	if (amps != NULL) delete[] amps;
+	if (sigs != NULL) delete[] sigs;
+	amps = newamps;
+	sigs = newsigs;
+}
+
+double MGE::window_rmax() // used to define the window size for pixellated surface brightness maps
+{
+	return 3*sigs[n_gaussians-1];
+}
+
+double MGE::length_scale()
+{
+	return sigs[n_gaussians-1];
+}
+
+
 
 
 SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool sine, QLens* qlens_in)
@@ -3443,7 +3633,6 @@ SB_Multipole::SB_Multipole(const double &A_m_in, const double r0_in, const int m
 	//string mstring;
 	//mstr << m_in;
 	//mstr >> mstring;
-	//special_parameter_command = "m=" + mstring;
 	sine_term = sine;
 	setup_base_source_properties(5,0,false);
 	qlens = qlens_in;

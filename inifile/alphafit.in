@@ -27,13 +27,17 @@ imgdata                      # Shows the image data so you can see what it looks
 #    can be used in addition to the image positions. If you do model the external shear, guess a small
 #    but nonzero value for both gamma and the angle, as we do here.
 
-fit lens alpha 4.5 1 0 0.8 30 0.7 0.3 shear=0.02 10 # Now we put our initial guess for the lens parameters
+fit lens sple 4.5 1 0 0.8 30 0.7 0.3 shear=0.02 10 # Now we put our initial guess for the lens parameters
 1 0 0 1 1 1 1 1 1                                   #vary flags; here we vary everything except for alpha and s (core size)
+pause
 
-fit sourcept auto  # Here, we put our initial guess for where the source point is located (or 'auto' to let qlens attempt this).
-                      # You can use 'fit plotimg' to see if the resulting images are roughly in the correct regions.
-                      # If the fit doesn't converge, play around with qlens further and find a lens model and source point
-                      # that fits the images more closely before trying again
+ptsrc auto     # Here, we put our initial guess for where the source point is located (or 'auto' to let qlens attempt this).
+               # You can use 'fit plotimg' to see if the resulting images are roughly in the correct regions.
+               # If the fit doesn't converge, play around with qlens further and find a lens model and source point
+               # that fits the images more closely before trying again
+					
+analytic_bestfit_src on    # This tells qlens to automatically find the source point coordinates during each likelihood evaluation 
+                           # (so that xsrc, ysrc will not be varied as free parameters during the fit).
 fit
 
 chisqflux on    # This means we use the image fluxes in the fit (very useful if the fluxes are reliable, but they often aren't)

@@ -135,7 +135,7 @@ GaussLaguerre::GaussLaguerre(const double alpha, int N) : GaussianIntegral(N)
           }
           while(fabs(z - z1) > EPS);
           points[i] = z;
-          weights[i] = -Gamma(alpha + N)/Gamma(double(N))/N/pp/p2;
+          weights[i] = -GammaFunction(alpha + N)/GammaFunction(double(N))/N/pp/p2;
      }
 }
 
@@ -296,7 +296,7 @@ GaussJacobi::GaussJacobi(const double alpha, const double beta, int N) : Gaussia
           }
           while(fabs(z-z1) > EPS);
           points[i] = z;
-          weights[i] = Gamma(alpha + N)*Gamma(beta + N)/Gamma(N + 1.0)/Gamma(N + alfbet + 1.0)*temp*pow(2.0, alfbet)/(pp*p2);
+          weights[i] = GammaFunction(alpha + N)*GammaFunction(beta + N)/GammaFunction(N + 1.0)/GammaFunction(N + alfbet + 1.0)*temp*pow(2.0, alfbet)/(pp*p2);
      }
 }
 
@@ -309,7 +309,7 @@ GaussChebyshev::GaussChebyshev(int N) : GaussianIntegral(N)
      }
 }
 
-double GaussianIntegral::Gamma(const double xx)
+double GaussianIntegral::GammaFunction(const double xx)
 {
 	double x,y,tmp,ser;
 	static double cof[6]={76.18009172947146,-86.50532032941677,
