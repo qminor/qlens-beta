@@ -11476,14 +11476,14 @@ bool QLens::output_coolest_files(const string filename)
 	pixels_psf["field_of_view_y"] = Json::Value(Json::arrayValue);
 	pixels_psf["field_of_view_y"].append(0);
 	if (psf_supersampling) {
-		pixels_psf["field_of_view_x"].append(pixsize*psf_list[0]->supersampled_psf_npixels_x/default_imgpixel_nsplit);
-		pixels_psf["field_of_view_y"].append(pixsize*psf_list[0]->supersampled_psf_npixels_y/default_imgpixel_nsplit);
+		pixels_psf["field_of_view_x"].append(pixsize*psf_list[0]->supersampled_psf_npixels_y/default_imgpixel_nsplit);
+		pixels_psf["field_of_view_y"].append(pixsize*psf_list[0]->supersampled_psf_npixels_x/default_imgpixel_nsplit);
 	} else {
-		pixels_psf["field_of_view_x"].append(pixsize*psf_list[0]->psf_npixels_x);
-		pixels_psf["field_of_view_y"].append(pixsize*psf_list[0]->psf_npixels_y);
+		pixels_psf["field_of_view_x"].append(pixsize*psf_list[0]->psf_npixels_y);
+		pixels_psf["field_of_view_y"].append(pixsize*psf_list[0]->psf_npixels_x);
 	}
-	pixels_psf["num_pix_x"] = (psf_supersampling ? psf_list[0]->supersampled_psf_npixels_x : psf_list[0]->psf_npixels_x);
-	pixels_psf["num_pix_y"] = (psf_supersampling ? psf_list[0]->supersampled_psf_npixels_y : psf_list[0]->psf_npixels_y);
+	pixels_psf["num_pix_x"] = (psf_supersampling ? psf_list[0]->supersampled_psf_npixels_y : psf_list[0]->psf_npixels_y);
+	pixels_psf["num_pix_y"] = (psf_supersampling ? psf_list[0]->supersampled_psf_npixels_x : psf_list[0]->psf_npixels_x);
 	pixels_psf["fits_file"] = Json::Value();
 	pixels_psf["fits_file"]["path"] = psf_list[0]->psf_filename;
 	coolest["instrument"]["psf"]["pixels"] = pixels_psf;
