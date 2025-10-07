@@ -127,6 +127,7 @@ class PointSource : public ModelParams
 	friend class SB_Profile;
 	QLens *lens;
 
+	public:
 	int ptsrc_number; // stores index in point source list
 	lensvector pos;
 	lensvector shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
@@ -1041,7 +1042,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	friend class Grid;
 	friend class SourcePixelGrid;
 	friend class ImagePixelGrid;
-	friend class ImagePixelData;
+	friend struct ImagePixelData;
 	friend struct DerivedParam;
 	friend class LensProfile;
 	friend class SB_Profile;
@@ -1463,10 +1464,20 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void set_integration_method(IntegrationMethod method) { LensProfile::integral_method = method; }
 	void set_analytic_bestfit_src(bool setting) {
 		use_analytic_bestfit_src = setting;
+		bool vary_source_coords = (use_analytic_bestfit_src) ? false : true;
+		// Automatically turn source coordinate parameters on/off accordingly
+		for (int i=0; i < n_ptsrc; i++) {
+			update_ptsrc_varyflag(i,"xsrc",vary_source_coords);
+			update_ptsrc_varyflag(i,"ysrc",vary_source_coords);
+		}
+		for (int i=0; i < n_ptsrc; i++) {
+			update_ptsrc_active_parameters(i);
+		}
 		update_parameter_list();
 	}
-	void update_imggrid_mask_values(const int mask_i);
+	void get_analytic_bestfit_src(bool &setting) { setting = use_analytic_bestfit_src; }
 
+	void update_imggrid_mask_values(const int mask_i);
 
 	void set_warnings(bool setting) { warnings = setting; }
 	void get_warnings(bool &setting) { setting = warnings; }

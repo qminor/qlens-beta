@@ -22,8 +22,7 @@ OPTS_NO_OPT = -Wno-write-strings -std=c++11
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
-#FLAGS = -DUSE_READLINE
-FLAGS = -I/usr/local/include/python3.7m/
+FLAGS = -DUSE_READLINE -I/usr/local/include/python3.7m/
 #OTHERLIBS =  -lm -lreadline -ltcmalloc_minimal -lcfitsio
 OTHERLIBS =  -lm -lreadline 
 LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)

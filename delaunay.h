@@ -108,8 +108,8 @@ class Delaunay
 		triangleTree *tris;
 		triangleBase *botTris;
 		triangleBase *botPtr;
-		double d1[2], d2[2], d3[2];
-		double product1, product2, product3;
+		//double d1[2], d2[2], d3[2];
+		//double product1, product2, product3;
 		
 	public:
 		double *x;

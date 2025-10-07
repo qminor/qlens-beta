@@ -15205,10 +15205,14 @@ QLens::~QLens()
 		delete[] assigned_mask;
 		for (i=0; i < n_extended_src_redshifts; i++) {
 			if (n_lens_redshifts > 0) delete[] extended_src_zfactors[i];
-			if (image_pixel_grids[i] != NULL) delete image_pixel_grids[i];
 		}
 		delete[] extended_src_zfactors;
-		if (image_pixel_grids != NULL) delete[] image_pixel_grids;
+	}
+	if (image_pixel_grids != NULL) {
+		for (i=0; i < n_image_pixel_grids; i++) {
+			if (image_pixel_grids[i] != NULL) delete image_pixel_grids[i];
+		}
+		delete[] image_pixel_grids;
 	}
 
 	if (n_lens_redshifts > 0) {

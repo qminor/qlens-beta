@@ -457,7 +457,7 @@ class ImagePixelGrid : private Sort
 	friend class SourcePixel;
 	friend class SourcePixelGrid;
 	friend class DelaunaySourceGrid;
-	friend class ImagePixelData;
+	friend struct ImagePixelData;
 	friend class LensProfile;
 	friend class PSF;
 	QLens *lens;
@@ -685,7 +685,7 @@ class PSF : public ModelParams
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
-	friend class ImagePixelData;
+	friend struct ImagePixelData;
 	QLens *lens;
 	ImagePixelGrid *image_pixel_grid;
 

@@ -53,11 +53,11 @@ PYBIND11_MODULE(qlens, m) {
 
         ;
 
-    py::class_<Alpha, LensProfile, std::unique_ptr<Alpha, py::nodelete>>(m, "Alpha")
-        .def(py::init<>([](){return new Alpha();}))
-        .def(py::init<const Alpha*>())
+    py::class_<SPLE_Lens, LensProfile, std::unique_ptr<SPLE_Lens, py::nodelete>>(m, "SPLE")
+        .def(py::init<>([](){return new SPLE_Lens();}))
+        .def(py::init<const SPLE_Lens*>())
         .def(py::init([](py::dict dict) {
-                                return new Alpha(
+                                return new SPLE_Lens(
                                         py::cast<double>(dict["b"]),
                                         py::cast<double>(dict["alpha"]),
                                         py::cast<double>(dict["s"]),
@@ -67,7 +67,7 @@ PYBIND11_MODULE(qlens, m) {
                                         py::cast<double>(dict["yc"])
                                 );
                         }))
-        .def("initialize", [](Alpha &current, py::dict dict){
+        .def("initialize", [](SPLE_Lens &current, py::dict dict){
                 try {
                         double b = py::cast<double>(dict["b"]);
                         double alpha = py::cast<double>(dict["alpha"]);
@@ -108,9 +108,9 @@ PYBIND11_MODULE(qlens, m) {
         })
         ;
 
-    py::class_<PseudoJaffe, LensProfile, std::unique_ptr<PseudoJaffe, py::nodelete>>(m, "PseudoJaffe")
-        .def(py::init<>([](){return new PseudoJaffe();}))
-        .def(py::init<const PseudoJaffe*>());
+    py::class_<dPIE_Lens, LensProfile, std::unique_ptr<dPIE_Lens, py::nodelete>>(m, "dPIE")
+        .def(py::init<>([](){return new dPIE_Lens();}))
+        .def(py::init<const dPIE_Lens*>());
 
     py::class_<NFW, LensProfile, std::unique_ptr<NFW, py::nodelete>>(m, "NFW")
         .def(py::init<>([](){return new NFW();}))
@@ -204,7 +204,7 @@ PYBIND11_MODULE(qlens, m) {
                 py::arg("flux")=-1, py::arg("show_labels")=false
                 )
         // .def("get_imageset", &Lens_Wrap::get_imageset)
-        .def("get_imageset", [](Lens_Wrap &curr, ImageSet &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false) {
+        .def("get_imageset", [](Lens_Wrap &curr, PointSource &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false) {
                 curr.get_imageset(src_x, src_y, imgset, verbal);
         },  py::arg("imgset"), py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)        
         .def("get_fit_imagesets", &Lens_Wrap::get_fit_imagesets, 
@@ -225,10 +225,13 @@ PYBIND11_MODULE(qlens, m) {
                 } else if (fitmethod=="twalk") {
                         curr.chi_square_twalk();
                 } else {
-                        throw std::runtime_error("Available fitmethodeters: simplex (default), powell, twalk");
+                        throw std::runtime_error("Available fitmethods: simplex (default), powell, nest, multinest, polychord, twalk");
                 }
         })
-        .def("use_bestfit", &Lens_Wrap::use_bestfit)
+        //.def("use_bestfit", &Lens_Wrap::use_bestfit)
+        .def("use_bestfit", [](Lens_Wrap &curr){
+			  curr.adopt_model(curr.bestfitparams);
+		  })
         .def("run_fit", &Lens_Wrap::chi_square_fit_simplex)
         .def("test_lens", &Lens_Wrap::test_lens_functions)
         .def("sort_critical_curves", &Lens_Wrap::sort_critical_curves)
@@ -247,7 +250,7 @@ PYBIND11_MODULE(qlens, m) {
 		  .def_readwrite("flux_chisq", &Lens_Wrap::include_flux_chisq)
 		  .def_readwrite("chisqtol", &Lens_Wrap::chisq_tolerance)
 		  .def_readwrite("central_image", &Lens_Wrap::include_central_image)
-		  .def_readwrite("sourcepts_fit", &Lens_Wrap::sourcepts_fit)
+		  //.def_readwrite("sourcepts_fit", &Lens_Wrap::sourcepts_fit)
 		  .def_readwrite("n_livepts", &Lens_Wrap::n_livepts)
 		  .def_property("sci_notation", &Lens_Wrap::get_sci_notation, &Lens_Wrap::set_sci_notation)
 		  .def_property("fit_label", &Lens_Wrap::get_fit_label, &Lens_Wrap::set_fit_label)
@@ -283,27 +286,27 @@ PYBIND11_MODULE(qlens, m) {
         .def("pos", [](lensvector &lens){ return std::make_tuple(lens.v[0], lens.v[1]); })
         ;
 
-    py::class_<ImageSet>(m, "ImageSet")
-        .def(py::init<>([](){ return new ImageSet(); }))
+    py::class_<PointSource>(m, "PointSource")
+        .def(py::init<>([](){ return new PointSource(); }))
         // .def()
-        // .def("print", &ImageSet::print)
-         //.def("print", [](&ImageSet curr, bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL){
+        // .def("print", &PointSource::print)
+         //.def("print", [](&PointSource curr, bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL){
                  //curr.print(include_time_delays, show_labels, srcfile, imgfile);
         //}, 
-         .def("print", &ImageSet::print,
+         .def("print", &PointSource::print,
                  py::arg("include_time_delays") = false, py::arg("include_time_delays") = true)
-        .def_readonly("n_images", &ImageSet::n_images)
-        .def_readonly("zsrc", &ImageSet::zsrc)
-        .def_readonly("srcflux", &ImageSet::srcflux)
-        .def_readonly("src", &ImageSet::src)
-        .def_readonly("images", &ImageSet::images)
+        .def_readonly("n_images", &PointSource::n_images)
+        .def_readonly("zsrc", &PointSource::zsrc)
+        .def_readonly("srcflux", &PointSource::srcflux)
+        .def_readonly("pos", &PointSource::pos)
+        .def_readonly("images", &PointSource::images)
         ;
 
     py::class_<ImageDataSet>(m, "ImageDataSet")
         .def(py::init<>([](){ return new ImageDataSet(); }))
         // .def()
-        // .def("print", &ImageSet::print)
-        // .def("print_s", [](&ImageSet curr, bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL){
+        // .def("print", &PointSource::print)
+        // .def("print_s", [](&PointSource curr, bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL){
         //         curr.print(include_time_delays, show_labels, srcfile, imgfile);
         // }, 
         //         py::arg("include_time_delays") = false, py::arg("include_time_delays") = true,
