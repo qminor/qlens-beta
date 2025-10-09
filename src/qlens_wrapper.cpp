@@ -9,7 +9,7 @@ namespace py = pybind11;
 
 using namespace std;
 
-class Lens_Wrap: public QLens {
+class QLens_Wrap: public QLens {
 public:
 #ifdef USE_MPI
 	MPI_Comm *subgroup_comm;
@@ -20,7 +20,7 @@ public:
 
 	int mpi_id, mpi_np;
 	int ngroups;
-    Lens_Wrap() : QLens()
+    QLens_Wrap() : QLens()
 	 {
 		mpi_id=0;
 		mpi_np=1;
@@ -217,7 +217,13 @@ public:
             
         // }
     }
-    ~Lens_Wrap()
+	double LogLikeListFunc(py::list param_list)
+	{
+		if (fitmodel == NULL) return -1e30;
+		vector<double> param_vec = py::cast<vector<double>>(param_list);
+		return LogLikeVecFunc(param_vec);
+	}
+    ~QLens_Wrap()
 	 {
 		Grid::deallocate_multithreaded_variables();
 		SourcePixelGrid::deallocate_multithreaded_variables();

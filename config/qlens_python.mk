@@ -9,7 +9,7 @@
 #MULTINEST_LIB = L/.../MultiNest/lib -lmultinest_mpi # enter in multinest library path, and add the folder to LD_LIBRARY_PATH
 #POLYCHORD_LIB = -L/.../PolyChord/lib -lchord # enter in polychord library path, and add the folder to LD_LIBRARY_PATH
 
-INC = -I/usr/local/Cellar/python@3.9/3.9.22/Frameworks/Python.framework/Versions/3.9/include/python3.9/
+INC = -I/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/include/python3.13/
 # Version without MUMPS
 #default: qlens mkdist cosmocalc qlens-wrap
 default: qlens mkdist cosmocalc qlens-wrap
@@ -22,9 +22,9 @@ OPTS_NO_OPT = -Wno-write-strings -std=c++11
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP
-FLAGS = -DUSE_READLINE -I/usr/local/include/python3.7m/
+#FLAGS = -I/usr/local/include/python3.7m/
 #OTHERLIBS =  -lm -lreadline -ltcmalloc_minimal -lcfitsio
-OTHERLIBS =  -lm -lreadline 
+OTHERLIBS =  -lm 
 LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 
 # Version with MUMPS
@@ -65,7 +65,7 @@ qlens_wrapper.o: $(objects)
 	$(CL) -o qlens_wrapper.o `python3 -m pybind11 --includes` -shared -std=c++11 qlens_wrapper.cpp $(objects)
 
 qlens-wrap: $(wrapper_objects) 
-	$(CL) -o qlens`python3-config --extension-suffix` `python3 -m pybind11 --includes` -shared -std=c++11 qlens_export.cpp qlens_wrapper.cpp $(wrapper_objects) $(LINKLIBS) -L/usr/local/Cellar/python@3.9/3.9.22/Frameworks/Python.framework/Versions/3.9/lib -lpython3.9
+	$(CL) -o qlens`python3-config --extension-suffix` `python3 -m pybind11 --includes` -shared -std=c++11 qlens_export.cpp qlens_wrapper.cpp $(wrapper_objects) $(LINKLIBS) -L/usr/local/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib -lpython3.13
 
 mkdist: $(mkdist_objects)
 	$(CC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm

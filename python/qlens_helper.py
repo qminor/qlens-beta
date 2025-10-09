@@ -43,8 +43,8 @@ def fit_plotimg(QLens_Object, include_cc=True, show=True, grid=False):
     markers_source = itertools.cycle(['o','s','v']) 
     for j in range(len(images_x)):
         mark=next(markers)
-        imgplane_ax.plot(images_x[j], images_y[j], 'o', marker=mark, color='b', label='Model (z=' + str(D[j].zsrc) + ')')
-        imgplane_ax.plot(data_images_x[j], data_images_y[j], 'o', marker=mark, color='g', label='Data (z=' + str(D[j].zsrc) + ')')
+        imgplane_ax.plot(images_x[j], images_y[j], marker=mark, linestyle='None', color='b', label='Model (z=' + str(D[j].zsrc) + ')')
+        imgplane_ax.plot(data_images_x[j], data_images_y[j], marker=mark, linestyle='None', color='g', label='Data (z=' + str(D[j].zsrc) + ')')
     plt.legend(loc="upper right")
     if grid==True:
         plt.grid(True)
@@ -55,10 +55,10 @@ def fit_plotimg(QLens_Object, include_cc=True, show=True, grid=False):
     sources_x = []
     sources_y = []
     for i in I:
-        sources_x.append(i.src.x)
-        sources_y.append(i.src.y)
+        sources_x.append(i.pos.x)
+        sources_y.append(i.pos.y)
     for j in range(len(sources_x)):
-        srcplane_ax.plot(sources_x[j], sources_y[j], 'o', marker=next(markers_source), color='b', label='Source (z=' + str(D[j].zsrc) + ')')
+        srcplane_ax.plot(sources_x[j], sources_y[j], marker=next(markers_source), linestyle='None', color='b', label='Source (z=' + str(D[j].zsrc) + ')')
 
     plt.legend(loc="upper right")
     if grid==True:
