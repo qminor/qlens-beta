@@ -102,6 +102,8 @@ set(QLENS_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/simplex.cpp 
     ${PROJECT_SOURCE_DIR}/src/powell.cpp 
     ${PROJECT_SOURCE_DIR}/src/mcmceval.cpp
+    ${PROJECT_SOURCE_DIR}/src/params.cpp
+    ${PROJECT_SOURCE_DIR}/src/modelparams.cpp
     #${PROJECT_SOURCE_DIR}/cmake/dummy.f
 )
 
@@ -127,6 +129,7 @@ set(COSMOCALC_SOURCES
     ${PROJECT_SOURCE_DIR}/src/romberg.cpp 
     ${PROJECT_SOURCE_DIR}/src/cosmo.cpp 
     ${PROJECT_SOURCE_DIR}/src/brent.cpp
+    ${PROJECT_SOURCE_DIR}/src/modelparams.cpp
 )
 
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
