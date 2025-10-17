@@ -11885,14 +11885,12 @@ double QLens::fitmodel_loglike_point_source(double* params)
 
 double QLens::fitmodel_loglike_extended_source(double* params)
 {
-
 #ifdef USE_OPENMP
 	double update_wtime0, update_wtime;
 	if (show_wtime) {
 		update_wtime0 = omp_get_wtime();
 	}
 #endif
-
 	double transformed_params[n_fit_parameters];
 	double loglike=0, chisq=0, chisq0, chisq_td;
 	double log_penalty_prior;
@@ -14099,8 +14097,9 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			if (sb_list[k]->sbtype==SHAPELET) at_least_one_shapelet_src = true;
 			else if (sb_list[k]->sbtype==MULTI_GAUSSIAN_EXPANSION) at_least_one_mge_src = true;
 		}
-		if ((!ignore_foreground_in_chisq) and (at_least_one_noninverted_foreground_src) or (include_fgmask_in_inversion)) { include_foreground_sbmask = true; include_foreground_sb = true; } 
-		else if ((!at_least_one_noninverted_foreground_src) and ((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
+		if (at_least_one_noninverted_foreground_src) include_foreground_sb = true;
+		if ((!ignore_foreground_in_chisq) and (include_fgmask_in_inversion)) { include_foreground_sbmask = true; } 
+		else if (((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
 		if ((source_fit_mode==Shapelet_Source) and (!at_least_one_shapelet_src) and (!at_least_one_mge_src) and ((n_ptsrc==0) or ((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)))) {
 			if (verbal) warn("cannot perform inversion because no shapelet/MGE objects and no point sources with invertible amplitudes are defined");
 			chisq0=-1e30; return -1e30;

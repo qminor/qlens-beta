@@ -179,39 +179,39 @@ PYBIND11_MODULE(qlens, m) {
         .def(py::init<const QTabulated_Model*>())
         ;
 
-    py::class_<Lens_Wrap>(m, "QLens")
-        .def(py::init<>([](){return new Lens_Wrap();}))
-        .def("imgdata_display", &Lens_Wrap::imgdata_display)
-        .def("imgdata_add", &Lens_Wrap::imgdata_add, 
+    py::class_<QLens_Wrap>(m, "QLens")
+        .def(py::init<>([](){return new QLens_Wrap();}))
+        .def("imgdata_display", &QLens_Wrap::imgdata_display)
+        .def("imgdata_add", &QLens_Wrap::imgdata_add, 
                 py::arg("x") = -1.0, py::arg("y") = -1.0)
-        .def("imgdata_write", &Lens_Wrap::imgdata_write_file)
-        .def("imgdata_clear", &Lens_Wrap::imgdata_clear, 
+        .def("imgdata_write", &QLens_Wrap::imgdata_write_file)
+        .def("imgdata_clear", &QLens_Wrap::imgdata_clear, 
                 py::arg("lower") = -1, py::arg("upper") = -1)
-        .def("imgdata_read", &Lens_Wrap::imgdata_load_file)
-        .def("lens_clear", &Lens_Wrap::lens_clear,
+        .def("imgdata_read", &QLens_Wrap::imgdata_load_file)
+        .def("lens_clear", &QLens_Wrap::lens_clear,
                 py::arg("min_loc") = -1, py::arg("max_loc") = -1)
-        .def("lens_list", &Lens_Wrap::lens_display)
-        //.def("lens", &Lens_Wrap::get_lens_pointer)
-        .def_readonly("lens", &Lens_Wrap::lens_list_vec)
-        .def("add_lens", &Lens_Wrap::add_lens_tuple, "Input should be a tuple that specifies the lens' zl and zs value. \nEx: (Lens1, zl1, zs1)")
-        .def("add_lens", &Lens_Wrap::add_lens_default, "Input should be a lens object.")
-        .def("add_lenses", &Lens_Wrap::batch_add_lenses_tuple, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values. \nEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]")
-        .def("add_lenses", [](Lens_Wrap &self){
+        .def("lens_list", &QLens_Wrap::lens_display)
+        //.def("lens", &QLens_Wrap::get_lens_pointer)
+        .def_readonly("lens", &QLens_Wrap::lens_list_vec)
+        .def("add_lens", &QLens_Wrap::add_lens_tuple, "Input should be a tuple that specifies the lens' zl and zs value. \nEx: (Lens1, zl1, zs1)")
+        .def("add_lens", &QLens_Wrap::add_lens_default, "Input should be a lens object.")
+        .def("add_lenses", &QLens_Wrap::batch_add_lenses_tuple, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values. \nEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]")
+        .def("add_lenses", [](QLens_Wrap &self){
                 return "Pass in an array of lenses \n\tEx: [Lens1, Lens2, Lens3] \nor an array of tuples. Each tuple must contain the lens, the zl and zs values for each corresponding lens. \n\tEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]";
         })
-        .def("findimg", &Lens_Wrap::output_images_single_source,
+        .def("findimg", &QLens_Wrap::output_images_single_source,
                 py::arg("x_source"), py::arg("y_source"), py::arg("verbal")=false,
                 py::arg("flux")=-1, py::arg("show_labels")=false
                 )
-        // .def("get_imageset", &Lens_Wrap::get_imageset)
-        .def("get_imageset", [](Lens_Wrap &curr, PointSource &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false) {
+        // .def("get_imageset", &QLens_Wrap::get_imageset)
+        .def("get_imageset", [](QLens_Wrap &curr, PointSource &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false) {
                 curr.get_imageset(src_x, src_y, imgset, verbal);
         },  py::arg("imgset"), py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)        
-        .def("get_fit_imagesets", &Lens_Wrap::get_fit_imagesets, 
+        .def("get_fit_imagesets", &QLens_Wrap::get_fit_imagesets, 
                 py::arg("status") = false, py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, 
                 py::arg("verbal") = false) 
-        .def("get_data_imagesets", &Lens_Wrap::export_to_ImageDataSet)
-        .def("run_fit", [](Lens_Wrap &curr, const std::string &fitmethod="simplex"){
+        .def("get_data_imagesets", &QLens_Wrap::export_to_ImageDataSet)
+        .def("run_fit", [](QLens_Wrap &curr, const std::string &fitmethod="simplex"){
                 if(fitmethod=="simplex") {
                         curr.chi_square_fit_simplex();
                 } else if (fitmethod=="powell") {
@@ -228,40 +228,62 @@ PYBIND11_MODULE(qlens, m) {
                         throw std::runtime_error("Available fitmethods: simplex (default), powell, nest, multinest, polychord, twalk");
                 }
         })
-        //.def("use_bestfit", &Lens_Wrap::use_bestfit)
-        .def("use_bestfit", [](Lens_Wrap &curr){
+        //.def("use_bestfit", &QLens_Wrap::use_bestfit)
+        .def("use_bestfit", [](QLens_Wrap &curr){
 			  curr.adopt_model(curr.bestfitparams);
 		  })
-        .def("run_fit", &Lens_Wrap::chi_square_fit_simplex)
-        .def("test_lens", &Lens_Wrap::test_lens_functions)
-        .def("sort_critical_curves", &Lens_Wrap::sort_critical_curves)
-		  .def("fit_chisq",&Lens_Wrap::chisq_single_evaluation, py::arg("showdiag") = false, py::arg("show_status") = true)
-        .def("set_sourcepts_auto", &Lens_Wrap::set_analytic_sourcepts)
-        .def("fitmodel", &Lens_Wrap::print_fit_model)
-        .def_readonly("sorted_critical_curve", &Lens_Wrap::sorted_critical_curve)
-        .def_readonly("nlens", &Lens_Wrap::nlens)
-		  .def_property("zsrc", &Lens_Wrap::get_source_redshift, &Lens_Wrap::set_source_redshift)
-		  .def_property("zsrc_ref", &Lens_Wrap::get_reference_source_redshift, &Lens_Wrap::set_reference_source_redshift)
-		  .def_property("analytic_bestfit_src", &Lens_Wrap::get_analytic_bestfit_src, &Lens_Wrap::set_analytic_bestfit_src)
-		  .def_readwrite("cc_splitlevels", &Lens_Wrap::cc_splitlevels)
-		  .def_readwrite("zlens", &Lens_Wrap::lens_redshift)
-		  .def_readwrite("imgplane_chisq", &Lens_Wrap::imgplane_chisq)
-		  .def_readwrite("nrepeat", &Lens_Wrap::n_repeats)
-		  .def_readwrite("flux_chisq", &Lens_Wrap::include_flux_chisq)
-		  .def_readwrite("chisqtol", &Lens_Wrap::chisq_tolerance)
-		  .def_readwrite("central_image", &Lens_Wrap::include_central_image)
-		  //.def_readwrite("sourcepts_fit", &Lens_Wrap::sourcepts_fit)
-		  .def_readwrite("n_livepts", &Lens_Wrap::n_livepts)
-		  .def_property("sci_notation", &Lens_Wrap::get_sci_notation, &Lens_Wrap::set_sci_notation)
-		  .def_property("fit_label", &Lens_Wrap::get_fit_label, &Lens_Wrap::set_fit_label)
-		  .def_readwrite("fit_output_dir", &Lens_Wrap::fit_output_dir)
-		  .def_readwrite_static("ansi_output", &Lens_Wrap::use_ansi_output_during_fit)
+        .def("run_fit", &QLens_Wrap::chi_square_fit_simplex)
+        .def("test_lens", &QLens_Wrap::test_lens_functions)
+        .def("sort_critical_curves", &QLens_Wrap::sort_critical_curves)
+        .def("setup_fitparams", &QLens_Wrap::setup_fit_parameters)
+        .def("init_fitmodel", &QLens_Wrap::initialize_fitmodel, py::arg("run_fit_in") = true)
+        .def("fitparams", [](QLens_Wrap &current){ 
+			  vector<double> fitparams_vec;
+			  for (int i=0; i < current.fitparams.size(); i++) fitparams_vec.push_back(current.fitparams[i]);
+			  py::list py_fitparams = py::cast(fitparams_vec);
+			  return py_fitparams;
+        })
+        .def("adopt_model", [](QLens_Wrap &current, py::list param_list){ 
+                std::vector<double> plst = py::cast<std::vector<double>>(param_list);
+                dvector param_vec(plst.size());
+                int iter = 0;
+                for (auto item : param_list) {
+                        param_vec[iter] = py::cast<double>(item); iter++;
+								//cout << "pvec " << iter << " = " << param_vec[iter] << endl;
+                }
+					 return current.adopt_model(param_vec);
+        })
+
+		  .def("fit_chisq",&QLens_Wrap::chisq_single_evaluation, py::arg("init_fitmodel") = false, py::arg("show_total_wtime") = false, py::arg("showdiag") = false, py::arg("show_status") = true, py::arg("show_lensmodel") = false)
+		  .def("LogLike", &QLens_Wrap::LogLikeListFunc)
+        //.def("LogLike", [](){ return QLens_Wrap::LogLikeFunc(QLens_Wrap::fitparams); })
+
+		  .def("set_sourcepts_auto",&QLens_Wrap::set_analytic_sourcepts, py::arg("verbal") = true)
+        .def("fitmodel", &QLens_Wrap::print_fit_model)
+        .def_readonly("sorted_critical_curve", &QLens_Wrap::sorted_critical_curve)
+        .def_readonly("nlens", &QLens_Wrap::nlens)
+		  .def_property("zsrc", &QLens_Wrap::get_source_redshift, &QLens_Wrap::set_source_redshift)
+		  .def_property("zsrc_ref", &QLens_Wrap::get_reference_source_redshift, &QLens_Wrap::set_reference_source_redshift)
+		  .def_property("analytic_bestfit_src", &QLens_Wrap::get_analytic_bestfit_src, &QLens_Wrap::set_analytic_bestfit_src)
+		  .def_readwrite("cc_splitlevels", &QLens_Wrap::cc_splitlevels)
+		  .def_readwrite("zlens", &QLens_Wrap::lens_redshift)
+		  .def_readwrite("imgplane_chisq", &QLens_Wrap::imgplane_chisq)
+		  .def_readwrite("nrepeat", &QLens_Wrap::n_repeats)
+		  .def_readwrite("flux_chisq", &QLens_Wrap::include_flux_chisq)
+		  .def_readwrite("chisqtol", &QLens_Wrap::chisq_tolerance)
+		  .def_readwrite("central_image", &QLens_Wrap::include_central_image)
+		  //.def_readwrite("sourcepts_fit", &QLens_Wrap::sourcepts_fit)
+		  .def_readwrite("n_livepts", &QLens_Wrap::n_livepts)
+		  .def_property("sci_notation", &QLens_Wrap::get_sci_notation, &QLens_Wrap::set_sci_notation)
+		  .def_property("fit_label", &QLens_Wrap::get_fit_label, &QLens_Wrap::set_fit_label)
+		  .def_readwrite("fit_output_dir", &QLens_Wrap::fit_output_dir)
+		  .def_readwrite_static("ansi_output", &QLens_Wrap::use_ansi_output_during_fit)
         ;
 
-    py::class_<Lens_Wrap::critical_curve>(m, "critical_curve")
-        .def_readonly("cc_pts", &Lens_Wrap::critical_curve::cc_pts)
-        .def_readonly("caustic_pts", &Lens_Wrap::critical_curve::caustic_pts)
-        .def_readonly("length_of_cell", &Lens_Wrap::critical_curve::length_of_cell);
+    py::class_<QLens_Wrap::critical_curve>(m, "critical_curve")
+        .def_readonly("cc_pts", &QLens_Wrap::critical_curve::cc_pts)
+        .def_readonly("caustic_pts", &QLens_Wrap::critical_curve::caustic_pts)
+        .def_readonly("length_of_cell", &QLens_Wrap::critical_curve::length_of_cell);
         
     py::class_<image>(m, "image")
         .def_readonly("pos", &image::pos)
