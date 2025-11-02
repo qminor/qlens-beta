@@ -14235,7 +14235,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 		thread = 0;
 #endif
 		double td_factor;
-		if (lens->include_time_delays) td_factor = lens->cosmo.time_delay_factor_arcsec(lens->lens_redshift,lens->reference_source_redshift);
+		if (lens->include_time_delays) td_factor = lens->cosmo->time_delay_factor_arcsec(lens->lens_redshift,lens->reference_source_redshift);
 		image imgpt;
 		double mag;
 		#pragma omp for private(i) schedule(static)
@@ -15759,6 +15759,7 @@ void QLens::PSF_convolution_Lmatrix(const int imggrid_i, bool verbal)
 {
 	ImagePixelGrid *image_pixel_grid = image_pixel_grids[imggrid_i];
 	PSF *psf = image_pixel_grid->psf;
+	if (psf==NULL) return;
 //#ifdef USE_MPI
 	//MPI_Comm sub_comm;
 	//if (psf_convolution_mpi) {
@@ -16255,7 +16256,7 @@ void QLens::PSF_convolution_Lmatrix_dense(const int imggrid_i, const bool verbal
 	//}
 //#endif
 
-	if (source_and_lens_n_amps > 0) {
+	if ((source_and_lens_n_amps > 0) and (psf != NULL)) {
 		if ((mpi_id==0) and (verbal)) cout << "Beginning PSF convolution (dense)...\n";
 
 		int nx_half, ny_half;
@@ -16554,6 +16555,7 @@ void QLens::PSF_convolution_pixel_vector(const int imggrid_i, const bool foregro
 	ImagePixelGrid *image_pixel_grid = image_pixel_grids[imggrid_i];
 	ImagePixelData *image_pixel_data = image_pixel_grid->image_pixel_data;
 	PSF *psf = image_pixel_grid->psf;
+	if (psf==NULL) return;
 	if (psf->use_input_psf_matrix) {
 		if (!psf_supersampling) {
 			if (psf->psf_matrix == NULL) {
@@ -18346,6 +18348,8 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int imggrid_i, cons
 			row = i*image_npixels;
 			for (j=0; j < image_npixels; j++) {
 				if (use_noise_map) covinv = imgpixel_covinv_vector[j];
+				//cout << "COV_INVERSE=" << covinv << endl;
+
 				if (Lmatrix_dense[j][i] != 0.0) {
 					pix_i = image_pixel_grid->active_image_pixel_i[j];
 					pix_j = image_pixel_grid->active_image_pixel_j[j];
@@ -19012,6 +19016,7 @@ void QLens::calculate_subpixel_distweights(const int imggrid_i)
 	image_pixel_grid = image_pixel_grids[imggrid_i];
 	DelaunaySourceGrid *srcgrid = image_pixel_grids[imggrid_i]->delaunay_srcgrid;
 	PSF *psfptr = image_pixel_grids[imggrid_i]->psf;
+	if (psfptr==NULL) return;
 	double xc, yc, xc_approx, yc_approx, sig, rc;
 	rc = srcgrid->distreg_rc;
 	sig = image_pixel_grid->find_approx_source_size(xc_approx,yc_approx);
@@ -19141,6 +19146,7 @@ void QLens::calculate_distreg_srcpixel_weights(const int imggrid_i, const double
 	image_pixel_grid = image_pixel_grids[imggrid_i];
 	DelaunaySourceGrid *srcgrid = image_pixel_grids[imggrid_i]->delaunay_srcgrid;
 	PSF *psfptr = image_pixel_grids[imggrid_i]->psf;
+	if (psfptr==NULL) return;
 	double xc, yc, rc;
 	rc = srcgrid->distreg_rc;
 	if (auto_lumreg_center) {

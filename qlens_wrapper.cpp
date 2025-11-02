@@ -44,6 +44,8 @@ public:
 #endif
 		Grid::allocate_multithreaded_variables(n_omp_threads);
 		SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
+		DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
+		ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 		QLens::allocate_multithreaded_variables(n_omp_threads);
 
 #ifdef USE_MPI
@@ -109,7 +111,9 @@ public:
 #else
 		set_mpi_params(0,1); // no MPI, so we have one process and id=0
 #endif
-	 }
+	 	set_verbal_mode(true);
+		set_inversion_nthreads(n_omp_threads);
+}
 
     void batch_add_lenses_tuple(py::list list) {
         double zl, zs;
@@ -140,6 +144,12 @@ public:
         add_lens(curr, zl, zs);
     }
 
+    void add_lens_extshear(LensProfile* lens_in, Shear* extshear) {
+        add_lens(lens_in, lens_redshift, reference_source_redshift);
+        add_lens((LensProfile*) extshear, lens_redshift, reference_source_redshift);
+		  lens_list[nlens-1]->anchor_center_to_lens(nlens-2);
+    }
+
     void add_lens_default(LensProfile* lens_in) {
         add_lens(lens_in, lens_redshift, reference_source_redshift);
     }
@@ -149,6 +159,8 @@ public:
         update_parameter_list();
         return name_;
     }
+
+
 
     void imgdata_display() {
         if (n_ptsrc==0) throw runtime_error("no image data has been loaded");
@@ -189,6 +201,188 @@ public:
         if(add_simulated_image_data(src)) update_parameter_list();
     }
 
+    bool get_shear_components_mode() { return Shear::use_shear_component_params; }
+    void set_shear_components_mode(const bool comp) {
+			Shear::use_shear_component_params = comp;
+			reassign_lensparam_pointers_and_names();
+	}
+    bool get_ellipticity_components_mode() { return LensProfile::use_ellipticity_components; }
+    void set_ellipticity_components_mode(const bool comp) {
+			LensProfile::use_ellipticity_components = comp;
+			reassign_lensparam_pointers_and_names();
+	}
+
+    bool get_split_imgpixels() { return split_imgpixels; }
+    void set_split_imgpixels(const bool split) {
+		bool old_setting = split_imgpixels;
+		if ((split==false) and ((use_srcpixel_clustering) or (use_lum_weighted_srcpixel_clustering))) {
+			if (mpi_id==0) cout << "NOTE: turning off source pixel clustering" << endl;
+			use_srcpixel_clustering = false;
+			use_lum_weighted_srcpixel_clustering = false;
+		}
+		split_imgpixels = split;
+		if (split_imgpixels != old_setting) {
+			if (psf_supersampling) {
+				psf_supersampling = false;
+				if (mpi_id==0) cout << "NOTE: Turning off PSF supersampling" << endl;
+			}
+			if (image_pixel_grids != NULL) {
+				for (int i=0; i < n_extended_src_redshifts; i++) {
+					if (image_pixel_grids[i] != NULL) {
+						image_pixel_grids[i]->delete_ray_tracing_arrays();
+						image_pixel_grids[i]->setup_ray_tracing_arrays();
+						if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+					}
+				}
+			}
+			if (fft_convolution) cleanup_FFT_convolution_arrays();
+		}
+	}
+
+    bool get_optimize_regparam() { return optimize_regparam; }
+    void set_optimize_regparam(const bool opt) {
+		 optimize_regparam = opt;
+		 int i;
+			if (n_pixellated_src > 0) {
+				bool vary_regparam = false;
+				for (i=0; i < n_pixellated_src; i++) {
+					srcgrids[i]->get_specific_varyflag("regparam",vary_regparam);
+					if (vary_regparam) break;
+				}
+				if (vary_regparam) {
+					if (mpi_id==0) cout << "NOTE: setting 'vary_regparam' to 'off' and updating parameters" << endl;
+					for (i=0; i < n_pixellated_src; i++) {
+						update_pixellated_src_varyflag(i,"regparam",false);
+					}
+					update_parameter_list();
+				}
+			}
+			if ((opt==false) and (use_lum_weighted_regularization) and ((!use_saved_sbweights) or (!get_lumreg_from_sbweights))) {
+				if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off' (to keep it on, consider using sbweights via 'lumreg_from_sbweights' and 'use_saved_sbweights))" << endl;
+				use_lum_weighted_regularization = false;
+				for (i=0; i < n_pixellated_src; i++) {
+					if (source_fit_mode==Delaunay_Source) update_pixsrc_active_parameters(i);
+				}
+				update_parameter_list();
+			}
+	 }
+
+    std::string sbmap_load_image_file(const std::string &filename_, py::kwargs& kwargs) { 
+			int band_i = 0;
+			int hdu_indx = 1;
+			bool show_header = false;
+			double pixsize = default_data_pixel_size;
+			double x_offset = 0.0, y_offset = 0.0;
+
+			if (kwargs) {
+                for (auto item : kwargs) {
+						 if (py::cast<string>(item.first)=="band") {
+							 band_i = py::cast<int>(item.second);
+						 } else if (py::cast<string>(item.first)=="pixsize") {
+							 pixsize = py::cast<double>(item.second);
+						 } else if (py::cast<string>(item.first)=="hdu_indx") {
+							 hdu_indx = py::cast<int>(item.second);
+						 } else if (py::cast<string>(item.first)=="x_offset") {
+							 x_offset = py::cast<double>(item.second);
+						 } else if (py::cast<string>(item.first)=="y_offset") {
+							 y_offset = py::cast<double>(item.second);
+						 } else if (py::cast<string>(item.first)=="show_header") {
+							 show_header = py::cast<bool>(item.second);
+						 }
+					 }
+			}
+
+			if (!load_pixel_image_data(band_i,filename_,pixsize,1.0,x_offset,y_offset,hdu_indx,show_header)) throw runtime_error("could not load image data");
+
+        return filename_;
+    }
+
+    std::string sbmap_load_noise_map(const std::string &filename_, py::kwargs& kwargs) { 
+			int band_i = 0;
+			int hdu_indx = 1;
+			bool show_header = false;
+
+			if (kwargs) {
+				 for (auto item : kwargs) {
+					 if (py::cast<string>(item.first)=="band") {
+						 band_i = py::cast<int>(item.second);
+					 } else if (py::cast<string>(item.first)=="hdu_indx") {
+						 hdu_indx = py::cast<int>(item.second);
+					 } else if (py::cast<string>(item.first)=="show_header") {
+						 show_header = py::cast<bool>(item.second);
+					 }
+				 }
+			}
+
+			if (band_i >= n_data_bands) throw runtime_error("image data for specified band has not been loaded yet");
+			if (!imgpixel_data_list[band_i]->load_noise_map_fits(filename_,hdu_indx,show_header)) throw runtime_error("could not load noise map fits file '" + filename_ + "'");
+
+			use_noise_map = true;
+
+        return filename_;
+    }
+
+    std::string sbmap_load_psf(const std::string &filename_, py::kwargs& kwargs) { 
+			int band_i = 0;
+			int hdu_indx = 1;
+			bool show_header = false;
+			bool load_supersampled_psf = false;
+			bool verbal_mode = true;
+
+			if (kwargs) {
+				 for (auto item : kwargs) {
+					 if (py::cast<string>(item.first)=="band") {
+						 band_i = py::cast<int>(item.second);
+					 } else if (py::cast<string>(item.first)=="hdu_indx") {
+						 hdu_indx = py::cast<int>(item.second);
+					 } else if (py::cast<string>(item.first)=="show_header") {
+						 show_header = py::cast<bool>(item.second);
+					 }
+				 }
+			}
+
+			if (band_i > n_psf) throw runtime_error("band index is higher than n_psf. To create new PSF, set band_i=n_psf");
+			if (band_i==n_psf) add_psf();
+			if (!psf_list[band_i]->load_psf_fits(filename_,hdu_indx,load_supersampled_psf,show_header,verbal_mode and (mpi_id==0))) throw runtime_error("could not load PSF fits file '" + filename_ + "'");
+			if (fft_convolution) cleanup_FFT_convolution_arrays();
+
+        return filename_;
+    }
+
+    std::string sbmap_load_mask(const std::string &filename_, py::kwargs& kwargs) { 
+			int band_i = 0;
+			int mask_i = 0;
+			bool add_mask = false;
+			bool subtract_mask = false;
+			bool foreground_mask = false;
+			bool emask = false;
+
+			if (kwargs) {
+				 for (auto item : kwargs) {
+					 if (py::cast<string>(item.first)=="band") {
+						 band_i = py::cast<int>(item.second);
+					 } else if (py::cast<string>(item.first)=="mask") {
+						 mask_i = py::cast<int>(item.second);
+					 } else if (py::cast<string>(item.first)=="fgmask") {
+						 foreground_mask = py::cast<bool>(item.second);
+					 } else if (py::cast<string>(item.first)=="emask") {
+						 emask = py::cast<bool>(item.second);
+					 } else if (py::cast<string>(item.first)=="add_mask") {
+						 add_mask = py::cast<bool>(item.second);
+					 } else if (py::cast<string>(item.first)=="subtract_mask") {
+						 subtract_mask = py::cast<bool>(item.second);
+					 }
+				 }
+			}
+
+			if (band_i >= n_data_bands) throw runtime_error("image data for specified band has not been loaded yet");
+			if (imgpixel_data_list[band_i]->load_mask_fits(mask_i,filename_,foreground_mask,emask,add_mask,subtract_mask)==false) throw runtime_error("could not load mask file");
+
+        return filename_;
+    }
+
+
+
     void lens_display() {
         print_lens_list(false);
     }
@@ -226,6 +420,8 @@ public:
     ~QLens_Wrap()
 	 {
 		Grid::deallocate_multithreaded_variables();
+		ImagePixelGrid::deallocate_multithreaded_variables();
+		DelaunayGrid::deallocate_multithreaded_variables();
 		SourcePixelGrid::deallocate_multithreaded_variables();
 		QLens::deallocate_multithreaded_variables();
 
@@ -237,6 +433,5 @@ public:
 		//delete[] onegroup;
 #endif
 	 }
-        
-private:
 };
+

@@ -2256,8 +2256,8 @@ void QLens::process_commands(bool read_file)
 				}
 				if (show_cosmo_settings) {
 					cout << "\033[4mCosmology settings\033[0m\n";
-					cout << "hubble = " << cosmo.get_hubble() << endl;
-					cout << "omega_m = " << cosmo.get_omega_m() << endl;
+					cout << "hubble = " << cosmo->get_hubble() << endl;
+					cout << "omega_m = " << cosmo->get_omega_m() << endl;
 					cout << "zlens = " << lens_redshift << endl;
 					cout << "zsrc = " << source_redshift << endl;
 					cout << "zsrc_ref = " << reference_source_redshift << endl;
@@ -9923,10 +9923,10 @@ void QLens::process_commands(bool read_file)
 			if (nwords==1) {
 				double re, reav, re_kpc, reav_kpc, arcsec_to_kpc, sigma_cr_kpc, m_ein;
 				re = einstein_radius_of_primary_lens(reference_zfactors[lens_redshift_idx[primary_lens_number]],reav);
-				arcsec_to_kpc = cosmo.angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+				arcsec_to_kpc = cosmo->angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
 				re_kpc = re*arcsec_to_kpc;
 				reav_kpc = reav*arcsec_to_kpc;
-				sigma_cr_kpc = cosmo.sigma_crit_kpc(lens_redshift, source_redshift);
+				sigma_cr_kpc = cosmo->sigma_crit_kpc(lens_redshift, source_redshift);
 				m_ein = sigma_cr_kpc*M_PI*SQR(reav_kpc);
 				if (mpi_id==0) {
 					cout << "Einstein radius of primary (+ co-centered and/or secondary) lens:\n";
@@ -9941,10 +9941,10 @@ void QLens::process_commands(bool read_file)
 					double re_major_axis, re_average;
 					if (get_einstein_radius(lens_number,re_major_axis,re_average)==false) Complain("could not calculate Einstein radius");
 					double re_kpc, re_major_kpc, arcsec_to_kpc, sigma_cr_kpc, m_ein;
-					arcsec_to_kpc = cosmo.angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+					arcsec_to_kpc = cosmo->angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
 					re_kpc = re_average*arcsec_to_kpc;
 					re_major_kpc = re_major_axis*arcsec_to_kpc;
-					sigma_cr_kpc = cosmo.sigma_crit_kpc(lens_redshift, source_redshift);
+					sigma_cr_kpc = cosmo->sigma_crit_kpc(lens_redshift, source_redshift);
 					m_ein = sigma_cr_kpc*M_PI*SQR(re_kpc);
 					if (lens_list[lens_number]->isspherical()) {
 						cout << "Einstein radius: r_E = " << re_average << " arcsec, " << re_kpc << " kpc\n";
@@ -9964,8 +9964,8 @@ void QLens::process_commands(bool read_file)
 		{
 			if (nwords > 1) Complain("no arguments accepted for command 'sigma_cr'");
 			double sigma_cr_arcsec, sigma_cr_kpc;
-			sigma_cr_arcsec = cosmo.sigma_crit_arcsec(lens_redshift, source_redshift);
-			sigma_cr_kpc = cosmo.sigma_crit_kpc(lens_redshift, source_redshift);
+			sigma_cr_arcsec = cosmo->sigma_crit_arcsec(lens_redshift, source_redshift);
+			sigma_cr_kpc = cosmo->sigma_crit_kpc(lens_redshift, source_redshift);
 			cout << "sigma_crit = " << sigma_cr_arcsec << " solar masses/arcsec^2\n";
 			cout << "           = " << sigma_cr_kpc << " solar masses/kpc^2\n";
 		}
@@ -10297,7 +10297,7 @@ void QLens::process_commands(bool read_file)
 				else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for image surface brightness map");
 				} else Complain("too many arguments to 'sbmap loadimg'");
-				if (!load_image_surface_brightness_grid(band_i,filename,pixsize,1.0,x_offset,y_offset,hdu_indx,show_header)) Complain("could not load image data");
+				if (!load_pixel_image_data(band_i,filename,pixsize,1.0,x_offset,y_offset,hdu_indx,show_header)) Complain("could not load image data");
 			}
 			else if (words[1]=="saveimg")
 			{
@@ -10415,6 +10415,7 @@ void QLens::process_commands(bool read_file)
 				} else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for noise map");
 				} else Complain("too many arguments to 'sbmap load_noisemap'");
+				if (band_i >= n_data_bands) Complain("image data for specified band has not been loaded yet");
 				if (!imgpixel_data_list[band_i]->load_noise_map_fits(filename,hdu_indx,show_header)) Complain("could not load noise map fits file '" << filename << "'");
 				use_noise_map = true;
 			}
@@ -12802,15 +12803,15 @@ void QLens::process_commands(bool read_file)
 			bool vary_hub;
 			if (nwords == 2) {
 				if (!(ws[1] >> hub)) Complain("invalid hubble setting");
-				cosmo.update_specific_parameter("hubble",hub);
+				cosmo->update_specific_parameter("hubble",hub);
 				update_zfactors_and_betafactors();
 				for (int i=0; i < nlens; i++) {
-					if (cosmo.get_n_vary_params()==0) lens_list[i]->update_cosmology_meta_parameters(true); // if the cosmology has changed, update cosmology info and any parameters that depend on them (this forces the issue even if cosmo params aren't being varied as fit parameters; otherwise will be done on next line)
+					if (cosmo->get_n_vary_params()==0) lens_list[i]->update_cosmology_meta_parameters(true); // if the cosmology has changed, update cosmology info and any parameters that depend on them (this forces the issue even if cosmo params aren't being varied as fit parameters; otherwise will be done on next line)
 					lens_list[i]->update_meta_parameters(); // if the cosmology has changed, update cosmology info and any parameters that depend on them 
 				}
-				cosmo.get_specific_varyflag("hubble",vary_hub);
+				cosmo->get_specific_varyflag("hubble",vary_hub);
 				//hubbleatter = hub;
-				//cosmo.set_cosmology(hubbleatter,0.04,hubble,2.215);
+				//cosmo->set_cosmology(hubbleatter,0.04,hubble,2.215);
 				if ((vary_hub) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
 					if (mpi_id==0) cout << "Limits for hubble parameter:\n";
 					if (read_command(false)==false) return;
@@ -12819,12 +12820,12 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[0] >> hmin)) Complain("Invalid lower limit for hubble parameter");
 					if (!(ws[1] >> hmax)) Complain("Invalid upper limit for hubble parameter");
 					if (hmin > hmax) Complain("lower limit cannot be greater than upper limit");
-					cosmo.set_limits_specific_parameter("hubble",hmin,hmax);
+					cosmo->set_limits_specific_parameter("hubble",hmin,hmax);
 					//hubbleatter_lower_limit = hmin;
 					//hubbleatter_upper_limit = hmax;
 				}
 			} else if (nwords==1) {
-				cosmo.get_specific_parameter("hubble",hub);
+				cosmo->get_specific_parameter("hubble",hub);
 				if (mpi_id==0) cout << "Matter density (hubble) = " << hub << endl;
 			} else Complain("must specify either zero or one argument (hubble value)");
 		}
@@ -12832,7 +12833,7 @@ void QLens::process_commands(bool read_file)
 		{
 			bool vary_hub;
 			if (nwords==1) {
-				cosmo.get_specific_varyflag("hubble",vary_hub);
+				cosmo->get_specific_varyflag("hubble",vary_hub);
 				if (mpi_id==0) cout << "Vary hubble parameter: " << display_switch(vary_hub) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_hubble' command; must specify 'on' or 'off'");
@@ -12847,7 +12848,7 @@ void QLens::process_commands(bool read_file)
 			//if (nwords == 2) {
 				//if (!(ws[1] >> h0param)) Complain("invalid hubble setting");
 				//hubble = h0param;
-				//cosmo.set_cosmology(omega_matter,0.04,hubble,2.215);
+				//cosmo->set_cosmology(omega_matter,0.04,hubble,2.215);
 				//if ((vary_hubble_parameter) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
 					//if (mpi_id==0) cout << "Limits for Hubble parameter:\n";
 					//if (read_command(false)==false) return;
@@ -12879,15 +12880,15 @@ void QLens::process_commands(bool read_file)
 			bool vary_om;
 			if (nwords == 2) {
 				if (!(ws[1] >> om)) Complain("invalid omega_m setting");
-				cosmo.update_specific_parameter("omega_m",om);
+				cosmo->update_specific_parameter("omega_m",om);
 				update_zfactors_and_betafactors();
 				for (int i=0; i < nlens; i++) {
-					if (cosmo.get_n_vary_params()==0) lens_list[i]->update_cosmology_meta_parameters(true); // if the cosmology has changed, update cosmology info and any parameters that depend on them (this forces the issue even if cosmo params aren't being varied as fit parameters; otherwise will be done on next line)
+					if (cosmo->get_n_vary_params()==0) lens_list[i]->update_cosmology_meta_parameters(true); // if the cosmology has changed, update cosmology info and any parameters that depend on them (this forces the issue even if cosmo params aren't being varied as fit parameters; otherwise will be done on next line)
 					lens_list[i]->update_meta_parameters(); // if the cosmology has changed, update cosmology info and any parameters that depend on them 
 				}
-				cosmo.get_specific_varyflag("omega_m",vary_om);
+				cosmo->get_specific_varyflag("omega_m",vary_om);
 				//omega_matter = om;
-				//cosmo.set_cosmology(omega_matter,0.04,hubble,2.215);
+				//cosmo->set_cosmology(omega_matter,0.04,hubble,2.215);
 				if ((vary_om) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
 					if (mpi_id==0) cout << "Limits for omega_m parameter:\n";
 					if (read_command(false)==false) return;
@@ -12896,12 +12897,12 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[0] >> omin)) Complain("Invalid lower limit for omega_m parameter");
 					if (!(ws[1] >> omax)) Complain("Invalid upper limit for omega_m parameter");
 					if (omin > omax) Complain("lower limit cannot be greater than upper limit");
-					cosmo.set_limits_specific_parameter("omega_m",omin,omax);
+					cosmo->set_limits_specific_parameter("omega_m",omin,omax);
 					//omega_matter_lower_limit = omin;
 					//omega_matter_upper_limit = omax;
 				}
 			} else if (nwords==1) {
-				cosmo.get_specific_parameter("omega_m",om);
+				cosmo->get_specific_parameter("omega_m",om);
 				if (mpi_id==0) cout << "Matter density (omega_m) = " << om << endl;
 			} else Complain("must specify either zero or one argument (omega_m value)");
 		}
@@ -12909,7 +12910,7 @@ void QLens::process_commands(bool read_file)
 		{
 			bool vary_om;
 			if (nwords==1) {
-				cosmo.get_specific_varyflag("omega_m",vary_om);
+				cosmo->get_specific_varyflag("omega_m",vary_om);
 				if (mpi_id==0) cout << "Vary omega_m parameter: " << display_switch(vary_om) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_omega_m' command; must specify 'on' or 'off'");
@@ -13530,13 +13531,13 @@ void QLens::process_commands(bool read_file)
 				set_switch(multinest_constant_eff_mode,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-		else if (words[0]=="multinest_mode_separation")
+		else if (words[0]=="multimodal_sampling")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "mode separation: " << display_switch(multinest_mode_separation) << endl;
+				if (mpi_id==0) cout << "mode separation: " << display_switch(multimodal_sampling) << endl;
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'multinest_mode_separation' command; must specify 'on' or 'off'");
-				set_switch(multinest_mode_separation,setword);
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'multimodal_sampling' command; must specify 'on' or 'off'");
+				set_switch(multimodal_sampling,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="polychord_nrepeats")

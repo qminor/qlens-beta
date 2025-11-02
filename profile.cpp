@@ -24,10 +24,10 @@ bool LensProfile::integration_warnings = true;
 int LensProfile::default_fejer_nlevels = 12;
 int LensProfile::fourier_spline_npoints = 336;
 
-LensProfile::LensProfile(const char *splinefile, const double zqlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, QLens* qlens_in)
+LensProfile::LensProfile(const char *splinefile, const double zqlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-	setup_cosmology(qlens_in,zqlens_in,zsrc_in);
+	setup_cosmology(cosmo_in,zqlens_in,zsrc_in);
 	set_integration_parameters(nn,acc);
 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
@@ -80,15 +80,16 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 	rmax_einstein_radius = 1e4;
 }
 
-void LensProfile::setup_cosmology(QLens* qlens_in, const double zlens_in, const double zsrc_in)
+void LensProfile::setup_cosmology(Cosmology* cosmo_in, const double zlens_in, const double zsrc_in)
 {
-	qlens = qlens_in;
-	zlens = zlens_in;
-	zlens_current = zlens_in;
-	zsrc_ref = zsrc_in;
-	sigma_cr = qlens->cosmo.sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/qlens->cosmo.angular_diameter_distance(zlens);
-	//update_meta_parameters(); // a few lens models have parameters that are defined by the cosmology (e.g. masses), so update these
+	if (cosmo != cosmo_in) {
+		cosmo = cosmo_in;
+		zlens = zlens_in;
+		zlens_current = zlens_in;
+		zsrc_ref = zsrc_in;
+		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+		kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+	}
 }
 
 LensProfile::LensProfile(const LensProfile* lens_in)
@@ -104,6 +105,7 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 
 void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *always* get called by any derived class when copying another lens object
 {
+	cosmo = lens_in->cosmo;
 	qlens = lens_in->qlens;
 	lenstype = lens_in->lenstype;
 	model_name = lens_in->model_name;
@@ -1193,11 +1195,11 @@ bool LensProfile::output_cosmology_info(const int lens_number)
 	mass_converged = calculate_total_scaled_mass(mtot);
 	if (mass_converged) {
 		rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
-		sigma_cr = qlens->cosmo.sigma_crit_arcsec(zlens,zsrc_ref);
+		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
 		mtot *= sigma_cr;
 		if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 		cout << "total mass: " << mtot << " M_sol" << endl;
-		//double kpc_to_arcsec = 206.264806/qlens->cosmo.angular_diameter_distance(zlens);
+		//double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 		if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 		cout << endl;
 	}
@@ -1652,9 +1654,9 @@ void LensProfile::set_angle_radians(const double &theta_in)
 
 void LensProfile::update_cosmology_meta_parameters(const bool force_update)
 {
-	if ((qlens != NULL) and ((force_update) or (zlens != zlens_current) or (qlens->cosmo.get_n_vary_params() > 0))) {
-		sigma_cr = qlens->cosmo.sigma_crit_arcsec(zlens,zsrc_ref);
-		kpc_to_arcsec = 206.264806/qlens->cosmo.angular_diameter_distance(zlens);
+	if ((qlens != NULL) and ((force_update) or (zlens != zlens_current) or (cosmo->get_n_vary_params() > 0))) {
+		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+		kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 		if (zlens != zlens_current) zlens_current = zlens;
 	}
 }

@@ -1761,7 +1761,7 @@ void QLens::find_images()
 	images_found = grid->tree_search();
 
 	if (include_time_delays) {
-		double td_factor = cosmo.time_delay_factor_arcsec(lens_redshift,reference_source_redshift);
+		double td_factor = cosmo->time_delay_factor_arcsec(lens_redshift,reference_source_redshift);
 		double min_td=1e30;
 		int i;
 		for (i = 0; i < Grid::nfound; i++)

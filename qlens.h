@@ -384,7 +384,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int n_livepts; // for nested sampling
 	bool multinest_constant_eff_mode;
 	double multinest_target_efficiency;
-	bool multinest_mode_separation;
+	bool multimodal_sampling;
 	int polychord_nrepeats;
 	int mcmc_threads;
 	double mcmc_tolerance; // for Metropolis-Hastings
@@ -435,7 +435,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int* pixellated_lens_redshift_idx;
 	LensPixelGrid **lensgrids; // at the moment, the only kind of object is pixellated potential grids (used for first-order potential corrections to lens models)
 
-	Cosmology cosmo;
+	Cosmology *cosmo;
+	bool cosmology_allocated_within_qlens;
 
 	int n_ptsrc;
 	PointSource **ptsrc_list;
@@ -1027,7 +1028,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal=false);
 	bool create_lensgrid_cartesian(const int band_number, const int zsrc_i, const int pixlens_i, const bool verbal, const bool use_mask = true);
 	//void load_source_surface_brightness_grid(string source_inputfile);
-	bool load_image_surface_brightness_grid(const int band_i, string image_pixel_filename_root, const double pixsize, const double pix_xy_ratio = 1.0, const double x_offset = 0.0, const double y_offset = 0.0, const int hdu_indx = 1, const bool show_fits_header = false);
+	bool load_pixel_image_data(const int band_i, string image_pixel_filename_root, const double pixsize, const double pix_xy_ratio = 1.0, const double x_offset = 0.0, const double y_offset = 0.0, const int hdu_indx = 1, const bool show_fits_header = false);
 	//bool make_image_surface_brightness_data();
 	const bool plot_lensed_surface_brightness(string imagefile, const int band_number, const bool output_fits = false, const bool plot_residual = false, bool plot_foreground_only = false, const bool omit_foreground = false, const bool show_mask_only = true, const bool normalize_residuals = false, const bool offload_to_data = false, const bool show_extended_mask = false, const bool show_foreground_mask = false, const bool show_noise_thresh = false, const bool exclude_ptimgs = false, const bool show_only_ptimgs = false, int specific_zsrc_i = -1, const bool show_only_first_order_corrections = false, const bool plot_log = false, const bool plot_current_sb = false, const bool verbose = true);
 
@@ -1047,7 +1048,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	friend class LensProfile;
 	friend class SB_Profile;
 	friend class MGE;
-	QLens();
+	QLens(Cosmology* cosmo_in = NULL);
 	QLens(QLens *lens_in);
 	void setup_parameters(const bool initial_setup); 
 	void update_meta_parameters(const bool varied_only_fitparams) {}

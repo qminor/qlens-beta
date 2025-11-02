@@ -19,7 +19,7 @@ PYBIND11_MODULE(qlens, m) {
         //         return new LensProfile(splinefile, zlens_in, zsrc_in, q_in, theta_degrees, xc_in, yc_in, nn, acc, qx_in, f_in, lens_in);
         // }))
         .def("update", [](LensProfile &current, py::dict dict){
-                for(auto item : dict) {
+                for (auto item : dict) {
                         if(!current.update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second)))
                                 return false;
                 }
@@ -28,8 +28,31 @@ PYBIND11_MODULE(qlens, m) {
         .def("print_parameters", &LensProfile::print_parameters)
         .def("print_vary_parameters", &LensProfile::print_vary_parameters)
         .def("set_center", &LensProfile::set_center)
+        //.def("extract_geometric_params", [](double& q1, double& q2, double& xcp, double& ycp, py::dict dict){ 
+				//if (!LensProfile::use_ellipticity_components) {
+					 //q1 = py::cast<double>(dict["q"]);
+				  //try {
+					 //q2 = py::cast<double>(dict["theta"]);
+				  //} catch (...) {
+					  //q2 = 0.0;
+				  //}
+				//} else {
+					 //q1 = py::cast<double>(dict["e1"]);
+					 //q2 = py::cast<double>(dict["e2"]);
+				//}
+			  //try {
+							 //xcp = py::cast<double>(dict["xc"]);
+			  //} catch (...) {
+				  //xcp = 0.0;
+			  //}
+			  //try {
+							 //ycp = py::cast<double>(dict["yc"]);
+			  //} catch (...) {
+				  //ycp = 0.0;
+			  //}
+		  //})
         .def("get_model_name", &LensProfile::get_model_name)
-        .def("setvary", [](LensProfile &current, py::list list){ 
+        .def("vary", [](LensProfile &current, py::list list){ 
                 std::vector<double> lst = py::cast<std::vector<double>>(list);
                 boolvector val(lst.size());
                 int iter = 0;
@@ -45,76 +68,120 @@ PYBIND11_MODULE(qlens, m) {
 						 throw std::runtime_error("could not set limits for given parameter " + param);
 					 }
 		  })
+        .def("set_prior_limits", [](LensProfile &curr, py::list list){
+			 std::string paramname;
+			 double lower, upper;
+			  for (auto arr : list){
+					try {
+						 std::tuple<std::string, double, double> extracted = py::cast<std::tuple<std::string, double, double>>(arr);
+						 paramname = std::get<0>(extracted);
+						 lower = std::get<1>(extracted);
+						 upper = std::get<2>(extracted);
+					} catch (...) {
+						 throw std::runtime_error("Error setting parameter limits. Input should be an array of tuples. Ex: [(<paramname>, lower, upper), (<paramname>, lower, upper)]");
+					}
+                if (curr.set_limits_specific_parameter(paramname,lower,upper)==false) {
+						 throw std::runtime_error("could not set limits for given parameter " + paramname);
+					 }
+			  }
+		  })
 		  .def("anchor_center",&LensProfile::anchor_center_to_lens)
 			.def("__repr__", [](LensProfile &a) {
 					string outstring = a.get_parameters_string();
 					return("\n" + outstring);
 				})
-
         ;
 
     py::class_<SPLE_Lens, LensProfile, std::unique_ptr<SPLE_Lens, py::nodelete>>(m, "SPLE")
         .def(py::init<>([](){return new SPLE_Lens();}))
         .def(py::init<const SPLE_Lens*>())
-        .def(py::init([](py::dict dict) {
-                                return new SPLE_Lens(
-                                        py::cast<double>(dict["b"]),
-                                        py::cast<double>(dict["alpha"]),
-                                        py::cast<double>(dict["s"]),
-                                        py::cast<double>(dict["q"]),
-                                        py::cast<double>(dict["theta"]),
-                                        py::cast<double>(dict["xc"]),
-                                        py::cast<double>(dict["yc"])
-                                );
-                        }))
-        .def("initialize", [](SPLE_Lens &current, py::dict dict){
-                try {
-                        double b = py::cast<double>(dict["b"]);
-                        double alpha = py::cast<double>(dict["alpha"]);
-                        double s = py::cast<double>(dict["s"]);
-                        double q = py::cast<double>(dict["q"]);
-                        double theta = py::cast<double>(dict["theta"]);
-                        double xc = py::cast<double>(dict["xc"]);
-                        double yc = py::cast<double>(dict["yc"]);
-                        current.initialize_parameters(b, alpha, s, q, theta, xc, yc);
-                } catch(...) {
-                        throw std::runtime_error("Required parameters: b, alpha, s, q, theta, xc, yc.");
-                }
-                
-        })
+        .def(py::init([](py::dict dict, py::kwargs& kwargs) {
+			  bool pmode=0;
+			if (kwargs) {
+				 for (auto item : kwargs) {
+					 if (py::cast<string>(item.first)=="pmode") {
+						 pmode = py::cast<int>(item.second);
+					 }
+				 }
+			}
+			  double b,p2,s,q1,q2,xc,yc;
+				 b = py::cast<double>(dict["b"]);
+				 if (pmode==0) {
+					 try {
+						 p2 = py::cast<double>(dict["alpha"]);
+					 } catch (...) {
+						 p2 = 1.0;
+					 }
+				 } else if (pmode==1) {
+					 try {
+						 p2 = py::cast<double>(dict["gamma"]);
+					 } catch (...) {
+						 p2 = 2.0;
+					 }
+				 } else throw std::runtime_error("Can only choose pmode=0 or pmode=1");
+				 try {
+					 s = py::cast<double>(dict["s"]);
+				 } catch (...) {
+					 s = 0.0;
+				 }
+				 LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
+			  return new SPLE_Lens(b,p2,s,q1,q2,xc,yc,pmode);
+        }))
+        //.def("initialize", [](SPLE_Lens &current, py::dict dict){
+                // do you really need initialize? Should just require initialization when creating object
+        //})
         ;
 
     py::class_<Shear, LensProfile, std::unique_ptr<Shear, py::nodelete>>(m, "Shear")
         .def(py::init<>([](){return new Shear();}))
         .def(py::init<const Shear*>())
         .def(py::init([](py::dict dict) {
-                return new Shear(
-                        py::cast<double>(dict["shear"]),
-                        py::cast<double>(dict["theta"]),
-                        py::cast<double>(dict["xc"]),
-                        py::cast<double>(dict["yc"])
-                );
+					 double p1, p2, xc, yc;
+					 if (!Shear::use_shear_component_params) {
+							p1 = py::cast<double>(dict["shear"]);
+							p2 = py::cast<double>(dict["theta"]);
+					 } else {
+							p1 = py::cast<double>(dict["shear1"]);
+							p2 = py::cast<double>(dict["shear2"]);
+					 }
+					  try {
+							xc = py::cast<double>(dict["xc"]);
+					  } catch (...) {
+						  xc = 0.0;
+					  }
+					  try {
+							 yc = py::cast<double>(dict["yc"]);
+					  } catch (...) {
+						  yc = 0.0;
+					  }
+					  return new Shear(p1,p2,xc,yc);
         }))
-        .def("initialize", [](Shear &current, py::dict dict){
-                try {
-                        double shear = py::cast<double>(dict["shear"]);
-                        double theta = py::cast<double>(dict["theta"]);
-                        double xc = py::cast<double>(dict["xc"]);
-                        double yc = py::cast<double>(dict["yc"]);
-                        current.initialize_parameters(shear, theta, xc, yc);
-                } catch(...) {
-                        throw std::runtime_error("Required parameters: shear, theta, xc, yc.");
-                }
-        })
-        ;
+		  ;
 
     py::class_<dPIE_Lens, LensProfile, std::unique_ptr<dPIE_Lens, py::nodelete>>(m, "dPIE")
         .def(py::init<>([](){return new dPIE_Lens();}))
-        .def(py::init<const dPIE_Lens*>());
+        .def(py::init<const dPIE_Lens*>())
+		  ;
 
-    py::class_<NFW, LensProfile, std::unique_ptr<NFW, py::nodelete>>(m, "NFW")
+    py::class_<NFW, LensProfile, std::unique_ptr<NFW, py::nodelete>>(m, "NFWlens")
         .def(py::init<>([](){return new NFW();}))
         .def(py::init<const NFW*>())
+        .def(py::init([](py::dict dict, py::kwargs& kwargs) {
+			  bool pmode=0;
+				if (kwargs) {
+					 for (auto item : kwargs) {
+						 if (py::cast<string>(item.first)=="pmode") {
+							 pmode = py::cast<int>(item.second);
+						 }
+					 }
+				}
+	
+			  double p1,p2,q1,q2,xc,yc;
+			 p1 = py::cast<double>(dict["ks"]);
+			 p2 = py::cast<double>(dict["rs"]);
+			 LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
+			 return new NFW(p1,p2,q1,q2,xc,yc,pmode);
+		  }))
         ;
 
     py::class_<Cored_NFW, LensProfile, std::unique_ptr<Cored_NFW, py::nodelete>>(m, "Cored_NFW")
@@ -188,13 +255,27 @@ PYBIND11_MODULE(qlens, m) {
         .def("imgdata_clear", &QLens_Wrap::imgdata_clear, 
                 py::arg("lower") = -1, py::arg("upper") = -1)
         .def("imgdata_read", &QLens_Wrap::imgdata_load_file)
+        .def("sbmap_loadimg", &QLens_Wrap::sbmap_load_image_file)
+        .def("sbmap_load_noisemap", &QLens_Wrap::sbmap_load_noise_map)
+        .def("sbmap_load_psf", &QLens_Wrap::sbmap_load_psf)
+        .def("sbmap_load_mask", &QLens_Wrap::sbmap_load_mask)
+		  .def_readwrite("outside_sb_prior", &QLens_Wrap::outside_sb_prior)
+		  .def_readwrite("outside_sb_frac_threshold", &QLens_Wrap::outside_sb_prior_threshold)
+		  .def_readwrite("outside_sb_noise_threshold", &QLens_Wrap::outside_sb_prior_noise_frac)
+		  .def_readwrite("nimg_prior", &QLens_Wrap::n_image_prior)
+		  .def_readwrite("nimg_threshold", &QLens_Wrap::n_image_threshold)
+
         .def("lens_clear", &QLens_Wrap::lens_clear,
                 py::arg("min_loc") = -1, py::arg("max_loc") = -1)
+		  .def_property("shear_components", &QLens_Wrap::get_shear_components_mode, &QLens_Wrap::set_shear_components_mode)
+		  .def_property("ellipticity_components", &QLens_Wrap::get_ellipticity_components_mode, &QLens_Wrap::set_ellipticity_components_mode)
+		  .def_property("split_imgpixels", &QLens_Wrap::get_split_imgpixels, &QLens_Wrap::set_split_imgpixels)
         .def("lens_list", &QLens_Wrap::lens_display)
         //.def("lens", &QLens_Wrap::get_lens_pointer)
         .def_readonly("lens", &QLens_Wrap::lens_list_vec)
         .def("add_lens", &QLens_Wrap::add_lens_tuple, "Input should be a tuple that specifies the lens' zl and zs value. \nEx: (Lens1, zl1, zs1)")
         .def("add_lens", &QLens_Wrap::add_lens_default, "Input should be a lens object.")
+        .def("add_lens_extshear", &QLens_Wrap::add_lens_extshear, "Input should be a	lens object, and a shear lens object to anchor to the original lens object.")
         .def("add_lenses", &QLens_Wrap::batch_add_lenses_tuple, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values. \nEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]")
         .def("add_lenses", [](QLens_Wrap &self){
                 return "Pass in an array of lenses \n\tEx: [Lens1, Lens2, Lens3] \nor an array of tuples. Each tuple must contain the lens, the zl and zs values for each corresponding lens. \n\tEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]";
@@ -228,11 +309,25 @@ PYBIND11_MODULE(qlens, m) {
                         throw std::runtime_error("Available fitmethods: simplex (default), powell, nest, multinest, polychord, twalk");
                 }
         })
+       .def("set_source_mode", [](QLens_Wrap &curr, const std::string &source_mode="ptsource"){
+                if(source_mode=="ptsource") {
+                        curr.source_fit_mode = Point_Source;
+                } else if (source_mode=="cartesian") {
+                        curr.source_fit_mode = Cartesian_Source;
+                } else if (source_mode=="delaunay") {
+                        curr.source_fit_mode = Delaunay_Source;
+                } else if (source_mode=="sbprofile") {
+                        curr.source_fit_mode = Parameterized_Source;
+                } else if (source_mode=="shapelet") {
+                        curr.source_fit_mode = Shapelet_Source;
+                } else {
+                        throw std::runtime_error("Available source_modes: ptsource, cartesian, delaunay, sbprofile, shapelet");
+                }
+        })
         //.def("use_bestfit", &QLens_Wrap::use_bestfit)
         .def("use_bestfit", [](QLens_Wrap &curr){
 			  curr.adopt_model(curr.bestfitparams);
 		  })
-        .def("run_fit", &QLens_Wrap::chi_square_fit_simplex)
         .def("test_lens", &QLens_Wrap::test_lens_functions)
         .def("sort_critical_curves", &QLens_Wrap::sort_critical_curves)
         .def("setup_fitparams", &QLens_Wrap::setup_fit_parameters)
@@ -256,12 +351,18 @@ PYBIND11_MODULE(qlens, m) {
 
 		  .def("fit_chisq",&QLens_Wrap::chisq_single_evaluation, py::arg("init_fitmodel") = false, py::arg("show_total_wtime") = false, py::arg("showdiag") = false, py::arg("show_status") = true, py::arg("show_lensmodel") = false)
 		  .def("LogLike", &QLens_Wrap::LogLikeListFunc)
-        //.def("LogLike", [](){ return QLens_Wrap::LogLikeFunc(QLens_Wrap::fitparams); })
-
+        .def("sbmap_invert", [](QLens_Wrap &current){
+			  double chisq0;
+			  bool verbal = true;
+				double chisq = current.invert_surface_brightness_map_from_data(chisq0, verbal);
+		  })
+		  .def_property("optimize_regparam", &QLens_Wrap::get_optimize_regparam, &QLens_Wrap::set_optimize_regparam)
 		  .def("set_sourcepts_auto",&QLens_Wrap::set_analytic_sourcepts, py::arg("verbal") = true)
         .def("fitmodel", &QLens_Wrap::print_fit_model)
         .def_readonly("sorted_critical_curve", &QLens_Wrap::sorted_critical_curve)
         .def_readonly("nlens", &QLens_Wrap::nlens)
+        .def_readwrite("default_pixsize", &QLens_Wrap::default_data_pixel_size)
+        .def_readwrite("psf_threshold", &QLens_Wrap::psf_threshold)
 		  .def_property("zsrc", &QLens_Wrap::get_source_redshift, &QLens_Wrap::set_source_redshift)
 		  .def_property("zsrc_ref", &QLens_Wrap::get_reference_source_redshift, &QLens_Wrap::set_reference_source_redshift)
 		  .def_property("analytic_bestfit_src", &QLens_Wrap::get_analytic_bestfit_src, &QLens_Wrap::set_analytic_bestfit_src)
