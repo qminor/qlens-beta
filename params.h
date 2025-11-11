@@ -102,8 +102,8 @@ struct DerivedParam
 			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
 		} else if (derived_param_type == LambdaR) { // here lambda_R = 1 - <kappa>(R)
 			name = "lambdaR"; latex_name = "\\lambda_R";
-		} else if (derived_param_type == DKappaR) {
-			name = "dkappa"; latex_name = "\\kappa'"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
+		} else if (derived_param_type == DlogKappaR) {
+			name = "dlogkappa"; latex_name = "\\ln\\kappa'"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
 		} else if (derived_param_type == Mass2dR) {
 			name = "mass2d"; latex_name = "M_{2D}";
 		} else if (derived_param_type == Mass3dR) {
@@ -175,8 +175,8 @@ struct DerivedParam
 	double get_derived_param(QLens* lens_in)
 	{
 		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,int_param,use_kpc_units);
-		else if (derived_param_type == LambdaR) return (1 - lens_in->total_dkappa(funcparam,-1,use_kpc_units));
-		else if (derived_param_type == DKappaR) return lens_in->total_dkappa(funcparam,int_param,use_kpc_units);
+		else if (derived_param_type == LambdaR) return (1 - lens_in->total_kappa(funcparam,-1,use_kpc_units));
+		else if (derived_param_type == DlogKappaR) return lens_in->total_dlogkappa(funcparam,int_param,use_kpc_units);
 		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,int_param,use_kpc_units);
 		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,int_param,use_kpc_units);
 		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,int_param);
@@ -294,7 +294,7 @@ struct DerivedParam
 			else std::cout << "kappa for lens " << int_param << " within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == LambdaR) {
 			std::cout << "One minus average kappa at r = " << funcparam << unitstring << std::endl;
-		} else if (derived_param_type == DKappaR) {
+		} else if (derived_param_type == DlogKappaR) {
 			if (int_param==-1) std::cout << "Derivative of total kappa within r = " << funcparam << unitstring << std::endl;
 			else std::cout << "Derivative of kappa for lens " << int_param << " within r = " << funcparam << unitstring << std::endl;
 		} else if (derived_param_type == Mass2dR) {

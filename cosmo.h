@@ -54,6 +54,8 @@ class Cosmology : public ModelParams, public Spline, public Romberg, public Bren
 	double zroot;
 
 	double k_pivot; // CMB pivot scale
+	static const double default_omega_baryon;
+	static const double default_del_R;
 	static const double default_k_pivot;
 	static const double default_spectral_index;
 	static const double default_running;
@@ -84,6 +86,11 @@ class Cosmology : public ModelParams, public Spline, public Romberg, public Bren
 		running = cosmo.running;
 		setup_parameters(true);
 		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,cosmo.omega_lambda,cosmo.hubble,cosmo.A_s,true);
+	}
+	Cosmology(double omega_matter, double hub) {
+		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
+		setup_parameters(true);
+		set_cosmology(omega_matter,default_omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,default_del_R,true);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double hub, double del_R) {
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;

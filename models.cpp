@@ -20,10 +20,17 @@ const double SPLE_Lens::def_tolerance = 1e-16;
 
 /*************************** Softened power law model (alpha) *****************************/
 
+//SPLE_Lens::SPLE_Lens(const double zlens_in, const double zsrc_in, const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees,
+		//const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
+//{
+	//setup_lens_properties(parameter_mode_in);
+	//setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	//initialize_parameters(bb,slope,ss,q_in,theta_degrees,xc_in,yc_in);
+//}
+
 SPLE_Lens::SPLE_Lens(const double zlens_in, const double zsrc_in, const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Cosmology* cosmo_in)
+		const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in) : SPLE_Lens(parameter_mode_in)
 {
-	setup_lens_properties(parameter_mode_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	initialize_parameters(bb,slope,ss,q_in,theta_degrees,xc_in,yc_in);
 }
@@ -414,7 +421,7 @@ bool SPLE_Lens::output_cosmology_info(const int lens_number)
 
 /********************************** dPIE_Lens **********************************/
 
-dPIE_Lens::dPIE_Lens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Cosmology* cosmo_in)
+dPIE_Lens::dPIE_Lens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
 
@@ -770,19 +777,12 @@ double dPIE_Lens::rho3d_r_integrand_analytic(const double r)
 
 /************************************* NFW *************************************/
 
-NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Cosmology* cosmo_in)
+NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
 	initialize_parameters(p1_in,p2_in,q_in,theta_degrees,xc_in,yc_in);
 }
-
-NFW::NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in) : NFW(parameter_mode_in)
-{
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
-	initialize_parameters(ks_in,rs_in,q_in,theta_degrees,xc_in,yc_in);
-}
-
 
 void NFW::initialize_parameters(const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
@@ -874,7 +874,7 @@ void NFW::get_parameters_pmode(const int pmode, double* params)
 		rs_kpc = rs / kpc_to_arcsec;
 		ds = ks * sigma_cr_kpc / rs_kpc;
 		// Using a root-finder to solve for c, then m200 can be solved for
-		qlens->cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 	}
 
 	if (pmode==2) {
@@ -909,7 +909,7 @@ void NFW::update_meta_parameters()
 			double ds, r200;
 			if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
 			ds = ks * sigma_cr_kpc / rs_kpc;
-			//qlens->cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+			//cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 			//c200 = r200/rs_kpc;
 		}
 	}
@@ -921,17 +921,17 @@ void NFW::assign_special_anchored_parameters(LensProfile *host_in, const double 
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-	//c200 = factor*qlens->cosmo->median_concentration_bullock(m200,zlens);
+	//c200 = factor*cosmo->median_concentration_bullock(m200,zlens);
 	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*qlens->cosmo->median_concentration_dutton(m200,zlens);
+	c200 = special_anchor_factor*cosmo->median_concentration_dutton(m200,zlens);
 	update_meta_parameters();
 }
 
 void NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		//c200 = qlens->cosmo->median_concentration_bullock(m200,zlens);
-		c200 = special_anchor_factor * qlens->cosmo->median_concentration_dutton(m200,zlens);
+		//c200 = cosmo->median_concentration_bullock(m200,zlens);
+		c200 = special_anchor_factor * cosmo->median_concentration_dutton(m200,zlens);
 		update_meta_parameters();
 	}
 }
@@ -968,7 +968,7 @@ void NFW::set_model_specific_integration_pointers()
 void NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->cosmo->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
@@ -977,11 +977,11 @@ void NFW::set_ks_c200_from_m200_rs()
 void NFW::set_ks_rs_from_m200_c200()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->cosmo->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
-	//cout << "NFW: dcrit=" << qlens->cosmo->critical_density(zlens) << " lenfac=" << kpc_to_arcsec << " rs_kpc=" << rs_kpc << " rs=" << rs << " ks=" << ks << " c200=" << c200 << " m200=" << m200 << endl;
+	//cout << "NFW: dcrit=" << cosmo->critical_density(zlens) << " lenfac=" << kpc_to_arcsec << " rs_kpc=" << rs_kpc << " rs=" << rs << " ks=" << ks << " c200=" << c200 << " m200=" << m200 << endl;
 }
 
 double NFW::kappa_rsq(const double rsq)
@@ -1046,9 +1046,9 @@ double NFW::concentration_prior()
 {
 	double ds, r200;
 	ds = ks * sigma_cr / rs;
-	qlens->cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+	cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 	c200 = r200/rs_kpc;
-	double log_medc = log(qlens->cosmo->median_concentration_dutton(m200,zlens));
+	double log_medc = log(cosmo->median_concentration_dutton(m200,zlens));
 	const double sig_logc = 0.110; // mass-concentration scatter of 0.110 dex (Dutton et al 2014)
 	//return (exp(-SQR((log(c200)-log_medc)/(ln10*sig_logc))/2)/(sig_logc*M_SQRT_2PI));
 	return (SQR((log(c200)-log_medc)/(ln10*sig_logc))/2 + (sig_logc*M_SQRT_2PI)); // returning -log(prior)
@@ -1071,7 +1071,7 @@ bool NFW::output_cosmology_info(const int lens_number)
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
 	} else {
-		qlens->cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 		c200 = r200/rs_kpc;
 	}
 
@@ -1084,7 +1084,7 @@ bool NFW::output_cosmology_info(const int lens_number)
 		cout << "M_200 = " << m200 << " M_sun\n";
 	}
 	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec)" << endl;
-	//qlens->cosmo->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
+	//cosmo->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//c200 = r200/rs_kpc;
 	//cout << "M_200(z=5) = " << m200 << " M_sun\n";
 	//cout << "r_200(z=5) = " << r200 << " kpc\n";
@@ -1100,8 +1100,8 @@ bool NFW::output_cosmology_info(const int lens_number)
 
 /********************************** Truncated_NFW **********************************/
 
-Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int truncation_mode_in, const int parameter_mode_in, Cosmology* cosmo_in)
-			//qlens->cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int truncation_mode_in, const int parameter_mode_in, Cosmology* cosmo_in)
+			//cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 			//c200 = r200/rs_kpc;
 {
 	setup_lens_properties(parameter_mode_in,truncation_mode_in);
@@ -1253,7 +1253,7 @@ void Truncated_NFW::get_parameters_pmode(const int pmode, double* params)
 	} else if (pmode==2) {
 		double rvir_kpc, rs_kpc;
 		// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
-		rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->cosmo->critical_density(zlens)),0.333333333333);
+		rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 		rs_kpc = rvir_kpc / c200;
 		tau200 = rt_kpc/rvir_kpc;
 		params[0] = m200;
@@ -1298,17 +1298,17 @@ void Truncated_NFW::assign_special_anchored_parameters(LensProfile *host_in, con
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another qlens at all
-	//c200 = factor*qlens->cosmo->median_concentration_bullock(m200,zlens);
+	//c200 = factor*cosmo->median_concentration_bullock(m200,zlens);
 	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*qlens->cosmo->median_concentration_dutton(m200,zlens);
+	c200 = special_anchor_factor*cosmo->median_concentration_dutton(m200,zlens);
 	update_meta_parameters();
 }
 
 void Truncated_NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		//c200 = qlens->cosmo->median_concentration_bullock(m200,zlens);
-		c200 = special_anchor_factor * qlens->cosmo->median_concentration_dutton(m200,zlens);
+		//c200 = cosmo->median_concentration_bullock(m200,zlens);
+		c200 = special_anchor_factor * cosmo->median_concentration_dutton(m200,zlens);
 		update_meta_parameters();
 	}
 }
@@ -1358,7 +1358,7 @@ void Truncated_NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->cosmo->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	if (parameter_mode==4) rt_kpc = tau_s * rs_kpc;
 	rt = rt_kpc * kpc_to_arcsec;
@@ -1370,7 +1370,7 @@ void Truncated_NFW::set_ks_rs_from_m200_c200()
 {
 	double rvir_kpc, rs_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->cosmo->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	if (parameter_mode==2) rt_kpc = tau200 * rvir_kpc;
@@ -1453,7 +1453,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 		if (parameter_mode == 2) rt_kpc = tau200 * r200;
 		if (parameter_mode == 4) rt_kpc = tau_s * rs_kpc;
 	} else {
-		qlens->cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
+		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 		c200 = r200/rs_kpc;
 	}
 
@@ -1468,7 +1468,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 	}
 	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec) (NOTE: ignores truncation)" << endl;
 
-	//qlens->cosmo->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
+	//cosmo->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
 	//zlens = 5;
 	//update_cosmology_meta_parameters();
 	//c200 = r200/rs_kpc;
@@ -1485,7 +1485,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 /********************************** Cored_NFW **********************************/
 
 Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Cosmology* cosmo_in)
+		const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
@@ -1649,14 +1649,14 @@ void Cored_NFW::assign_special_anchored_parameters(LensProfile *host_in, const d
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
 	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*qlens->cosmo->median_concentration_bullock(m200,zlens);
+	c200 = special_anchor_factor*cosmo->median_concentration_bullock(m200,zlens);
 	update_meta_parameters();
 }
 
 void Cored_NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-		c200 = qlens->cosmo->median_concentration_bullock(m200,zlens);
+		c200 = cosmo->median_concentration_bullock(m200,zlens);
 		update_meta_parameters();
 	}
 }
@@ -1701,7 +1701,7 @@ void Cored_NFW::set_model_specific_integration_pointers()
 void Cored_NFW::set_ks_rs_from_m200_c200_beta()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->cosmo->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	double rcterm;
@@ -1713,7 +1713,7 @@ void Cored_NFW::set_ks_rs_from_m200_c200_beta()
 void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->cosmo->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	rc = rc_kpc * kpc_to_arcsec;
@@ -1727,7 +1727,7 @@ void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
 void Cored_NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->cosmo->critical_density(zlens)),0.333333333333);
+	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	double rcterm;
@@ -1908,7 +1908,7 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
 	} else {
-		qlens->cosmo->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
+		cosmo->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
 		c200 = r200/rs_kpc;
 	}
 
@@ -1930,7 +1930,7 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 /********************************** Hernquist **********************************/
 
 Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc, Cosmology* cosmo_in)
+		const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
@@ -2046,7 +2046,7 @@ double Hernquist::rho3d_r_integrand_analytic(const double r)
 /********************************** Exponential Disk **********************************/
 
 ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc, Cosmology* cosmo_in)
+		const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
@@ -2874,7 +2874,7 @@ double PointMass::kappa_avg_r(const double r)
 
 /***************************** Core/Cusp Model *****************************/
 
-CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Cosmology* cosmo_in)
+CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
@@ -3182,7 +3182,7 @@ bool CoreCusp::output_cosmology_info(const int lens_number)
 	double rs_kpc, ds, m200, r200, r200_arcsec;
 	rs_kpc = a / kpc_to_arcsec;
 	ds = k0 * sigma_cr_kpc / rs_kpc;
-	r200_const = 200.0*qlens->cosmo->critical_density(zlens)*1e-9/CUBE(kpc_to_arcsec)*4*M_PI/3.0;
+	r200_const = 200.0*cosmo->critical_density(zlens)*1e-9/CUBE(kpc_to_arcsec)*4*M_PI/3.0;
 	double (Brent::*r200root)(const double);
 	r200root = static_cast<double (Brent::*)(const double)> (&CoreCusp::r200_root_eq);
 	r200_arcsec = BrentsMethod(r200root, 0.1, 10000, 1e-4);
@@ -3210,7 +3210,7 @@ double CoreCusp::rho3d_r_integrand_analytic(const double r)
 
 /***************************** Sersic profile *****************************/
 
-SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Cosmology* cosmo_in)
+SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
 
@@ -3408,7 +3408,7 @@ bool SersicLens::output_cosmology_info(const int lens_number)
 
 /***************************** Double Sersic profile *****************************/
 
-DoubleSersicLens::DoubleSersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Cosmology* cosmo_in)
+DoubleSersicLens::DoubleSersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
 
@@ -3623,7 +3623,7 @@ bool DoubleSersicLens::output_cosmology_info(const int lens_number)
 
 /***************************** Cored Sersic profile *****************************/
 
-Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, Cosmology* cosmo_in)
+Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &Re_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
 
@@ -5373,7 +5373,7 @@ QTabulated_Model::~QTabulated_Model() {
 	}
 }
 
-TopHatLens::TopHatLens(const double zlens_in, const double zsrc_in, const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, Cosmology* cosmo_in)
+TopHatLens::TopHatLens(const double zlens_in, const double zsrc_in, const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
 	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
@@ -5555,7 +5555,7 @@ double TopHatLens::potential_analytic(const double x, const double y)
 
 /***************************** Test Model (for testing purposes only) *****************************/
 
-TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
+TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
 	setup_lens_properties();
 	//setup_base_lens_properties(X,false); // number of parameters = X, is_elliptical_lens = false

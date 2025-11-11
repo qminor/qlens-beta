@@ -1087,7 +1087,7 @@ void QLens::process_commands(bool read_file)
 							"The available derived parameter types are:  ('*' means if lens_number is omitted, all lenses are included)\n\n"
 							"raw_chisq -- The chi-square value (not including priors; no arguments required)\n"
 							"kappa_r  -- *The kappa at radius <r>, averaged over all angles (where <r> in arcseconds)\n"
-							"dkappa_r -- *The derivative of kappa at radius <r>, averaged over all angles (where <r> is in arcseconds)\n"
+							"dlogkappa -- *The log-derivative of kappa at radius <r>, averaged over all angles (where <r> is in arcseconds)\n"
 							"lambda_r  -- 1-<kappa(r)> where <kappa(r)> is averaged over all angles (where <r> in arcseconds)\n"
 							"mass2d_r -- The projected mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
@@ -2273,8 +2273,8 @@ void QLens::process_commands(bool read_file)
 					cout << "primary_lens = " << primary_lens_number << ((auto_set_primary_lens==true) ? " (auto)": "") << endl;
 					if (LensProfile::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration" << endl;
 					else if (LensProfile::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature" << endl;
-					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << Gauss_NN << " points" << endl;
-					cout << "integral_tolerance = " << integral_tolerance << endl;
+					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << LensProfile::Gauss_NN << " points" << endl;
+					cout << "integral_tolerance = " << LensProfile::integral_tolerance << endl;
 					cout << "major_axis_along_y: " << display_switch(LensProfile::orient_major_axis_north) << endl;
 					cout << "ellipticity_components: " << display_switch(LensProfile::use_ellipticity_components) << endl;
 					cout << "shear_components: " << display_switch(Shear::use_shear_component_params) << endl;
@@ -2343,17 +2343,16 @@ void QLens::process_commands(bool read_file)
 					if (nwords == 3) {
 						int pts;
 						if (!(ws[2] >> pts)) Complain("invalid number of points");
-						set_Gauss_NN(pts);
 					}
 				} else Complain("unknown integration method");
 				set_integration_method(method);
 			} else if (nwords==1) {
 				if (mpi_id==0) {
 					method = LensProfile::integral_method;
-					if (method==Romberg_Integration) cout << "Integration method: Romberg integration with tolerance = " << integral_tolerance << endl;
-					else if (method==Gauss_Patterson_Quadrature) cout << "Integration method: Gauss-Patterson quadrature with tolerance = " << integral_tolerance << endl;
-					else if (method==Fejer_Quadrature) cout << "Integration method: Fejer quadrature with tolerance = " << integral_tolerance << endl;
-					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << Gauss_NN << " points" << endl;
+					if (method==Romberg_Integration) cout << "Integration method: Romberg integration with tolerance = " << LensProfile::integral_tolerance << endl;
+					else if (method==Gauss_Patterson_Quadrature) cout << "Integration method: Gauss-Patterson quadrature with tolerance = " << LensProfile::integral_tolerance << endl;
+					else if (method==Fejer_Quadrature) cout << "Integration method: Fejer quadrature with tolerance = " << LensProfile::integral_tolerance << endl;
+					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << LensProfile::Gauss_NN << " points" << endl;
 				}
 			} else Complain("no more than two arguments are allowed for 'integral_method' (method,npoints)");
 		}
@@ -9135,14 +9134,14 @@ void QLens::process_commands(bool read_file)
 								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add lambda_r' (param_arg)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								add_derived_param(LambdaR,dparam_arg,-1,-1,use_kpc);
-							} else if (words[3]=="dkappa_r") {
-								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add dkappa_r' (param_arg)");
+							} else if (words[3]=="dlogkappa") {
+								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add dlogkappa' (param_arg)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								if (nwords==6) {
 									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 									if (lensnum >= nlens) Complain("specified lens number does not exist");
 								} else lensnum = -1;
-								add_derived_param(DKappaR,dparam_arg,lensnum,-1,use_kpc);
+								add_derived_param(DlogKappaR,dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="logslope") {
 								if (nwords != 7) Complain("derived parameter logslope requires three arguments (rmin,rmax,lens_number)");
 								double dparam_arg2;
@@ -13152,7 +13151,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> itolerance)) Complain("invalid value for integral_tolerance");
 				set_integral_tolerance(itolerance);
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Tolerance for numerical integration = " << integral_tolerance << endl;
+				if (mpi_id==0) cout << "Tolerance for numerical integration = " << LensProfile::integral_tolerance << endl;
 			} else Complain("must specify either zero or one argument for integral_tolerance");
 		}
 		else if (words[0]=="nrepeat")

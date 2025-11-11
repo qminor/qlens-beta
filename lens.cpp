@@ -578,8 +578,6 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), ModelParams()
 	tabulate_phi_N = 200;
 	tabulate_q_N = 10;
 	grid = NULL;
-	Gauss_NN = 60;
-	integral_tolerance = 1e-3;
 	default_parameter_mode = 0;
 	include_recursive_lensing = true;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
@@ -979,8 +977,6 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	tabulate_q_N = lens_in->tabulate_q_N;
 
 	grid = NULL;
-	Gauss_NN = lens_in->Gauss_NN;
-	integral_tolerance = lens_in->integral_tolerance;
 	include_recursive_lensing = lens_in->include_recursive_lensing;
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
 
@@ -1045,8 +1041,6 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
-		// *NOTE*: Gauss_NN and integral_tolerance should probably just be set as static variables in LensProfile, so they don't need to be passed in here
-
 	SPLE_Lens* alphaptr;
 	Shear* shearptr;
 	//Truncated_NFW* tnfwptr;
@@ -1058,7 +1052,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 		case DEFLECTION:
 			new_lens = new Deflection(zl, zs, scale1, scale2, this->cosmo); break;
 		case sple_LENS:
-			//new_lens = new SPLE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this->cosmo); break; // the old way
+			//new_lens = new SPLE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, this->cosmo); break; // the old way
 			
 			//alphaptr = new SPLE_Lens();
 			//alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
@@ -1074,35 +1068,35 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 			//new_lens = new Shear(zl, zs, eparam, theta, xc, yc, this->cosmo); break;
 		// Note: the Multipole profile is added using the function add_multipole_lens(..., this->cosmo) because one of the input parameters is an int
 		case nfw:
-			new_lens = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this->cosmo); break;
+			new_lens = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case TRUNCATED_nfw:
 			//tnfwptr = new Truncated_NFW(pmode,special_param1); // this->cosmo doesn't work yet...doesn't load lens redshift
 			//cout << "HMM " << mass_parameter << " " << scale1 << " " << scale2 << " " << eparam << " " << theta << " " << xc << " " << yc << endl;
 			//tnfwptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
 			//new_lens = tnfwptr;
 			//break;
-			new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this->cosmo); break;
+			new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, special_param1, pmode, this->cosmo); break;
 		case CORED_nfw:
-			new_lens = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this->cosmo); break;
+			new_lens = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case dpie_LENS:
-			new_lens = new dPIE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this->cosmo); break;
+			new_lens = new dPIE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case EXPDISK:
-			new_lens = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this->cosmo); break;
+			new_lens = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, this->cosmo); break;
 		case HERNQUIST:
-			new_lens = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this->cosmo); break;
+			new_lens = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, this->cosmo); break;
 		case CORECUSP:
 			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to create_and_add_lens(...) function for model CORECUSP");
-			new_lens = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this->cosmo); break;
+			new_lens = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case SERSIC_LENS:
-			new_lens = new SersicLens(zl, zs, mass_parameter, scale1, logslope_param, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this->cosmo); break;
+			new_lens = new SersicLens(zl, zs, mass_parameter, scale1, logslope_param, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case DOUBLE_SERSIC_LENS:
-			new_lens = new DoubleSersicLens(zl, zs, mass_parameter, special_param1, scale1, logslope_param, scale2, special_param2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this->cosmo); break;
+			new_lens = new DoubleSersicLens(zl, zs, mass_parameter, special_param1, scale1, logslope_param, scale2, special_param2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case CORED_SERSIC_LENS:
-			new_lens = new Cored_SersicLens(zl, zs, mass_parameter, scale1, logslope_param, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this->cosmo); break;
+			new_lens = new Cored_SersicLens(zl, zs, mass_parameter, scale1, logslope_param, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case TOPHAT_LENS:
-			new_lens = new TopHatLens(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this->cosmo); break;
+			new_lens = new TopHatLens(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, this->cosmo); break;
 		case TESTMODEL: // Model for testing purposes
-			new_lens = new TestModel(zl, zs, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			new_lens = new TestModel(zl, zs, eparam, theta, xc, yc); break;
 		default:
 			die("Lens type not recognized");
 	}
@@ -1223,7 +1217,7 @@ void QLens::create_and_add_lens(const char *splinefile, const int emode, const d
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 	if (emode > 3) die("lens emode greater than 3 does not exist");
-	lens_list[nlens-1] = new LensProfile(splinefile, zl, zs, q, theta, xc, yc, Gauss_NN, integral_tolerance, qx, f, this->cosmo);
+	lens_list[nlens-1] = new LensProfile(splinefile, zl, zs, q, theta, xc, yc, qx, f, this->cosmo);
 	lens_list[nlens-1]->set_qlens_pointer(this);
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
@@ -1418,7 +1412,7 @@ bool QLens::add_qtabulated_lens_from_file(const double zl, const double zs, cons
 void QLens::add_lens(LensProfile *new_lens, const double zl, const double zs)
 {
 	// NOTE: the integration points/weights should NOT be in the LensProfile classes. They should be in one place so they don't get computed & copied multiple times. FIX THIS!!!
-	new_lens->set_integration_parameters(Gauss_NN, integral_tolerance);
+	//new_lens->set_integration_parameters(Gauss_NN, integral_tolerance);
 	new_lens->setup_cosmology(this->cosmo,zl,zs);
 	new_lens->set_qlens_pointer(this);
 
@@ -5932,16 +5926,17 @@ double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 	return total_kappa;
 }
 
-double QLens::total_dkappa(const double r, const int lensnum, const bool use_kpc)
+double QLens::total_dlogkappa(const double r, const int lensnum, const bool use_kpc)
 {
-	double total_dkappa;
+	double total_dlogkappa;
 	int j;
 	double kap, kap2;
 	double theta, thetastep;
 	int thetasteps = 200;
 	thetastep = 2*M_PI/thetasteps;
-	double x, y, x2, y2, dr;
-	dr = 1e-5;
+	double x, y, x2, y2, dlogr, rfac;
+	dlogr = 1e-5;
+	rfac = exp(dlogr);
 	double z, r_arcsec = r;
 	if (lensnum==-1) z = lens_list[primary_lens_number]->get_redshift();
 	else z = lens_list[lensnum]->get_redshift();
@@ -5951,14 +5946,14 @@ double QLens::total_dkappa(const double r, const int lensnum, const bool use_kpc
 	for (int i=0; i < nlens; i++)
 		if (i==primary_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
 	}
-	total_dkappa = 0;
+	total_dlogkappa = 0;
 	double *onezfac = new double[n_lens_redshifts];
 	for (j=0; j < n_lens_redshifts; j++) onezfac[j] = 1.0;
 	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
 		x = grid_xcenter + r_arcsec*cos(theta);
 		y = grid_ycenter + r_arcsec*sin(theta);
-		x2 = (r_arcsec+dr)*cos(theta);
-		y2 = (r_arcsec+dr)*sin(theta);
+		x2 = (r_arcsec*rfac)*cos(theta);
+		y2 = (r_arcsec*rfac)*sin(theta);
 		if (lensnum==-1) {
 			kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
 			kap2 = kappa(x2,y2,onezfac,default_zsrc_beta_factors);
@@ -5966,10 +5961,10 @@ double QLens::total_dkappa(const double r, const int lensnum, const bool use_kpc
 			kap = lens_list[lensnum]->kappa(x,y);
 			kap2 = lens_list[lensnum]->kappa(x2,y2);
 		}
-		total_dkappa += (kap2 - kap)/dr;
+		total_dlogkappa += (log(kap2/kap))/dlogr;
 	}
-	total_dkappa /= thetasteps;
-	return total_dkappa;
+	total_dlogkappa /= thetasteps;
+	return total_dlogkappa;
 }
 
 void QLens::plot_mass_profile(double rmin, double rmax, int rpts, const char *massname)
@@ -12106,7 +12101,7 @@ double QLens::fitmodel_custom_prior()
 
 void QLens::set_Gauss_NN(const int& nn)
 {
-	Gauss_NN = nn;
+	LensProfile::Gauss_NN = nn;
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
 			lens_list[i]->SetGaussLegendre(nn);
@@ -12116,7 +12111,7 @@ void QLens::set_Gauss_NN(const int& nn)
 
 void QLens::set_integral_tolerance(const double& acc)
 {
-	integral_tolerance = acc;
+	LensProfile::integral_tolerance = acc;
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
 			lens_list[i]->set_integral_tolerance(acc);

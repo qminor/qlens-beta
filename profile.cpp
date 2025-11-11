@@ -23,12 +23,13 @@ int LensProfile::default_ellipticity_mode = 1;
 bool LensProfile::integration_warnings = true;
 int LensProfile::default_fejer_nlevels = 12;
 int LensProfile::fourier_spline_npoints = 336;
+int LensProfile::Gauss_NN = 60;
+double LensProfile::integral_tolerance = 1e-3;
 
-LensProfile::LensProfile(const char *splinefile, const double zqlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, Cosmology* cosmo_in)
+LensProfile::LensProfile(const char *splinefile, const double zqlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
 	setup_cosmology(cosmo_in,zqlens_in,zsrc_in);
-	set_integration_parameters(nn,acc);
 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	qx_parameter = qx_in;
@@ -78,6 +79,7 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 	include_limits = false;
 	rmin_einstein_radius = 1e-5;
 	rmax_einstein_radius = 1e4;
+	set_integration_parameters();
 }
 
 void LensProfile::setup_cosmology(Cosmology* cosmo_in, const double zlens_in, const double zsrc_in)
@@ -335,7 +337,6 @@ void LensProfile::copy_integration_tables(const LensProfile* lens_in)
 	// It's a total waste of time to make copies of the integration tables. You should change it so the integration tables are static, or perhaps move them out of LensProfile, so it doesn't have to copy them for each lens every time a fit is run.
 	if (ellipticity_mode == -1) return; // non-elliptical lenses do not require doing numerical integrations
 	if (lens_in->points==NULL) die("Integration tables were not initialized for current lens");
-	integral_tolerance = lens_in->integral_tolerance;
 	numberOfPoints = lens_in->numberOfPoints;
 	weights = new double[numberOfPoints];
 	points = new double[numberOfPoints];
@@ -1479,13 +1480,12 @@ void LensProfile::set_angle_from_components(const double &comp1, const double &c
 	set_angle_radians(angle);
 }
 
-void LensProfile::set_integration_parameters(const int &nn, const double &acc)
+void LensProfile::set_integration_parameters()
 {
 	if (ellipticity_mode == -1) return; // non-elliptical lenses do not require doing numerical integrations
-	SetGaussLegendre(nn);
-	integral_tolerance = acc;
-	SetGaussPatterson(acc,integration_warnings);
-	SetClenshawCurtis(default_fejer_nlevels,acc,false);
+	SetGaussLegendre(Gauss_NN);
+	SetGaussPatterson(integral_tolerance,integration_warnings);
+	SetClenshawCurtis(default_fejer_nlevels,integral_tolerance,false);
 }
 
 void LensProfile::set_integral_tolerance(const double acc) {

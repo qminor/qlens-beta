@@ -12,6 +12,8 @@
 #include "cosmo.h"
 using namespace std;
 
+const double Cosmology::default_omega_baryon = 0.0488;
+const double Cosmology::default_del_R = 2.215;
 const double Cosmology::default_k_pivot = 0.05;
 const double Cosmology::default_spectral_index = 0.96;
 const double Cosmology::default_running = 0;

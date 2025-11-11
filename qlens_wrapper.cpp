@@ -20,8 +20,11 @@ public:
 
 	int mpi_id, mpi_np;
 	int ngroups;
-    QLens_Wrap() : QLens()
+    QLens_Wrap(const double zlens, const double zsrc, const double zsrc_ref, Cosmology* cosmo_in = NULL) : QLens(cosmo_in)
 	 {
+		 lens_redshift = zlens;
+		 source_redshift = zsrc;
+		 reference_source_redshift = zsrc_ref;
 		mpi_id=0;
 		mpi_np=1;
 
