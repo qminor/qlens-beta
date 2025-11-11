@@ -527,7 +527,7 @@ void dPIE_Lens::update_meta_parameters()
 {
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (qlens != NULL) {
+	if (cosmo != NULL) {
 		if (parameter_mode==1) set_abs_params_from_sigma0();
 		else if (parameter_mode==2) set_abs_params_from_mtot();
 	}
@@ -901,7 +901,7 @@ void NFW::update_meta_parameters()
 {
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (qlens != NULL) {
+	if (cosmo != NULL) {
 		if (parameter_mode==2) set_ks_c200_from_m200_rs();
 		else if (parameter_mode==1) set_ks_rs_from_m200_c200();
 		else {
@@ -1286,7 +1286,7 @@ void Truncated_NFW::update_meta_parameters()
 {
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (qlens != NULL) {
+	if (cosmo != NULL) {
 		if ((parameter_mode==3) or (parameter_mode==4)) set_ks_c200_from_m200_rs();
 		else if ((parameter_mode==1) or (parameter_mode==2)) set_ks_rs_from_m200_c200();
 	}
@@ -1626,7 +1626,7 @@ void Cored_NFW::update_meta_parameters()
 {
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
-	if (qlens != NULL) {
+	if (cosmo != NULL) {
 		if (parameter_mode==3) {
 			set_ks_rs_from_m200_c200_rckpc();
 		} else if (parameter_mode==2) {

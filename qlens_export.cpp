@@ -153,13 +153,8 @@ PYBIND11_MODULE(qlens, m) {
 			double zlens = default_zlens;
 			double zsrc_ref = default_zsrc_ref;
 
-			if (kwargs) {
-				for (auto item : kwargs) {
-					if (py::cast<string>(item.first)=="pmode") {
-						pmode = py::cast<int>(item.second);
-					}
-				}
-			}
+			process_cosmology_and_pmode_kwargs(pmode, cosmo_in, zlens, zsrc_ref, kwargs);
+
 			double b,p2,s,q1,q2,xc,yc;
 			b = py::cast<double>(dict["b"]);
 			if (pmode==0) {
@@ -262,6 +257,9 @@ PYBIND11_MODULE(qlens, m) {
 				p2 = py::cast<double>(dict["rs_kpc"]);
 			} else throw std::runtime_error("Can only choose pmode=0, 1, or 2");
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
+
+			if (cosmo_in==NULL) throw std::runtime_error("NFW requires cosmology object to be passed in when initializing");
+
 			NFW* nfw = new NFW(zlens,zsrc_ref,p1,p2,q1,q2,xc,yc,pmode,cosmo_in);
 			if (use_median_c) {
 				nfw->assign_special_anchored_parameters(nfw,c_median_factor,true);

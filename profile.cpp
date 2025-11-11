@@ -85,12 +85,14 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 void LensProfile::setup_cosmology(Cosmology* cosmo_in, const double zlens_in, const double zsrc_in)
 {
 	if (cosmo != cosmo_in) {
-		cosmo = cosmo_in;
 		zlens = zlens_in;
 		zlens_current = zlens_in;
 		zsrc_ref = zsrc_in;
-		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-		kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+		if (cosmo_in != NULL) {
+			cosmo = cosmo_in;
+			sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+			kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+		}
 	}
 }
 
@@ -693,7 +695,9 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 			break;
 		}
 	}
-	if (found_match) update_parameters(newparams);
+	if (found_match) {
+		update_parameters(newparams);
+	}
 	delete[] newparams;
 	return found_match;
 }
@@ -1654,7 +1658,7 @@ void LensProfile::set_angle_radians(const double &theta_in)
 
 void LensProfile::update_cosmology_meta_parameters(const bool force_update)
 {
-	if ((qlens != NULL) and ((force_update) or (zlens != zlens_current) or (cosmo->get_n_vary_params() > 0))) {
+	if ((cosmo != NULL) and ((force_update) or (zlens != zlens_current) or (cosmo->get_n_vary_params() > 0))) {
 		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
 		kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 		if (zlens != zlens_current) zlens_current = zlens;
