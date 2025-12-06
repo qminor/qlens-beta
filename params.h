@@ -28,8 +28,8 @@ struct ParamPrior
 	}
 	void set_uniform() { prior = UNIFORM_PRIOR; }
 	void set_log() { prior = LOG_PRIOR; }
-	void set_gaussian(double &pos_in, double &sig_in) { prior = GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; }
-	void set_gauss2(int p1, int p2, double &pos1_in, double &pos2_in, double &sig1_in, double &sig2_in, double &sig12_in) {
+	void set_gaussian(const double &pos_in, const double &sig_in) { prior = GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; }
+	void set_gauss2(int p1, int p2, const double &pos1_in, const double &pos2_in, const double &sig1_in, const double &sig2_in, const double &sig12_in) {
 		prior = GAUSS2_PRIOR;
 		gauss_paramnums.input(2);
 		gauss_meanvals.input(2);
@@ -77,10 +77,10 @@ struct ParamTransform
 	}
 	void set_none() { transform = NONE; }
 	void set_log() { transform = LOG_TRANSFORM; }
-	void set_linear(double &a_in, double &b_in) { transform = LINEAR_TRANSFORM; a = a_in; b = b_in; }
-	void set_gaussian(double &pos_in, double &sig_in) { transform = GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
-	void set_ratio(int &paramnum_in) { transform = RATIO; ratio_paramnum = paramnum_in; }
-	void set_include_jacobian(bool &include) { include_jacobian = include; }
+	void set_linear(const double a_in, const double b_in) { transform = LINEAR_TRANSFORM; a = a_in; b = b_in; }
+	void set_gaussian(const double pos_in, const double sig_in) { transform = GAUSS_TRANSFORM; gaussian_pos = pos_in; gaussian_sig = sig_in; }
+	void set_ratio(const int paramnum_in) { transform = RATIO; ratio_paramnum = paramnum_in; }
+	void set_include_jacobian(const bool include) { include_jacobian = include; }
 };
 
 struct DerivedParam
@@ -348,35 +348,52 @@ struct DerivedParam
 	}
 };
 
-struct ParamSettings
+struct ParamList
 {
+	static constexpr double VERY_LARGE = 1e30;
+	QLens* qlens;
+
 	int nparams;
 	ParamPrior **priors;
 	ParamTransform **transforms;
-	string *param_names;
+	double *values, *untransformed_values;
+	string *untransformed_param_names, *param_names;
 	string *override_names; // this allows to manually set names even after parameter transformations
-	// ParamSettings should handle the latex names too, to simplify things; this would also allow for manual override of the latex names. Implement this!!!!!!
+	string *untransformed_latex_names, *latex_names;
+	// ParamList should handle the latex names too, to simplify things; this would also allow for manual override of the latex names. Implement this!!!!!!
 	double *prior_norms;
-	double *penalty_limits_lo, *penalty_limits_hi;
-	bool *use_penalty_limits;
+	double *untransformed_prior_limits_lo, *untransformed_prior_limits_hi;
+	bool *defined_prior_limits;
 	// It would be nice if penalty limits and override_limits could be merged. The tricky part is that the penalty limits deal with the	
 	// untransformed parameters, while override_limits deal with the transformed parameters. Not sure yet what is the best way to handle this.
-	double *override_limits_lo, *override_limits_hi;
-	bool *override_prior_limits;
+	double *prior_limits_lo, *prior_limits_hi;
+	//bool *override_prior_limits;
 	double *stepsizes;
 	bool *auto_stepsize;
 	bool *hist2d_param;
-	bool *hist2d_dparam;
 	bool *subplot_param;
+
+	DerivedParam** dparams;
+	bool *hist2d_dparam;
 	bool *subplot_dparam;
 	string *dparam_names;
 	int n_dparams;
-	ParamSettings() { priors = NULL; param_names = NULL; transforms = NULL; nparams = 0; stepsizes = NULL; auto_stepsize = NULL; hist2d_param = NULL; hist2d_dparam = NULL; subplot_param = NULL; dparam_names = NULL; subplot_dparam = NULL; nparams = 0; n_dparams = 0; }
-	ParamSettings(ParamSettings& param_settings_in) {
+	ParamList() {
+		set_null_ptrs_and_values();
+	}
+	ParamList(QLens* qlens_in) : ParamList() {
+		qlens = qlens_in;
+	}
+	ParamList(ParamList& param_settings_in) {
 		nparams = param_settings_in.nparams;
 		n_dparams = param_settings_in.n_dparams;
+		untransformed_param_names = new string[nparams];
 		param_names = new string[nparams];
+		untransformed_latex_names = new string[nparams];
+		latex_names = new string[nparams];
 		override_names = new string[nparams];
+		untransformed_values = new double[nparams];
+		values = new double[nparams];
 		priors = new ParamPrior*[nparams];
 		transforms = new ParamTransform*[nparams];
 		stepsizes = new double[nparams];
@@ -384,28 +401,33 @@ struct ParamSettings
 		hist2d_param = new bool[nparams];
 		subplot_param = new bool[nparams];
 		prior_norms = new double[nparams];
-		penalty_limits_lo = new double[nparams];
-		penalty_limits_hi = new double[nparams];
-		use_penalty_limits = new bool[nparams];
-		override_limits_lo = new double[nparams];
-		override_limits_hi = new double[nparams];
-		override_prior_limits = new bool[nparams];
+		untransformed_prior_limits_lo = new double[nparams];
+		untransformed_prior_limits_hi = new double[nparams];
+		defined_prior_limits = new bool[nparams];
+		prior_limits_lo = new double[nparams];
+		prior_limits_hi = new double[nparams];
+		//override_prior_limits = new bool[nparams];
 		for (int i=0; i < nparams; i++) {
 			priors[i] = new ParamPrior(param_settings_in.priors[i]);
 			transforms[i] = new ParamTransform(param_settings_in.transforms[i]);
+			untransformed_param_names[i] = param_settings_in.untransformed_param_names[i];
 			param_names[i] = param_settings_in.param_names[i];
+			untransformed_latex_names[i] = param_settings_in.untransformed_latex_names[i];
+			latex_names[i] = param_settings_in.latex_names[i];
 			override_names[i] = param_settings_in.override_names[i];
+			untransformed_values[i] = param_settings_in.untransformed_values[i];
+			values[i] = param_settings_in.values[i];
 			stepsizes[i] = param_settings_in.stepsizes[i];
 			auto_stepsize[i] = param_settings_in.auto_stepsize[i];
 			hist2d_param[i] = param_settings_in.hist2d_param[i];
 			subplot_param[i] = param_settings_in.subplot_param[i];
 			prior_norms[i] = param_settings_in.prior_norms[i];
-			penalty_limits_lo[i] = param_settings_in.penalty_limits_lo[i];
-			penalty_limits_hi[i] = param_settings_in.penalty_limits_hi[i];
-			use_penalty_limits[i] = param_settings_in.use_penalty_limits[i];
-			override_limits_lo[i] = param_settings_in.override_limits_lo[i];
-			override_limits_hi[i] = param_settings_in.override_limits_hi[i];
-			override_prior_limits[i] = param_settings_in.override_prior_limits[i];
+			untransformed_prior_limits_lo[i] = param_settings_in.untransformed_prior_limits_lo[i];
+			untransformed_prior_limits_hi[i] = param_settings_in.untransformed_prior_limits_hi[i];
+			defined_prior_limits[i] = param_settings_in.defined_prior_limits[i];
+			prior_limits_lo[i] = param_settings_in.prior_limits_lo[i];
+			prior_limits_hi[i] = param_settings_in.prior_limits_hi[i];
+			//override_prior_limits[i] = param_settings_in.override_prior_limits[i];
 		}
 		if (n_dparams > 0) {
 			dparam_names = new string[n_dparams];
@@ -416,53 +438,78 @@ struct ParamSettings
 				hist2d_dparam[i] = param_settings_in.hist2d_dparam[i];
 				subplot_dparam[i] = param_settings_in.subplot_dparam[i];
 			}
+		} else {
+			dparam_names = NULL;
+			hist2d_dparam = NULL;
+			subplot_dparam = NULL;
 		}
 	}
-	void update_params(const int nparams_in, std::vector<string>& names, double* stepsizes_in);
-	void insert_params(const int pi, const int pf, std::vector<string>& names, double* stepsizes_in);
+	ParamList(ParamList& param_settings_in, QLens* qlens_in) : ParamList(param_settings_in) {
+		qlens = qlens_in;
+	}
+	void update_param_list(string* param_names_in, string* latex_names_in, double* stepsizes_in, const bool check_current_params = false);
+	void insert_params(const int pi, const int pf, string* param_names_in, string* latex_names_in, double* untransformed_values_in, double* stepsizes_in);
 	bool remove_params(const int pi, const int pf);
-	void add_dparam(string dparam_name);
-	void remove_dparam(int dparam_number);
-	void rename_dparam(int dparam_number, string newname) { dparam_names[dparam_number] = newname; }
+	bool print_priors_and_limits();
+	bool print_parameter_values();
+	string mkstring_doub(const double db);
+	string mkstring_int(const int i);
+	string get_param_values_string();
+
+	void add_dparam(DerivedParamType type_in, double param, int lensnum, double param2, bool use_kpc);
+	bool remove_dparam(int dparam_number);
+	bool rename_dparam(int dparam_number, string newname, string new_latex_name) {
+		if (dparam_number >= n_dparams) { warn("Specified derived parameter does not exist"); return false; }
+		dparam_names[dparam_number] = newname;
+		dparams[dparam_number]->rename(newname,new_latex_name);
+		return true;
+	}
 	void clear_dparams()
 	{
+		delete_dparam_ptrs();
 		if (n_dparams > 0) {
-			delete[] dparam_names;
-			delete[] hist2d_dparam;
-			delete[] subplot_dparam;
+			dparams = NULL;
+			dparam_names = NULL;
+			hist2d_dparam = NULL;
+			subplot_dparam = NULL;
 			n_dparams = 0;
 		}
 	}
+	void print_dparam_list(QLens* lens_in)
+	{
+		if (n_dparams > 0) {
+			for (int i=0; i < n_dparams; i++) {
+				std::cout << i << ". " << std::flush;
+				dparams[i]->print_param_description(lens_in);
+			}
+		}
+		else std::cout << "No derived parameters have been created" << std::endl;
+	}
 	int lookup_param_number(const string pname)
 	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		int pnum = -1;
 		for (int i=0; i < nparams; i++) {
-			if ((transformed_names[i]==pname) or (param_names[i]==pname)) { pnum = i; break; }
+			if ((param_names[i]==pname) or (untransformed_param_names[i]==pname)) { pnum = i; break; }
 		}
 		for (int i=0; i < n_dparams; i++) {
 			if (dparam_names[i]==pname) pnum = nparams+i;
 		}
-		delete[] transformed_names;
 		return pnum;
 	}
 	string lookup_param_name(const int i)
 	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
-		string name = transformed_names[i];
-		delete[] transformed_names;
+		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
+		string name = param_names[i];
 		return name;
 	}
 	bool exclude_hist2d_param(const string pname)
 	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		bool found_name = false;
 		int i;
 		for (i=0; i < nparams; i++) {
-			if ((param_names[i]==pname) or (transformed_names[i]==pname)) {
+			if ((untransformed_param_names[i]==pname) or (param_names[i]==pname)) {
 				hist2d_param[i] = false;
 				found_name = true;
 				break;
@@ -477,7 +524,6 @@ struct ParamSettings
 				}
 			}
 		}
-		delete[] transformed_names;
 		return found_name;
 	}
 	bool hist2d_params_defined()
@@ -502,33 +548,29 @@ struct ParamSettings
 	}
 	bool hist2d_param_flag(const int i, string &name)
 	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		bool flag;
 		if (i < nparams) {
-			name = transformed_names[i];
+			name = param_names[i];
 			flag = hist2d_param[i];
 		} else {
 			int j = i - nparams;
 			name = dparam_names[j];
 			flag = hist2d_dparam[j];
 		}
-		delete[] transformed_names;
 		return flag;
 	}
 	string print_excluded_hist2d_params()
 	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		string pstring = "";
 		int i;
 		for (i=0; i < nparams; i++) {
-			if (!hist2d_param[i]) pstring += transformed_names[i] + " ";
+			if (!hist2d_param[i]) pstring += param_names[i] + " ";
 		}
 		for (i=0; i < n_dparams; i++) {
 			if (!hist2d_dparam[i]) pstring += dparam_names[i] + " ";
 		}
-		delete[] transformed_names;
 		return pstring;
 	}
 	void reset_hist2d_params()
@@ -539,12 +581,11 @@ struct ParamSettings
 	}
 	bool set_subplot_param(const string pname)
 	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		bool found_name = false;
 		int i;
 		for (i=0; i < nparams; i++) {
-			if ((param_names[i]==pname) or (transformed_names[i]==pname)) {
+			if ((untransformed_param_names[i]==pname) or (param_names[i]==pname)) {
 				subplot_param[i] = true;
 				found_name = true;
 				break;
@@ -559,7 +600,6 @@ struct ParamSettings
 				}
 			}
 		}
-		delete[] transformed_names;
 		return found_name;
 	}
 	bool subplot_params_defined()
@@ -584,33 +624,29 @@ struct ParamSettings
 	}
 	bool subplot_param_flag(const int i, string &name)
 	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		bool flag;
 		if (i < nparams) {
-			name = transformed_names[i];
+			name = param_names[i];
 			flag = subplot_param[i];
 		} else {
 			int j = i - nparams;
 			name = dparam_names[j];
 			flag = subplot_dparam[j];
 		}
-		delete[] transformed_names;
 		return flag;
 	}
 	string print_subplot_params()
 	{
-		string *transformed_names = new string[nparams];
-		transform_parameter_names(param_names,transformed_names,NULL,NULL);
+		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		string pstring = "";
 		int i;
 		for (i=0; i < nparams; i++) {
-			if (subplot_param[i]) pstring += transformed_names[i] + " ";
+			if (subplot_param[i]) pstring += param_names[i] + " ";
 		}
 		for (i=0; i < n_dparams; i++) {
 			if (subplot_dparam[i]) pstring += dparam_names[i] + " ";
 		}
-		delete[] transformed_names;
 		return pstring;
 	}
 	void reset_subplot_params()
@@ -619,22 +655,37 @@ struct ParamSettings
 		for (i=0; i < nparams; i++) subplot_param[i] = false;
 		for (i=0; i < n_dparams; i++) subplot_dparam[i] = false;
 	}
-	void clear_penalty_limits()
+	void clear_prior_limits()
 	{
 		for (int i=0; i < nparams; i++) {
-			use_penalty_limits[i] = false;
+			defined_prior_limits[i] = false;
+			untransformed_prior_limits_lo[i] = -VERY_LARGE;
+			untransformed_prior_limits_hi[i] = VERY_LARGE;
+			prior_limits_lo[i] = -VERY_LARGE;
+			prior_limits_hi[i] = VERY_LARGE;
+			prior_norms[i] = 1.0;
 		}
 	}
-	void print_priors();
+	bool all_prior_limits_defined() {
+		for (int i=0; i < nparams; i++) if (defined_prior_limits[i]==false) return false;
+		return true;
+	}
+	void print_priors_and_transforms();
 	bool output_prior(const int i);
 	void print_stepsizes();
-	void print_penalty_limits();
+	void print_untransformed_prior_limits();
 	void scale_stepsizes(const double fac)
 	{
 		for (int i=0; i < nparams; i++) {
 			stepsizes[i] *= fac;
 			auto_stepsize[i] = false;
 		}
+	}
+	void scale_stepsize(const int paramnum, const double fac)
+	{
+		if ((paramnum < 0) or (paramnum >= nparams)) { warn("invalid ratio_paramnum"); return; }
+		stepsizes[paramnum] *= fac;
+		auto_stepsize[paramnum] = false;
 	}
 	void reset_stepsizes(double *stepsizes_in)
 	{
@@ -657,190 +708,394 @@ struct ParamSettings
 		auto_stepsize[i] = false;
 		stepsizes[i] = step;
 	}
-	void set_penalty_limit(const int i, const double lo, const double hi)
+	void update_untransformed_values(const int pi, const int pf, double* values_in)
 	{
-		if (i >= nparams) die("parameter chosen for penalty limit is greater than total number of parameters (%i vs %i)",i,nparams);
-		use_penalty_limits[i] = true;
-		penalty_limits_lo[i] = lo;
-		penalty_limits_hi[i] = hi;
+		int i, index;
+		for (i=0, index=pi; index < pf; i++, index++) {
+			untransformed_values[index] = values_in[i];
+		}
+		transform_parameters();
 	}
-	void get_penalty_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
+	void update_untransformed_values(double* values_in)
+	{
+		update_untransformed_values(0,nparams,values_in);
+	}
+	bool update_param_values(const int pi, const int pf, double* values_in)
+	{
+		int i, index;
+		for (i=0, index=pi; index < pf; i++, index++) {
+			values[index] = values_in[i];
+		}
+		inverse_transform_parameters(); // we inverse transform all the parameters in case any of the transforms depend on the parameters that have just been updated
+		if (qlens) {
+			if (qlens->update_model(untransformed_values) != 0.0) return false;
+		}
+		return true;
+	}
+	bool update_param_values(double* values_in)
+	{
+		return update_param_values(0,nparams,values_in);
+	}
+	bool update_param_value(const int i, const double value_in)
+	{
+		values[i] = value_in;
+		inverse_transform_parameter(i); // NOTE: what if another parameter has a ratio transform that depends on parameter i? The safe thing would be to transform all parameters, but I just wonder if it's overkill. Just transforming parameter i for now
+		if (qlens) {
+			if (qlens->update_model(untransformed_values) != 0.0) return false;
+		}
+		return true;
+	}
+	bool update_param_value(const string name, const double value_in)
+	{
+		int paramnum = lookup_param_number(name);
+		if ((paramnum < 0) or (paramnum >= nparams)) return false;
+		return update_param_value(paramnum,value_in);
+	}
+	void get_untransformed_prior_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
 	{
 		use_plimits.input(nparams);
 		lower.input(nparams);
 		upper.input(nparams);
 		for (int i=0; i < nparams; i++) {
-			use_plimits[i] = use_penalty_limits[i];
-			lower[i] = penalty_limits_lo[i];
-			upper[i] = penalty_limits_hi[i];
+			use_plimits[i] = defined_prior_limits[i];
+			lower[i] = untransformed_prior_limits_lo[i];
+			upper[i] = untransformed_prior_limits_hi[i];
 		}
 	}
-	void update_penalty_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
+	void get_prior_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
 	{
+		use_plimits.input(nparams);
+		lower.input(nparams);
+		upper.input(nparams);
 		for (int i=0; i < nparams; i++) {
-			use_penalty_limits[i] = use_plimits[i];
-			penalty_limits_lo[i] = lower[i];
-			penalty_limits_hi[i] = upper[i];
+			use_plimits[i] = defined_prior_limits[i];
+			lower[i] = prior_limits_lo[i];
+			upper[i] = prior_limits_hi[i];
 		}
 	}
-	void update_specific_penalty_limits(const int pi, const int pf, boolvector& use_plimits, dvector& lower, dvector& upper)
+	bool set_prior_limit(const int paramnum, const double lo, const double hi)
 	{
-		int i, index;
-		for (i=0, index=pi; index < pf; i++, index++) {
-			use_penalty_limits[index] = use_plimits[i];
-			penalty_limits_lo[index] = lower[i];
-			penalty_limits_hi[index] = upper[i];
+		if (paramnum >= nparams) die("parameter chosen for prior limit is greater than total number of parameters (%i vs %i)",paramnum,nparams);
+		//override_prior_limits[paramnum] = true; // I don't think override_prior_limits is even necessary; get rid of it?
+		prior_limits_lo[paramnum] = lo;
+		prior_limits_hi[paramnum] = hi;
+		inverse_transform_prior_limit(paramnum);
+		set_prior_norm(paramnum);
+		bool *changed_limit = new bool[nparams];
+		for (int i=0; i < nparams; i++) changed_limit[i] = false;
+		changed_limit[paramnum] = true;
+		if (qlens) qlens->update_prior_limits(untransformed_prior_limits_lo,untransformed_prior_limits_hi,changed_limit);
+		delete[] changed_limit;
+		return true;
+	}
+	bool set_prior_limit(const string name, const double lo, const double hi)
+	{
+		int paramnum = lookup_param_number(name);
+		if ((paramnum < 0) or (paramnum >= nparams)) return false;
+		return set_prior_limit(paramnum,lo,hi);
+	}
+	void set_untransformed_prior_limits(const int pi, const int pf, dvector& lower, dvector& upper, const bool update_model = false)
+	{
+		int i,j;
+		for (i=pi,j=0; i < pf; i++,j++) {
+			untransformed_prior_limits_lo[i] = lower[j];
+			untransformed_prior_limits_hi[i] = upper[j];
+			//std::cout << "Set untransformed limit " << i << " " << untransformed_prior_limits_lo[i] << " " << untransformed_prior_limits_hi[i] << std::endl;
+			defined_prior_limits[i] = true;
+		}
+		transform_prior_limits();
+		set_prior_norms();
+		if ((update_model) and (qlens)) {
+			bool *changed_limit = new bool[nparams];
+			for (j=0; j < nparams; j++) changed_limit[j] = false;
+			for (j=pi; j < pf; j++) changed_limit[j] = true;
+			qlens->update_prior_limits(untransformed_prior_limits_lo,untransformed_prior_limits_hi,changed_limit);
+			delete[] changed_limit;
 		}
 	}
-	void clear_penalty_limit(const int i)
+	void set_untransformed_prior_limit(const int i, const double lo, const double hi, const bool update_model = false)
 	{
 		if (i >= nparams) die("parameter chosen for penalty limit is greater than total number of parameters (%i vs %i)",i,nparams);
-		use_penalty_limits[i] = true; // this ensures that it won't be overwritten by default values
-		penalty_limits_lo[i] = -1e30;
-		penalty_limits_hi[i] = 1e30;
+		defined_prior_limits[i] = true;
+		untransformed_prior_limits_lo[i] = lo;
+		untransformed_prior_limits_hi[i] = hi;
+		defined_prior_limits[i] = true;
+		transform_prior_limit(i);
+		set_prior_norm(i);
+		// by default, update_model=false because the prior limits within the model objects were changed before calling this function
+		if ((update_model) and (qlens)) {
+			bool *changed_limit = new bool[nparams];
+			for (int j=0; j < nparams; j++) changed_limit[j] = false;
+			changed_limit[i] = true;
+			qlens->update_prior_limits(untransformed_prior_limits_lo,untransformed_prior_limits_hi,changed_limit);
+			delete[] changed_limit;
+		}
 	}
-	void transform_parameters(double *params)
+	void update_untransformed_prior_limits_from_auto_ranges(const int pi, const int pf, boolvector& use_plimits, dvector& lower, dvector& upper)
 	{
-		double *new_params = new double[nparams];
-		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==NONE) new_params[i] = params[i];
-			else if (transforms[i]->transform==LOG_TRANSFORM) new_params[i] = log(params[i])/M_LN10;
-			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				new_params[i] = erff((params[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
-			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				new_params[i] = transforms[i]->a * params[i] + transforms[i]->b;
-			} else if (transforms[i]->transform==RATIO) {
-				new_params[i] = params[i]/params[transforms[i]->ratio_paramnum];
+		int i,j;
+		for (i=pi,j=0; i < pf; i++,j++) {
+			if (use_plimits[j]) {
+				if (!defined_prior_limits[i]) {
+					untransformed_prior_limits_lo[i] = lower[j];
+					untransformed_prior_limits_hi[i] = upper[j];
+					defined_prior_limits[i] = true;
+				} else {
+					if (untransformed_prior_limits_lo[i] < lower[j]) {
+						untransformed_prior_limits_lo[i] = lower[j];
+					}
+					if (untransformed_prior_limits_hi[i] > upper[j]) {
+						untransformed_prior_limits_hi[i] = upper[j];
+					}
+				}
 			}
 		}
-		for (int i=0; i < nparams; i++) {
-			params[i] = new_params[i];
-		}
-		delete[] new_params;
+		transform_prior_limits(pi,pf);
+		set_prior_norms(pi,pf);
 	}
-	void transform_limits(double *lower, double *upper)
+	void clear_prior_limit(const int i)
 	{
-		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==LOG_TRANSFORM) lower[i] = log(lower[i])/M_LN10;
-			if (transforms[i]->transform==LOG_TRANSFORM) upper[i] = log(upper[i])/M_LN10;
+		if (i >= nparams) die("parameter chosen for penalty limit is greater than total number of parameters (%i vs %i)",i,nparams);
+		defined_prior_limits[i] = false;
+		untransformed_prior_limits_lo[i] = -VERY_LARGE;
+		untransformed_prior_limits_hi[i] = VERY_LARGE;
+		prior_limits_lo[i] = -VERY_LARGE;
+		prior_limits_hi[i] = VERY_LARGE;
+		prior_norms[i] = 1.0;
+	}
+	bool set_param_prior(const int param_num, const string prior_type_string, const vector<double> &prior_params, const int param_num2 = -1)
+	{
+		int n_required_params = -1;
+		Prior prior_type;
+		if (prior_type_string=="none") { prior_type = UNIFORM_PRIOR; n_required_params = 0; }
+		else if (prior_type_string=="log") { prior_type = LOG_PRIOR; n_required_params = 0; }
+		else if (prior_type_string=="gaussian") { prior_type = GAUSS_PRIOR; n_required_params = 2; }
+		else if (prior_type_string=="gauss2") { prior_type = GAUSS2_PRIOR; n_required_params = 5; }
+		else { warn("prioration type not recognized"); return false; }
+		if (prior_params.size() != n_required_params) { warn("wrong number of prioration parameters passed into set_param_prior method"); return false; }
+
+		if (prior_type==UNIFORM_PRIOR) priors[param_num]->set_uniform();
+		else if (prior_type==LOG_PRIOR) priors[param_num]->set_log();
+		else if (prior_type==GAUSS_PRIOR) priors[param_num]->set_gaussian(prior_params[0],prior_params[1]);
+		else if (prior_type==GAUSS2_PRIOR) {
+			priors[param_num]->set_gauss2(param_num,param_num2,prior_params[0],prior_params[1],prior_params[2],prior_params[3],prior_params[4]);
+			priors[param_num2]->set_gauss2_secondary(param_num,param_num2);
+		}
+		set_prior_norm(param_num);
+		return true;
+	}
+	bool set_param_transform(const int param_num, const string transform_type_string, const vector<double> &transform_params, const int param_num2 = -1)
+	{
+		int n_required_params = -1;
+		Transform transform_type;
+		if (transform_type_string=="none") { transform_type = NONE; n_required_params = 0; }
+		else if (transform_type_string=="log") { transform_type = LOG_TRANSFORM; n_required_params = 0; }
+		else if (transform_type_string=="ratio")
+		{
+			transform_type = RATIO;
+			n_required_params = 0;
+			if ((param_num2 < 0) or (param_num2 >= nparams)) {
+				warn("invalid ratio_paramnum");
+				return false;
+			}
+		}
+		else if (transform_type_string=="gaussian") { transform_type = GAUSS_TRANSFORM; n_required_params = 2; }
+		else if (transform_type_string=="linear") { transform_type = LINEAR_TRANSFORM; n_required_params = 2; }
+		else { warn("transformation type not recognized"); return false; }
+		if (transform_params.size() != n_required_params) { warn("wrong number of transformation parameters passed into set_param_transform method"); return false; }
+
+		if (transform_type==NONE) transforms[param_num]->set_none();
+		else if (transform_type==LOG_TRANSFORM) transforms[param_num]->set_log();
+		else if (transform_type==RATIO) transforms[param_num]->set_ratio(param_num2);
+		else if (transform_type==GAUSS_TRANSFORM) transforms[param_num]->set_gaussian(transform_params[0],transform_params[1]);
+		else if (transform_type==LINEAR_TRANSFORM) transforms[param_num]->set_linear(transform_params[0],transform_params[1]);
+		transform_parameter_name(param_num);
+		transform_parameter(param_num);
+		transform_stepsize(param_num);
+		transform_prior_limit(param_num);
+		set_prior_norm(param_num);
+		return true;
+	}
+	void transform_parameters(const int pi = 0, int pf = -1)
+	{
+		if (pf==-1) pf = nparams;
+		for (int i=pi; i < pf; i++) {
+			if (transforms[i]->transform==NONE) values[i] = untransformed_values[i];
+			else if (transforms[i]->transform==LOG_TRANSFORM) values[i] = log(untransformed_values[i])/M_LN10;
 			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				lower[i] = erff((lower[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
-				upper[i] = erff((upper[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
+				values[i] = erff((untransformed_values[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
 			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				lower[i] = transforms[i]->a * lower[i] + transforms[i]->b;
-				upper[i] = transforms[i]->a * upper[i] + transforms[i]->b;
-				if (lower[i] > upper[i]) {
-					double temp = lower[i]; lower[i] = upper[i]; upper[i] = temp;
+				values[i] = transforms[i]->a * untransformed_values[i] + transforms[i]->b;
+			} else if (transforms[i]->transform==RATIO) {
+				values[i] = untransformed_values[i]/untransformed_values[transforms[i]->ratio_paramnum];
+			}
+		}
+	}
+	void transform_parameter(const int paramnum)
+	{
+		transform_parameters(paramnum,paramnum+1);
+	}
+	void transform_prior_limits(const int pi = 0, int pf = -1)
+	{
+		if (pf==-1) pf = nparams;
+		for (int i=pi; i < pf; i++) {
+			if (transforms[i]->transform==NONE) {
+				prior_limits_lo[i] = untransformed_prior_limits_lo[i];
+				prior_limits_hi[i] = untransformed_prior_limits_hi[i];
+			} else if (transforms[i]->transform==LOG_TRANSFORM) {
+				prior_limits_lo[i] = log(untransformed_prior_limits_lo[i])/M_LN10;
+				prior_limits_hi[i] = log(untransformed_prior_limits_hi[i])/M_LN10;
+			} else if (transforms[i]->transform==GAUSS_TRANSFORM) {
+				prior_limits_lo[i] = erff((untransformed_prior_limits_lo[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
+				prior_limits_hi[i] = erff((untransformed_prior_limits_hi[i] - transforms[i]->gaussian_pos)/(M_SQRT2*transforms[i]->gaussian_sig));
+			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
+				prior_limits_lo[i] = transforms[i]->a * untransformed_prior_limits_lo[i] + transforms[i]->b;
+				prior_limits_hi[i] = transforms[i]->a * untransformed_prior_limits_hi[i] + transforms[i]->b;
+				if (prior_limits_lo[i] > prior_limits_hi[i]) {
+					double temp = prior_limits_lo[i]; prior_limits_lo[i] = prior_limits_hi[i]; prior_limits_hi[i] = temp;
 				}
 			} else if (transforms[i]->transform==RATIO) {
-				lower[i] = 0; // these can be manually adjusted using 'fit priors range ...'
-				upper[i] = 1; // these can be customized
+				prior_limits_lo[i] = 0; // these can be manually adjusted using 'fit priors range ...'
+				prior_limits_hi[i] = 1; // these can be customized
 			}
 		}
 	}
-	void set_override_prior_limit(const int i, const double lo, const double hi)
+	void inverse_transform_prior_limits(const int pi = 0, int pf = -1)
 	{
-		if (i >= nparams) die("parameter chosen for prior limit is greater than total number of parameters (%i vs %i)",i,nparams);
-		override_prior_limits[i] = true;
-		override_limits_lo[i] = lo;
-		override_limits_hi[i] = hi;
-	}
-	void override_limits(double *lower, double *upper)
-	{
-		for (int i=0; i < nparams; i++) {
-			if (override_prior_limits[i]) {
-				lower[i] = override_limits_lo[i];
-				upper[i] = override_limits_hi[i];
-			}
-		}
-	}
-	void inverse_transform_parameters(double *params, double *transformed_params)
-	{
+		if (pf==-1) pf = nparams;
 		bool apply_ratio_transform_afterwards = false;
-		for (int i=0; i < nparams; i++) {
-			if (transforms[i]->transform==NONE) transformed_params[i] = params[i];
-			else if (transforms[i]->transform==LOG_TRANSFORM) transformed_params[i] = pow(10.0,params[i]);
-			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				transformed_params[i] = transforms[i]->gaussian_pos + M_SQRT2*transforms[i]->gaussian_sig*erfinv(params[i]);
+		for (int i=pi; i < pf; i++) {
+			if (transforms[i]->transform==NONE) {
+				untransformed_prior_limits_lo[i] = prior_limits_lo[i];
+				untransformed_prior_limits_hi[i] = prior_limits_hi[i];
+			} else if (transforms[i]->transform==LOG_TRANSFORM) {
+				untransformed_prior_limits_lo[i] = pow(10.0,prior_limits_lo[i]);
+				untransformed_prior_limits_hi[i] = pow(10.0,prior_limits_hi[i]);
+			} else if (transforms[i]->transform==GAUSS_TRANSFORM) {
+				untransformed_prior_limits_lo[i] = transforms[i]->gaussian_pos + M_SQRT2*transforms[i]->gaussian_sig*erfinv(prior_limits_lo[i]);
+				untransformed_prior_limits_hi[i] = transforms[i]->gaussian_pos + M_SQRT2*transforms[i]->gaussian_sig*erfinv(prior_limits_hi[i]);
 			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				transformed_params[i] = (params[i] - transforms[i]->b) / transforms[i]->a;
+				untransformed_prior_limits_lo[i] = (prior_limits_lo[i] - transforms[i]->b) / transforms[i]->a;
+				untransformed_prior_limits_hi[i] = (prior_limits_hi[i] - transforms[i]->b) / transforms[i]->a;
+			} else if (transforms[i]->transform==RATIO) {
+				untransformed_prior_limits_lo[i] = prior_limits_lo[i]*untransformed_prior_limits_lo[transforms[i]->ratio_paramnum];
+				untransformed_prior_limits_hi[i] = prior_limits_hi[i]*untransformed_prior_limits_hi[transforms[i]->ratio_paramnum];
+			}
+		}
+	}
+	void transform_prior_limit(const int paramnum)
+	{
+		transform_prior_limits(paramnum,paramnum+1);
+	}
+	void inverse_transform_prior_limit(const int paramnum)
+	{
+		inverse_transform_prior_limits(paramnum,paramnum+1);
+	}
+	void inverse_transform_parameters(double *params, double *inverse_transformed_params, const int pi = 0, int pf = -1)
+	{
+		if (pf==-1) pf = nparams;
+		bool apply_ratio_transform_afterwards = false;
+		for (int i=pi; i < pf; i++) {
+			if (transforms[i]->transform==NONE) inverse_transformed_params[i] = params[i];
+			else if (transforms[i]->transform==LOG_TRANSFORM) inverse_transformed_params[i] = pow(10.0,params[i]);
+			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
+				inverse_transformed_params[i] = transforms[i]->gaussian_pos + M_SQRT2*transforms[i]->gaussian_sig*erfinv(params[i]);
+			} else if (transforms[i]->transform==LINEAR_TRANSFORM) {
+				inverse_transformed_params[i] = (params[i] - transforms[i]->b) / transforms[i]->a;
 			} else if (transforms[i]->transform==RATIO) {
 				if (transforms[i]->ratio_paramnum < i) {
-					transformed_params[i] = params[i]*transformed_params[transforms[i]->ratio_paramnum];
+					inverse_transformed_params[i] = params[i]*inverse_transformed_params[transforms[i]->ratio_paramnum];
 				} else apply_ratio_transform_afterwards = true;
 			}
 		}
 		if (apply_ratio_transform_afterwards) {
-			for (int i=0; i < nparams; i++) {
-				if (transforms[i]->transform==RATIO) transformed_params[i] = params[i]*transformed_params[transforms[i]->ratio_paramnum];
+			for (int i=pi; i < pf; i++) {
+				if (transforms[i]->transform==RATIO) inverse_transformed_params[i] = params[i]*inverse_transformed_params[transforms[i]->ratio_paramnum];
 			}
 		}
+	}
+	void inverse_transform_parameters(const int pi = 0, int pf = -1)
+	{
+		if (pf==-1) pf = nparams;
+		inverse_transform_parameters(values,untransformed_values,pi,pf);
+	}
+	void inverse_transform_parameter(const int paramnum)
+	{
+		inverse_transform_parameters(values,untransformed_values,paramnum,paramnum+1);
 	}
 	void inverse_transform_parameters(double *params)
 	{
 		inverse_transform_parameters(params,params);
 	}
-	void transform_parameter_names(string *names, string *transformed_names, string *latex_names, string *transformed_latex_names)
+	void transform_parameter_names(const int pi = 0, int pf = -1)
 	{
-		for (int i=0; i < nparams; i++) {
+		if (pf==-1) pf = nparams;
+		for (int i=pi; i < pf; i++) {
 			if (transforms[i]->transform==NONE) {
-				transformed_names[i] = names[i];
-				if (latex_names != NULL) transformed_latex_names[i] = latex_names[i];
+				param_names[i] = untransformed_param_names[i];
+				if (untransformed_latex_names != NULL) latex_names[i] = untransformed_latex_names[i];
 			}
 			else if (transforms[i]->transform==LOG_TRANSFORM) {
-				transformed_names[i] = "log(" + names[i] + ")";
-				if (latex_names != NULL) transformed_latex_names[i] = "\\log(" + latex_names[i] + ")";
+				param_names[i] = "log(" + untransformed_param_names[i] + ")";
+				if (untransformed_latex_names != NULL) latex_names[i] = "\\log(" + untransformed_latex_names[i] + ")";
 			}
 			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				transformed_names[i] = "u{" + names[i] + "}";
-				if (latex_names != NULL) transformed_latex_names[i] = "u\\{" + latex_names[i] + "\\}";
+				param_names[i] = "u{" + untransformed_param_names[i] + "}";
+				if (untransformed_latex_names != NULL) latex_names[i] = "u\\{" + untransformed_latex_names[i] + "\\}";
 			}
 			else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				transformed_names[i] = "L{" + names[i] + "}";
-				if (latex_names != NULL) transformed_latex_names[i] = "L\\{" + latex_names[i] + "\\}";
+				param_names[i] = "L{" + untransformed_param_names[i] + "}";
+				if (untransformed_latex_names != NULL) latex_names[i] = "L\\{" + untransformed_latex_names[i] + "\\}";
 			}
 			else if (transforms[i]->transform==RATIO) {
-				transformed_names[i] = names[i] + "_over_" + names[transforms[i]->ratio_paramnum];
-				if (latex_names != NULL) transformed_latex_names[i] = latex_names[i] + "/" + latex_names[transforms[i]->ratio_paramnum];
+				param_names[i] = untransformed_param_names[i] + "_over_" + untransformed_param_names[transforms[i]->ratio_paramnum];
+				if (untransformed_latex_names != NULL) latex_names[i] = untransformed_latex_names[i] + "/" + untransformed_latex_names[transforms[i]->ratio_paramnum];
 			}
 		}
-		override_parameter_names(transformed_names); // allows for manually setting parameter names
+		override_parameter_names(); // allows for manually setting parameter untransformed_param_names
+	}
+	void transform_parameter_name(const int paramnum)
+	{
+		transform_parameter_names(paramnum,paramnum+1);
 	}
 	bool set_override_parameter_name(const int i, const string name)
 	{
 		bool unique_name = true;
 		for (int j=0; j < nparams; j++) {
-			if ((i != j) and (((override_names[j] != "") and (override_names[j]==name)) or (param_names[j]==name))) unique_name = false;
+			if ((i != j) and (((override_names[j] != "") and (override_names[j]==name)) or (untransformed_param_names[j]==name))) unique_name = false;
 		}
 		if (!unique_name) return false;
 		override_names[i] = name;
+		param_names[i] = name;
 		return true;
 	}
-	void override_parameter_names(string* names)
+	void override_parameter_names()
 	{
 		for (int i=0; i < nparams; i++) {
-			if (override_names[i] != "") names[i] = override_names[i];
+			if (override_names[i] != "") param_names[i] = override_names[i];
 		}
 	}
-	void transform_stepsizes()
+	void transform_stepsize(const int i)
 	{
 		// It would be better to have it pass in the current value of the parameters, then use the default
 		// (untransformed) stepsize to define the transformed stepsize. For example, the log stepsize would
 		// be log((pi+step)/pi). But passing in the parameter values is a bit of a pain...do this later
-		for (int i=0; i < nparams; i++) {
-			if (auto_stepsize[i]) {
-				if (transforms[i]->transform==LOG_TRANSFORM) {
-					stepsizes[i] = 0.5; // default for a log transform
-				}
-				else if (transforms[i]->transform==GAUSS_TRANSFORM) {
-				}
-				else if (transforms[i]->transform==LINEAR_TRANSFORM) {
-				}
-				else if (transforms[i]->transform==RATIO) {
-					stepsizes[i] = 0.5; // default for a ratio
-				}
+		if (auto_stepsize[i]) {
+			if (transforms[i]->transform==LOG_TRANSFORM) {
+				stepsizes[i] = 0.5; // default for a log transform
+			}
+			else if (transforms[i]->transform==GAUSS_TRANSFORM) {
+			}
+			else if (transforms[i]->transform==LINEAR_TRANSFORM) {
+			}
+			else if (transforms[i]->transform==RATIO) {
+				stepsizes[i] = 0.5; // default for a ratio
 			}
 		}
+	}
+	void transform_stepsizes()
+	{
+		for (int i=0; i < nparams; i++) transform_stepsize(i);
 	}
 	void add_prior_terms_to_loglike(double *params, double& loglike)
 	{
@@ -902,19 +1157,24 @@ struct ParamSettings
 			}
 		}
 	}
-	void set_prior_norms(double *lower_limit, double* upper_limit)
+	void set_prior_norms(const int pi = 0, int pf = -1)
 	{
 		// flat priors are automatically given a norm of 1.0, since we'll be transforming to the unit hypercube when doing nested sampling;
 		// however a correction is required for other priors
-		for (int i=0; i < nparams; i++) {
+		if (pf==-1) pf = nparams;
+		for (int i=pi; i < pf; i++) {
 			if (priors[i]->prior!=UNIFORM_PRIOR) {
-				if (priors[i]->prior==LOG_PRIOR) prior_norms[i] = log(upper_limit[i]/lower_limit[i]);
+				if (priors[i]->prior==LOG_PRIOR) prior_norms[i] = log(prior_limits_hi[i]/prior_limits_lo[i]);
 				else if (priors[i]->prior==GAUSS_PRIOR) {
-					prior_norms[i] = (erff((upper_limit[i] - priors[i]->gaussian_pos)/(M_SQRT2*priors[i]->gaussian_sig)) - erff((lower_limit[i] - priors[i]->gaussian_pos)/(M_SQRT2*priors[i]->gaussian_sig))) * M_SQRT_HALFPI * priors[i]->gaussian_sig;
+					prior_norms[i] = (erff((prior_limits_hi[i] - priors[i]->gaussian_pos)/(M_SQRT2*priors[i]->gaussian_sig)) - erff((prior_limits_lo[i] - priors[i]->gaussian_pos)/(M_SQRT2*priors[i]->gaussian_sig))) * M_SQRT_HALFPI * priors[i]->gaussian_sig;
 				}
-				prior_norms[i] /= (upper_limit[i] - lower_limit[i]); // correction since we are transforming to the unit hypercube
+				prior_norms[i] /= (prior_limits_hi[i] - prior_limits_lo[i]); // correction since we are transforming to the unit hypercube
 			}
 		}
+	}
+	void set_prior_norm(const int paramnum)
+	{
+		set_prior_norms(paramnum,paramnum+1);
 	}
 	void add_jacobian_terms_to_loglike(double *params, double& loglike)
 	{
@@ -929,63 +1189,94 @@ struct ParamSettings
 	void clear_params()
 	{
 		if (nparams > 0) {
-			delete[] param_names;
-			delete[] override_names;
-			for (int i=0; i < nparams; i++) {
-				delete priors[i];
-				delete transforms[i];
-			}
-			delete[] priors;
-			delete[] transforms;
-			delete[] stepsizes;
-			delete[] auto_stepsize;
-			delete[] subplot_param;
-			delete[] hist2d_param;
-			delete[] prior_norms;
-			delete[] penalty_limits_lo;
-			delete[] penalty_limits_hi;
-			delete[] use_penalty_limits;
-			delete[] override_limits_lo;
-			delete[] override_limits_hi;
-			delete[] override_prior_limits;
-
+			delete_param_ptrs();
+			set_null_param_ptrs();
 		}
-		priors = NULL;
-		param_names = NULL;
-		override_names = NULL;
-		transforms = NULL;
 		nparams = 0;
-		stepsizes = NULL;
-		auto_stepsize = NULL;
-		subplot_param = NULL;
 	}
-	~ParamSettings()
-	{
+	void delete_param_ptrs() {
 		if (nparams > 0) {
-			delete[] param_names;
-			delete[] override_names;
+			delete[] untransformed_values;
+			delete[] values;
 			for (int i=0; i < nparams; i++) {
 				delete priors[i];
 				delete transforms[i];
 			}
 			delete[] priors;
 			delete[] transforms;
+			delete[] untransformed_param_names;
+			delete[] param_names;
+			delete[] untransformed_latex_names;
+			delete[] latex_names;
+			delete[] override_names;
 			delete[] stepsizes;
 			delete[] auto_stepsize;
 			delete[] subplot_param;
 			delete[] hist2d_param;
 			delete[] prior_norms;
-			delete[] penalty_limits_lo;
-			delete[] penalty_limits_hi;
-			delete[] use_penalty_limits;
-			delete[] override_limits_lo;
-			delete[] override_limits_hi;
-			delete[] override_prior_limits;
+			delete[] untransformed_prior_limits_lo;
+			delete[] untransformed_prior_limits_hi;
+			delete[] defined_prior_limits;
+			delete[] prior_limits_lo;
+			delete[] prior_limits_hi;
+			//delete[] override_prior_limits;
 		}
+
+	}
+	void delete_dparam_ptrs(const bool include_dparam_objects = true) {
 		if (n_dparams > 0) {
+			if (include_dparam_objects) {
+				// delete the actual derived parameter objects, and not just the arrays that point to them
+				for (int i=0; i < n_dparams; i++) delete dparams[i];
+			}
+			delete[] dparams;
 			delete[] dparam_names;
+			delete[] hist2d_dparam;
 			delete[] subplot_dparam;
 		}
+	}
+	void set_null_param_ptrs()
+	{
+		priors = NULL;
+		transforms = NULL;
+		untransformed_param_names = NULL;
+		param_names = NULL;
+		untransformed_latex_names = NULL;
+		latex_names = NULL;
+		override_names = NULL;
+		untransformed_values = NULL;
+		values = NULL;
+		stepsizes = NULL;
+		auto_stepsize = NULL;
+		hist2d_param = NULL;
+		subplot_param = NULL;
+		prior_norms = NULL;
+		untransformed_prior_limits_lo = NULL;
+		untransformed_prior_limits_hi = NULL;
+		defined_prior_limits = NULL;
+		prior_limits_lo = NULL;
+		prior_limits_hi = NULL;
+		//override_prior_limits = NULL;
+	}
+	void set_null_dparam_ptrs()
+	{
+		dparams = NULL;
+		dparam_names = NULL;
+		hist2d_dparam = NULL;
+		subplot_dparam = NULL;
+	}
+	void set_null_ptrs_and_values()
+	{
+		nparams = 0;
+		n_dparams = 0;
+		qlens = NULL;
+		set_null_param_ptrs();
+		set_null_dparam_ptrs();
+	}
+	~ParamList()
+	{
+		delete_param_ptrs();
+		delete_dparam_ptrs();
 	}
 };
 

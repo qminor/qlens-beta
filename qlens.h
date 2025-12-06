@@ -83,7 +83,7 @@ enum DerivedParamType {
 
 class QLens;			// Defined after class Grid
 class ModelParams;
-class SourcePixelGrid;
+class CartesianSourceGrid;
 class LensPixelGrid;
 class DelaunaySourceGrid;
 class ImagePixelGrid;
@@ -92,7 +92,7 @@ class PSF;
 struct ImageData;
 struct WeakLensingData;
 struct ImagePixelData;
-struct ParamSettings;
+struct ParamList;
 struct DerivedParam;
 
 struct image {
@@ -127,8 +127,10 @@ class PointSource : public ModelParams
 	friend class SB_Profile;
 	QLens *lens;
 
+	private:
+	int zsrc_paramnum; // just to keep track of which parameter number is zsrc (set when constructor is called)
+
 	public:
-	int ptsrc_number; // stores index in point source list
 	lensvector pos;
 	lensvector shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
 	double zsrc, srcflux;
@@ -145,6 +147,10 @@ class PointSource : public ModelParams
 	}
 	void setup_parameters(const bool initial_setup);
 	void update_meta_parameters(const bool varied_only_fitparams);
+	void get_parameter_numbers_from_qlens(int& pi, int& pf);
+	bool register_vary_parameters_in_qlens();
+	void register_limits_in_qlens();
+	void update_fitparams_in_qlens();
 	void set_vary_source_coords();
 	void copy_ptsrc_data(PointSource* ptsrc_in);
 	void copy_imageset(const lensvector& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0);
@@ -349,7 +355,7 @@ void polychord_dumper(int ndead,int nlive,int npars,double* live,double* dead,do
 void multinest_loglikelihood(double *Cube, int &ndim, int &npars, double &lnew, void *context);
 void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, double **posterior, double **paramConstr, double &maxLogLike, double &logZ, double &INSlogZ, double &logZerr, void *context);
 
-// There is too much inheritance going on here. Nearly all of these can be changed to simply objects that are created within the QLens
+// There is too much inheritance going on here. Nearly all of these (except ModelParams) can be changed to simply objects that are created within the QLens
 // class; it's more transparent to do so, and more object-oriented.
 class QLens : public ModelParams, public UCMC, private Brent, private Sort, private Powell, private Simplex
 {
@@ -411,7 +417,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double high_sn_frac;
 	bool use_custom_prior;
 	bool lens_position_gaussian_transformation;
-	ParamSettings *param_settings;
+	ParamList *param_list;
 
 	int nlens;
 	LensProfile** lens_list;
@@ -420,6 +426,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	int n_sb;
 	SB_Profile** sb_list;
+	std::vector<SB_Profile*> sb_list_vec;
 	int* sbprofile_redshift_idx;
 	int* sbprofile_band_number;
 	int* sbprofile_imggrid_idx;
@@ -428,8 +435,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int* pixellated_src_redshift_idx;
 	int* pixellated_src_band;
 	ModelParams **srcgrids; // this is the base class for Delaunay and cartesian source grids
+	std::vector<ModelParams*> pixsrc_list_vec;
 	DelaunaySourceGrid **delaunay_srcgrids;
-	SourcePixelGrid **cartesian_srcgrids;
+	CartesianSourceGrid **cartesian_srcgrids;
 
 	int n_pixellated_lens;
 	int* pixellated_lens_redshift_idx;
@@ -442,9 +450,6 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	PointSource **ptsrc_list;
 	int* ptsrc_redshift_idx;
 	std::vector<int> ptsrc_redshift_groups;
-
-	int n_derived_params;
-	DerivedParam** dparam_list;
 
 	lensvector source;
 	image *images_found;
@@ -499,16 +504,14 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	QLens *fitmodel;
 	QLens *lens_parent;
-	dvector fitparams, upper_limits, lower_limits, upper_limits_initial, lower_limits_initial, bestfitparams;
+	dvector bestfitparams;
 	dmatrix bestfit_fisher_inverse;
 	dmatrix fisher_inverse;
 	double bestfit_flux;
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
 	bool use_ansi_characters;
-	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, pixlens_fit_parameters, ptsrc_fit_parameters, psf_fit_parameters, cosmo_fit_parameters, n_fit_parameters;
-	std::vector<string> fit_parameter_names, transformed_parameter_names;
-	std::vector<string> latex_parameter_names, transformed_latex_parameter_names;
+	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, pixlens_fit_parameters, ptsrc_fit_parameters, psf_fit_parameters, cosmo_fit_parameters;
 
 	double *regparam_ptr; // points to regularization parameter for given source pixel grid or shapelet object
 	double *regparam_pot_ptr; // points to regularization parameter for potential of given lens pixel grid
@@ -1040,13 +1043,15 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool show_wtime;
 
 	friend class Grid;
-	friend class SourcePixelGrid;
+	friend class CartesianSourceGrid;
 	friend class ImagePixelGrid;
 	friend struct ImagePixelData;
 	friend struct DerivedParam;
 	friend class LensProfile;
 	friend class SB_Profile;
 	friend class MGE;
+	friend class Cosmology;
+
 	QLens(Cosmology* cosmo_in = NULL);
 	QLens(QLens *lens_in);
 	void setup_parameters(const bool initial_setup); 
@@ -1179,12 +1184,19 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	// the remaining functions in this class are all contained in lens.cpp
 	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
+	void create_and_add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void add_shear_lens(const double zl, const double zs, const double shear, const double theta, const double xc, const double yc); // specific version for shear model
 	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode); // specific version for ptmass model
 	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
+	void add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
+	void add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
+	bool add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot);
+	bool add_qtabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot);
+	bool save_tabulated_lens_to_file(int lnum, const string tabfileroot);
+	void add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
 	bool spawn_lens_from_source_object(const int src_number, const double zl, const double zs, const int pmode, const bool vary_mass_parameter, const bool include_limits, const double mass_param_lower, const double mass_param_upper);
 
-	void add_lens(LensProfile *new_lens, const double zl, const double zs);
+	void add_lens(LensProfile *new_lens);
 	void add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx);
 	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);
 	void update_lens_redshift_data();
@@ -1215,21 +1227,26 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	}
 	bool get_sci_notation() { return use_scientific_notation; }
 
-	void add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
-	void add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
-	bool add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot);
-	bool add_qtabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot);
-	bool save_tabulated_lens_to_file(int lnum, const string tabfileroot);
-	void add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
-
-	void create_and_add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
-	bool set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags);
 	bool register_lens_vary_parameters(const int lensnumber);
-	bool set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags);
-	bool set_pixellated_src_vary_parameters(const int src_number, boolvector &vary_flags);
+	void register_lens_prior_limits(const int lens_number);
+	void update_lens_fitparams(const int lens_number);
+
+	bool register_sb_vary_parameters(const int sbnumber);
+	void register_sb_prior_limits(const int sb_number);
+	void update_sb_fitparams(const int sb_number);
+
+	bool register_pixellated_src_vary_parameters(const int pixsrc_number);
+	void register_pixellated_src_prior_limits(const int pixsrc_number);
+	void update_pixellated_src_fitparams(const int pixsrc_number);
+
 	bool set_pixellated_lens_vary_parameters(const int pixlens_number, boolvector &vary_flags);
-	bool set_ptsrc_vary_parameters(const int src_number, boolvector &vary_flags);
+
+	bool register_ptsrc_vary_parameters(const int src_number);
+	void register_ptsrc_prior_limits(const int ptsrc_number);
+	void update_ptsrc_fitparams(const int ptsrc_number);
+
 	bool set_psf_vary_parameters(const int psf_number, boolvector &vary_flags);
+
 	bool update_pixellated_src_varyflag(const int src_number, const string name, const bool flag);
 	bool update_pixellated_lens_varyflag(const int pixlens_number, const string name, const bool flag);
 	bool update_ptsrc_varyflag(const int ptsrc_number, const string name, const bool flag);
@@ -1238,7 +1255,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool update_cosmo_varyflag(const string name, const bool flag);
 	bool update_misc_varyflag(const string name, const bool flag);
 
-	void update_parameter_list();
+	bool update_parameter_list(const bool check_current_params = false);
 	void update_anchored_parameters_and_redshift_data();
 	bool update_lens_centers_from_pixsrc_coords();
 
@@ -1253,14 +1270,15 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double mass3d_r(const double r_arcsec, const int lensnum, const bool use_kpc);
 	double calculate_average_log_slope(const int lensnum, const double rmin, const double rmax, const bool use_kpc);
 
-	void add_source_object(SB_ProfileName name, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1, const int pmode = 0);
-	void add_source_object(const char *splinefile, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
-	void add_multipole_source(const bool is_lensed, const int band_number, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
-	void add_shapelet_source(const bool is_lensed, const int band_number, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
-	void add_mge_source(const bool is_lensed, const int band_number, const double zsrc_in, const double reg, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode = 0);
+	void add_source(SB_Profile* new_src, const bool is_lensed);
+	void create_and_add_source_object(SB_ProfileName name, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1, const int pmode = 0);
+	void create_and_add_splined_source_object(const char *splinefile, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
+	void create_and_add_multipole_source(const bool is_lensed, const int band_number, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
+	void create_and_add_shapelet_source(const bool is_lensed, const int band_number, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
+	void create_and_add_mge_source(const bool is_lensed, const int band_number, const double zsrc_in, const double reg, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode = 0);
 
 
-	void remove_source_object(int sb_number);
+	void remove_source_object(int sb_number, const bool delete_src = true);
 	void clear_source_objects();
 	void print_source_list(bool show_vary_params);
 
@@ -1268,7 +1286,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void remove_model_band(const int band_number, const bool removing_pixellated_src);
 
 	void add_pixellated_source(const double zsrc, const int band_number = 0);
-	void remove_pixellated_source(int src_number);
+	void remove_pixellated_source(int src_number, const bool delete_pixsrc = true);
 	void print_pixellated_source_list(bool show_vary_params);
 	void find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& sigavg, double& xavg, double& yavg);
 
@@ -1287,11 +1305,11 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_image_pixel_data();
 	void remove_image_pixel_data(int band_number);
 
-	void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30, bool use_kpc = false);
-	void remove_derived_param(int dparam_number);
-	void rename_derived_param(int dparam_number, string newname, string new_latex_name);
-	void clear_derived_params();
-	void print_derived_param_list();
+	//void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30, bool use_kpc = false);
+	//void remove_derived_param(int dparam_number);
+	//void rename_derived_param(int dparam_number, string newname, string new_latex_name);
+	//void clear_derived_params();
+	//void print_derived_param_list();
 	void clear_raw_chisq() { raw_chisq = -1e30; if (fitmodel) fitmodel->raw_chisq = -1e30; }
 
 	bool create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index = -1); // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
@@ -1299,7 +1317,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void clear_lenses();
 	void clear();
 	void reset_grid();
-	void remove_lens(int lensnumber);
+	void remove_lens(int lensnumber, const bool delete_lens = true);
 	void toggle_major_axis_along_y(bool major_axis_along_y);
 	void toggle_major_axis_along_y_src(bool major_axis_along_y);
 	void create_output_directory();
@@ -1309,7 +1327,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	private:
 	bool temp_auto_store_cc_points, temp_include_time_delays;
-	void fit_set_optimizations();
+	bool fit_set_optimizations();
 	void fit_restore_defaults();
 	double zfac_re; // used by einstein_radius_root(...)
 
@@ -1340,10 +1358,10 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
 	double chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime, bool showdiag, bool show_status, bool show_lensinfo = false);
-	bool setup_fit_parameters(const bool ignore_limits = false);
-	bool setup_limits();
+	//bool setup_fit_parameters(const bool ignore_limits = false);
+	//bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
-	void get_all_parameter_names();
+	void get_all_parameter_names(vector<string>& fit_parameter_names, vector<string>& latex_parameter_names);
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
@@ -1354,9 +1372,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool get_misc_parameter_numbers(int& pi, int& pf);
 	bool lookup_parameter_value(const string pname, double& pval);
 	void create_parameter_value_string(string &pvals);
-	bool output_parameter_values();
-	bool output_parameter_prior_ranges();
-	bool update_parameter_value(const int param_num, const double param_val);
+	//bool output_parameter_values();
+	//bool output_parameter_prior_ranges();
 	void update_pixsrc_active_parameters(const int src_number);
 	void update_pixlens_active_parameters(const int pixlens_number);
 	void update_ptsrc_active_parameters(const int src_number);
@@ -1366,6 +1383,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void set_default_plimits();
 	bool initialize_fitmodel(const bool running_fit_in);
 	double update_model(const double* params);
+	void update_prior_limits(const double* lower, const double* upper, const bool* changed_limits);
 	double fitmodel_loglike_point_source(double* params);
 	double fitmodel_loglike_extended_source(double* params);
 	double fitmodel_custom_prior();
@@ -1375,7 +1393,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);
 	double get_lens_parameter_using_pmode(const int lensnum, const int paramnum, const int pmode = -1);
 	double loglike_point_source(double* params);
-	bool calculate_fisher_matrix(const dvector &params, const dvector &stepsizes);
+	bool calculate_fisher_matrix(double *params, const dvector &stepsizes);
 	double loglike_deriv(const dvector &params, const int index, const double step);
 	void output_bestfit_model();
 	bool adopt_model(dvector &fitparams);
@@ -1521,11 +1539,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 			for (int i=0; i < n_pixellated_src; i++) srcgrids[i]->set_include_limits(true);
 		}
 	}
-	void transform_cube(double* params, double* Cube) {
-		for (int i=0; i < n_fit_parameters; i++) {
-			params[i] = lower_limits[i] + Cube[i]*(upper_limits[i]-lower_limits[i]);
-		}
-	}
+	void transform_cube(double* params, double* Cube);
 	bool get_einstein_radius(int lens_number, double& re_major_axis, double& re_average);
 
 	/*

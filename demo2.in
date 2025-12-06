@@ -1,7 +1,7 @@
 # Deleting current lens configuration, if any:
 lens clear
 # We create our primary lens galaxy with an isothermal ellipsoid profile (axis ratio=0.7):
-lens alpha 10 1 5e-1 0.7 90
+lens sple 10 1 5e-1 0.7 90
 grid -18 18 -18 18
 #autogrid
 # Now we create a satellite galaxy with a PseudoJaffe profile (which is isothermal with

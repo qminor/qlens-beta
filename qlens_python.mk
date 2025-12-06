@@ -79,7 +79,7 @@ mumps:
 qlens.o: qlens.cpp qlens.h
 	$(CC) -c qlens.cpp
 
-commands.o: commands.cpp qlens.h lensvec.h profile.h
+commands.o: commands.cpp qlens.h lensvec.h profile.h sbprofile.h params.h pixelgrid.h delaunay.h modelparams.h 
 	$(CC_NO_OPT) -c commands.cpp
 
 params.o: params.cpp params.h 

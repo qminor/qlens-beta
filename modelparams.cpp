@@ -1,4 +1,6 @@
 #include "modelparams.h"
+#include "params.h"
+#include <sstream>
 
 using namespace std;
 
@@ -20,8 +22,6 @@ void ModelParams::setup_parameter_arrays(const int npar)
 	penalty_upper_limits.input(n_params);
 	lower_limits.input(n_params);
 	upper_limits.input(n_params);
-	lower_limits_initial.input(n_params);
-	upper_limits_initial.input(n_params);
 	if (param != NULL) delete[] param;
 	param = new double*[n_params];
 	n_vary_params = 0;
@@ -35,7 +35,7 @@ void ModelParams::setup_parameter_arrays(const int npar)
 	}
 }
 
-void ModelParams::copy_param_arrays(ModelParams* params_in)
+void ModelParams::copy_param_arrays(const ModelParams* params_in)
 {
 	// REMEMBER: you must still run setup_parameters() in the inherited class to initialize and assign the pointers before running this!
 	// note, we do not copy n_params, nor resize most of the vectors, because it is assumed that this has been setup already in setup_parameters()
@@ -52,8 +52,6 @@ void ModelParams::copy_param_arrays(ModelParams* params_in)
 	penalty_upper_limits.input(params_in->penalty_upper_limits);
 	lower_limits.input(params_in->lower_limits);
 	upper_limits.input(params_in->upper_limits);
-	lower_limits_initial.input(params_in->lower_limits_initial);
-	upper_limits_initial.input(params_in->upper_limits_initial);
 }
 
 void ModelParams::update_fit_parameters(const double* fitparams, int &index)
@@ -79,7 +77,14 @@ bool ModelParams::update_specific_parameter(const string name_in, const double& 
 			break;
 		}
 	}
+	update_fitparams_in_qlens();
 	return found_match;
+}
+
+void ModelParams::update_fitparams_in_qlens()
+{
+	// this is a virtual function that must be defined for each inherited class
+	return;
 }
 
 void ModelParams::get_parameter_number(const string name_in, int& paramnum)
@@ -104,13 +109,13 @@ void ModelParams::get_parameter_vary_index(const string name_in, int& index)
 	}
 }
 
-
-
 bool ModelParams::set_varyflags(const boolvector& vary_in)
 {
 	if (vary_in.size() != n_active_params) {
 		return false;
 	}
+	int pi, pf;
+	get_parameter_numbers_from_qlens(pi,pf); // these are the old parameter numbers
 
 	int i,j;
 	n_vary_params = 0;
@@ -121,6 +126,22 @@ bool ModelParams::set_varyflags(const boolvector& vary_in)
 			j++;
 		}
 	}
+	if (qlens) {
+		if (pf > pi) qlens->param_list->remove_params(pi,pf); // eliminate any old fit parameters so they can be replaced with the new ones
+		return register_vary_parameters_in_qlens();
+	}
+	return true;
+}
+
+void ModelParams::get_parameter_numbers_from_qlens(int& pi, int& pf)
+{
+	// this is a virtual function that must be defined for each inherited class
+	return;
+}
+
+bool ModelParams::register_vary_parameters_in_qlens()
+{
+	// this is a virtual function that must be defined for each inherited class
 	return true;
 }
 
@@ -146,7 +167,7 @@ bool ModelParams::update_specific_varyflag(const string name_in, const bool& var
 	return (param_i != -1);
 }
 
-void ModelParams::set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init)
+void ModelParams::set_limits(const dvector& lower, const dvector& upper)
 {
 	if (lower.size() != n_vary_params) die("lower limits array does not match number of variable parameters in source object (%i vs %i)",lower.size(),n_vary_params);
 	include_limits = true;
@@ -156,9 +177,20 @@ void ModelParams::set_limits(const dvector& lower, const dvector& upper, const d
 		if ((active_params[i]) and (vary_params[i])) {
 			lower_limits[i] = lower[j];
 			upper_limits[i] = upper[j];
-			lower_limits_initial[i] = lower_init[j];
-			upper_limits_initial[i] = upper_init[j];
 			j++;
+		}
+	}
+	register_limits_in_qlens();
+}
+
+void ModelParams::update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index)
+{
+	// in this case, the limits are being updated from the fitparams list, so there is no need to call register_lens_prior_limits
+	for (int i=0; i < n_params; i++) {
+		if ((active_params[i]) and (vary_params[i])) {
+			lower_limits[i] = lower[index];
+			upper_limits[i] = upper[index];
+			index++;
 		}
 	}
 }
@@ -178,13 +210,18 @@ bool ModelParams::set_limits_specific_parameter(const string name_in, const doub
 		if (!include_limits) include_limits = true;
 		lower_limits[param_i] = lower;
 		upper_limits[param_i] = upper;
-		lower_limits_initial[param_i] = lower;
-		upper_limits_initial[param_i] = upper;
 	}
+	register_limits_in_qlens();
 	return (param_i != -1);
 }
 
-void ModelParams::get_fit_parameters(dvector& fitparams, int &index)
+void ModelParams::register_limits_in_qlens()
+{
+	// this is a virtual function that must be defined for each inherited class
+	return;
+}
+
+void ModelParams::get_fit_parameters(double *fitparams, int &index)
 {
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]==true) {
@@ -235,27 +272,29 @@ void ModelParams::get_fit_parameter_names(vector<string>& paramnames_vary, vecto
 	}
 }
 
-bool ModelParams::get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index)
-{
-	if (include_limits==false) return false;
-	for (int i=0; i < n_params; i++) {
-		if ((active_params[i]) and (vary_params[i])) {
-			lower[index] = lower_limits[i];
-			upper[index] = upper_limits[i];
-			lower0[index] = lower_limits_initial[i];
-			upper0[index] = upper_limits_initial[i];
-			index++;
-		}
-	}
-	return true;
-}
-
 bool ModelParams::get_specific_parameter(const string name_in, double& value)
 {
 	bool found_match = false;
 	for (int i=0; i < n_params; i++) {
 		if ((active_params[i]) and (paramnames[i]==name_in)) {
 			value = *(param[i]);
+			found_match = true;
+			break;
+		}
+	}
+	return found_match;
+}
+
+bool ModelParams::get_specific_stepsize(const string name_in, double& step)
+{
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if ((active_params[i]) and (paramnames[i]==name_in)) {
+			if (scale_stepsize_by_param_value[i]) {
+				step = stepsizes[i]*(*(param[i]));
+			} else {
+				step = stepsizes[i];
+			}
 			found_match = true;
 			break;
 		}
@@ -276,6 +315,21 @@ bool ModelParams::get_specific_varyflag(const string name_in, bool& flag)
 	return found_match;
 }
 
+bool ModelParams::get_specific_limit(const string name_in, double& lower, double& upper)
+{
+	if (include_limits==false) return false;
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if ((active_params[i]) and (vary_params[i]) and (paramnames[i]==name_in)) {
+			lower = lower_limits[i];
+			upper = upper_limits[i];
+			found_match = true;
+			break;
+		}
+	}
+	return found_match;
+}
+
 void ModelParams::get_varyflags(boolvector& flags)
 {
 	flags.input(n_vary_params);
@@ -285,6 +339,20 @@ void ModelParams::get_varyflags(boolvector& flags)
 			flags[index++] = vary_params[i];
 		}
 	}
+}
+
+bool ModelParams::get_limits(dvector& lower, dvector& upper)
+{
+	int index = 0;
+	if (include_limits==false) return false;
+	for (int i=0; i < n_params; i++) {
+		if ((active_params[i]) and (vary_params[i])) {
+			lower[index] = lower_limits[i];
+			upper[index] = upper_limits[i];
+			index++;
+		}
+	}
+	return true;
 }
 
 bool ModelParams::get_limits(dvector& lower, dvector& upper, int &index)
@@ -308,16 +376,58 @@ void ModelParams::print_parameters(const bool show_only_varying_params)
 		for (int i=0; i < n_params; i++) {
 			if (active_params[i]) {
 				if ((!show_only_varying_params) or (vary_params[i])) {
-				cout << paramnames[i] << "=";
-				cout << *(param[i]);
-				if (j != n_active_params-1) cout << ", ";
-				j++;
+					cout << paramnames[i] << "=";
+					cout << *(param[i]);
+					if (j != n_active_params-1) cout << ", ";
+					j++;
 				}
 			}
 		}
 	}
 	cout << endl;
 }
+
+string ModelParams::mkstring_int(const int i)
+{
+	stringstream istr;
+	string istring;
+	istr << i;
+	istr >> istring;
+	return istring;
+}
+
+string ModelParams::mkstring_doub(const double db)
+{
+	stringstream dstr;
+	string dstring;
+	dstr << db;
+	dstr >> dstring;
+	return dstring;
+}
+
+// This function is used by the Python wrapper
+string ModelParams::get_parameters_string()
+{
+	string paramstring = "";
+	if (entry_number >= 0) paramstring += mkstring_int(entry_number) + ". ";
+	if (model_name != "") paramstring += model_name + ": ";
+	if (n_active_params == 0) paramstring += "no active parameters";
+	else {
+		int j=0;
+		for (int i=0; i < n_params; i++) {
+			if (active_params[i]) {
+				paramstring += paramnames[i] + "=";
+				paramstring += mkstring_doub(*(param[i]));
+				if (j != n_active_params-1) paramstring += ", ";
+				j++;
+			}
+		}
+	}
+
+	return paramstring;
+}
+
+
 
 void ModelParams::print_vary_parameters()
 {
@@ -327,20 +437,15 @@ void ModelParams::print_vary_parameters()
 		vector<string> paramnames_vary;
 		get_fit_parameter_names(paramnames_vary);
 		if (include_limits) {
-			dvector lower_lims0(n_vary_params);
-			dvector upper_lims0(n_vary_params);
 			dvector lower_lims(n_vary_params);
 			dvector upper_lims(n_vary_params);
 			int indx=0;
-			bool status = get_limits(lower_lims,upper_lims,lower_lims0,upper_lims0,indx);
+			bool status = get_limits(lower_lims,upper_lims,indx);
 			if (!status) cout << "   Warning: parameter limits not defined\n";
 			else {
 				cout << "   parameter limits:\n";
 				for (int i=0; i < n_vary_params; i++) {
-					if ((lower_lims0[i]==lower_lims[i]) and (upper_lims0[i]==upper_lims[i]))
-						cout << "   " << paramnames_vary[i] << ": [" << lower_lims[i] << ":" << upper_lims[i] << "]\n";
-					else
-						cout << "   " << paramnames_vary[i] << ": [" << lower_lims[i] << ":" << upper_lims[i] << "], initial range: [" << lower_lims0[i] << ":" << upper_lims0[i] << "]\n";
+					cout << "   " << paramnames_vary[i] << ": [" << lower_lims[i] << ":" << upper_lims[i] << "]\n";
 				}
 			}
 		} else {

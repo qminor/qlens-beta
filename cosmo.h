@@ -17,6 +17,8 @@
 #include "brent.h"
 #include "mathexpr.h"
 
+class QLens;
+
 struct CosmologyParams
 {
 	double hubble;
@@ -52,6 +54,7 @@ class Cosmology : public ModelParams, public Spline, public Romberg, public Bren
 	double A_s; // dimensionless curvature power spectrum at the pivot scale
 	double ns, running;
 	double zroot;
+	QLens* qlens;
 
 	double k_pivot; // CMB pivot scale
 	static const double default_omega_baryon;
@@ -78,7 +81,7 @@ class Cosmology : public ModelParams, public Spline, public Romberg, public Bren
 	double tf_cb, tf_cbnu;
 
 	public:
-	Cosmology() { setup_parameters(true); k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running; }
+	Cosmology() { setup_parameters(true); k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running; qlens = NULL; }
 	int set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double degen_hdm, double omega_lamb, double hub, double del_R, bool normalize_by_sigma8);
 	Cosmology(CosmologyParams &cosmo) {
 		k_pivot = default_k_pivot;
@@ -125,9 +128,10 @@ class Cosmology : public ModelParams, public Spline, public Romberg, public Bren
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
 		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s,true);
 	}
+	void set_qlens(QLens* qlensptr) { qlens = qlensptr; }
 	void setup_parameters(const bool initial_setup);   // don't need this, unless we want to work with ModelParams pointers in lens.cpp for parameter manipulation?
 	void update_meta_parameters(const bool varied_only_fitparams); 
-	void copy_cosmo_data(Cosmology* cosmo_in);
+	void copy_cosmo_data(const Cosmology* cosmo_in);
 
 	void set_pivot_scale(double pscale) { k_pivot = pscale; }
 	void set_power_spectrum_scale_params(double index, double run) { ns = index; running = run; }
@@ -194,7 +198,18 @@ class Cosmology : public ModelParams, public Spline, public Romberg, public Bren
 	double h_over_h0(const double a) { return sqrt(omega_m/(a*a*a) + (1-omega_m-omega_lambda)/(a*a) + omega_lambda); }
 
 	double get_hubble() { return hubble; }
+	void set_hubble(const double h_in) {
+		hubble = h_in;
+		update_meta_parameters(false);
+		// once qlens pointer is setup, add a line that updates zfactors, betafactors in qlens
+	}
+
 	double get_omega_m() { return omega_m; }
+	void set_omega_m(const double om_in) {
+		omega_m = om_in;
+		update_meta_parameters(false);
+		// once qlens pointer is setup, add a line that updates zfactors, betafactors in qlens
+	}
 
 	private:
 	double growth_function_integrand(double a);

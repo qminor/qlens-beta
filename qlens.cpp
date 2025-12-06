@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 	n_omp_threads = 1;
 #endif
 	Grid::allocate_multithreaded_variables(n_omp_threads);
-	SourcePixel::allocate_multithreaded_variables(n_omp_threads);
+	CartesianSourcePixel::allocate_multithreaded_variables(n_omp_threads);
 	DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 	QLens::allocate_multithreaded_variables(n_omp_threads);
@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
 	Grid::deallocate_multithreaded_variables();
 	ImagePixelGrid::deallocate_multithreaded_variables();
 	DelaunayGrid::deallocate_multithreaded_variables();
-	SourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
+	CartesianSourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
 	QLens::deallocate_multithreaded_variables();
 
 #ifdef USE_MPI

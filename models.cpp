@@ -28,10 +28,11 @@ const double SPLE_Lens::def_tolerance = 1e-16;
 	//initialize_parameters(bb,slope,ss,q_in,theta_degrees,xc_in,yc_in);
 //}
 
-SPLE_Lens::SPLE_Lens(const double zlens_in, const double zsrc_in, const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in) : SPLE_Lens(parameter_mode_in)
+SPLE_Lens::SPLE_Lens(const double zlens_in, const double zsrc_in, const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	setup_lens_properties(parameter_mode_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(bb,slope,ss,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -424,9 +425,8 @@ bool SPLE_Lens::output_cosmology_info(const int lens_number)
 dPIE_Lens::dPIE_Lens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-
-	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -780,7 +780,8 @@ double dPIE_Lens::rho3d_r_integrand_analytic(const double r)
 NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(p1_in,p2_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -1105,7 +1106,8 @@ Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const 
 			//c200 = r200/rs_kpc;
 {
 	setup_lens_properties(parameter_mode_in,truncation_mode_in);
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -1488,7 +1490,8 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 		const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -1933,7 +1936,8 @@ Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &
 		const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(ks_in,rs_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -2049,7 +2053,8 @@ ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_i
 		const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(k0_in,R_d_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -2148,7 +2153,8 @@ bool ExpDisk::calculate_total_scaled_mass(double& total_mass)
 Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(shear_p1_in,shear_p2_in,xc_in,yc_in);
 }
 
@@ -2338,7 +2344,8 @@ Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &
 {
 	sine_term = sine;
 	setup_lens_properties(0,m_in);
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(A_m_in,n_in,m_in,theta_degrees,xc_in,yc_in,kap,sine);
 }
 
@@ -2696,7 +2703,8 @@ void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, c
 PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &p_in, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(p_in,xc_in,yc_in);
 }
 
@@ -2877,7 +2885,8 @@ double PointMass::kappa_avg_r(const double r)
 CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(mass_param_in,gamma_in,n_in,a_in,s_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -3215,7 +3224,8 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(p1_in,Re_in,n_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -3413,7 +3423,8 @@ DoubleSersicLens::DoubleSersicLens(const double zlens_in, const double zsrc_in, 
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(p1_in,delta_k_in,Reff1_in,n1_in,Reff2_in,n2_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -3628,7 +3639,8 @@ Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, 
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(p1_in,Re_in,n_in,rc_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -3832,7 +3844,8 @@ bool Cored_SersicLens::output_cosmology_info(const int lens_number)
 MassSheet::MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(kext_in,xc_in,yc_in);
 }
 
@@ -3974,7 +3987,8 @@ void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensm
 Deflection::Deflection(const double zlens_in, const double zsrc_in, const double &defx_in, const double &defy_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(defx_in,defy_in);
 }
 
@@ -4151,7 +4165,8 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 	original_kscale = kscale;
 	original_rscale = rscale;
 	loaded_from_file = false;
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 }
 
 Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
@@ -4214,7 +4229,8 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 {
 	lenstype = TABULATED;
 	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 
 	kscale = kscale_in;
 	rscale = rscale_in;
@@ -4679,7 +4695,8 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";
 	setup_base_lens_properties(7,-1,false); // number of parameters = 3, is_elliptical_lens = false
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	ellipticity_mode = -1;
 	original_emode = lens_in->ellipticity_mode;
 	// I wanted to allow q or e to be a parameter, but at present only q is allowed...fix this later
@@ -4850,7 +4867,8 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 {
 	lenstype = QTABULATED;
 	setup_base_lens_properties(7,-1,false); // number of parameters = 5, is_elliptical_lens = false
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 
 	kscale = kscale_in;
 	rscale = rscale_in;
@@ -5376,7 +5394,8 @@ QTabulated_Model::~QTabulated_Model() {
 TopHatLens::TopHatLens(const double zlens_in, const double zsrc_in, const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 	initialize_parameters(kap0_in,rad_in,q_in,theta_degrees,xc_in,yc_in);
 }
 

@@ -114,7 +114,7 @@ class UCMC : public Minimize, private LevenMarq, private Derivative
 		void Set_MCMC_MPI(const int mpi_np_in, const int mpi_id_in); // Use this if the likelihood itself is not MPI'd (i.e., there will be a separate likelihood evaluation per MPI process)
 		void Set_MCMC_MPI(const int mpi_np_in, const int mpi_id_in, const int mpi_ngroups_in, const int mpi_group_num_in, int *mpi_group_leader_in);
 #endif
-		void InputPoint(double *, double *, double *, double *, double *, int);
+		void InputPoint(double *, double *, double *, double *, double *, int); // this version allows for sampling a smaller subspace of the prior to draw the initial points
 		void InputPoint(double *, double *, double *, int);
 		void InputPoint(double *, double *, int);
 		bool checkLimits(double *);
