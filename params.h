@@ -344,7 +344,7 @@ struct DerivedParam
 	void rename(const string new_name, const string new_latex_name)
 	{
 		name = new_name;
-		latex_name = new_latex_name;
+		if (latex_name != "") latex_name = new_latex_name;
 	}
 };
 
@@ -360,33 +360,23 @@ struct ParamList
 	string *untransformed_param_names, *param_names;
 	string *override_names; // this allows to manually set names even after parameter transformations
 	string *untransformed_latex_names, *latex_names;
-	// ParamList should handle the latex names too, to simplify things; this would also allow for manual override of the latex names. Implement this!!!!!!
 	double *prior_norms;
 	double *untransformed_prior_limits_lo, *untransformed_prior_limits_hi;
 	bool *defined_prior_limits;
-	// It would be nice if penalty limits and override_limits could be merged. The tricky part is that the penalty limits deal with the	
-	// untransformed parameters, while override_limits deal with the transformed parameters. Not sure yet what is the best way to handle this.
 	double *prior_limits_lo, *prior_limits_hi;
-	//bool *override_prior_limits;
 	double *stepsizes;
 	bool *auto_stepsize;
 	bool *hist2d_param;
 	bool *subplot_param;
 
-	DerivedParam** dparams;
-	bool *hist2d_dparam;
-	bool *subplot_dparam;
-	string *dparam_names;
-	int n_dparams;
 	ParamList() {
 		set_null_ptrs_and_values();
 	}
 	ParamList(QLens* qlens_in) : ParamList() {
 		qlens = qlens_in;
 	}
-	ParamList(ParamList& param_settings_in) {
-		nparams = param_settings_in.nparams;
-		n_dparams = param_settings_in.n_dparams;
+	ParamList(ParamList& param_list_in) {
+		nparams = param_list_in.nparams;
 		untransformed_param_names = new string[nparams];
 		param_names = new string[nparams];
 		untransformed_latex_names = new string[nparams];
@@ -406,45 +396,29 @@ struct ParamList
 		defined_prior_limits = new bool[nparams];
 		prior_limits_lo = new double[nparams];
 		prior_limits_hi = new double[nparams];
-		//override_prior_limits = new bool[nparams];
 		for (int i=0; i < nparams; i++) {
-			priors[i] = new ParamPrior(param_settings_in.priors[i]);
-			transforms[i] = new ParamTransform(param_settings_in.transforms[i]);
-			untransformed_param_names[i] = param_settings_in.untransformed_param_names[i];
-			param_names[i] = param_settings_in.param_names[i];
-			untransformed_latex_names[i] = param_settings_in.untransformed_latex_names[i];
-			latex_names[i] = param_settings_in.latex_names[i];
-			override_names[i] = param_settings_in.override_names[i];
-			untransformed_values[i] = param_settings_in.untransformed_values[i];
-			values[i] = param_settings_in.values[i];
-			stepsizes[i] = param_settings_in.stepsizes[i];
-			auto_stepsize[i] = param_settings_in.auto_stepsize[i];
-			hist2d_param[i] = param_settings_in.hist2d_param[i];
-			subplot_param[i] = param_settings_in.subplot_param[i];
-			prior_norms[i] = param_settings_in.prior_norms[i];
-			untransformed_prior_limits_lo[i] = param_settings_in.untransformed_prior_limits_lo[i];
-			untransformed_prior_limits_hi[i] = param_settings_in.untransformed_prior_limits_hi[i];
-			defined_prior_limits[i] = param_settings_in.defined_prior_limits[i];
-			prior_limits_lo[i] = param_settings_in.prior_limits_lo[i];
-			prior_limits_hi[i] = param_settings_in.prior_limits_hi[i];
-			//override_prior_limits[i] = param_settings_in.override_prior_limits[i];
-		}
-		if (n_dparams > 0) {
-			dparam_names = new string[n_dparams];
-			hist2d_dparam = new bool[n_dparams];
-			subplot_dparam = new bool[n_dparams];
-			for (int i=0; i < n_dparams; i++) {
-				dparam_names[i] = param_settings_in.dparam_names[i];
-				hist2d_dparam[i] = param_settings_in.hist2d_dparam[i];
-				subplot_dparam[i] = param_settings_in.subplot_dparam[i];
-			}
-		} else {
-			dparam_names = NULL;
-			hist2d_dparam = NULL;
-			subplot_dparam = NULL;
+			priors[i] = new ParamPrior(param_list_in.priors[i]);
+			transforms[i] = new ParamTransform(param_list_in.transforms[i]);
+			untransformed_param_names[i] = param_list_in.untransformed_param_names[i];
+			param_names[i] = param_list_in.param_names[i];
+			untransformed_latex_names[i] = param_list_in.untransformed_latex_names[i];
+			latex_names[i] = param_list_in.latex_names[i];
+			override_names[i] = param_list_in.override_names[i];
+			untransformed_values[i] = param_list_in.untransformed_values[i];
+			values[i] = param_list_in.values[i];
+			stepsizes[i] = param_list_in.stepsizes[i];
+			auto_stepsize[i] = param_list_in.auto_stepsize[i];
+			hist2d_param[i] = param_list_in.hist2d_param[i];
+			subplot_param[i] = param_list_in.subplot_param[i];
+			prior_norms[i] = param_list_in.prior_norms[i];
+			untransformed_prior_limits_lo[i] = param_list_in.untransformed_prior_limits_lo[i];
+			untransformed_prior_limits_hi[i] = param_list_in.untransformed_prior_limits_hi[i];
+			defined_prior_limits[i] = param_list_in.defined_prior_limits[i];
+			prior_limits_lo[i] = param_list_in.prior_limits_lo[i];
+			prior_limits_hi[i] = param_list_in.prior_limits_hi[i];
 		}
 	}
-	ParamList(ParamList& param_settings_in, QLens* qlens_in) : ParamList(param_settings_in) {
+	ParamList(ParamList& param_list_in, QLens* qlens_in) : ParamList(param_list_in) {
 		qlens = qlens_in;
 	}
 	void update_param_list(string* param_names_in, string* latex_names_in, double* stepsizes_in, const bool check_current_params = false);
@@ -456,56 +430,21 @@ struct ParamList
 	string mkstring_int(const int i);
 	string get_param_values_string();
 
-	void add_dparam(DerivedParamType type_in, double param, int lensnum, double param2, bool use_kpc);
-	bool remove_dparam(int dparam_number);
-	bool rename_dparam(int dparam_number, string newname, string new_latex_name) {
-		if (dparam_number >= n_dparams) { warn("Specified derived parameter does not exist"); return false; }
-		dparam_names[dparam_number] = newname;
-		dparams[dparam_number]->rename(newname,new_latex_name);
-		return true;
-	}
-	void clear_dparams()
-	{
-		delete_dparam_ptrs();
-		if (n_dparams > 0) {
-			dparams = NULL;
-			dparam_names = NULL;
-			hist2d_dparam = NULL;
-			subplot_dparam = NULL;
-			n_dparams = 0;
-		}
-	}
-	void print_dparam_list(QLens* lens_in)
-	{
-		if (n_dparams > 0) {
-			for (int i=0; i < n_dparams; i++) {
-				std::cout << i << ". " << std::flush;
-				dparams[i]->print_param_description(lens_in);
-			}
-		}
-		else std::cout << "No derived parameters have been created" << std::endl;
-	}
 	int lookup_param_number(const string pname)
 	{
-		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		int pnum = -1;
 		for (int i=0; i < nparams; i++) {
 			if ((param_names[i]==pname) or (untransformed_param_names[i]==pname)) { pnum = i; break; }
-		}
-		for (int i=0; i < n_dparams; i++) {
-			if (dparam_names[i]==pname) pnum = nparams+i;
 		}
 		return pnum;
 	}
 	string lookup_param_name(const int i)
 	{
-		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		string name = param_names[i];
 		return name;
 	}
 	bool exclude_hist2d_param(const string pname)
 	{
-		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		bool found_name = false;
 		int i;
 		for (i=0; i < nparams; i++) {
@@ -513,15 +452,6 @@ struct ParamList
 				hist2d_param[i] = false;
 				found_name = true;
 				break;
-			}
-		}
-		if (!found_name) {
-			for (i=0; i < n_dparams; i++) {
-				if (dparam_names[i]==pname) {
-					hist2d_dparam[i] = false;
-					found_name = true;
-					break;
-				}
 			}
 		}
 		return found_name;
@@ -536,40 +466,23 @@ struct ParamList
 				break;
 			}
 		}
-		if (!active_param) {
-			for (i=0; i < n_dparams; i++) {
-				if (!hist2d_dparam[i]) {
-					active_param = true;
-					break;
-				}
-			}
-		}
 		return active_param;
 	}
 	bool hist2d_param_flag(const int i, string &name)
 	{
-		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		bool flag;
 		if (i < nparams) {
 			name = param_names[i];
 			flag = hist2d_param[i];
-		} else {
-			int j = i - nparams;
-			name = dparam_names[j];
-			flag = hist2d_dparam[j];
 		}
 		return flag;
 	}
 	string print_excluded_hist2d_params()
 	{
-		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		string pstring = "";
 		int i;
 		for (i=0; i < nparams; i++) {
 			if (!hist2d_param[i]) pstring += param_names[i] + " ";
-		}
-		for (i=0; i < n_dparams; i++) {
-			if (!hist2d_dparam[i]) pstring += dparam_names[i] + " ";
 		}
 		return pstring;
 	}
@@ -577,11 +490,9 @@ struct ParamList
 	{
 		int i;
 		for (i=0; i < nparams; i++) hist2d_param[i] = true;
-		for (i=0; i < n_dparams; i++) hist2d_dparam[i] = true;
 	}
 	bool set_subplot_param(const string pname)
 	{
-		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		bool found_name = false;
 		int i;
 		for (i=0; i < nparams; i++) {
@@ -589,15 +500,6 @@ struct ParamList
 				subplot_param[i] = true;
 				found_name = true;
 				break;
-			}
-		}
-		if (!found_name) {
-			for (i=0; i < n_dparams; i++) {
-				if (dparam_names[i]==pname) {
-					subplot_dparam[i] = true;
-					found_name = true;
-					break;
-				}
 			}
 		}
 		return found_name;
@@ -612,48 +514,28 @@ struct ParamList
 				break;
 			}
 		}
-		if (!active_param) {
-			for (i=0; i < n_dparams; i++) {
-				if (subplot_dparam[i]) {
-					active_param = true;
-					break;
-				}
-			}
-		}
 		return active_param;
 	}
 	bool subplot_param_flag(const int i, string &name)
 	{
-		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		bool flag;
 		if (i < nparams) {
 			name = param_names[i];
 			flag = subplot_param[i];
-		} else {
-			int j = i - nparams;
-			name = dparam_names[j];
-			flag = subplot_dparam[j];
 		}
 		return flag;
 	}
 	string print_subplot_params()
 	{
-		//transform_parameter_names(untransformed_param_names,param_names,NULL,NULL);
 		string pstring = "";
-		int i;
-		for (i=0; i < nparams; i++) {
+		for (int i=0; i < nparams; i++) {
 			if (subplot_param[i]) pstring += param_names[i] + " ";
-		}
-		for (i=0; i < n_dparams; i++) {
-			if (subplot_dparam[i]) pstring += dparam_names[i] + " ";
 		}
 		return pstring;
 	}
 	void reset_subplot_params()
 	{
-		int i;
-		for (i=0; i < nparams; i++) subplot_param[i] = false;
-		for (i=0; i < n_dparams; i++) subplot_dparam[i] = false;
+		for (int i=0; i < nparams; i++) subplot_param[i] = false;
 	}
 	void clear_prior_limits()
 	{
@@ -667,8 +549,13 @@ struct ParamList
 		}
 	}
 	bool all_prior_limits_defined() {
-		for (int i=0; i < nparams; i++) if (defined_prior_limits[i]==false) return false;
-		return true;
+		bool all_defined = true;
+		for (int i=0; i < nparams; i++) {
+			if (defined_prior_limits[i]==false) {
+				all_defined = false;
+			}
+		}
+		return all_defined;
 	}
 	void print_priors_and_transforms();
 	bool output_prior(const int i);
@@ -776,9 +663,9 @@ struct ParamList
 	bool set_prior_limit(const int paramnum, const double lo, const double hi)
 	{
 		if (paramnum >= nparams) die("parameter chosen for prior limit is greater than total number of parameters (%i vs %i)",paramnum,nparams);
-		//override_prior_limits[paramnum] = true; // I don't think override_prior_limits is even necessary; get rid of it?
 		prior_limits_lo[paramnum] = lo;
 		prior_limits_hi[paramnum] = hi;
+		defined_prior_limits[paramnum] = true;
 		inverse_transform_prior_limit(paramnum);
 		set_prior_norm(paramnum);
 		bool *changed_limit = new bool[nparams];
@@ -800,7 +687,6 @@ struct ParamList
 		for (i=pi,j=0; i < pf; i++,j++) {
 			untransformed_prior_limits_lo[i] = lower[j];
 			untransformed_prior_limits_hi[i] = upper[j];
-			//std::cout << "Set untransformed limit " << i << " " << untransformed_prior_limits_lo[i] << " " << untransformed_prior_limits_hi[i] << std::endl;
 			defined_prior_limits[i] = true;
 		}
 		transform_prior_limits();
@@ -1099,11 +985,9 @@ struct ParamList
 	}
 	void add_prior_terms_to_loglike(double *params, double& loglike)
 	{
-		//std::cout << "LOGLIKE00=" << (2*loglike) << std::endl;
 		double dloglike,dloglike_tot=0;
 		for (int i=0; i < nparams; i++) {
 			if (priors[i]->prior!=UNIFORM_PRIOR) {
-				//std::cout << "PRIOR NORM (param " << i << "): " << (2*log(prior_norms[i])) << std::endl;
 				dloglike_tot += log(prior_norms[i]); // Normalize the prior for the bayesian evidence
 				if (priors[i]->prior==LOG_PRIOR) {
 					dloglike = log(params[i]);
@@ -1111,7 +995,6 @@ struct ParamList
 				}
 				else if (priors[i]->prior==GAUSS_PRIOR) {
 					dloglike = SQR((params[i] - priors[i]->gaussian_pos)/priors[i]->gaussian_sig)/2.0;
-					//std::cout << "YO: " << params[i] << " " << priors[i]->gaussian_pos << " " << priors[i]->gaussian_sig << " " << dloglike << std::endl;
 					dloglike_tot += dloglike;
 				}
 				else if (priors[i]->prior==GAUSS2_PRIOR) {
@@ -1127,9 +1010,7 @@ struct ParamList
 				}
 			}
 		}
-		//std::cout << "DLOGLIKE_TOT*2: " << (2*dloglike_tot) << " LOGLIKE0: " << (2*loglike) << std::endl;
 		loglike += dloglike_tot;
-		//std::cout << "NEW LOGLIKE: " << (2*loglike) << std::endl;
 	}
 	void update_reference_paramnums(int *new_paramnums)
 	{
@@ -1219,21 +1100,8 @@ struct ParamList
 			delete[] defined_prior_limits;
 			delete[] prior_limits_lo;
 			delete[] prior_limits_hi;
-			//delete[] override_prior_limits;
 		}
 
-	}
-	void delete_dparam_ptrs(const bool include_dparam_objects = true) {
-		if (n_dparams > 0) {
-			if (include_dparam_objects) {
-				// delete the actual derived parameter objects, and not just the arrays that point to them
-				for (int i=0; i < n_dparams; i++) delete dparams[i];
-			}
-			delete[] dparams;
-			delete[] dparam_names;
-			delete[] hist2d_dparam;
-			delete[] subplot_dparam;
-		}
 	}
 	void set_null_param_ptrs()
 	{
@@ -1256,7 +1124,211 @@ struct ParamList
 		defined_prior_limits = NULL;
 		prior_limits_lo = NULL;
 		prior_limits_hi = NULL;
-		//override_prior_limits = NULL;
+	}
+	void set_null_ptrs_and_values()
+	{
+		nparams = 0;
+		qlens = NULL;
+		set_null_param_ptrs();
+	}
+	~ParamList()
+	{
+		delete_param_ptrs();
+	}
+};
+
+struct DerivedParamList
+{
+	static constexpr double VERY_LARGE = 1e30;
+	QLens* qlens;
+
+	int n_dparams;
+	DerivedParam** dparams;
+	bool *hist2d_dparam;
+	bool *subplot_dparam;
+	string *dparam_names;
+	DerivedParamList() {
+		set_null_ptrs_and_values();
+	}
+	DerivedParamList(QLens* qlens_in) : DerivedParamList() {
+		qlens = qlens_in;
+	}
+	DerivedParamList(DerivedParamList& dparam_list_in) {
+		n_dparams = dparam_list_in.n_dparams;
+		if (n_dparams > 0) {
+			dparam_names = new string[n_dparams];
+			hist2d_dparam = new bool[n_dparams];
+			subplot_dparam = new bool[n_dparams];
+			for (int i=0; i < n_dparams; i++) {
+				dparam_names[i] = dparam_list_in.dparam_names[i];
+				hist2d_dparam[i] = dparam_list_in.hist2d_dparam[i];
+				subplot_dparam[i] = dparam_list_in.subplot_dparam[i];
+			}
+		} else {
+			dparam_names = NULL;
+			hist2d_dparam = NULL;
+			subplot_dparam = NULL;
+		}
+	}
+	DerivedParamList(DerivedParamList& dparam_list_in, QLens* qlens_in) : DerivedParamList(dparam_list_in) {
+		qlens = qlens_in;
+	}
+	//void update_param_list(string* param_names_in, string* latex_names_in, double* stepsizes_in, const bool check_current_params = false);
+	//bool print_parameter_values();
+	//string mkstring_doub(const double db);
+	//string mkstring_int(const int i);
+	//string get_param_values_string();
+
+	bool add_dparam(const string param_type, const double param, const int lensnum, const double param2, const bool use_kpc);
+	bool remove_dparam(const int dparam_number);
+	bool rename_dparam(const int dparam_number, const string newname, const string new_latex_name) {
+		if (dparam_number >= n_dparams) { warn("Specified derived parameter does not exist"); return false; }
+		dparam_names[dparam_number] = newname;
+		dparams[dparam_number]->rename(newname,new_latex_name);
+		return true;
+	}
+	double get_dparam(const int i)
+	{
+		if (i < n_dparams) return dparams[i]->get_derived_param(qlens);
+		else return -VERY_LARGE;
+	}
+	void clear_dparams()
+	{
+		delete_dparam_ptrs();
+		if (n_dparams > 0) {
+			dparams = NULL;
+			dparam_names = NULL;
+			hist2d_dparam = NULL;
+			subplot_dparam = NULL;
+			n_dparams = 0;
+		}
+	}
+	bool print_dparam_list()
+	{
+		bool status = true;
+		if (n_dparams > 0) {
+			if (qlens) {
+				for (int i=0; i < n_dparams; i++) {
+					std::cout << i << ". " << std::flush;
+					dparams[i]->print_param_description(qlens);
+				}
+			} else {
+				status = false;
+			}
+		}
+		else {
+			std::cout << "No derived parameters have been created" << std::endl;
+		}
+		return status;
+	}
+	int lookup_param_number(const string pname)
+	{
+		int pnum = -1;
+		for (int i=0; i < n_dparams; i++) {
+			if (dparam_names[i]==pname) pnum = i;
+		}
+		return pnum;
+	}
+	string lookup_param_name(const int i)
+	{
+		string name = dparam_names[i];
+		return name;
+	}
+	bool exclude_hist2d_param(const string pname)
+	{
+		bool found_name = false;
+		for (int i=0; i < n_dparams; i++) {
+			if (dparam_names[i]==pname) {
+				hist2d_dparam[i] = false;
+				found_name = true;
+				break;
+			}
+		}
+		return found_name;
+	}
+	bool hist2d_params_defined()
+	{
+		bool active_param = false;
+		for (int i=0; i < n_dparams; i++) {
+			if (!hist2d_dparam[i]) {
+				active_param = true;
+				break;
+			}
+		}
+		return active_param;
+	}
+	bool hist2d_param_flag(const int i, string &name)
+	{
+		bool flag;
+		name = dparam_names[i];
+		flag = hist2d_dparam[i];
+		return flag;
+	}
+	string print_excluded_hist2d_params()
+	{
+		string pstring = "";
+		for (int i=0; i < n_dparams; i++) {
+			if (!hist2d_dparam[i]) pstring += dparam_names[i] + " ";
+		}
+		return pstring;
+	}
+	void reset_hist2d_params()
+	{
+		for (int i=0; i < n_dparams; i++) hist2d_dparam[i] = true;
+	}
+	bool set_subplot_param(const string pname)
+	{
+		bool found_name = false;
+		for (int i=0; i < n_dparams; i++) {
+			if (dparam_names[i]==pname) {
+				subplot_dparam[i] = true;
+				found_name = true;
+				break;
+			}
+		}
+		return found_name;
+	}
+	bool subplot_params_defined()
+	{
+		bool active_param = false;
+		for (int i=0; i < n_dparams; i++) {
+			if (subplot_dparam[i]) {
+				active_param = true;
+				break;
+			}
+		}
+		return active_param;
+	}
+	bool subplot_param_flag(const int i, string &name)
+	{
+		bool flag;
+		name = dparam_names[i];
+		flag = subplot_dparam[i];
+		return flag;
+	}
+	string print_subplot_params()
+	{
+		string pstring = "";
+		for (int i=0; i < n_dparams; i++) {
+			if (subplot_dparam[i]) pstring += dparam_names[i] + " ";
+		}
+		return pstring;
+	}
+	void reset_subplot_params()
+	{
+		for (int i=0; i < n_dparams; i++) subplot_dparam[i] = false;
+	}
+	void delete_dparam_ptrs(const bool include_dparam_objects = true) {
+		if (n_dparams > 0) {
+			if (include_dparam_objects) {
+				// delete the actual derived parameter objects, and not just the arrays that point to them
+				for (int i=0; i < n_dparams; i++) delete dparams[i];
+			}
+			delete[] dparams;
+			delete[] dparam_names;
+			delete[] hist2d_dparam;
+			delete[] subplot_dparam;
+		}
 	}
 	void set_null_dparam_ptrs()
 	{
@@ -1267,18 +1339,17 @@ struct ParamList
 	}
 	void set_null_ptrs_and_values()
 	{
-		nparams = 0;
 		n_dparams = 0;
 		qlens = NULL;
-		set_null_param_ptrs();
 		set_null_dparam_ptrs();
 	}
-	~ParamList()
+	~DerivedParamList()
 	{
-		delete_param_ptrs();
 		delete_dparam_ptrs();
 	}
 };
+
+
 
 #endif // PARAMS_H
 

@@ -186,6 +186,7 @@ void ModelParams::set_limits(const dvector& lower, const dvector& upper)
 void ModelParams::update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index)
 {
 	// in this case, the limits are being updated from the fitparams list, so there is no need to call register_lens_prior_limits
+	include_limits = true;
 	for (int i=0; i < n_params; i++) {
 		if ((active_params[i]) and (vary_params[i])) {
 			lower_limits[i] = lower[index];

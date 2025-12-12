@@ -31,6 +31,7 @@ class ModelParams
 	dvector lower_limits, upper_limits;
 
 	ModelParams() { param = NULL; qlens = NULL; entry_number = -1; }
+	void set_qlens(QLens* qlensptr) { qlens = qlensptr; }
 	void setup_parameter_arrays(const int npar);
 	virtual void setup_parameters(const bool initial_setup) {} 
 	virtual void update_meta_parameters(const bool varied_only_fitparams) {}
@@ -59,7 +60,6 @@ class ModelParams
 			}
 		}
 	}
-
 
 	void update_fit_parameters(const double* fitparams, int &index);
 	bool update_specific_parameter(const std::string name_in, const double& value);

@@ -375,7 +375,12 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), ModelParams()
 	include_imgfluxes_in_inversion = false;
 	include_srcflux_in_inversion = false;
 
+	lenslist = new LensList(this);
+	srclist = new SourceList(this);
+	pixsrclist = new PixSrcList(this);
+	ptsrclist = new PtSrcList(this);
 	param_list = new ParamList(this);
+	dparam_list = new DerivedParamList(this);
 	sim_err_pos = 0.005;
 	sim_err_flux = 0.01;
 	sim_err_td = 1;
@@ -753,7 +758,12 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	include_imgfluxes_in_inversion = lens_in->include_imgfluxes_in_inversion;
 	include_srcflux_in_inversion = lens_in->include_srcflux_in_inversion;
 
+	lenslist = new LensList(this);
+	srclist = new SourceList(this);
+	pixsrclist = new PixSrcList(this);
+	ptsrclist = new PtSrcList(this);
 	param_list = new ParamList(*lens_in->param_list,this);
+	dparam_list = new DerivedParamList(*lens_in->dparam_list,this);
 	sim_err_pos = lens_in->sim_err_pos;
 	sim_err_flux = lens_in->sim_err_flux;
 	sim_err_td = lens_in->sim_err_td;
@@ -1163,8 +1173,6 @@ void QLens::create_and_add_lens(const char *splinefile, const int emode, const d
 	lens_list[nlens-1]->set_qlens_pointer(this);
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
-
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
 }
@@ -1190,7 +1198,6 @@ void QLens::add_multipole_lens(const double zl, const double zs, int m, const do
 
 	lens_list[nlens-1] = new Multipole(zl, zs, a_m, n, m, theta, xc, yc, kap, this->cosmo, sine_term);
 	lens_list[nlens-1]->set_qlens_pointer(this);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1220,7 +1227,6 @@ void QLens::add_tabulated_lens(const double zl, const double zs, int lnum, const
 
 	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N,this->cosmo);
 	lens_list[nlens-1]->set_qlens_pointer(this);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1251,7 +1257,6 @@ void QLens::add_qtabulated_lens(const double zl, const double zs, int lnum, cons
 
 	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N, this->cosmo);
 	lens_list[nlens-1]->set_qlens_pointer(this);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1294,7 +1299,6 @@ bool QLens::add_tabulated_lens_from_file(const double zl, const double zs, const
 
 	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, tabfile, tabfilename, this->cosmo);
 	lens_list[nlens-1]->set_qlens_pointer(this);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1344,7 +1348,6 @@ bool QLens::add_qtabulated_lens_from_file(const double zl, const double zs, cons
 
 	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, tabfile, this->cosmo);
 	lens_list[nlens-1]->set_qlens_pointer(this);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1360,7 +1363,6 @@ void QLens::add_lens(LensProfile *new_lens)
 
 	new_lens->lens_number = nlens-1;
 	lens_list[nlens-1] = new_lens;
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 	register_lens_vary_parameters(nlens-1);
 
 	reset_grid();
@@ -1383,6 +1385,7 @@ void QLens::add_new_lens_entry(const double zl)
 	lens_redshift_idx = new_lens_redshift_idx;
 	lens_list = newlist;
 	nlens++;
+	lenslist->input_ptr(lens_list,nlens);
 
 	//int j,k;
 	//if (n_lens_redshifts > 1) {
@@ -1837,19 +1840,19 @@ void QLens::remove_lens(int lensnumber, const bool delete_lens)
 	delete[] lens_list;
 	delete[] lens_redshift_idx;
 	nlens--;
-	lens_list_vec.erase(lens_list_vec.begin()+lensnumber); // Used for Python wrapper
 
 	lens_list = newlist;
+	lenslist->input_ptr(lens_list,nlens);
 	if (nlens > 0) lens_redshift_idx = new_lens_redshift_idx;
 	else lens_redshift_idx = NULL;
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
 
 	param_list->remove_params(pi,pf);
-	for (int i=param_list->n_dparams-1; i >= 0; i--) {
-		if (param_list->dparams[i]->int_param==lensnumber) { // this is problematic because "int_param" might not be referring to the lens number (some dparams use int_param for pixsrc number, for example). You need to refine the dparams so it says whether it's connected to a lens, pixsrc, ptsrc etc. and then update this code accordingly.
+	for (int i=dparam_list->n_dparams-1; i >= 0; i--) {
+		if (dparam_list->dparams[i]->int_param==lensnumber) { // this is problematic because "int_param" might not be referring to the lens number (some dparams use int_param for pixsrc number, for example). You need to refine the dparams so it says whether it's connected to a lens, pixsrc, ptsrc etc. and then update this code accordingly.
 			if (mpi_id==0) cout << "Removing derived param " << i << endl;
-			param_list->remove_dparam(i);
+			dparam_list->remove_dparam(i);
 		}
 	}
 }
@@ -1857,7 +1860,6 @@ void QLens::remove_lens(int lensnumber, const bool delete_lens)
 void QLens::clear_lenses()
 {
 	if (nlens > 0) {
-		lens_list_vec.clear(); // Used for Python wrapper
 		int pi, pf, pi_min=1000, pf_max=0;
 		// since all the lens parameters are blocked together in the param_list list, we just need to find the initial and final parameters to remove
 		for (int i=0; i < nlens; i++) {
@@ -1869,6 +1871,7 @@ void QLens::clear_lenses()
 			delete lens_list[i];
 		}	
 		delete[] lens_list;
+		lenslist->clear_ptr();
 		param_list->remove_params(pi_min,pf_max);
 		nlens = 0;
 		if (lens_redshift_idx != NULL) {
@@ -1914,7 +1917,7 @@ void QLens::clear_lenses()
 		n_lens_redshifts = 0;
 
 		reset_grid();
-		param_list->clear_dparams();
+		dparam_list->clear_dparams(); // NOT ALL DPARAMS ARE TIED TO A LENS!!! Should check which dparams are tied to lenses and clear those
 	}
 }
 
@@ -2737,6 +2740,7 @@ void QLens::create_and_add_source_object(SB_ProfileName name, const bool is_lens
 
 void QLens::add_source(SB_Profile* new_src, const bool is_lensed)
 {
+	new_src->set_qlens_pointer(this);
 	int band_number = new_src->band;
 	if (band_number > n_model_bands) die("cannot add band with index that is > number of bands");
 
@@ -2767,8 +2771,9 @@ void QLens::add_source(SB_Profile* new_src, const bool is_lensed)
 	n_sb++;
 	sb_list = newlist;
 	sb_list[n_sb-1] = new_src;
-	sb_list_vec.push_back(sb_list[n_sb-1]); // used for Python wrapper
+	srclist->input_ptr(sb_list,n_sb);
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	register_sb_vary_parameters(n_sb-1);
 }
 
 void QLens::create_and_add_shapelet_source(const bool is_lensed, const int band_number, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode)
@@ -2802,7 +2807,7 @@ void QLens::create_and_add_shapelet_source(const bool is_lensed, const int band_
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
-	sb_list_vec.push_back(sb_list[n_sb-1]); // used for Python wrapper
+	srclist->input_ptr(sb_list,n_sb);
 	if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's has changed, will need to redo FFT setup
 }
 
@@ -2837,7 +2842,7 @@ void QLens::create_and_add_mge_source(const bool is_lensed, const int band_numbe
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
-	sb_list_vec.push_back(sb_list[n_sb-1]); // used for Python wrapper
+	srclist->input_ptr(sb_list,n_sb);
 	if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's has changed, will need to redo FFT setup
 }
 
@@ -2872,7 +2877,7 @@ void QLens::create_and_add_multipole_source(const bool is_lensed, const int band
 	sbprofile_imggrid_idx[n_sb] = band_number*n_extended_src_redshifts+sbprofile_redshift_idx[n_sb];
 	n_sb++;
 	sb_list = newlist;
-	sb_list_vec.push_back(sb_list[n_sb-1]); // used for Python wrapper
+	srclist->input_ptr(sb_list,n_sb);
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
 }
 
@@ -2912,7 +2917,7 @@ void QLens::create_and_add_splined_source_object(const char *splinefile, const b
 
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
-	sb_list_vec.push_back(sb_list[n_sb-1]); // used for Python wrapper
+	srclist->input_ptr(sb_list,n_sb);
 	if (emode != -1) SB_Profile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 }
 
@@ -2974,9 +2979,9 @@ void QLens::remove_source_object(int sb_number, const bool delete_src)
 		sbprofile_band_number = NULL;
 		sbprofile_imggrid_idx = NULL;
 	}
-	sb_list_vec.erase(sb_list_vec.begin()+sb_number); // Used for Python wrapper
 
 	sb_list = newlist;
+	srclist->input_ptr(sb_list,n_sb);
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
 
 	param_list->remove_params(pi,pf);
@@ -2985,7 +2990,6 @@ void QLens::remove_source_object(int sb_number, const bool delete_src)
 void QLens::clear_source_objects()
 {
 	if (n_sb > 0) {
-		sb_list_vec.clear(); // Used for Python wrapper
 		int pi, pf, pi_min=1000, pf_max=0;
 		// since all the source parameters are blocked together in the param_list list, we just need to find the initial and final parameters to remove
 		for (int i=0; i < n_sb; i++) {
@@ -3001,6 +3005,7 @@ void QLens::clear_source_objects()
 			delete sb_list[i];
 		}	
 		delete[] sb_list;
+		srclist->clear_ptr();
 		if (sbprofile_redshift_idx != NULL) delete[] sbprofile_redshift_idx;
 		if (sbprofile_band_number != NULL) delete[] sbprofile_band_number;
 		if (sbprofile_imggrid_idx != NULL) delete[] sbprofile_imggrid_idx;
@@ -3074,7 +3079,7 @@ void QLens::remove_model_band(const int band_number, const bool removing_pixella
 		}
 	}
 	if (removing_pixellated_src) {
-		if ((n_pixsrc_with_band <= 1) and (n_sbsrc_with_band==0)) {
+		if ((n_pixsrc_with_band <= 1) and (n_sbsrc_with_band==0) and (n_psf <= band_number)) {
 			remove_band = true; // the particular source in question might not have been removed yet
 			//cout << "removing band! band_number=" << band_number << " npixz=" << n_pixsrc_with_band << " nsbz=" << n_sbsrc_with_band << endl;
 		//} else {
@@ -3170,7 +3175,7 @@ void QLens::add_pixellated_source(const double zsrc, const int band_number)
 	}
 	delaunay_srcgrids[n_pixellated_src-1]->srcgrid_redshift = zsrc;
 	cartesian_srcgrids[n_pixellated_src-1]->srcgrid_redshift = zsrc;
-	pixsrc_list_vec.push_back(srcgrids[n_pixellated_src-1]); // used for Python wrapper
+	pixsrclist->input_ptr(srcgrids,n_pixellated_src);
 }
 
 void QLens::remove_pixellated_source(int src_number, const bool delete_pixsrc)
@@ -3214,7 +3219,6 @@ void QLens::remove_pixellated_source(int src_number, const bool delete_pixsrc)
 	delete[] delaunay_srcgrids;
 	delete[] cartesian_srcgrids;
 	delete[] pixellated_src_redshift_idx;
-	pixsrc_list_vec.erase(pixsrc_list_vec.begin()+src_number); // Used for Python wrapper
 	n_pixellated_src--;
 	if (n_pixellated_src > 0) {
 		pixellated_src_redshift_idx = new_pixellated_src_redshift_idx;
@@ -3235,6 +3239,7 @@ void QLens::remove_pixellated_source(int src_number, const bool delete_pixsrc)
 		cartesian_srcgrids = NULL;
 	}
 	if (pf > pi) param_list->remove_params(pi,pf); // eliminate any fit parameters associated with the source being removed
+	pixsrclist->input_ptr(srcgrids,n_pixellated_src);
 }
 
 void QLens::print_pixellated_source_list(bool show_vary_params)
@@ -3462,6 +3467,7 @@ void QLens::add_point_source(const double zsrc, const lensvector &sourcept, cons
 	ptsrc_list = newlist;
 	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->entry_number = i;
 	register_ptsrc_vary_parameters(n_ptsrc-1);
+	ptsrclist->input_ptr(ptsrc_list,n_ptsrc);
 }
 
 void QLens::remove_point_source(int ptsrc_number)
@@ -3512,6 +3518,7 @@ void QLens::remove_point_source(int ptsrc_number)
 	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->entry_number = i;
 
 	if (pf > pi) param_list->remove_params(pi,pf); // eliminate any fit parameters associated with the point source being removed
+	ptsrclist->input_ptr(ptsrc_list,n_ptsrc);
 }
 
 void QLens::print_point_source_list(bool show_vary_params)
@@ -4201,6 +4208,55 @@ bool QLens::update_cosmo_varyflag(const string name, const bool flag)
 	return true;
 }
 
+bool QLens::register_cosmo_vary_parameters()
+{
+	int pi, pf;
+	vector<string> fit_parameter_names, latex_parameter_names;
+	get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+	if (get_cosmo_parameter_numbers(pi,pf) == true) {
+		int index=0, index2=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		dvector stepsizes(npar), values(npar);
+		cosmo->get_fit_parameters(values.array(),index2);
+		cosmo->get_auto_stepsizes(stepsizes,index=0);
+		param_list->insert_params(pi,pf,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (cosmo->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+		}
+		cosmo->get_auto_ranges(use_penalty_limits,lower,upper,index=0);
+		//cout << "Updating cosmo prior limits from " << pi << " to " << (pf-1) << endl;
+		param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
+void QLens::register_cosmo_prior_limits()
+{
+	int pi, pf;
+	if (get_cosmo_parameter_numbers(pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		if (cosmo->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+			//sb_list[cosmo_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+			//param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+		}
+	}
+}
+
+void QLens::update_cosmo_fitparams()
+{
+	int pi, pf;
+	if (get_cosmo_parameter_numbers(pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		dvector values(npar);
+		cosmo->get_fit_parameters(values.array(),index);
+		param_list->update_untransformed_values(pi,pf,values.array());
+	}
+}
+
 bool QLens::update_misc_varyflag(const string name, const bool flag)
 {
 	// updates one specific parameter
@@ -4503,10 +4559,10 @@ bool QLens::lookup_parameter_value(const string pname, double& pval)
 		}
 	}
 	if (!found_param) {
-		for (i=0; i < param_list->n_dparams; i++) {
-			if (param_list->dparams[i]->name==pname) {
+		for (i=0; i < dparam_list->n_dparams; i++) {
+			if (dparam_list->dparams[i]->name==pname) {
 				found_param = true;
-				pval = param_list->dparams[i]->get_derived_param(this);
+				pval = dparam_list->dparams[i]->get_derived_param(this);
 			}
 		}
 	}
@@ -4517,7 +4573,7 @@ void QLens::create_parameter_value_string(string &pvals)
 {
 	pvals = "";
 	int i;
-	int n_derived_params = param_list->n_dparams;
+	int n_derived_params = dparam_list->n_dparams;
 	for (i=0; i < param_list->nparams; i++) {
 		stringstream pvalstr;
 		string pvalstring;
@@ -4528,7 +4584,7 @@ void QLens::create_parameter_value_string(string &pvals)
 	}
 	double pval;
 	for (i=0; i < n_derived_params; i++) {
-		pval = param_list->dparams[i]->get_derived_param(this);
+		pval = dparam_list->dparams[i]->get_derived_param(this);
 		stringstream pvalstr;
 		string pvalstring;
 		pvalstr << pval;
@@ -7004,6 +7060,7 @@ void QLens::sort_image_data_into_redshift_groups()
 	image_data = sorted_image_data;
 	ptsrc_list = sorted_ptsrc_list;
 	ptsrc_redshift_idx = sorted_ptsrc_redshift_idx;
+	ptsrclist->input_ptr(ptsrc_list,n_ptsrc);
 }
 
 /*
@@ -7865,6 +7922,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		}
 		fitmodel->lens_list[i]->qlens = fitmodel; // point to the fitmodel, since the cosmology may be varied (by varying H0, e.g.)
 	}
+	fitmodel->lenslist->input_ptr(fitmodel->lens_list,nlens);
 
 	//if ((source_fit_mode != Point_Source) and (n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		 //add_pixellated_source(source_redshift); // THIS IS UGLY. There must be a better way to do this
@@ -7943,6 +8001,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			fitmodel->ptsrc_list[i]->entry_number = i;
 		}
 	}
+	fitmodel->ptsrclist->input_ptr(fitmodel->ptsrc_list,n_ptsrc);
 
 	fitmodel->n_sb = n_sb;
 	if (n_sb > 0) {
@@ -7985,6 +8044,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			fitmodel->sb_list[i]->qlens = fitmodel; // point to the fitmodel
 		}
 	}
+	fitmodel->srclist->input_ptr(fitmodel->sb_list,n_sb);
 
 	fitmodel->n_pixellated_src = n_pixellated_src;
 	if (n_pixellated_src > 0) {
@@ -8009,6 +8069,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			}
 		}
 	}
+	fitmodel->pixsrclist->input_ptr(fitmodel->srcgrids,n_pixellated_src);
 
 	fitmodel->n_pixellated_lens = n_pixellated_lens;
 	if (n_pixellated_lens > 0) {
@@ -9433,7 +9494,7 @@ void QLens::plot_chisq_1d(const int param, const int n, const double ip, const d
 	fit_restore_defaults();
 }
 
-double QLens::chi_square_fit_simplex()
+double QLens::chi_square_fit_simplex(const bool show_parameter_errors)
 {
 	fitmethod = SIMPLEX;
 	if (fit_set_optimizations()==false) return -1e30;
@@ -9527,7 +9588,7 @@ double QLens::chi_square_fit_simplex()
 		}
 	}
 
-	output_fit_results(stepsizes,chisq_bestfit,chisq_evals);
+	output_fit_results(stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
 
 	if (turned_on_chisqmag) use_magnification_in_chisq = false; // restore chisqmag to original setting
 	fit_restore_defaults();
@@ -9536,7 +9597,7 @@ double QLens::chi_square_fit_simplex()
 	return chisq_bestfit;
 }
 
-double QLens::chi_square_fit_powell()
+double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 {
 	fitmethod = POWELL;
 	if (fit_set_optimizations()==false) return -1e30;
@@ -9607,7 +9668,7 @@ double QLens::chi_square_fit_powell()
 	display_chisq_status = false;
 	if (group_id==0) fitmodel->logfile << "Optimization finished: min chisq = " << chisq_bestfit << endl;
 
-	output_fit_results(stepsizes,chisq_bestfit,chisq_evals);
+	output_fit_results(stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
 
 	if (turned_on_chisqmag) use_magnification_in_chisq = false; // restore chisqmag to original setting
 	fit_restore_defaults();
@@ -9616,11 +9677,11 @@ double QLens::chi_square_fit_powell()
 	return chisq_bestfit;
 }
 
-void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, const int chisq_evals)
+void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, const int chisq_evals, const bool show_parameter_errors)
 {
 	bool fisher_matrix_is_nonsingular;
 	double *fitparams = param_list->values;
-	if (calculate_parameter_errors) {
+	if (show_parameter_errors) {
 		if (mpi_id==0) cout << "Calculating parameter errors... (press CTRL-C to skip)" << endl;
 		fisher_matrix_is_nonsingular = calculate_fisher_matrix(fitparams,stepsizes);
 		if (fisher_matrix_is_nonsingular) bestfit_fisher_inverse.input(fisher_inverse);
@@ -9658,7 +9719,7 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 			fitmodel->print_point_source_list(false);
 		}
 
-		if (calculate_parameter_errors) {
+		if (show_parameter_errors) {
 			if (fisher_matrix_is_nonsingular) {
 				cout << "Marginalized 1-sigma errors from Fisher matrix:\n";
 				for (int i=0; i < n_fitparams; i++) {
@@ -9674,7 +9735,7 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 				cout << param_list->param_names[i] << ": " << fitparams[i] << endl;
 		}
 		cout << endl;
-		if (auto_save_bestfit) output_bestfit_model();
+		if (auto_save_bestfit) output_bestfit_model(show_parameter_errors);
 	}
 }
 
@@ -9798,7 +9859,7 @@ void QLens::nested_sampling()
 
 	double *fitparams = param_list->values;
 	int n_fitparams = param_list->nparams;
-	int n_derived_params = param_list->n_dparams;
+	int n_derived_params = dparam_list->n_dparams;
 	InputPoint(fitparams,param_list->prior_limits_hi,param_list->prior_limits_lo,n_fitparams);
 	SetNDerivedParams(n_derived_params);
 
@@ -9818,12 +9879,12 @@ void QLens::nested_sampling()
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
 		for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << param_list->dparams[i]->name << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
 		for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << param_list->dparams[i]->name << "\t" << param_list->dparams[i]->latex_name << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
@@ -9914,7 +9975,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	}
 
 	int n_fitparams = param_list->nparams;
-	int n_derived_params = param_list->n_dparams;
+	int n_derived_params = dparam_list->n_dparams;
 	if (mpi_id==0) {
 		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
 		int i;
@@ -9925,12 +9986,12 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
 		for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << param_list->dparams[i]->name << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
 		for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << param_list->dparams[i]->name << "\t" << param_list->dparams[i]->latex_name << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
@@ -10205,7 +10266,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 	}
 
 	int n_fitparams = param_list->nparams;
-	int n_derived_params = param_list->n_dparams;
+	int n_derived_params = dparam_list->n_dparams;
 	if (mpi_id==0) {
 		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
 		int i;
@@ -10216,12 +10277,12 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
 		for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << param_list->dparams[i]->name << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
 		for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << param_list->dparams[i]->name << "\t" << param_list->dparams[i]->latex_name << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
@@ -10425,7 +10486,7 @@ void QLens::chi_square_twalk()
 	}
 
 	int n_fitparams = param_list->nparams;
-	int n_derived_params = param_list->n_dparams;
+	int n_derived_params = dparam_list->n_dparams;
 	double *fitparams = param_list->values;
 	InputPoint(fitparams,param_list->prior_limits_hi,param_list->prior_limits_lo,n_fitparams);
 	SetNDerivedParams(n_derived_params);
@@ -10446,12 +10507,12 @@ void QLens::chi_square_twalk()
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
 		for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << param_list->dparams[i]->name << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
 		for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << param_list->dparams[i]->name << "\t" << param_list->dparams[i]->latex_name << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
@@ -10551,11 +10612,11 @@ bool QLens::adopt_model(dvector &fitpars)
 	return true;
 }
 
-void QLens::output_bestfit_model()
+void QLens::output_bestfit_model(const bool show_parameter_errors)
 {
 	if ((nlens == 0) and (n_sb==0)) { warn(warnings,"No fit model has been specified"); return; }
 	int n_fitparams = param_list->nparams;
-	int n_derived_params = param_list->n_dparams;
+	int n_derived_params = dparam_list->n_dparams;
 	if (n_fitparams == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
 	if (bestfitparams.size() != n_fitparams) { warn(warnings,"Best-fit point number of params does not match current number"); return; }
 	if (fit_output_dir != ".") create_output_directory();
@@ -10568,12 +10629,12 @@ void QLens::output_bestfit_model()
 	string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 	ofstream pnamefile(pnamefile_str.c_str());
 	for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
-	for (i=0; i < n_derived_params; i++) pnamefile << param_list->dparams[i]->name << endl;
+	for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 	pnamefile.close();
 	string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 	ofstream lpnamefile(lpnamefile_str.c_str());
 	for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
-	for (i=0; i < n_derived_params; i++) lpnamefile << param_list->dparams[i]->name << "\t" << param_list->dparams[i]->latex_name << endl;
+	for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 	lpnamefile.close();
 
 	string bestfit_filename = fit_output_dir + "/" + fit_output_filename + ".bf";
@@ -10586,7 +10647,7 @@ void QLens::output_bestfit_model()
 
 	string outfile_str = fit_output_dir + "/" + fit_output_filename + ".bestfit";
 	ofstream outfile(outfile_str.c_str());
-	if ((calculate_parameter_errors) and (bestfit_fisher_inverse.is_initialized()))
+	if ((show_parameter_errors) and (bestfit_fisher_inverse.is_initialized()))
 	{
 		if (bestfit_fisher_inverse.rows() != n_fitparams) die("dimension of Fisher matrix does not match number of fit parameters (%i vs %i)",bestfit_fisher_inverse.rows(),n_fitparams);
 		string fisher_inv_filename = fit_output_dir + "/" + fit_output_filename + ".pcov"; // inverse-fisher matrix is the parameter covariance matrix
@@ -10669,7 +10730,7 @@ bool QLens::add_dparams_to_chain(string file_ext)
 
 	int i, n_fitparams, nparams, n_derived_params, n_dparams_old;
 	n_fitparams = param_list->nparams;
-	n_derived_params = param_list->n_dparams;
+	n_derived_params = dparam_list->n_dparams;
 	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 	ifstream pnumfile(pnumfile_str.c_str());
 	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
@@ -10702,7 +10763,7 @@ bool QLens::add_dparams_to_chain(string file_ext)
 			pnamefile_old.getline(dataline,n_characters);
 			pnamefile << dataline << endl;
 		}
-		for (i=0; i < n_derived_params; i++) pnamefile << param_list->dparams[i]->name << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		pnamefile_old.close();
 
@@ -10714,7 +10775,7 @@ bool QLens::add_dparams_to_chain(string file_ext)
 			lpnamefile_old.getline(dataline,n_characters);
 			lpnamefile << dataline << endl;
 		}
-		for (i=0; i < n_derived_params; i++) lpnamefile << param_list->dparams[i]->name << "\t" << param_list->dparams[i]->latex_name << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		lpnamefile_old.close();
 
@@ -12085,11 +12146,11 @@ double QLens::loglike_point_source(double* params)
 
 void QLens::fitmodel_calculate_derived_params(double* params, double* derived_params)
 {
-	if (param_list->n_dparams==0) return;
+	if (dparam_list->n_dparams==0) return;
 	double transformed_params[param_list->nparams];
 	fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
 	if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
-	for (int i=0; i < param_list->n_dparams; i++) derived_params[i] = param_list->dparams[i]->get_derived_param(fitmodel);
+	for (int i=0; i < dparam_list->n_dparams; i++) derived_params[i] = dparam_list->dparams[i]->get_derived_param(fitmodel);
 	clear_raw_chisq();
 }
 

@@ -655,6 +655,19 @@ double LensProfile::get_parameter(const int i)
 	else return *(param[i]);
 }
 
+bool LensProfile::lookup_parameter_number(const string name_in, int& paramnum)
+{
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if (paramnames[i]==name_in) {
+			found_match = true;
+			paramnum = i;
+			break;
+		}
+	}
+	return found_match;
+}
+
 bool LensProfile::get_specific_parameter(const string name_in, double& value)
 {
 	bool found_match = false;

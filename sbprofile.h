@@ -147,6 +147,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 		parameter_anchor_ratio = NULL;
 		parameter_anchor_exponent = NULL;
 	}
+	void set_qlens_pointer(QLens* qlens_in) { qlens = qlens_in; }
 
 	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
 	void anchor_center_to_source(SB_Profile** center_anchor_list, const int &center_anchor_source_number);
@@ -239,6 +240,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	virtual void get_fit_parameters(double *fitparams, int &index);
 	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL, const bool include_suffix = false);
 	virtual void get_parameters(double* params);
+	bool lookup_parameter_number(const std::string name_in, int& paramnum);
 	bool get_specific_parameter(const std::string name_in, double& value);
 	bool get_specific_limit(const std::string name_in, double& lower, double& upper);
 	bool update_specific_parameter(const std::string name_in, const double& value);
@@ -302,6 +304,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	int get_sbprofile_nparams() { return sbprofile_nparams; }
 	void check_vary_params();
 	int get_n_vary_params() { return n_vary_params; }
+	bool get_vary_flag(const int paramnum) { return vary_params[paramnum]; }
 	int get_center_anchor_number();
 	void set_theta(double theta_in) { theta=theta_in; update_angle_meta_params(); }
 	void set_center(double xc_in, double yc_in) { x_center = xc_in; y_center = yc_in; }

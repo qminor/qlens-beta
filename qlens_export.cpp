@@ -14,9 +14,9 @@ double default_zsrc_ref = 2;
 
 QLens* global_qlens_ptr = NULL;
 
-void process_cosmology_and_pmode_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_ptr, double& z, double& zs, py::kwargs& kwargs)
+void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_ptr, double& z, double& zs, boolvector& vary_list, py::kwargs& kwargs)
 {
-	bool set_pmode=false, set_cosmo=false, set_qlens=false, set_z=false, set_zs=false;
+	bool set_pmode=false, set_cosmo=false, set_qlens=false, set_z=false, set_zs=false, set_vary=false;
 	if (kwargs) {
 		for (auto item : kwargs) {
 			if (py::cast<string>(item.first)=="pmode") {
@@ -34,6 +34,14 @@ void process_cosmology_and_pmode_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wra
 			} else if (py::cast<string>(item.first)=="zs") {
 				zs = py::cast<double>(item.second);
 				set_zs = true;
+			} else if (py::cast<string>(item.first)=="vary") {
+				py::list py_vary_list = py::cast<py::list>(item.second);
+				vary_list.input(py_vary_list.size());
+				int iter = 0;
+				for (auto item : py_vary_list) {
+					vary_list[iter] = py::cast<bool>(item); iter++;
+				}
+				set_vary = true;
 			}
 		}
 		if (set_pmode) kwargs.attr("pop")("pmode");
@@ -41,6 +49,7 @@ void process_cosmology_and_pmode_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wra
 		if (set_qlens) kwargs.attr("pop")("qlens");
 		if (set_z) kwargs.attr("pop")("z");
 		if (set_zs) kwargs.attr("pop")("zs");
+		if (set_vary) kwargs.attr("pop")("vary");
 
 		if ((set_qlens) and (!set_cosmo) and (qlens_ptr != NULL)) cosmo = qlens_ptr->cosmo;
 	}
@@ -61,13 +70,16 @@ PYBIND11_MODULE(qlens, m) {
 			for (int i=0; i < current.nparams; i++) vals[i] = current.values[i];
 				return vals;
 		})
+		.def("__getitem__", [](ParamList &current, size_t index) {
+			//current.print_parameter_values();
+			return &current.values[index];
+		})
 		.def("print",&ParamList::print_parameter_values)
 		.def("print_stepsizes",&ParamList::print_stepsizes)
 		.def("print_priors",&ParamList::print_priors_and_limits)
 		.def("print_transforms",&ParamList::print_priors_and_transforms)
 		.def("priors",&ParamList::print_priors_and_limits)
 		.def("transforms",&ParamList::print_priors_and_transforms)
-		.def("transform",&ParamList::print_priors_and_transforms)
 		.def("stepsizes", [](ParamList &current) {
 			py::list steps(current.nparams);
 			for (int i=0; i < current.nparams; i++) steps[i] = current.stepsizes[i];
@@ -84,8 +96,11 @@ PYBIND11_MODULE(qlens, m) {
 			return current.update_param_value(name, value);
 		})
 		.def("stepsize", [](ParamList &current, const string name, py::args &args, py::kwargs &kwargs){
-			int paramnum = current.lookup_param_number(name);
-			if (paramnum < 0) throw std::runtime_error("specified parameter name '" + name + "' not recognized");
+			int paramnum = -1;
+			if (name != "") {
+				paramnum = current.lookup_param_number(name);
+				if (paramnum < 0) throw std::runtime_error("specified parameter name '" + name + "' not recognized");
+			}
 			double stepsize = -1.0;
 			double scale_factor = -1.0;
 			if (args.size()>=1) {
@@ -105,11 +120,13 @@ PYBIND11_MODULE(qlens, m) {
 					}
 				}
 			}
-
 			if (stepsize > 0) current.set_stepsize(paramnum,stepsize);
 			if (scale_factor > 0) {
 				current.scale_stepsize(paramnum,scale_factor);
 			}
+			if ((stepsize <= 0) and (scale_factor <= 0)) {
+				if (paramnum <= 0) current.print_stepsizes();
+			};
 		})
 		.def("transform", [](ParamList &current, const string name, const string transform_type_in, py::kwargs &kwargs){
 			int paramnum = current.lookup_param_number(name);
@@ -169,12 +186,12 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			if (!current.set_param_prior(paramnum,prior_type_in,prior_params,joint_prior_paramnum)) throw std::runtime_error("could not set parameter prior");
 		})
-		.def("set_prior_limits", [](ParamList &curr, const std::string &paramname, const double lower, const double upper){
+		.def("set_limits", [](ParamList &curr, const std::string &paramname, const double lower, const double upper){
 			if (curr.set_prior_limit(paramname,lower,upper)==false) {
 				throw std::runtime_error("could not set limits for given parameter " + paramname);
 			}
 		})
-		.def("set_prior_limits", [](ParamList &curr, py::list list){
+		.def("set_limits", [](ParamList &curr, py::list list){
 			std::string paramname;
 			double lower, upper;
 			for (auto arr : list){
@@ -191,6 +208,7 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 		})
+		.def("clear",&ParamList::clear_params)
 		.def("rename", [](ParamList &current, const string old_name, const string new_name){
 			int paramnum = current.lookup_param_number(old_name);
 			if (paramnum < 0) throw std::runtime_error("specified parameter name '" + old_name + "' not recognized");
@@ -201,6 +219,61 @@ PYBIND11_MODULE(qlens, m) {
 			return("\n" + outstring);
 		})
 		;
+
+
+	py::class_<DerivedParamList>(m, "DerivedParamList")
+		.def(py::init<>([](QLens_Wrap* qlens_in){return new DerivedParamList(qlens_in);}))
+		.def("values", [](DerivedParamList &current) {
+			py::list vals(current.n_dparams);
+			for (int i=0; i < current.n_dparams; i++) vals[i] = current.get_dparam(i);
+				return vals;
+		})
+		.def("print",&DerivedParamList::print_dparam_list)
+		.def("add", [](DerivedParamList &current, const string param_type, py::args &args, py::kwargs &kwargs){
+			double param1=-1.0, param2=-1.0;
+			bool use_kpc = false;
+			int lens_number = -1;
+			if (args.size()>=1) {
+				try {
+					param1 = args[0].cast<double>();
+				} catch (...) {
+					throw std::runtime_error("Invalid param1 for derived parameter type '" + param_type + "'");
+				}
+				if (args.size()>=2) {
+					try {
+						param2 = args[1].cast<double>();
+					} catch (...) {
+						throw std::runtime_error("Invalid param2 for derived parameter type '" + param_type + "'");
+					}
+				}
+				if (args.size()>=3) {
+					throw std::runtime_error("Too many non-keyword arguments for derived parameter type '" + param_type + "'");
+				}
+			}
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="lens") {
+					lens_number = py::cast<int>(item.second);
+				} else if (py::cast<string>(item.first)=="use_kpc") {
+					use_kpc = py::cast<bool>(item.second);
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for derived parameter type '" + param_type + "'");
+				}
+			}
+			return current.add_dparam(param_type,param1,lens_number,param2,use_kpc);
+		})
+		.def("remove",&DerivedParamList::remove_dparam)
+		.def("clear",&DerivedParamList::clear_dparams)
+		.def("rename", [](DerivedParamList &current, const string old_name, const string new_name, const string new_latex_name=""){
+			int paramnum = current.lookup_param_number(old_name);
+			if (paramnum < 0) throw std::runtime_error("specified parameter name '" + old_name + "' not recognized");
+			if (!current.rename_dparam(paramnum,new_name,new_latex_name)) throw std::runtime_error("parameter name not unique; parameter could not be renamed");
+		})
+		//.def("__repr__", [](DerivedParamList &a) {
+			//string outstring = a.get_param_values_string();
+			//return("\n" + outstring);
+		//})
+		;
+
 
 	py::class_<ModelParams>(m, "ModelParams")
 		.def(py::init<>([](){return new ModelParams();}))
@@ -227,12 +300,12 @@ PYBIND11_MODULE(qlens, m) {
 				throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
 			}
 		})
-		.def("set_prior_limits", [](ModelParams &curr, const std::string &param, const double lower, const double upper){
+		.def("set_limits", [](ModelParams &curr, const std::string &param, const double lower, const double upper){
 			if (curr.set_limits_specific_parameter(param,lower,upper)==false) {
 				throw std::runtime_error("could not set limits for given parameter " + param);
 			}
 		})
-		.def("set_prior_limits", [](ModelParams &curr, py::list list){
+		.def("set_limits", [](ModelParams &curr, py::list list){
 			std::string paramname;
 			double lower, upper;
 			for (auto arr : list){
@@ -292,12 +365,238 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		;
 
+	py::class_<LensList>(m, "LensList")
+		.def(py::init<>([](QLens_Wrap* qlens_in){return new LensList(qlens_in);}))
+		//.def("add",&LensList::add_lens)
+		.def("add", [](LensList &current, LensProfile* lens_in, py::kwargs &kwargs){
+			Shear *extshear = NULL;
+			int anchor_center_lensnum = -1;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="shear") {
+					try {
+						extshear = py::cast<Shear*>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid Shear lens object passed in for external shear");
+					}
+				} else if (py::cast<string>(item.first)=="anchor_center") {
+					try {
+						anchor_center_lensnum = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid lens number passed in to anchor center to");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for lens.add");
+				}
+			}
+			if (anchor_center_lensnum >= 0) {
+				if (anchor_center_lensnum >= current.nlens) throw std::runtime_error("Lens number for anchoring is greater than nlens-1");
+			}
+			if (extshear != NULL) current.add_lens_extshear(lens_in,extshear);
+			else current.add_lens(lens_in);
+			if (anchor_center_lensnum >= 0) {
+				if (extshear != NULL) current.anchor_lens_center(current.nlens-2,anchor_center_lensnum);
+				else current.anchor_lens_center(current.nlens-1,anchor_center_lensnum);
+			}
+		})
+		.def("clear", [](LensList &current){
+			current.clear();
+		})
+		.def("clear", [](LensList &current, const int num){
+			current.clear(num);
+		})
+		.def("clear", [](LensList &current, const int min, const int max){
+			current.clear(min,max);
+		})
+		.def("clear",&LensList::clear)
+		.def("__getitem__", [](LensList &current, size_t index) {
+			//current.print_parameter_values();
+			return current.lenslistptr[index];
+		})
+		.def("__len__", [](LensList &current) {
+			return current.nlens;
+		})
+		.def("__repr__", [](LensList &current) {
+			string lens_info;
+			for (int i=0; i < current.nlens; i++) lens_info += "\n" + current.lenslistptr[i]->get_parameters_string();
+			return(lens_info);
+		})
+		;
+
+	py::class_<SourceList>(m, "SourceList")
+		.def(py::init<>([](QLens_Wrap* qsrc_in){return new SourceList(qsrc_in);}))
+		//.def("add",&SourceList::add_lens)
+		.def("add", [](SourceList &current, SB_Profile* src_in, py::kwargs &kwargs){
+			bool is_lensed = true;
+			bool anchor_to_src = false;
+			bool anchor_to_lens = false;
+			int anchor_center_srcnum = -1;
+			int anchor_center_lensnum = -1;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="is_lensed") {
+					try {
+						is_lensed = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean argument for 'is_lensed' (should be True or False)");
+					}
+				} else if (py::cast<string>(item.first)=="anchor_center") {
+					if (anchor_to_lens) throw std::runtime_error("cannot anchor to both a lens and a source");
+					try {
+						anchor_center_srcnum = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid src number passed in to anchor center to");
+					}
+					anchor_to_src = true;
+				} else if (py::cast<string>(item.first)=="anchor_lens_center") {
+					if (anchor_to_src) throw std::runtime_error("cannot anchor to both a lens and a source");
+					try {
+						anchor_center_lensnum = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid lens number passed in to anchor center to");
+					}
+					anchor_to_lens = true;
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for src.add");
+				}
+			}
+			if (anchor_to_src) {
+				if (anchor_center_srcnum >= current.n_sb) throw std::runtime_error("src number for anchoring is greater than n_sb-1");
+			}
+			current.add_source(src_in,is_lensed);
+			if (anchor_to_src) {
+				current.anchor_center_to_source(current.n_sb-1,anchor_center_srcnum);
+			} else if (anchor_to_lens) {
+				current.anchor_center_to_lens(current.n_sb-1,anchor_center_lensnum);
+			}
+		})
+		.def("clear", [](SourceList &current){
+			current.clear();
+		})
+		.def("clear", [](SourceList &current, const int num){
+			current.clear(num);
+		})
+		.def("clear", [](SourceList &current, const int min, const int max){
+			current.clear(min,max);
+		})
+		.def("clear",&SourceList::clear)
+		.def("__getitem__", [](SourceList &current, size_t index) {
+			//current.print_parameter_values();
+			return current.srclistptr[index];
+		})
+		.def("__len__", [](SourceList &current) {
+			return current.n_sb;
+		})
+		.def("__repr__", [](SourceList &current) {
+			string src_info;
+			for (int i=0; i < current.n_sb; i++) src_info += "\n" + current.srclistptr[i]->get_parameters_string();
+			return(src_info);
+		})
+		;
+
+	py::class_<PixSrcList>(m, "PixSrcList")
+		.def(py::init<>([](QLens_Wrap* qsrc_in){return new PixSrcList(qsrc_in);}))
+		//.def("add",&PixSrcList::add_lens)
+		.def("add", [](PixSrcList &current, py::kwargs &kwargs){
+			int band = 0;
+			double zsrc = current.qlens->source_redshift;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="band") {
+					try {
+						band = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid band number");
+					}
+				} else if (py::cast<string>(item.first)=="z") {
+					try {
+						zsrc = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid src redshift");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for pixsrc.add");
+				}
+			}
+			current.add_pixsrc(zsrc,band);
+		})
+
+		.def("clear", [](PixSrcList &current){
+			current.clear();
+		})
+		.def("clear", [](PixSrcList &current, const int num){
+			current.clear(num);
+		})
+		.def("clear", [](PixSrcList &current, const int min, const int max){
+			current.clear(min,max);
+		})
+		.def("clear",&PixSrcList::clear)
+		.def("__getitem__", [](PixSrcList &current, size_t index) {
+			//current.print_parameter_values();
+			return current.pixsrclist_ptr[index];
+		})
+		.def("__len__", [](PixSrcList &current) {
+			return current.n_pixsrc;
+		})
+		.def("__repr__", [](PixSrcList &current) {
+			string src_info;
+			for (int i=0; i < current.n_pixsrc; i++) src_info += "\n" + current.pixsrclist_ptr[i]->get_parameters_string();
+			return(src_info);
+		})
+		;
+
+	py::class_<PtSrcList>(m, "PtSrcList")
+		.def(py::init<>([](QLens_Wrap* qsrc_in){return new PtSrcList(qsrc_in);}))
+		//.def("add",&PtSrcList::add_lens)
+		.def("add", [](PtSrcList &current, const double x, const double y, py::kwargs &kwargs){
+			double zsrc = current.qlens->source_redshift;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="z") {
+					try {
+						zsrc = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid src redshift");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for ptsrc.add");
+				}
+			}
+			lensvector pos;
+			pos[0]=x;
+			pos[1]=y;
+			current.add_ptsrc(zsrc,pos,false);
+		})
+
+		.def("clear", [](PtSrcList &current){
+			current.clear();
+		})
+		.def("clear", [](PtSrcList &current, const int num){
+			current.clear(num);
+		})
+		.def("clear", [](PtSrcList &current, const int min, const int max){
+			current.clear(min,max);
+		})
+		//.def("clear",&PtSrcList::clear)
+		.def("__getitem__", [](PtSrcList &current, size_t index) {
+			//current.print_parameter_values();
+			return current.ptsrclist_ptr[index];
+		})
+		.def("__len__", [](PtSrcList &current) {
+			return current.n_ptsrc;
+		})
+		.def("__repr__", [](PtSrcList &current) {
+			string src_info;
+			for (int i=0; i < current.n_ptsrc; i++) src_info += "\n" + current.ptsrclist_ptr[i]->get_parameters_string();
+			return(src_info);
+		})
+		;
+
 	py::class_<LensProfile>(m, "LensProfile")
 		.def(py::init<>([](){return new LensProfile();}))
 		.def(py::init<const LensProfile*>())
 		// .def(py::init<>([](const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in, Lens* lens_in){
 		//		return new LensProfile(splinefile, zlens_in, zsrc_in, q_in, theta_degrees, xc_in, yc_in, nn, acc, qx_in, f_in, lens_in);
 		// }))
+		.def("print_params", &LensProfile::print_parameters)
+		.def("print_vary_params", &LensProfile::print_vary_parameters)
+		.def("get_model_name", &LensProfile::get_model_name)
 		.def("update", [](LensProfile &current, py::dict dict){
 			for (auto item : dict) {
 				if(!current.update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second)))
@@ -308,10 +607,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def("update", [](LensProfile &current, const string name, const double value){
 			return current.update_specific_parameter(name, value);
 		})
-		.def("print_params", &LensProfile::print_parameters)
-		.def("print_vary_params", &LensProfile::print_vary_parameters)
 		.def("set_center", &LensProfile::set_center)
-		.def("get_model_name", &LensProfile::get_model_name)
 		.def("vary", [](LensProfile &current, py::list list){ 
 			std::vector<double> lst = py::cast<std::vector<double>>(list);
 			boolvector val(lst.size());
@@ -323,12 +619,12 @@ PYBIND11_MODULE(qlens, m) {
 				throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
 			}
 		})
-		.def("set_prior_limits", [](LensProfile &curr, const std::string &param, const double lower, const double upper){
+		.def("set_limits", [](LensProfile &curr, const std::string &param, const double lower, const double upper){
 			if (curr.set_limits_specific_parameter(param,lower,upper)==false) {
 				throw std::runtime_error("could not set limits for given parameter " + param);
 			}
 		})
-		.def("set_prior_limits", [](LensProfile &curr, py::list list){
+		.def("set_limits", [](LensProfile &curr, py::list list){
 			std::string paramname;
 			double lower, upper;
 			for (auto arr : list){
@@ -344,6 +640,29 @@ PYBIND11_MODULE(qlens, m) {
 					throw std::runtime_error("could not set limits for given parameter " + paramname);
 				}
 			}
+		})
+		//.def("get_prior_limits", [](LensProfile &curr){
+			//int nparams = current.n_vary_params;
+			//dvector lower(nparams);
+			//dvector upper(nparams);
+			//current.get_limits(lower,upper);
+			//// I think it should return a list of tuples with lower limit and upper limit. Do this later
+		//})
+		.def("anchor_param", [](LensProfile &current, const string name, LensProfile* param_anchor_lens, const string anchor_param_name){
+			int paramnum = -1;
+			int anchor_paramnum = -1;
+			if (!current.lookup_parameter_number(name,paramnum)) throw std::runtime_error("could not find parameter '" + name +"'");
+			if (current.get_vary_flag(paramnum)==true) throw std::runtime_error("cannot anchor parameter if its vary flag is set to 'True'");
+			if (!param_anchor_lens->lookup_parameter_number(anchor_param_name,anchor_paramnum)) throw std::runtime_error("could not find parameter '" + anchor_param_name +"'");
+			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,1.0,1.0,param_anchor_lens);
+		})
+		.def("anchor_param", [](LensProfile &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name){
+			int paramnum = -1;
+			int anchor_paramnum = -1;
+			if (!current.lookup_parameter_number(name,paramnum)) throw std::runtime_error("could not find parameter '" + name +"'");
+			if (current.get_vary_flag(paramnum)==true) throw std::runtime_error("cannot anchor parameter if its vary flag is set to 'True'");
+			if (!param_anchor_source->lookup_parameter_number(anchor_param_name,anchor_paramnum)) throw std::runtime_error("could not find parameter '" + anchor_param_name +"'");
+			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,1.0,1.0,param_anchor_source);
 		})
 		.def("anchor_center",&LensProfile::anchor_center_to_lens)
 		.def("__repr__", [](LensProfile &a) {
@@ -371,8 +690,9 @@ PYBIND11_MODULE(qlens, m) {
 			QLens_Wrap* qlens_ptr = NULL;
 			double zlens = default_zlens;
 			double zsrc_ref = default_zsrc_ref;
+			boolvector vary_list;
 
-			process_cosmology_and_pmode_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, kwargs);
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
 
 			double b,p2,s,q1,q2,xc,yc;
 			b = py::cast<double>(dict["b"]);
@@ -397,6 +717,11 @@ PYBIND11_MODULE(qlens, m) {
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
 			SPLE_Lens* sple = new SPLE_Lens(zlens,zsrc_ref,b,p2,s,q1,q2,xc,yc,pmode,cosmo_in);
 			if (qlens_ptr != NULL) qlens_ptr->add_lens(sple);
+			if (vary_list.size() > 0) {
+				if (sple->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+				}
+			}
 			return sple;
 		}))
 		//.def("initialize", [](SPLE_Lens &current, py::dict dict){
@@ -417,7 +742,8 @@ PYBIND11_MODULE(qlens, m) {
 			QLens_Wrap* qlens_ptr = NULL;
 			double zlens = default_zlens;
 			double zsrc_ref = default_zsrc_ref;
-			process_cosmology_and_pmode_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, kwargs);
+			boolvector vary_list;
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
 			double p1, p2, xc, yc;
 			if (!Shear::use_shear_component_params) {
 					p1 = py::cast<double>(dict["shear"]);
@@ -438,8 +764,12 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			Shear* shearlens = new Shear(zlens,zsrc_ref,p1,p2,xc,yc,cosmo_in);
 			if (qlens_ptr != NULL) qlens_ptr->add_lens(shearlens);
+			if (vary_list.size() > 0) {
+				if (shearlens->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+				}
+			}
 			return shearlens;
-
 		}))
 		;
 
@@ -452,7 +782,8 @@ PYBIND11_MODULE(qlens, m) {
 			QLens_Wrap* qlens_ptr = NULL;
 			double zlens = default_zlens;
 			double zsrc_ref = default_zsrc_ref;
-			process_cosmology_and_pmode_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, kwargs);
+			boolvector vary_list;
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
 
 			double p1,p2,p3,q1,q2,xc,yc;
 			if (pmode==0) {
@@ -484,6 +815,11 @@ PYBIND11_MODULE(qlens, m) {
 
 			dPIE_Lens* dpie = new dPIE_Lens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
 			if (qlens_ptr != NULL) qlens_ptr->add_lens(dpie);
+			if (vary_list.size() > 0) {
+				if (dpie->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+				}
+			}
 			return dpie;
 		}))
 		;
@@ -497,11 +833,12 @@ PYBIND11_MODULE(qlens, m) {
 			QLens_Wrap* qlens_ptr = NULL;
 			double zlens = default_zlens;
 			double zsrc_ref = default_zsrc_ref;
+			boolvector vary_list;
 			bool use_median_c = false;
 			bool anchor_median_c = true; // keep c set to median if use_median_c is turned on
 			double c_median_factor = 1.0;
 			if (kwargs) {
-				process_cosmology_and_pmode_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, kwargs);
+				process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
 				for (auto item : kwargs) {
 					if (py::cast<string>(item.first)=="c_median") {
 						use_median_c = py::cast<bool>(item.second);
@@ -541,6 +878,11 @@ PYBIND11_MODULE(qlens, m) {
 				if (!anchor_median_c) nfw->unassign_special_anchored_parameter();
 			}
 			if (qlens_ptr != NULL) qlens_ptr->add_lens(nfw);
+			if (vary_list.size() > 0) {
+				if (nfw->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+				}
+			}
 			return nfw;
 		}))
 		;
@@ -586,7 +928,8 @@ PYBIND11_MODULE(qlens, m) {
 			QLens_Wrap* qlens_ptr = NULL;
 			double zlens = default_zlens;
 			double zsrc_ref = default_zsrc_ref;
-			process_cosmology_and_pmode_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, kwargs);
+			boolvector vary_list;
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
 
 			double p1,p2,p3,q1,q2,xc,yc;
 			if (pmode==0) {
@@ -600,6 +943,11 @@ PYBIND11_MODULE(qlens, m) {
 
 			SersicLens* sersic = new SersicLens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
 			if (qlens_ptr != NULL) qlens_ptr->add_lens(sersic);
+			if (vary_list.size() > 0) {
+				if (sersic->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+				}
+			}
 			return sersic;
 		}))
 		;
@@ -643,6 +991,9 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			return true;
 		})
+		.def("update", [](SB_Profile &current, const string name, const double value){
+			return current.update_specific_parameter(name, value);
+		})
 		.def("print_params", &SB_Profile::print_params)
 		.def("print_vary_params", &SB_Profile::print_vary_parameters)
 		.def("set_center", &SB_Profile::set_center)
@@ -658,12 +1009,12 @@ PYBIND11_MODULE(qlens, m) {
 				throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
 			}
 		})
-		.def("set_prior_limits", [](SB_Profile &curr, const std::string &param, const double lower, const double upper){
+		.def("set_limits", [](SB_Profile &curr, const std::string &param, const double lower, const double upper){
 			if (curr.set_limits_specific_parameter(param,lower,upper)==false) {
 				throw std::runtime_error("could not set limits for given parameter " + param);
 			}
 		})
-		.def("set_prior_limits", [](SB_Profile &curr, py::list list){
+		.def("set_limits", [](SB_Profile &curr, py::list list){
 			std::string paramname;
 			double lower, upper;
 			for (auto arr : list){
@@ -681,6 +1032,14 @@ PYBIND11_MODULE(qlens, m) {
 			}
 		})
 		.def("sb", &SB_Profile::surface_brightness)
+		.def("anchor_param", [](SB_Profile &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name){
+			int paramnum = -1;
+			int anchor_paramnum = -1;
+			if (!current.lookup_parameter_number(name,paramnum)) throw std::runtime_error("could not find parameter '" + name +"'");
+			if (current.get_vary_flag(paramnum)==true) throw std::runtime_error("cannot anchor parameter if its vary flag is set to 'True'");
+			if (!param_anchor_source->lookup_parameter_number(anchor_param_name,anchor_paramnum)) throw std::runtime_error("could not find parameter '" + anchor_param_name +"'");
+			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,1.0,1.0,param_anchor_source);
+		})
 		//.def("anchor_center",&SB_Profile::anchor_center_to_source)
 		.def("__repr__", [](SB_Profile &a) {
 			string outstring = a.get_parameters_string();
@@ -758,30 +1117,7 @@ PYBIND11_MODULE(qlens, m) {
 	py::class_<DelaunaySourceGrid, ModelParams, std::unique_ptr<DelaunaySourceGrid, py::nodelete>>(m, "DelaunaySrcGrid")
 		.def(py::init<>([](QLens* qlens_in){return new DelaunaySourceGrid(qlens_in);}))
 		.def(py::init<const DelaunaySourceGrid*>())
-		/*
-		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
-			int pmode=0;
-			Cosmology* cosmo_in = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
-			process_cosmology_and_pmode_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, kwargs);
-
-			double p1,p2,p3,q1,q2,xc,yc;
-			if (pmode==0) {
-				p1 = py::cast<double>(dict["kappa_e"]);
-			} else if (pmode==1) {
-				p1 = py::cast<double>(dict["Mstar"]);
-			} else throw std::runtime_error("Can only choose pmode=0 or 1");
-			p2 = py::cast<double>(dict["R_eff"]);
-			p3 = py::cast<double>(dict["n"]);
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
-
-			return new DelaunaySourceGrid(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
-		}))
-		*/
 		;
-
-
 
 	py::class_<QLens_Wrap>(m, "QLens")
 		.def(py::init<>([](py::kwargs &kwargs){
@@ -826,6 +1162,9 @@ PYBIND11_MODULE(qlens, m) {
 			return new QLens_Wrap(zlens,zsrc,zsrc_ref,cosmo_in);
 		}))
 		.def_readonly("cosmo", &QLens_Wrap::cosmo)
+		.def("objects", [](QLens_Wrap &current){ 
+			return std::make_tuple(current.lenslist, current.srclist, current.ptsrclist, current.pixsrclist, current.param_list, current.dparam_list);
+		})
 
 		.def("imgdata_display", &QLens_Wrap::imgdata_display)
 		.def("imgdata_add", &QLens_Wrap::imgdata_add, 
@@ -844,20 +1183,20 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("nimg_prior", &QLens_Wrap::n_image_prior)
 		.def_readwrite("nimg_threshold", &QLens_Wrap::n_image_threshold)
 
-		.def("lens_clear", &QLens_Wrap::lens_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
+		.def("clear_lenses", &QLens_Wrap::lens_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
 		.def_property("shear_components", &QLens_Wrap::get_shear_components_mode, &QLens_Wrap::set_shear_components_mode)
 		.def_property("ellipticity_components", &QLens_Wrap::get_ellipticity_components_mode, &QLens_Wrap::set_ellipticity_components_mode)
 		.def_property("split_imgpixels", &QLens_Wrap::get_split_imgpixels, &QLens_Wrap::set_split_imgpixels)
 		.def("lens_list", &QLens_Wrap::lens_display)
 		.def("src_list", &QLens_Wrap::src_display)
 		.def("pixsrc_list", &QLens_Wrap::pixsrc_display)
-		.def_readonly("src", &QLens_Wrap::sb_list_vec)
-		.def_readonly("pixsrc", &QLens_Wrap::pixsrc_list_vec)
-		.def("pixsrc_clear", &QLens_Wrap::pixsrc_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
+		//.def("pixsrc_clear", &QLens_Wrap::pixsrc_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
 		//.def("remove_pixsrc", &QLens_Wrap::remove_pixellated_source)
-		//.def_readonly("pixsrc", &QLens_Wrap::pixsrc_list_vec)
 		//.def("lens", &QLens_Wrap::get_lens_pointer)
-		.def_readonly("lens", &QLens_Wrap::lens_list_vec)
+		.def_readonly("lens", &QLens_Wrap::lenslist)
+		.def_readonly("src", &QLens_Wrap::srclist)
+		.def_readonly("pixsrc", &QLens_Wrap::pixsrclist)
+		.def_readonly("ptsrc", &QLens_Wrap::ptsrclist)
 		.def("add_lens", &QLens_Wrap::add_lens_tuple, "Input should be a tuple that specifies the lens' zl and zs value. \nEx: (Lens1, zl1, zs1)")
 		.def("add_lens", &QLens_Wrap::add_lens, "Input should be a lens object.")
 		.def("add_lens_extshear", &QLens_Wrap::add_lens_extshear, "Input should be a	lens object, and a shear lens object to anchor to the original lens object.")
@@ -908,37 +1247,72 @@ PYBIND11_MODULE(qlens, m) {
 				py::arg("status") = false, py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, 
 				py::arg("verbal") = false) 
 		.def("get_data_imagesets", &QLens_Wrap::export_to_ImageDataSet)
-		.def("run_fit", [](QLens_Wrap &curr, const std::string &fitmethod="simplex"){
-				if(fitmethod=="simplex") {
-						curr.chi_square_fit_simplex();
-				} else if (fitmethod=="powell") {
-						curr.chi_square_fit_powell();
-				} else if (fitmethod=="nest") {
-						curr.nested_sampling();
-				} else if (fitmethod=="multinest") {
-						curr.multinest(false,false);
-				} else if (fitmethod=="polychord") {
-						curr.polychord(true,false);
-				} else if (fitmethod=="twalk") {
-						curr.chi_square_twalk();
+		.def("run_fit", [](QLens_Wrap &curr, const std::string &fitmethod, py::kwargs &kwargs){
+			bool adopt_bestfit = false;
+			bool show_errors = true;
+			bool resume = false;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="adopt") {
+					try {
+						adopt_bestfit = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid argument for 'adopt'; must be true or false");
+					}
+				} else if (py::cast<string>(item.first)=="resume") {
+					try {
+						adopt_bestfit = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid argument for 'resume'; must be true or false");
+					}
+				} else if (py::cast<string>(item.first)=="show_errors") {
+					try {
+						adopt_bestfit = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid argument for 'show_errors'; must be true or false");
+					}
 				} else {
-						throw std::runtime_error("Available fitmethods: simplex (default), powell, nest, multinest, polychord, twalk");
+					throw std::runtime_error("Unknown keyword argument for 'run_fit'");
 				}
+			}
+
+			if(fitmethod=="simplex") {
+					curr.chi_square_fit_simplex(show_errors);
+			} else if (fitmethod=="powell") {
+					curr.chi_square_fit_powell(show_errors);
+			} else if (fitmethod=="nest") {
+					curr.nested_sampling();
+			} else if (fitmethod=="multinest") {
+					curr.multinest(resume,false);
+			} else if (fitmethod=="polychord") {
+					curr.polychord(resume,false);
+			} else if (fitmethod=="twalk") {
+					curr.chi_square_twalk();
+			} else {
+					throw std::runtime_error("Available fitmethods: simplex (default), powell, nest, multinest, polychord, twalk");
+			}
 		})
 		.def("set_source_mode", [](QLens_Wrap &curr, const std::string &source_mode="ptsource"){
-				if(source_mode=="ptsource") {
-						curr.source_fit_mode = Point_Source;
-				} else if (source_mode=="cartesian") {
-						curr.source_fit_mode = Cartesian_Source;
-				} else if (source_mode=="delaunay") {
-						curr.source_fit_mode = Delaunay_Source;
-				} else if (source_mode=="sbprofile") {
-						curr.source_fit_mode = Parameterized_Source;
-				} else if (source_mode=="shapelet") {
-						curr.source_fit_mode = Shapelet_Source;
-				} else {
-						throw std::runtime_error("Available source_modes: ptsource, cartesian, delaunay, sbprofile, shapelet");
-				}
+			if(source_mode=="ptsource") {
+					curr.source_fit_mode = Point_Source;
+			} else if (source_mode=="cartesian") {
+					curr.source_fit_mode = Cartesian_Source;
+			} else if (source_mode=="delaunay") {
+					curr.source_fit_mode = Delaunay_Source;
+			} else if (source_mode=="sbprofile") {
+					curr.source_fit_mode = Parameterized_Source;
+			} else if (source_mode=="shapelet") {
+					curr.source_fit_mode = Shapelet_Source;
+			} else {
+					throw std::runtime_error("Available source_modes: ptsource, cartesian, delaunay, sbprofile, shapelet");
+			}
+		})
+		.def("source_mode", [](QLens_Wrap &curr){
+			if (curr.source_fit_mode == Point_Source) cout << "ptsource" << endl;
+			else if (curr.source_fit_mode == Cartesian_Source) cout << "cartesian" << endl;
+			else if (curr.source_fit_mode == Delaunay_Source) cout << "delaunay" << endl;
+			else if (curr.source_fit_mode == Parameterized_Source) cout << "sbprofile" << endl;
+			else if (curr.source_fit_mode == Shapelet_Source) cout << "shapelet" << endl;
+			else throw std::runtime_error("Source_modes not recognized");
 		})
 		//.def("use_bestfit", &QLens_Wrap::use_bestfit)
 		.def("use_bestfit", [](QLens_Wrap &curr){
@@ -946,15 +1320,9 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("test_lens", &QLens_Wrap::test_lens_functions)
 		.def("sort_critical_curves", &QLens_Wrap::sort_critical_curves)
-		//.def("setup_fitparams", &QLens_Wrap::setup_fit_parameters)
 		.def("init_fitmodel", &QLens_Wrap::initialize_fitmodel, py::arg("run_fit_in") = true)
 		.def_readonly("params", &QLens_Wrap::param_list)
-		//.def("fitparams", [](QLens_Wrap &current){ 
-			//vector<double> fitparams_vec;
-			//for (int i=0; i < current.fitparams.size(); i++) fitparams_vec.push_back(current.fitparams[i]);
-			//py::list py_fitparams = py::cast(fitparams_vec);
-			//return py_fitparams;
-		//})
+		.def_readonly("dparams", &QLens_Wrap::dparam_list)
 		.def("adopt_model", [](QLens_Wrap &current, py::list param_list){ 
 				std::vector<double> plst = py::cast<std::vector<double>>(param_list);
 				dvector param_vec(plst.size());
@@ -1026,8 +1394,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def("pos", [](lensvector &lens){ return std::make_tuple(lens.v[0], lens.v[1]); })
 		;
 
-	py::class_<PointSource>(m, "PointSource")
-		.def(py::init<>([](){ return new PointSource(); }))
+	py::class_<PointSource, ModelParams, std::unique_ptr<PointSource, py::nodelete>>(m, "PtSrc")
+		.def(py::init<>([](QLens* qlens_in){ return new PointSource(qlens_in); }))
 		// .def()
 		// .def("print", &PointSource::print)
 		//.def("print", [](&PointSource curr, bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL){

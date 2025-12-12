@@ -356,6 +356,7 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL);
 	virtual double get_parameter(const int i);
 	virtual void get_parameters(double* params);
+	bool lookup_parameter_number(const std::string name_in, int& paramnum);
 	bool get_specific_parameter(const std::string name_in, double& value);
 	bool get_specific_limit(const std::string name_in, double& lower, double& upper);
 	virtual void get_parameters_pmode(const int pmode_in, double* params);
@@ -437,6 +438,7 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 	int get_n_params() { return n_params; }
 	int get_lensprofile_nparams() { return lensprofile_nparams; }
 	int get_n_vary_params() { return n_vary_params; }
+	bool get_vary_flag(const int paramnum) { return vary_params[paramnum]; }
 	int get_center_anchor_number() { return center_anchor_lens->lens_number; }
 	virtual int get_special_parameter_anchor_number() { return -1; } // no special parameters can be center_anchored for the base class
 	void set_zsrc_ref(const double zsrc_ref_in) { zsrc_ref = zsrc_ref_in; }

@@ -804,6 +804,7 @@ bool SB_Profile::set_limits_specific_parameter(const string name_in, const doubl
 void SB_Profile::update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index)
 {
 	// in this case, the limits are being updated from the fitparams list, so there is no need to call register_lens_prior_limits
+	if (!include_limits) include_limits = true;
 	for (int i=0; i < n_vary_params; i++) {
 		if (limits_changed[index]) {
 			lower_limits[i] = lower[index];
@@ -819,6 +820,19 @@ void SB_Profile::get_parameters(double* params)
 		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
+}
+
+bool SB_Profile::lookup_parameter_number(const string name_in, int& paramnum)
+{
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if (paramnames[i]==name_in) {
+			found_match = true;
+			paramnum = i;
+			break;
+		}
+	}
+	return found_match;
 }
 
 bool SB_Profile::get_specific_parameter(const string name_in, double& value)
@@ -1133,7 +1147,6 @@ void SB_Profile::assign_anchored_parameter(const int& paramnum, const int& ancho
 	if (anchor_paramnum >= param_anchor_source->n_params) die("Parameter does not exist for source you are anchoring to");
 	anchor_parameter_to_source[paramnum] = true;
 	parameter_anchor_source[paramnum] = param_anchor_source;
-	//(*param_anchor_source->param[0]) = 88;
 	parameter_anchor_paramnum[paramnum] = anchor_paramnum;
 	if ((!use_implicit_ratio) and (!use_exponent)) {
 		parameter_anchor_ratio[paramnum] = 1.0;

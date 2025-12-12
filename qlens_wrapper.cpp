@@ -150,8 +150,6 @@ public:
 		}
 	}
 
-
-
 	void add_lens_tuple(std::tuple<LensProfile*, double, double> lens_tuple) {
 		double zl, zs;
 		LensProfile* curr;
@@ -527,7 +525,6 @@ public:
 		else if (regularization_method == Squared_Exponential_Kernel) method = "sqexp_kernel";
 		return method;
 	}
-
 
 	double LogLikeListFunc(py::list param_list)
 	{

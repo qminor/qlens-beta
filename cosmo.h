@@ -54,7 +54,6 @@ class Cosmology : public ModelParams, public Spline, public Romberg, public Bren
 	double A_s; // dimensionless curvature power spectrum at the pivot scale
 	double ns, running;
 	double zroot;
-	QLens* qlens;
 
 	double k_pivot; // CMB pivot scale
 	static const double default_omega_baryon;
@@ -128,9 +127,12 @@ class Cosmology : public ModelParams, public Spline, public Romberg, public Bren
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
 		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s,true);
 	}
-	void set_qlens(QLens* qlensptr) { qlens = qlensptr; }
 	void setup_parameters(const bool initial_setup);   // don't need this, unless we want to work with ModelParams pointers in lens.cpp for parameter manipulation?
 	void update_meta_parameters(const bool varied_only_fitparams); 
+	void get_parameter_numbers_from_qlens(int& pi, int& pf);
+	bool register_vary_parameters_in_qlens();
+	void register_limits_in_qlens();
+	void update_fitparams_in_qlens();
 	void copy_cosmo_data(const Cosmology* cosmo_in);
 
 	void set_pivot_scale(double pscale) { k_pivot = pscale; }

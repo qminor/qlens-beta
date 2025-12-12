@@ -173,6 +173,31 @@ void Cosmology::update_meta_parameters(const bool varied_only_fitparams)
 	}
 }
 
+void Cosmology::get_parameter_numbers_from_qlens(int& pi, int& pf)
+{
+	if (qlens) qlens->get_cosmo_parameter_numbers(pi,pf);
+}
+
+bool Cosmology::register_vary_parameters_in_qlens()
+{
+	return qlens->register_cosmo_vary_parameters();
+	// this is a virtual function that must be defined for each inherited class
+}
+
+void Cosmology::register_limits_in_qlens()
+{
+	if (qlens != NULL) {
+		qlens->register_cosmo_prior_limits();
+	}
+}
+
+void Cosmology::update_fitparams_in_qlens()
+{
+	if (qlens != NULL) {
+		qlens->update_cosmo_fitparams();
+	}
+}
+
 int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double n_massive_neutrinos, double omega_lamb, double hub, double A_s_in, bool normalize_by_sigma8)
 {
 	omega_m = omega_matter;

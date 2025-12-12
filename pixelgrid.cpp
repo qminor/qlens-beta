@@ -110,13 +110,13 @@ void ImagePixelGrid::deallocate_multithreaded_variables()
 PointSource::PointSource(QLens* lens_in) : ModelParams()
 {
 	model_name = "ptsrc";
-	lens = lens_in;
+	qlens = lens_in;
 	setup_parameters(true);
 }
 
 PointSource::PointSource(QLens* lens_in, const lensvector& sourcept, const double zsrc_in) : ModelParams()
 {
-	lens = lens_in;
+	qlens = lens_in;
 	setup_parameters(true);
 	zsrc = zsrc_in;
 	pos[0] = sourcept[0];
@@ -147,7 +147,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 	int indx = 0;
 
 	include_shift = false;
-	if ((lens) and (lens->include_ptsrc_shift)) include_shift = true;
+	if ((qlens) and (qlens->include_ptsrc_shift)) include_shift = true;
 
 	if (initial_setup) {
 		param[indx] = &pos[0];
@@ -230,7 +230,7 @@ void PointSource::copy_ptsrc_data(PointSource* ptsrc_in)
 
 void PointSource::update_meta_parameters(const bool varied_only_fitparams)
 {
-	if ((lens != NULL) and ((vary_params[zsrc_paramnum]) or (!varied_only_fitparams))) lens->update_ptsrc_redshift_data(); // just in case the source redshift was changed
+	if ((qlens != NULL) and ((vary_params[zsrc_paramnum]) or (!varied_only_fitparams))) qlens->update_ptsrc_redshift_data(); // just in case the source redshift was changed
 }
 
 void PointSource::get_parameter_numbers_from_qlens(int& pi, int& pf)

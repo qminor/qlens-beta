@@ -93,7 +93,12 @@ struct ImageData;
 struct WeakLensingData;
 struct ImagePixelData;
 struct ParamList;
+struct DerivedParamList;
 struct DerivedParam;
+class LensList;
+class SourceList;
+class PixSrcList;
+class PtSrcList;
 
 struct image {
 	lensvector pos;
@@ -125,7 +130,6 @@ class PointSource : public ModelParams
 {
 	friend class QLens;
 	friend class SB_Profile;
-	QLens *lens;
 
 	private:
 	int zsrc_paramnum; // just to keep track of which parameter number is zsrc (set when constructor is called)
@@ -139,7 +143,7 @@ class PointSource : public ModelParams
 	std::vector<image> images;
 
 	public:
-	PointSource() { lens = NULL; }
+	PointSource() { qlens = NULL; }
 	PointSource(QLens* lens_in);
 	PointSource(QLens* lens_in, const lensvector& sourcept, const double zsrc_in);
 	PointSource(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
@@ -347,7 +351,6 @@ struct ParamAnchor {
 	void shift_down() { paramnum--; }
 };
 
-
 double mcsampler_set_lensptr(QLens* lens_in);
 double polychord_loglikelihood (double theta[], int nDims, double phi[], int nDerived);
 void polychord_prior (double cube[], double theta[], int nDims);
@@ -418,15 +421,16 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool use_custom_prior;
 	bool lens_position_gaussian_transformation;
 	ParamList *param_list;
+	DerivedParamList *dparam_list;
 
 	int nlens;
 	LensProfile** lens_list;
-	std::vector<LensProfile*> lens_list_vec;
+	LensList *lenslist;
 	int *lens_redshift_idx;
 
 	int n_sb;
 	SB_Profile** sb_list;
-	std::vector<SB_Profile*> sb_list_vec;
+	SourceList *srclist;
 	int* sbprofile_redshift_idx;
 	int* sbprofile_band_number;
 	int* sbprofile_imggrid_idx;
@@ -435,7 +439,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int* pixellated_src_redshift_idx;
 	int* pixellated_src_band;
 	ModelParams **srcgrids; // this is the base class for Delaunay and cartesian source grids
-	std::vector<ModelParams*> pixsrc_list_vec;
+	PixSrcList *pixsrclist;
 	DelaunaySourceGrid **delaunay_srcgrids;
 	CartesianSourceGrid **cartesian_srcgrids;
 
@@ -448,6 +452,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	int n_ptsrc;
 	PointSource **ptsrc_list;
+	PtSrcList *ptsrclist;
 	int* ptsrc_redshift_idx;
 	std::vector<int> ptsrc_redshift_groups;
 
@@ -1247,6 +1252,10 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	bool set_psf_vary_parameters(const int psf_number, boolvector &vary_flags);
 
+	bool register_cosmo_vary_parameters();
+	void register_cosmo_prior_limits();
+	void update_cosmo_fitparams();
+
 	bool update_pixellated_src_varyflag(const int src_number, const string name, const bool flag);
 	bool update_pixellated_lens_varyflag(const int pixlens_number, const string name, const bool flag);
 	bool update_ptsrc_varyflag(const int ptsrc_number, const string name, const bool flag);
@@ -1332,9 +1341,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double zfac_re; // used by einstein_radius_root(...)
 
 	public:
-	double chi_square_fit_simplex();
-	double chi_square_fit_powell();
-	void output_fit_results(dvector& stepsizes, const double chisq_bestfit, const int chisq_evals);
+	double chi_square_fit_simplex(const bool show_parameter_errors);
+	double chi_square_fit_powell(const bool show_parameter_errors);
+	void output_fit_results(dvector& stepsizes, const double chisq_bestfit, const int chisq_evals, const bool calculate_parameter_errors);
 	void nested_sampling();
 	void polychord(const bool resume_previous, const bool skip_run);
 	void multinest(const bool resume_previous, const bool skip_run);
@@ -1395,7 +1404,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double loglike_point_source(double* params);
 	bool calculate_fisher_matrix(double *params, const dvector &stepsizes);
 	double loglike_deriv(const dvector &params, const int index, const double step);
-	void output_bestfit_model();
+	void output_bestfit_model(const bool show_parameter_errors = false);
 	bool adopt_model(dvector &fitparams);
 
 	bool include_central_image;
@@ -1562,6 +1571,156 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	void test_lens_functions();
 };
+
+class LensList
+{
+	protected:
+	QLens* qlens;
+
+	public:
+	int nlens;
+	LensProfile** lenslistptr;
+	LensList(QLens* qlens_in) { lenslistptr = NULL; qlens = qlens_in; nlens = 0; }
+	void input_ptr(LensProfile** ptr_in, const int nlens_in) { lenslistptr = ptr_in; nlens = nlens_in; }
+	void clear_ptr() { lenslistptr = NULL; nlens = 0; }
+	void add_lens(LensProfile* lens_in) {
+		qlens->add_lens(lens_in);
+	}
+	void add_lens_extshear(LensProfile* lens_in, Shear* extshear) {
+		qlens->add_lens(lens_in);
+		qlens->add_lens((LensProfile*) extshear);
+		  lenslistptr[nlens-1]->anchor_center_to_lens(nlens-2);
+	}
+	bool clear(const int min_loc=-1, const int max_loc=-1) {
+		if((min_loc == -1) and (max_loc == -1)) {
+			for (int i=nlens-1; i >= 0; i--) {
+				qlens->remove_lens(i,false);
+			}
+		} else if ((min_loc != -1) and (max_loc == -1)) {
+			if (min_loc >= nlens) { warn("specified lens index does not exist"); return false; }
+			qlens->remove_lens(min_loc,false);
+		} else {
+			if (((min_loc < 0) or (min_loc >= nlens)) or ((max_loc < 0) or (max_loc >= nlens))) { warn("specified lens index does not exist"); return false; }
+			if (min_loc > max_loc) { warn("max index must be greater than min index"); return false; }
+			for (int i=max_loc; i >= min_loc; i--) {
+				qlens->remove_lens(i,false);
+			}
+		}
+		return true;
+	}
+	bool anchor_lens_center(const int lens_num1, const int lens_num2) {
+		if ((lens_num1 >= nlens) or (lens_num2 >= nlens)) return false;
+		lenslistptr[lens_num1]->anchor_center_to_lens(lens_num2);
+		return true;
+	}
+};
+
+class SourceList
+{
+	protected:
+	QLens* qlens;
+
+	public:
+	int n_sb;
+	SB_Profile** srclistptr;
+	SourceList(QLens* qlens_in) { srclistptr = NULL; qlens = qlens_in; n_sb = 0; }
+	void input_ptr(SB_Profile** ptr_in, const int n_sb_in) { srclistptr = ptr_in; n_sb = n_sb_in; }
+	void clear_ptr() { srclistptr = NULL; n_sb = 0; }
+	void add_source(SB_Profile* src_in, const bool is_lensed) {
+		qlens->add_source(src_in,is_lensed);
+	}
+	bool clear(const int min_loc=-1, const int max_loc=-1) {
+		if((min_loc == -1) and (max_loc == -1)) {
+			for (int i=n_sb-1; i >= 0; i--) {
+				qlens->remove_source_object(i,false);
+			}
+		} else if ((min_loc != -1) and (max_loc == -1)) {
+			if (min_loc >= n_sb) { warn("specified source index does not exist"); return false; }
+			qlens->remove_source_object(min_loc,false);
+		} else {
+			if (((min_loc < 0) or (min_loc >= n_sb)) or ((max_loc < 0) or (max_loc >= n_sb))) { warn("specified source index does not exist"); return false; }
+			if (min_loc > max_loc) { warn("max index must be greater than min index"); return false; }
+			for (int i=max_loc; i >= min_loc; i--) {
+				qlens->remove_source_object(i,false);
+			}
+		}
+		return true;
+	}
+	bool anchor_center_to_source(const int src_num1, const int src_num2) {
+		if ((src_num1 >= n_sb) or (src_num2 >= n_sb)) return false;
+		srclistptr[src_num1]->anchor_center_to_source(srclistptr,src_num2);
+		return true;
+	}
+	bool anchor_center_to_lens(const int src_num, const int lens_num) {
+		if ((src_num >= n_sb) or (lens_num >= qlens->nlens)) return false;
+		srclistptr[src_num]->anchor_center_to_lens(qlens->lens_list,lens_num);
+		return true;
+	}
+};
+
+class PixSrcList
+{
+	public:
+	QLens* qlens;
+	int n_pixsrc;
+	ModelParams** pixsrclist_ptr;
+	PixSrcList(QLens* qlens_in) { pixsrclist_ptr = NULL; qlens = qlens_in; n_pixsrc = 0; }
+	void input_ptr(ModelParams** ptr_in, const int n_pixsrc_in) { pixsrclist_ptr = ptr_in; n_pixsrc = n_pixsrc_in; }
+	void clear_ptr() { pixsrclist_ptr = NULL; n_pixsrc = 0; }
+	void add_pixsrc(const double zsrc, const int band) {
+		qlens->add_pixellated_source(zsrc,band);
+	}
+	bool clear(const int min_loc=-1, const int max_loc=-1) {
+		if((min_loc == -1) and (max_loc == -1)) {
+			for (int i=n_pixsrc-1; i >= 0; i--) {
+				qlens->remove_pixellated_source(i,false);
+			}
+		} else if ((min_loc != -1) and (max_loc == -1)) {
+			if (min_loc >= n_pixsrc) { warn("specified source index does not exist"); return false; }
+			qlens->remove_pixellated_source(min_loc,false);
+		} else {
+			if (((min_loc < 0) or (min_loc >= n_pixsrc)) or ((max_loc < 0) or (max_loc >= n_pixsrc))) { warn("specified source index does not exist"); return false; }
+			if (min_loc > max_loc) { warn("max index must be greater than min index"); return false; }
+			for (int i=max_loc; i >= min_loc; i--) {
+				qlens->remove_pixellated_source(i,false);
+			}
+		}
+		return true;
+	}
+};
+
+class PtSrcList
+{
+	public:
+	QLens* qlens;
+	int n_ptsrc;
+	PointSource** ptsrclist_ptr;
+	PtSrcList(QLens* qlens_in) { ptsrclist_ptr = NULL; qlens = qlens_in; n_ptsrc = 0; }
+	void input_ptr(PointSource** ptr_in, const int n_ptsrc_in) { ptsrclist_ptr = ptr_in; n_ptsrc = n_ptsrc_in; }
+	void clear_ptr() { ptsrclist_ptr = NULL; n_ptsrc = 0; }
+	void add_ptsrc(const double zsrc, const lensvector &sourcept, const bool vary_source_coords = false) {
+		qlens->add_point_source(zsrc,sourcept,vary_source_coords);
+	}
+	bool clear(const int min_loc=-1, const int max_loc=-1) {
+		if((min_loc == -1) and (max_loc == -1)) {
+			for (int i=n_ptsrc-1; i >= 0; i--) {
+				qlens->remove_point_source(i);
+			}
+		} else if ((min_loc != -1) and (max_loc == -1)) {
+			if (min_loc >= n_ptsrc) { warn("specified source index does not exist"); return false; }
+			qlens->remove_point_source(min_loc);
+		} else {
+			if (((min_loc < 0) or (min_loc >= n_ptsrc)) or ((max_loc < 0) or (max_loc >= n_ptsrc))) { warn("specified source index does not exist"); return false; }
+			if (min_loc > max_loc) { warn("max index must be greater than min index"); return false; }
+			for (int i=max_loc; i >= min_loc; i--) {
+				qlens->remove_point_source(i);
+			}
+		}
+		return true;
+	}
+};
+
+
 
 struct ImageData
 {

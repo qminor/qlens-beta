@@ -245,8 +245,56 @@ void ParamList::update_param_list(string* param_names_in, string* latex_names_in
 	}
 }
 
-void ParamList::add_dparam(DerivedParamType type_in, double param, int lensnum, double param2, bool use_kpc)
+bool DerivedParamList::add_dparam(const string param_type, const double param, const int lensnum, const double param2, const bool use_kpc)
 {
+	DerivedParamType derived_param_type;
+	if (param_type=="kappa_r") {
+		derived_param_type = KappaR;
+	} else if (param_type=="lambda_r") {
+		derived_param_type = LambdaR;
+	} else if (param_type=="dlogkappa") {
+		derived_param_type = DlogKappaR;
+	} else if (param_type=="mass2d_r") {
+		derived_param_type = Mass2dR;
+	} else if (param_type=="mass3d_r") {
+		derived_param_type = Mass3dR;
+	} else if (param_type=="re_zsrc") {
+		derived_param_type = Einstein;
+	} else if (param_type=="mass_re") {
+		derived_param_type = Einstein_Mass;
+	} else if (param_type=="xi") {
+		derived_param_type = Xi_Param;
+	} else if (param_type=="kappa_re") {
+		derived_param_type = Kappa_Re;
+	} else if (param_type=="lensparam") {
+		derived_param_type = LensParam;
+	} else if (param_type=="logslope") {
+		derived_param_type = AvgLogSlope;
+	} else if (param_type=="r_perturb_rel") {
+		derived_param_type = Relative_Perturbation_Radius;
+	} else if (param_type=="r_perturb") {
+		derived_param_type = Perturbation_Radius;
+	} else if (param_type=="mass_perturb") {
+		derived_param_type = Robust_Perturbation_Mass;
+	} else if (param_type=="sigma_perturb") {
+		derived_param_type = Robust_Perturbation_Density;
+	} else if (param_type=="raw_chisq") {
+		derived_param_type = Chi_Square;
+	} else if (param_type=="qs") {
+		derived_param_type = Adaptive_Grid_qs;
+	} else if (param_type=="phi_s") {
+		derived_param_type = Adaptive_Grid_phi_s;
+	} else if (param_type=="sig_s") {
+		derived_param_type = Adaptive_Grid_sig_s;
+	} else if (param_type=="xavg_s") {
+		derived_param_type = Adaptive_Grid_xavg;
+	} else if (param_type=="yavg_s") {
+		derived_param_type = Adaptive_Grid_yavg;
+	} else {
+		warn("derived parameter type not recognized");
+		return false;
+	}
+
 	DerivedParam** newlist = new DerivedParam*[n_dparams+1];
 	string* new_dparam_names = new string[n_dparams+1];
 	bool* new_subplot_dparam = new bool[n_dparams+1];
@@ -260,8 +308,8 @@ void ParamList::add_dparam(DerivedParamType type_in, double param, int lensnum, 
 		}
 		delete_dparam_ptrs(false);
 	}
-	if (param2 == -1e30) newlist[n_dparams] = new DerivedParam(type_in,param,lensnum,-1,use_kpc);
-	else newlist[n_dparams] = new DerivedParam(type_in,param,lensnum,param2,use_kpc);
+	if (param2 == -1e30) newlist[n_dparams] = new DerivedParam(derived_param_type,param,lensnum,-1,use_kpc);
+	else newlist[n_dparams] = new DerivedParam(derived_param_type,param,lensnum,param2,use_kpc);
 
 	dparams = newlist;
 	new_dparam_names[n_dparams] = dparams[n_dparams]->name;
@@ -272,9 +320,10 @@ void ParamList::add_dparam(DerivedParamType type_in, double param, int lensnum, 
 	subplot_dparam = new_subplot_dparam;
 	hist2d_dparam = new_hist2d_dparam;
 	n_dparams++;
+	return true;
 }
 
-bool ParamList::remove_dparam(int dparam_number)
+bool DerivedParamList::remove_dparam(const int dparam_number)
 {
 	if ((dparam_number >= n_dparams) or (n_dparams == 0)) return false;
 
