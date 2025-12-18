@@ -156,3 +156,10 @@ def add_crit_to_plot(QLens_Object, srcplane_fig, imgplane_fig):
         
     plt.legend(loc="upper right")
 
+def plot_sb(xyz):
+    # This is VERY rudimentary, but it seems to work ok
+    fig = plt.figure(figsize = (5,5))
+    plt.pcolormesh(xyz[0], xyz[1], xyz[2], cmap=plt.cm.get_cmap())
+    plt.colorbar()
+    plt.show(block=False)
+

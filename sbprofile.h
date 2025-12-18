@@ -14,7 +14,7 @@
 #include <vector>
 #include <map>
 
-struct ImagePixelData;
+struct ImageData;
 class LensProfile;
 class PointSource;
 class QLens;
@@ -32,7 +32,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	friend class dPIE_Lens;
 	friend class NFW;
 	friend class ImagePixelGrid;
-	friend struct ImagePixelData;
+	friend struct ImageData;
 	private:
 	Spline sb_spline;
 	double sb_splint(double);

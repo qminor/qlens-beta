@@ -1,16 +1,18 @@
 from qlens_helper import *
 
-q = QLens()
-params = q.params
+cosmo = Cosmology(omega_m=0.3,hubble=0.7)
+q = QLens(cosmo)
+(lens,src,ptsrc,pixsrc,imgdata,params,dparams) = q.objects();
 
 q.sci_notation = False
-q.imgdata_read("alphafit.dat")
-q.imgdata_display()
-q.add_lens(SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3}))
-q.lens[0].vary([1,0,0,1,1,1,1])
-q.add_lens(Shear({"shear": 0.02, "theta": 10, "xc": 0.7, "yc": 0.3}))
-q.lens[1].anchor_center(0)
-q.lens[1].vary([1,1])
+q.imgdata_read("alphafit.dat") # this function will become obsolete once the ptimgdata class is wrapped
+q.imgdata_display() # this function will become obsolete once the ptimgdata class is wrapped
+
+sple = SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3})
+sple.vary([1,0,0,1,1,1,1])
+extshear = Shear({"shear": 0.02, "theta": 10})
+extshear.vary([1,1,0,0])
+lens.add(sple,shear=extshear)
 
 q.central_image = False
 q.imgplane_chisq = True

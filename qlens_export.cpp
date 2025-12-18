@@ -1,4 +1,5 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/numpy.h>
 #include "qlens_wrapper.cpp"
 #include "profile.h"
 #include "params.h"
@@ -62,7 +63,7 @@ PYBIND11_MODULE(qlens, m) {
 		//.def(py::init<>([](){return new QLens();}))
 	//;
 
-	py::class_<ParamList>(m, "ParamList")
+	py::class_<ParamList, std::unique_ptr<ParamList, py::nodelete>>(m, "ParamList")
 		.def(py::init<>([](QLens_Wrap* qlens_in){return new ParamList(qlens_in);}))
 		.def("values", [](ParamList &current) {
 			//current.print_parameter_values();
@@ -214,6 +215,9 @@ PYBIND11_MODULE(qlens, m) {
 			if (paramnum < 0) throw std::runtime_error("specified parameter name '" + old_name + "' not recognized");
 			if (!current.set_override_parameter_name(paramnum,new_name)) throw std::runtime_error("parameter name not unique; parameter could not be renamed");
 		})
+		.def("__getitem__", [](ParamList &current, size_t index) {
+			return current.values[index];
+		})
 		.def("__repr__", [](ParamList &a) {
 			string outstring = a.get_param_values_string();
 			return("\n" + outstring);
@@ -221,7 +225,7 @@ PYBIND11_MODULE(qlens, m) {
 		;
 
 
-	py::class_<DerivedParamList>(m, "DerivedParamList")
+	py::class_<DerivedParamList, std::unique_ptr<DerivedParamList, py::nodelete>>(m, "DerivedParamList")
 		.def(py::init<>([](QLens_Wrap* qlens_in){return new DerivedParamList(qlens_in);}))
 		.def("values", [](DerivedParamList &current) {
 			py::list vals(current.n_dparams);
@@ -397,6 +401,95 @@ PYBIND11_MODULE(qlens, m) {
 				if (extshear != NULL) current.anchor_lens_center(current.nlens-2,anchor_center_lensnum);
 				else current.anchor_lens_center(current.nlens-1,anchor_center_lensnum);
 			}
+			return lens_in;
+		})
+		.def("update", [](LensList &current, py::dict dict){
+			bool status = true;
+			for (int i=0; i < current.nlens; i++) {
+				for (auto item : dict) {
+					if (!current.lenslistptr[i]->update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second))) status = false;
+				}
+			}
+			return status;
+		})
+		.def("update", [](LensList &current, const string name, const double value){
+			bool status = true;
+			for (int i=0; i < current.nlens; i++) {
+				if (!current.lenslistptr[i]->update_specific_parameter(name, value)) status = false;
+			}
+			return status;
+		})
+		.def("einstein_radius", [](LensList &current, const int lens_number){
+			double re_major_axis;
+			double re_average;
+			if (current.qlens->get_einstein_radius(lens_number,re_major_axis,re_average)==false) throw std::runtime_error("could not calculate Einstein radius");
+			return re_average;
+		})
+		.def("einstein_radius", [](LensList &current, py::kwargs& kwargs){
+			QLens* qlens = current.qlens;
+			bool verbal = false;
+			bool changed_zsrc = false;
+			double zsrc = qlens->source_redshift;
+			double old_zsrc = qlens->source_redshift;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="zsrc") {
+					try {
+						zsrc = py::cast<double>(item.second);
+						qlens->set_source_redshift(zsrc);
+						changed_zsrc = true;
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'zsrc' argument");
+					}
+				} else if (py::cast<string>(item.first)=="verbal") {
+					try {
+						verbal = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'verbal' argument");
+					}
+				} else throw std::runtime_error("argument to 'lens.einstein_radius' not recognized");
+			}
+			int zlens_idx = qlens->lens_redshift_idx[qlens->primary_lens_number];
+			double re, reav, zlens;
+			re = qlens->einstein_radius_of_primary_lens(qlens->reference_zfactors[zlens_idx],reav);
+			zlens = qlens->lens_redshifts[zlens_idx];
+			if (verbal) {
+				double arcsec_to_kpc, re_kpc, reav_kpc, sigma_cr_kpc, m_ein;
+				arcsec_to_kpc = qlens->cosmo->angular_diameter_distance(zlens)/(1e-3*(180/M_PI)*3600);
+				re_kpc = re*arcsec_to_kpc;
+				reav_kpc = reav*arcsec_to_kpc;
+				sigma_cr_kpc = qlens->cosmo->sigma_crit_kpc(zlens,zsrc);
+				m_ein = sigma_cr_kpc*M_PI*SQR(reav_kpc);
+				if (qlens->mpi_id==0) {
+					cout << "Einstein radius of primary (+ co-centered and/or secondary) lens:\n";
+					cout << "r_E_major = " << re << " arcsec, " << re_kpc << " kpc\n";
+					cout << "r_E_avg = " << reav << " arcsec, " << reav_kpc << " kpc\n";
+					cout << "Mass within average Einstein radius: " << m_ein << " solar masses\n";
+				}
+			}
+			if (changed_zsrc) qlens->set_source_redshift(old_zsrc);
+			return reav;
+		})
+		.def("output_kappa", [](LensList &current, const double rmin, const double rmax, const int steps, py::kwargs& kwargs){
+			bool output_dkappa = false;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="dkappa") {
+					try {
+						output_dkappa = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'dkappa' argument");
+					}
+				} else throw std::runtime_error("argument to 'lens.output_kappa' not recognized");
+			}
+			dvector rvals(steps), kappavals(steps), dkappavals(steps);
+			current.qlens->output_total_kappa(rmin, rmax, steps, rvals, kappavals, dkappavals);
+			py::array_t<double> rvec(steps,rvals.array());
+			py::array_t<double> kappavec(steps,kappavals.array());
+			py::array_t<double> dkappavec(steps,dkappavals.array());
+			if (!output_dkappa) return std::make_tuple(rvec,kappavec);
+			else return std::make_tuple(rvec,dkappavec);
+		})
+		.def("cosmology_info", [](LensList &current){
+			current.qlens->print_lens_cosmology_info(0,current.nlens-1);
 		})
 		.def("clear", [](LensList &current){
 			current.clear();
@@ -422,8 +515,479 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		;
 
-	py::class_<SourceList>(m, "SourceList")
-		.def(py::init<>([](QLens_Wrap* qsrc_in){return new SourceList(qsrc_in);}))
+	py::class_<ImageData, std::unique_ptr<ImageData, py::nodelete>>(m, "ImgData")
+		.def(py::init<>([](const int band){return new ImageData(band);}))
+		.def("load_mask", [](ImageData &current, const string filename, py::kwargs &kwargs) {
+			int mask_i = 0;
+			bool foreground = false;
+			bool emask = false;
+			bool add_pixels = false;
+			bool subtract_pixels = false;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="foreground") {
+					try {
+						foreground = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'foreground' argument");
+					}
+				} else if (py::cast<string>(item.first)=="emask") {
+					try {
+						emask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'emask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="add_pixels") {
+					try {
+						add_pixels = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'add_pixels' argument");
+					}
+				} else if (py::cast<string>(item.first)=="subtract_pixels") {
+					try {
+						subtract_pixels = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'subtract_pixels' argument");
+					}
+				} else if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'load_mask'");
+				}
+			}
+			if ((foreground) and (emask)) throw std::runtime_error("'foreground' and 'emask' arguments cannot both be set to 'True'");
+			if ((add_pixels) and (subtract_pixels)) throw std::runtime_error("cannot set both 'add_pixels' and 'subtract_pixels' to 'True'");
+			bool status = current.load_mask_fits(mask_i,filename,foreground,emask,add_pixels,subtract_pixels);
+			if (!status) throw std::runtime_error("could not load mask fits file '" + filename + "'");
+			if (current.qlens->mpi_id==0) {
+				if ((status==true) and (foreground) and (current.qlens->fgmask_padding > 0)) cout << "Padding foreground mask by " << current.qlens->fgmask_padding << " neighbors (for convolutions)" << endl;
+			}
+			return status;
+		})
+		.def("load_noise_map", [](ImageData &current, const string filename, py::kwargs &kwargs) {
+			int hdu_index = 1;
+			bool show_header = false;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="hdu_index") {
+					try {
+						hdu_index = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid HDU index");
+					}
+				} else if (py::cast<string>(item.first)=="show_header") {
+					try {
+						show_header = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean argument for 'show_header'");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'load_noise_map'");
+				}
+			}
+			if (!current.load_noise_map_fits(filename,hdu_index,show_header)) throw runtime_error("could not load noise map fits file '" + filename + "'");
+			current.qlens->use_noise_map = true;
+		})
+		.def("mask_all_pixels", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'mask_all_pixels'");
+				}
+			}
+			current.set_no_mask_pixels(mask_i);
+		})
+		.def("unmask_all_pixels", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'unmask_all_pixels'");
+				}
+			}
+			if (!current.set_all_mask_pixels(mask_i)) throw std::runtime_error("could not alter mask");
+		})
+		.def("invert_mask", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'invert_mask'");
+				}
+			}
+			if (!current.invert_mask(mask_i)) throw std::runtime_error("could not alter mask");
+		})
+		.def("set_neighbor_pixels", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			bool interior = false;
+			bool exterior = false;
+			int ntimes = 1;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="n") {
+					try {
+						ntimes = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'n' argument");
+					}
+				} else if (py::cast<string>(item.first)=="interior") {
+					try {
+						interior = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'interior' argument");
+					}
+				} else if (py::cast<string>(item.first)=="exterior") {
+					try {
+						exterior = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'exterior' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'set_neighbor_pixels'");
+				}
+			}
+			for (int i=0; i < ntimes; i++) current.set_neighbor_pixels(interior,exterior,mask_i);
+		})
+		.def("unset_neighbor_pixels", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			int ntimes = 1;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="n") {
+					try {
+						ntimes = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'n' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'unset_neighbor_pixels'");
+				}
+			}
+			current.invert_mask(mask_i);
+			for (int i=0; i < ntimes; i++) current.set_neighbor_pixels(false,false,mask_i);
+			current.invert_mask(mask_i);
+		})
+		.def("unset_low_sn_pixels", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			double sbthresh = -1.0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="threshold") {
+					try {
+						sbthresh = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'threshold' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'unset_low_sn_pixels'");
+				}
+			}
+			if (sbthresh==-1.0) throw std::runtime_error("signal threshold must be specified with 'threshold=#' keyword argument");
+			if (!current.unset_low_signal_pixels(sbthresh,mask_i)) throw std::runtime_error("could not alter mask");
+		})
+		.def("assign_mask_windows", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			double noise_threshold = -1.0;
+			int npixel_threshold = 0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="noise_threshold") {
+					try {
+						noise_threshold = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'noise_threshold' argument");
+					}
+				} else if (py::cast<string>(item.first)=="npixel_threshold") {
+					try {
+						npixel_threshold = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'npixel_threshold' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'assign_mask_windows'");
+				}
+			}
+			if (noise_threshold==-1.0) throw std::runtime_error("noise threshold must be specified with 'noise_threshold=#' keyword argument");
+			if (!current.assign_mask_windows(noise_threshold,npixel_threshold,mask_i)) throw std::runtime_error("could not alter mask");
+		})
+		.def("set_mask_annulus", [](ImageData &current, const double xc, const double yc, const double rmin, const double rmax, py::kwargs &kwargs) {
+			int mask_i = 0;
+			double thetamin = 0.0;
+			double thetamax = 360;
+			double xstretch = 1.0;
+			double ystretch = 1.0;
+			bool fgmask = false;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="thetamin") {
+					try {
+						thetamin = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'thetamin' argument");
+					}
+				} else if (py::cast<string>(item.first)=="thetamax") {
+					try {
+						thetamax = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'thetamax' argument");
+					}
+				} else if (py::cast<string>(item.first)=="xstretch") {
+					try {
+						xstretch = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'xstretch' argument");
+					}
+				} else if (py::cast<string>(item.first)=="ystretch") {
+					try {
+						ystretch = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'ystretch' argument");
+					}
+				} else if (py::cast<string>(item.first)=="fgmask") {
+					try {
+						fgmask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'fgmask' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'set_mask_annulus'");
+				}
+			}
+			if (!current.set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false,fgmask,mask_i)) throw std::runtime_error("coult not alter mask");
+		})
+		.def("set_emask_annulus", [](ImageData &current, const double xc, const double yc, const double rmin, const double rmax, py::kwargs &kwargs) {
+			int mask_i = 0;
+			double thetamin = 0.0;
+			double thetamax = 360;
+			double xstretch = 1.0;
+			double ystretch = 1.0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="thetamin") {
+					try {
+						thetamin = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'thetamin' argument");
+					}
+				} else if (py::cast<string>(item.first)=="thetamax") {
+					try {
+						thetamax = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'thetamax' argument");
+					}
+				} else if (py::cast<string>(item.first)=="xstretch") {
+					try {
+						xstretch = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'xstretch' argument");
+					}
+				} else if (py::cast<string>(item.first)=="ystretch") {
+					try {
+						ystretch = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'ystretch' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'set_emask_annulus'");
+				}
+			}
+			if (!current.set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,mask_i)) throw std::runtime_error("could not alter extended mask");
+		})
+		.def("set_mask_window", [](ImageData &current, const double xmin, const double xmax, const double ymin, const double ymax, py::kwargs &kwargs) {
+			int mask_i = 0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'set_mask_window'");
+				}
+			}
+			if (!current.set_mask_window(xmin,xmax,ymin,ymax,true,mask_i)) throw std::runtime_error("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
+		})
+		.def("activate_partner_imgpixels", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'activate_partner_imgpixels'");
+				}
+			}
+			current.activate_partner_image_pixels(mask_i,false);
+		})
+		.def("remove_pixel_overlap", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'remove_pixel_overlap'");
+				}
+			}
+			current.remove_overlapping_pixels_from_other_masks(mask_i);
+		})
+		.def("set_uniform_noise_map", [](ImageData &current, const double noise_in) {
+			current.set_uniform_pixel_noise(noise_in);
+		})
+
+		//if (!current.estimate_pixel_noise(xmin,xmax,ymin,ymax,sig_sb,mean_sb,mask_i)) throw std::runtime_error("could not find pixel noise in mask"); // implement this later
+		.def("__repr__", [](ImageData &current) {
+			string imgdata_info = "\n" + current.get_imgdata_info_string();
+			return(imgdata_info);
+		})
+		;
+
+	py::class_<ImgDataList>(m, "ImgDataList")
+		.def(py::init<>([](QLens_Wrap* qlens_in){return new ImgDataList(qlens_in);}))
+		//.def("add",&ImgDataList::add_lens)
+		.def("add_new_band", [](ImgDataList &current){
+			current.add_band();
+		})
+		.def("load", [](ImgDataList &current, const string filename, py::kwargs &kwargs){
+			int band = 0;
+			double pixsize = 0.05;
+			double pix_xy_ratio = 1.0;
+			double x_offset = 0.0;
+			double y_offset = 0.0;
+			int hdu_index = 1;
+			bool show_header = false;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="band") {
+					try {
+						band = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid band number");
+					}
+				} else if (py::cast<string>(item.first)=="pixsize") {
+					try {
+						pixsize = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid pixel size");
+					}
+				} else if (py::cast<string>(item.first)=="pix_xy_ratio") {
+					try {
+						pix_xy_ratio = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid pixel x/y ratio");
+					}
+				} else if (py::cast<string>(item.first)=="x_offset") {
+					try {
+						x_offset = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid x_offset");
+					}
+				} else if (py::cast<string>(item.first)=="y_offset") {
+					try {
+						y_offset = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid y_offset");
+					}
+				} else if (py::cast<string>(item.first)=="hdu_index") {
+					try {
+						hdu_index = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid HDU index");
+					}
+				} else if (py::cast<string>(item.first)=="show_header") {
+					try {
+						show_header = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean argument for 'show_header'");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for imgdata.load");
+				}
+			}
+			bool success = current.load_imgdata(band,filename,pixsize,pix_xy_ratio,x_offset,y_offset,hdu_index,show_header);
+			ImageData* newimgdata = (success) ? current.imgdatalist_ptr[band] : NULL;
+			return newimgdata;
+		})
+		.def("clear", [](ImgDataList &current){
+			current.clear();
+		})
+		.def("clear", [](ImgDataList &current, const int num){
+			current.clear(num);
+		})
+		.def("clear", [](ImgDataList &current, const int min, const int max){
+			current.clear(min,max);
+		})
+		.def("clear",&ImgDataList::clear)
+		.def("__getitem__", [](ImgDataList &current, size_t index) {
+			//current.print_parameter_values();
+			return current.imgdatalist_ptr[index];
+		})
+		.def("__len__", [](ImgDataList &current) {
+			return current.n_data_bands;
+		})
+		.def("__repr__", [](ImgDataList &current) {
+			string imgdata_info;
+			for (int i=0; i < current.n_data_bands; i++) imgdata_info += "\n" + current.imgdatalist_ptr[i]->get_imgdata_info_string();
+			return(imgdata_info);
+		})
+		;
+
+	py::class_<SourceList>(m, "SrcList")
+		.def(py::init<>([](QLens_Wrap* qlens_in){return new SourceList(qlens_in);}))
 		//.def("add",&SourceList::add_lens)
 		.def("add", [](SourceList &current, SB_Profile* src_in, py::kwargs &kwargs){
 			bool is_lensed = true;
@@ -468,6 +1032,22 @@ PYBIND11_MODULE(qlens, m) {
 				current.anchor_center_to_lens(current.n_sb-1,anchor_center_lensnum);
 			}
 		})
+		.def("update", [](SourceList &current, py::dict dict){
+			bool status = true;
+			for (int i=0; i < current.n_sb; i++) {
+				for (auto item : dict) {
+					if (!current.srclistptr[i]->update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second))) status = false;
+				}
+			}
+			return status;
+		})
+		.def("update", [](SourceList &current, const string name, const double value){
+			bool status = true;
+			for (int i=0; i < current.n_sb; i++) {
+				if (!current.srclistptr[i]->update_specific_parameter(name, value)) status = false;
+			}
+			return status;
+		})
 		.def("clear", [](SourceList &current){
 			current.clear();
 		})
@@ -493,7 +1073,7 @@ PYBIND11_MODULE(qlens, m) {
 		;
 
 	py::class_<PixSrcList>(m, "PixSrcList")
-		.def(py::init<>([](QLens_Wrap* qsrc_in){return new PixSrcList(qsrc_in);}))
+		.def(py::init<>([](QLens_Wrap* qlens_in){return new PixSrcList(qlens_in);}))
 		//.def("add",&PixSrcList::add_lens)
 		.def("add", [](PixSrcList &current, py::kwargs &kwargs){
 			int band = 0;
@@ -517,7 +1097,22 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			current.add_pixsrc(zsrc,band);
 		})
-
+		.def("update", [](PixSrcList &current, py::dict dict){
+			bool status = true;
+			for (int i=0; i < current.n_pixsrc; i++) {
+				for (auto item : dict) {
+					if (!current.pixsrclist_ptr[i]->update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second))) status = false;
+				}
+			}
+			return status;
+		})
+		.def("update", [](PixSrcList &current, const string name, const double value){
+			bool status = true;
+			for (int i=0; i < current.n_pixsrc; i++) {
+				if (!current.pixsrclist_ptr[i]->update_specific_parameter(name, value)) status = false;
+			}
+			return status;
+		})
 		.def("clear", [](PixSrcList &current){
 			current.clear();
 		})
@@ -536,14 +1131,14 @@ PYBIND11_MODULE(qlens, m) {
 			return current.n_pixsrc;
 		})
 		.def("__repr__", [](PixSrcList &current) {
-			string src_info;
-			for (int i=0; i < current.n_pixsrc; i++) src_info += "\n" + current.pixsrclist_ptr[i]->get_parameters_string();
-			return(src_info);
+			string pixsrc_info;
+			for (int i=0; i < current.n_pixsrc; i++) pixsrc_info += "\n" + current.pixsrclist_ptr[i]->get_parameters_string();
+			return(pixsrc_info);
 		})
 		;
 
 	py::class_<PtSrcList>(m, "PtSrcList")
-		.def(py::init<>([](QLens_Wrap* qsrc_in){return new PtSrcList(qsrc_in);}))
+		.def(py::init<>([](QLens_Wrap* qlens_in){return new PtSrcList(qlens_in);}))
 		//.def("add",&PtSrcList::add_lens)
 		.def("add", [](PtSrcList &current, const double x, const double y, py::kwargs &kwargs){
 			double zsrc = current.qlens->source_redshift;
@@ -563,7 +1158,22 @@ PYBIND11_MODULE(qlens, m) {
 			pos[1]=y;
 			current.add_ptsrc(zsrc,pos,false);
 		})
-
+		.def("update", [](PtSrcList &current, py::dict dict){
+			bool status = true;
+			for (int i=0; i < current.n_ptsrc; i++) {
+				for (auto item : dict) {
+					if (!current.ptsrclist_ptr[i]->update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second))) status = false;
+				}
+			}
+			return status;
+		})
+		.def("update", [](PtSrcList &current, const string name, const double value){
+			bool status = true;
+			for (int i=0; i < current.n_ptsrc; i++) {
+				if (!current.ptsrclist_ptr[i]->update_specific_parameter(name, value)) status = false;
+			}
+			return status;
+		})
 		.def("clear", [](PtSrcList &current){
 			current.clear();
 		})
@@ -582,9 +1192,9 @@ PYBIND11_MODULE(qlens, m) {
 			return current.n_ptsrc;
 		})
 		.def("__repr__", [](PtSrcList &current) {
-			string src_info;
-			for (int i=0; i < current.n_ptsrc; i++) src_info += "\n" + current.ptsrclist_ptr[i]->get_parameters_string();
-			return(src_info);
+			string ptsrc_info;
+			for (int i=0; i < current.n_ptsrc; i++) ptsrc_info += "\n" + current.ptsrclist_ptr[i]->get_parameters_string();
+			return(ptsrc_info);
 		})
 		;
 
@@ -608,6 +1218,9 @@ PYBIND11_MODULE(qlens, m) {
 			return current.update_specific_parameter(name, value);
 		})
 		.def("set_center", &LensProfile::set_center)
+		.def("cosmology_info", [](LensProfile &current){
+			return current.output_cosmology_info(-1);
+		})
 		.def("vary", [](LensProfile &current, py::list list){ 
 			std::vector<double> lst = py::cast<std::vector<double>>(list);
 			boolvector val(lst.size());
@@ -908,16 +1521,43 @@ PYBIND11_MODULE(qlens, m) {
 		.def(py::init<const Multipole*>())
 		;
 
-	py::class_<PointMass, LensProfile, std::unique_ptr<PointMass, py::nodelete>>(m, "PointMass")
-		.def(py::init<>([](){return new PointMass();}))
-		.def(py::init<const PointMass*>())
-		;
-
 	py::class_<CoreCusp, LensProfile, std::unique_ptr<CoreCusp, py::nodelete>>(m, "CoreCusp")
 		.def(py::init<>([](){return new CoreCusp();}))
 		.def(py::init<const CoreCusp*>())
 		;
 	*/
+
+	py::class_<PointMass, LensProfile, std::unique_ptr<PointMass, py::nodelete>>(m, "PointMass")
+		//.def(py::init<>([](){return new PointMass();}))
+		.def(py::init<const PointMass*>())
+		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
+			int pmode=0;
+			Cosmology* cosmo_in = NULL;
+			QLens_Wrap* qlens_ptr = NULL;
+			double zlens = default_zlens;
+			double zsrc_ref = default_zsrc_ref;
+			boolvector vary_list;
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+
+			double p1,xc,yc;
+			if (pmode==0) {
+				p1 = py::cast<double>(dict["b"]);
+			} else if (pmode==1) {
+				p1 = py::cast<double>(dict["mtot"]);
+			} else throw std::runtime_error("Can only choose pmode=0 or 1");
+			xc = py::cast<double>(dict["xc"]);
+			yc = py::cast<double>(dict["yc"]);
+
+			PointMass* ptmass = new PointMass(zlens,zsrc_ref,p1,xc,yc,pmode,cosmo_in);
+			if (qlens_ptr != NULL) qlens_ptr->add_lens(ptmass);
+			if (vary_list.size() > 0) {
+				if (ptmass->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+				}
+			}
+			return ptmass;
+		}))
+		;
 
 	py::class_<SersicLens, LensProfile, std::unique_ptr<SersicLens, py::nodelete>>(m, "SersicLens")
 		//.def(py::init<>([](){return new SersicLens();}))
@@ -1163,7 +1803,28 @@ PYBIND11_MODULE(qlens, m) {
 		}))
 		.def_readonly("cosmo", &QLens_Wrap::cosmo)
 		.def("objects", [](QLens_Wrap &current){ 
-			return std::make_tuple(current.lenslist, current.srclist, current.ptsrclist, current.pixsrclist, current.param_list, current.dparam_list);
+			return std::make_tuple(current.lenslist, current.srclist, current.ptsrclist, current.pixsrclist, current.imgdatalist, current.param_list, current.dparam_list);
+		})
+		.def("lens_object", [](QLens_Wrap &current){ 
+			return current.lenslist;
+		})
+		.def("src_object", [](QLens_Wrap &current){ 
+			return current.srclist;
+		})
+		.def("ptsrc_object", [](QLens_Wrap &current){ 
+			return current.ptsrclist;
+		})
+		.def("pixsrc_object", [](QLens_Wrap &current){ 
+			return current.pixsrclist;
+		})
+		.def("imgdata_object", [](QLens_Wrap &current){ 
+			return current.imgdatalist;
+		})
+		.def("param_object", [](QLens_Wrap &current){ 
+			return current.param_list;
+		})
+		.def("dparam_object", [](QLens_Wrap &current){ 
+			return current.dparam_list;
 		})
 
 		.def("imgdata_display", &QLens_Wrap::imgdata_display)
@@ -1173,10 +1834,10 @@ PYBIND11_MODULE(qlens, m) {
 		.def("imgdata_clear", &QLens_Wrap::imgdata_clear, 
 				py::arg("lower") = -1, py::arg("upper") = -1)
 		.def("imgdata_read", &QLens_Wrap::imgdata_load_file)
-		.def("sbmap_loadimg", &QLens_Wrap::sbmap_load_image_file)
-		.def("sbmap_load_noisemap", &QLens_Wrap::sbmap_load_noise_map)
 		.def("sbmap_load_psf", &QLens_Wrap::sbmap_load_psf)
+		.def("sbmap_load_noisemap", &QLens_Wrap::sbmap_load_noise_map)
 		.def("sbmap_load_mask", &QLens_Wrap::sbmap_load_mask)
+
 		.def_readwrite("outside_sb_prior", &QLens_Wrap::outside_sb_prior)
 		.def_readwrite("outside_sb_frac_threshold", &QLens_Wrap::outside_sb_prior_threshold)
 		.def_readwrite("outside_sb_noise_threshold", &QLens_Wrap::outside_sb_prior_noise_frac)
@@ -1184,6 +1845,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("nimg_threshold", &QLens_Wrap::n_image_threshold)
 
 		.def("clear_lenses", &QLens_Wrap::lens_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
+		.def_property("primary_lens_number", &QLens_Wrap::get_primary_lens_number, &QLens_Wrap::set_primary_lens_number)
+		.def_property("secondary_lens_number", &QLens_Wrap::get_secondary_lens_number, &QLens_Wrap::set_secondary_lens_number)
 		.def_property("shear_components", &QLens_Wrap::get_shear_components_mode, &QLens_Wrap::set_shear_components_mode)
 		.def_property("ellipticity_components", &QLens_Wrap::get_ellipticity_components_mode, &QLens_Wrap::set_ellipticity_components_mode)
 		.def_property("split_imgpixels", &QLens_Wrap::get_split_imgpixels, &QLens_Wrap::set_split_imgpixels)
@@ -1193,6 +1856,7 @@ PYBIND11_MODULE(qlens, m) {
 		//.def("pixsrc_clear", &QLens_Wrap::pixsrc_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
 		//.def("remove_pixsrc", &QLens_Wrap::remove_pixellated_source)
 		//.def("lens", &QLens_Wrap::get_lens_pointer)
+		.def_readonly("imgdata", &QLens_Wrap::imgdatalist)
 		.def_readonly("lens", &QLens_Wrap::lenslist)
 		.def_readonly("src", &QLens_Wrap::srclist)
 		.def_readonly("pixsrc", &QLens_Wrap::pixsrclist)
@@ -1260,13 +1924,13 @@ PYBIND11_MODULE(qlens, m) {
 					}
 				} else if (py::cast<string>(item.first)=="resume") {
 					try {
-						adopt_bestfit = py::cast<bool>(item.second);
+						resume = py::cast<bool>(item.second);
 					} catch (...) {
 						throw std::runtime_error("Invalid argument for 'resume'; must be true or false");
 					}
 				} else if (py::cast<string>(item.first)=="show_errors") {
 					try {
-						adopt_bestfit = py::cast<bool>(item.second);
+						show_errors = py::cast<bool>(item.second);
 					} catch (...) {
 						throw std::runtime_error("Invalid argument for 'show_errors'; must be true or false");
 					}
@@ -1290,6 +1954,7 @@ PYBIND11_MODULE(qlens, m) {
 			} else {
 					throw std::runtime_error("Available fitmethods: simplex (default), powell, nest, multinest, polychord, twalk");
 			}
+			if ((adopt_bestfit) and (curr.adopt_model(curr.bestfitparams)==false)) throw std::runtime_error("could not adopt best-fit model");
 		})
 		.def("set_source_mode", [](QLens_Wrap &curr, const std::string &source_mode="ptsource"){
 			if(source_mode=="ptsource") {
@@ -1341,6 +2006,82 @@ PYBIND11_MODULE(qlens, m) {
 			bool verbal = true;
 				double chisq = current.invert_surface_brightness_map_from_data(chisq0, verbal);
 		})
+		.def("plotimg", [](QLens_Wrap &current, py::kwargs& kwargs){
+			int band_i=0;
+			bool plot_residual = false;
+			bool normalize_sb = false;
+			bool plot_foreground_only = false;
+			bool omit_foreground = false;
+			bool show_all_pixels = false;
+			bool show_extended_mask = false;
+			bool show_foreground_mask = false;
+			bool exclude_ptimgs = false; // by default, we include point images if n_ptsrc > 0
+			//if (include_fgmask_in_inversion) show_foreground_mask = true; // no reason not to show emask if we're including it in the inversion
+			bool plot_fits = false;
+			bool offload_to_data = false;
+			//bool omit_cc = false;
+			//bool old_cc_setting = show_cc;
+			bool subcomp = false;
+			bool plot_log = false;
+			bool show_noise_thresh = false;
+			bool plot_contours = false;
+			bool show_only_ptimgs = false;
+			bool show_current_sb = false; // if true, will plot the surface brightness that is currently stored in the image_pixel_grids
+			bool show_only_first_order = false;
+			int zsrc_i = -1;
+			string fits_filename = "";
+
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="res") {
+					try {
+						plot_residual = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'res' argument");
+					}
+				} else if (py::cast<string>(item.first)=="nres") {
+					try {
+						plot_residual = py::cast<bool>(item.second);
+						if (plot_residual) normalize_sb = true;
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'nres' argument");
+					}
+				} else if (py::cast<string>(item.first)=="nomask") {
+					try {
+						show_all_pixels = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'nomask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="output_fits") {
+					try {
+						fits_filename = py::cast<string>(item.second);
+						if (fits_filename != "") plot_fits = true;
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'nomask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="src") {
+					try {
+						zsrc_i = py::cast<int>(item.second);
+						if ((zsrc_i < 0) or (zsrc_i >= current.n_extended_src_redshifts)) throw std::runtime_error("source redshift index does not exist");
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'nomask' argument");
+					}
+				} else throw std::runtime_error("argument to 'lens.output_kappa' not recognized");
+			}
+
+			dvector xvals,yvals,zvals;
+			//current.output_lensed_surface_brightness(xvals,yvals,zvals,0);
+			current.output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
+			if (plot_fits) current.plot_sbmap(fits_filename,xvals,yvals,zvals,plot_fits);
+
+			int nx,ny;
+			nx = xvals.size()-1;
+			ny = yvals.size()-1;
+
+			py::array_t<double> xvec(nx+1,xvals.array());
+			py::array_t<double> yvec(ny+1,yvals.array());
+			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
+			return std::make_tuple(xvec,yvec,zmat);
+		})
 		.def_property("optimize_regparam", &QLens_Wrap::get_optimize_regparam, &QLens_Wrap::set_optimize_regparam)
 		.def("set_sourcepts_auto",&QLens_Wrap::set_analytic_sourcepts, py::arg("verbal") = true)
 		.def("fitmodel", &QLens_Wrap::print_fit_model)
@@ -1353,6 +2094,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("analytic_bestfit_src", &QLens_Wrap::get_analytic_bestfit_src, &QLens_Wrap::set_analytic_bestfit_src)
 		.def_readwrite("cc_splitlevels", &QLens_Wrap::cc_splitlevels)
 		.def_readwrite("zlens", &QLens_Wrap::lens_redshift)
+		.def("lensinfo", &QLens_Wrap::print_lensing_info_at_point)
 		.def_readwrite("imgplane_chisq", &QLens_Wrap::imgplane_chisq)
 		.def_readwrite("nrepeat", &QLens_Wrap::n_repeats)
 		.def_readwrite("flux_chisq", &QLens_Wrap::include_flux_chisq)
@@ -1410,8 +2152,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("images", &PointSource::images)
 		;
 
-	py::class_<ImageDataSet>(m, "ImageDataSet")
-		.def(py::init<>([](){ return new ImageDataSet(); }))
+	py::class_<PtImageDataSet>(m, "PtImageDataSet")
+		.def(py::init<>([](){ return new PtImageDataSet(); }))
 		// .def()
 		// .def("print", &PointSource::print)
 		// .def("print_s", [](&PointSource curr, bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL){
@@ -1419,9 +2161,9 @@ PYBIND11_MODULE(qlens, m) {
 		// }, 
 		//		py::arg("include_time_delays") = false, py::arg("include_time_delays") = true,
 		//		py::arg("srcfile") = NULL, py::arg("imgfile") = NULL)
-		.def_readonly("n_images", &ImageDataSet::n_images)
-		.def_readonly("zsrc", &ImageDataSet::zsrc)
-		.def_readonly("images", &ImageDataSet::images)
+		.def_readonly("n_images", &PtImageDataSet::n_images)
+		.def_readonly("zsrc", &PtImageDataSet::zsrc)
+		.def_readonly("images", &PtImageDataSet::images)
 		;
 
 }

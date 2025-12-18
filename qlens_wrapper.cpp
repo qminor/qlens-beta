@@ -321,7 +321,7 @@ public:
 					 }
 			}
 
-			if (!load_pixel_image_data(band_i,filename_,pixsize,1.0,x_offset,y_offset,hdu_indx,show_header)) throw runtime_error("could not load image data");
+			if (!load_image_pixel_data(band_i,filename_,pixsize,1.0,x_offset,y_offset,hdu_indx,show_header)) throw runtime_error("could not load image data");
 
 		return filename_;
 	}
@@ -344,7 +344,7 @@ public:
 			}
 
 			if (band_i >= n_data_bands) throw runtime_error("image data for specified band has not been loaded yet");
-			if (!imgpixel_data_list[band_i]->load_noise_map_fits(filename_,hdu_indx,show_header)) throw runtime_error("could not load noise map fits file '" + filename_ + "'");
+			if (!imgdata_list[band_i]->load_noise_map_fits(filename_,hdu_indx,show_header)) throw runtime_error("could not load noise map fits file '" + filename_ + "'");
 
 			use_noise_map = true;
 
@@ -405,7 +405,7 @@ public:
 			}
 
 			if (band_i >= n_data_bands) throw runtime_error("image data for specified band has not been loaded yet");
-			if (imgpixel_data_list[band_i]->load_mask_fits(mask_i,filename_,foreground_mask,emask,add_mask,subtract_mask)==false) throw runtime_error("could not load mask file");
+			if (imgdata_list[band_i]->load_mask_fits(mask_i,filename_,foreground_mask,emask,add_mask,subtract_mask)==false) throw runtime_error("could not load mask file");
 
 		return filename_;
 	}

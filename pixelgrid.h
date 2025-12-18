@@ -14,7 +14,7 @@
 class ImagePixelGrid;
 class CartesianSourcePixel;
 class CartesianSourceGrid;
-struct ImagePixelData;
+struct ImageData;
 class PSF;
 
 enum PixelGridType { CartesianPixelGrid, DelaunayPixelGrid };
@@ -384,7 +384,7 @@ class LensPixelGrid : public DelaunayGrid, public ModelParams
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
-	QLens *lens;
+	QLens *qlens;
 	ImagePixelGrid *image_pixel_grid;
 
 	public:
@@ -472,13 +472,13 @@ class ImagePixelGrid : private Sort
 	friend class CartesianSourcePixel;
 	friend class CartesianSourceGrid;
 	friend class DelaunaySourceGrid;
-	friend struct ImagePixelData;
+	friend struct ImageData;
 	friend class LensProfile;
 	friend class PSF;
-	QLens *lens;
+	QLens *qlens;
 	CartesianSourceGrid *cartesian_srcgrid;
 	DelaunaySourceGrid *delaunay_srcgrid;
-	ImagePixelData *image_pixel_data;
+	ImageData *image_data;
 	PSF *psf;
 	LensPixelGrid *lensgrid;
 	lensvector **corner_pts;
@@ -607,22 +607,22 @@ class ImagePixelGrid : private Sort
 	public:
 	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double xmin_in, double xmax_in, double ymin_in, double ymax_in, int x_N_in, int y_N_in, const bool raytrace = false, const int band_number_in = 0, int src_redshift_index = -1, const int imggrid_index_in = -1);
 	//ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, double** sb_in, const int x_N_in, const int y_N_in, const int reduce_factor, double xmin_in, double xmax_in, double ymin_in, double ymax_in, const int src_redshift_index = -1);
-	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data, const bool include_fgmask = false, const int band_number_in = 0, const int src_redshift_index = -1, const int imggrid_index_in = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
+	ImagePixelGrid(QLens* lens_in, SourceFitMode mode, RayTracingMethod method, ImageData& pixel_data, const bool include_fgmask = false, const int band_number_in = 0, const int src_redshift_index = -1, const int imggrid_index_in = -1, const int mask_index = 0, const bool setup_mask_and_data = true, const bool verbal = false);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();
 	void update_zfactors_and_beta_factors();
 	void set_include_in_Lmatrix(const int imggrid_i);
 	void set_include_only_one_pixsrc_in_Lmatrix();
 
-	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImagePixelData& pixel_data);
-	void load_data(ImagePixelData& pixel_data);
+	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImageData& pixel_data);
+	void load_data(ImageData& pixel_data);
 	void generate_point_images(const vector<image>& imgs, double *ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num = -1); // -1 means use all images
 	void add_point_images(double *ptimage_surface_brightness, const int npix);
 	void generate_and_add_point_images(const vector<image>& imgs, const bool include_imgfluxes, const double srcflux);
 	void find_point_images(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap, const bool is_lensed, const bool verbal);
 	//bool test_if_inside_cell(const lensvector& point, const int& i, const int& j);
-	void assign_mask_pointers(ImagePixelData& pixel_data, const int mask_index);
-	bool set_fit_window(ImagePixelData& pixel_data, const bool raytrace = false, const int mask_k = 0, const bool redo_fft = true, const bool use_fgmask = false);
+	void assign_mask_pointers(ImageData& pixel_data, const int mask_index);
+	bool set_fit_window(ImageData& pixel_data, const bool raytrace = false, const int mask_k = 0, const bool redo_fft = true, const bool use_fgmask = false);
 	void include_all_pixels(const bool redo_fft = true);
 	void activate_extended_mask(const bool redo_fft = true);
 	void activate_foreground_mask(const bool redo_fft = true, const bool datamask = false);
@@ -650,7 +650,7 @@ class ImagePixelGrid : private Sort
 	~ImagePixelGrid();
 	void redo_lensing_calculations(const bool verbal = false);
 	void redo_lensing_calculations_corners();
-	void assign_mask_pixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& count, ImagePixelData* data_in);
+	void assign_mask_pixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& count, ImageData* data_in);
 
 	void find_optimal_sourcegrid(double& sourcegrid_xmin, double& sourcegrid_xmax, double& sourcegrid_ymin, double& sourcegrid_ymax, const double &sourcegrid_limit_xmin, const double &sourcegrid_limit_xmax, const double &sourcegrid_limit_ymin, const double& sourcegrid_limit_ymax);
 	void set_sourcegrid_params_from_ray_tracing(double& sourcegrid_xmin, double& sourcegrid_xmax, double& sourcegrid_ymin, double& sourcegrid_ymax, const double sourcegrid_limit_xmin, const double sourcegrid_limit_xmax, const double sourcegrid_limit_ymin, const double sourcegrid_limit_ymax);
@@ -660,7 +660,7 @@ class ImagePixelGrid : private Sort
 	void find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal, double& sig, double& scaled_maxdist);
 	void set_surface_brightness_vector_to_data();
 	void plot_grid(string filename, bool show_inactive_pixels);
-	void set_lens(QLens* lensptr) { lens = lensptr; }
+	void set_lens(QLens* qlensptr) { qlens = qlensptr; }
 	void set_cartesian_srcgrid(CartesianSourceGrid* source_pixel_ptr) { cartesian_srcgrid = source_pixel_ptr; }
 	void set_delaunay_srcgrid(DelaunaySourceGrid* delaunayptr) { delaunay_srcgrid = delaunayptr; }
 	void set_lensgrid(LensPixelGrid* gridptr) { lensgrid = gridptr; }
@@ -670,12 +670,12 @@ class ImagePixelGrid : private Sort
 	void set_zero_lensed_surface_brightness();
 	void set_zero_foreground_surface_brightness();
 
-	double plot_surface_brightness(string outfile_root, bool plot_residual = false, bool normalize_sb = false, bool show_noise_thresh = false, bool plot_log = false, bool show_foreground_mask = false);
+	double output_surface_brightness(dvector& xvals, dvector& yvals, dvector& zvals, bool plot_residual = false, bool normalize_sb = false, bool show_noise_thresh = false, bool plot_log = false, bool show_foreground_mask = false);
 	void plot_sourcepts(string outfile_root, const bool show_subpixels = false);
 	void output_fits_file(string fits_filename, bool plot_residual = false);
 
 	void add_pixel_noise();
-	void set_image_pixel_data(ImagePixelData* imgdata, const int mask_index);
+	void set_image_pixel_data(ImageData* imgdata, const int mask_index);
 	void set_uniform_pixel_noise(const double pn)
 	{
 		if (noise_map != NULL) {
@@ -686,6 +686,7 @@ class ImagePixelGrid : private Sort
 				}
 			}
 		}
+		if (qlens) qlens->use_noise_map = true;
 	}
 	double calculate_signal_to_noise(double &total_signal);
 	void assign_image_mapping_flags(const bool delaunay, const bool potential_perturbations = false, const bool map_all_imgpixels = false);
@@ -700,8 +701,8 @@ class PSF : public ModelParams
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
-	friend struct ImagePixelData;
-	QLens *lens;
+	friend struct ImageData;
+	QLens *qlens;
 	ImagePixelGrid *image_pixel_grid;
 
 	double **psf_matrix;
@@ -735,10 +736,11 @@ class PSF : public ModelParams
 
 class SB_Profile;
 
-struct ImagePixelData : private Sort
+struct ImageData : private Sort
 {
 	friend class QLens;
-	QLens *lens;
+	QLens *qlens;
+	int band_number;
 	int npixels_x, npixels_y;
 	double **surface_brightness;
 	double **noise_map;
@@ -760,8 +762,9 @@ struct ImagePixelData : private Sort
 	string data_fits_filename;
 	string noise_map_fits_filename;
 	std::ostream* isophote_fit_out;
-	ImagePixelData()
+	ImageData(const int band_in = 0)
 	{
+		band_number = band_in;
 		npixels_x = 0;
 		npixels_y = 0;
 		pixel_size = 0.0;
@@ -782,11 +785,11 @@ struct ImagePixelData : private Sort
 		yvals = NULL;
 		pixel_xcvals = NULL;
 		pixel_ycvals = NULL;
-		lens = NULL;
+		qlens = NULL;
 		isophote_fit_out = &std::cout;
 		noise_map_fits_filename = "";
 	}
-	~ImagePixelData();
+	~ImageData();
 	void load_data(string root);
 	void load_from_image_grid(ImagePixelGrid* image_pixel_grid);
 	bool load_noise_map_fits(string fits_filename, const int hdu_indx = 1, const bool show_header = false);
@@ -806,11 +809,11 @@ struct ImagePixelData : private Sort
 			}
 		}
 	}
-	bool load_data_fits(string fits_filename, const double pixel_size_in, const double pixel_xy_ratio_in = 1.0, const double x_offset = 0.0, const double y_offset = 0.0, const int hdu_indx = 0, const bool show_header = false);
+	bool load_data_fits(string fits_filename, const double pixel_size_in, const double pixel_xy_ratio_in = 1.0, const double x_offset = 0.0, const double y_offset = 0.0, const int hdu_indx = 1, const bool show_header = false);
 	void save_data_fits(string fits_filename, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
-	bool load_mask_fits(const int mask_k, string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false, const bool subtract_mask_pixels=false);
+	bool load_mask_fits(const int mask_k, const string fits_filename, const bool foreground=false, const bool emask=false, const bool add_mask=false, const bool subtract_mask_pixels=false);
 	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const int mask_k=0, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
-	bool copy_mask(ImagePixelData* data, const int mask_k = 0);
+	bool copy_mask(ImageData* data, const int mask_k = 0);
 	void assign_high_sn_pixels();
 	double find_max_sb(const int mask_k = 0);
 	double find_avg_sb(const double sb_threshold, const int mask_k = 0);
@@ -838,9 +841,9 @@ struct ImagePixelData : private Sort
 	long int get_size_of_extended_mask(const int mask_k = 0);
 	long int get_size_of_foreground_mask();
 	bool test_if_in_fit_region(const double& x, const double& y, const int mask_k = 0);
-	void set_lens(QLens* lensptr) {
-		lens = lensptr;
-		//pixel_size = lens->default_data_pixel_size;
+	void set_lens(QLens* qlensptr) {
+		qlens = qlensptr;
+		//pixel_size = qlens->default_data_pixel_size;
 	}
 
 	bool estimate_pixel_noise(const double xmin, const double xmax, const double ymin, const double ymax, double &noise, double &mean_sb, const int mask_k = 0);
@@ -866,6 +869,9 @@ struct ImagePixelData : private Sort
 	void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_fac_inverse(double** a, int n);
 	void plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask = false, bool show_foreground_mask = false, const int mask_k = 0);
+	std::string mkstring_int(const int i);
+	std::string mkstring_doub(const double db);
+	std::string get_imgdata_info_string();
 };
 
 #endif // PIXELGRID_H
