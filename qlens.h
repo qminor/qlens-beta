@@ -1039,7 +1039,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	//void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_pixel_data(const int band_i, string image_pixel_filename_root, const double pixsize, const double pix_xy_ratio = 1.0, const double x_offset = 0.0, const double y_offset = 0.0, const int hdu_indx = 1, const bool show_fits_header = false);
 	//bool make_image_surface_brightness_data();
-	void plot_sbmap(const string outfile_root, dvector& xvals, dvector& yvals, dvector& zvals, const bool plot_fits);
+	void plot_sbmap(const string outfile_root, dvector& xvals, dvector& yvals, dvector& zvals, const bool plot_fits = false);
 	const bool output_lensed_surface_brightness(dvector& xvals, dvector& yvals, dvector& zvals, const int band_number, const bool output_fits = false, const bool plot_residual = false, bool plot_foreground_only = false, const bool omit_foreground = false, const bool show_mask_only = true, const bool normalize_residuals = false, const bool offload_to_data = false, const bool show_extended_mask = false, const bool show_foreground_mask = false, const bool show_noise_thresh = false, const bool exclude_ptimgs = false, const bool show_only_ptimgs = false, int specific_zsrc_i = -1, const bool show_only_first_order_corrections = false, const bool plot_log = false, const bool plot_current_sb = false, const bool verbose = true);
 
 	//void plot_Lmatrix();

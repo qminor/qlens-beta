@@ -9289,6 +9289,7 @@ void QLens::process_commands(bool read_file)
 					bool show_all = false;
 					int dataset;
 					string range;
+					dvector xvals,yvals,zvals;
 					extract_word_starts_with('[',1,3,range); // allow for ranges to be specified (if it's not, then ranges are set to "")
 					if (words[nwords-1]=="sbmap") {
 						show_sbmap = true;
@@ -9323,7 +9324,8 @@ void QLens::process_commands(bool read_file)
 						run_plotter("imgdat");
 					else {
 						if (n_data_bands==0) Complain("no image pixel data has been loaded");
-						imgdata_list[0]->plot_surface_brightness("img_pixel",true);
+						imgdata_list[0]->output_surface_brightness(xvals,yvals,zvals,true);
+						plot_sbmap("img_pixel",xvals,yvals,zvals);
 						if (range=="") {
 							stringstream xminstream, xmaxstream, yminstream, ymaxstream;
 							string xminstr, xmaxstr, yminstr, ymaxstr;
@@ -9980,7 +9982,10 @@ void QLens::process_commands(bool read_file)
 			if (show_multiplicities) showmults = "showmults";
 			if (show_pixel_data) {
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
-				imgdata_list[0]->plot_surface_brightness("img_pixel",true);
+				dvector xvals,yvals,zvals;
+				imgdata_list[0]->output_surface_brightness(xvals,yvals,zvals,true);
+				plot_sbmap("img_pixel",xvals,yvals,zvals);
+
 			}
 
 
@@ -10691,11 +10696,14 @@ void QLens::process_commands(bool read_file)
 							range = "[" + xminstring + ":" + xmaxstring + "][" + yminstring + ":" + ymaxstring + "]";
 						}
 
+						dvector xvals,yvals,zvals;
 						if (set_title) plot_title = temp_title;
 						if (mpi_id==0) {
 							if (!make_delaunay_from_sbprofile) cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel");
 							else {
-								delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate,false);
+								delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,delaunay_grid_scale,set_npix,interpolate);
+								plot_sbmap("src_pixel",xvals,yvals,zvals);
+
 							}
 						}
 						if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
@@ -10787,16 +10795,20 @@ void QLens::process_commands(bool read_file)
 				string contstring;
 				if (plot_contours) contstring = "ncont=" + ncontstring2; else contstring = "";
 
+				dvector xvals,yvals,zvals;
 				if (nwords == 2) {
-					imgdata_list[band_i]->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
+					imgdata_list[band_i]->output_surface_brightness(xvals,yvals,zvals,show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
+					plot_sbmap("data_pixel",xvals,yvals,zvals);
 					if (show_isofit) run_plotter_range("datapixel_ellfit",range,contstring);
 					else run_plotter_range("datapixel",range,contstring);
 				} else if (nwords == 3) {
 					if (terminal==TEXT) {
-						imgdata_list[band_i]->plot_surface_brightness(words[2],show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
+						imgdata_list[band_i]->output_surface_brightness(xvals,yvals,zvals,show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
+						plot_sbmap(words[2],xvals,yvals,zvals);
 					}
 					else {
-						imgdata_list[band_i]->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
+						imgdata_list[band_i]->output_surface_brightness(xvals,yvals,zvals,show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
+						plot_sbmap("data_pixel",xvals,yvals,zvals);
 						run_plotter_file("datapixel",words[2],range,contstring);
 					}
 				}
@@ -11377,7 +11389,9 @@ void QLens::process_commands(bool read_file)
 										}
 									} else if ((source_fit_mode==Delaunay_Source) and (src_i >= 0)) {
 										if (delaunay_srcgrids[src_i] != NULL) {
-											delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",1,600,false);
+											delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,1,600,false);
+											delaunay_srcgrids[src_i]->plot_voronoi_grid("src_pixel");
+											plot_sbmap("src_pixel",xvals,yvals,zvals);
 											plotted_src = true;
 										}
 									}
@@ -11576,6 +11590,7 @@ void QLens::process_commands(bool read_file)
 					if (!plot_images("sourcexy.in", "imgs.dat", false, verbal_mode)==true) Complain("could not create grid to plot images");
 				}
 
+				dvector xvals, yvals, zvals;
 				string range1 = "";
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if (range1 == "") {
@@ -11613,7 +11628,9 @@ void QLens::process_commands(bool read_file)
 						if (source_fit_mode==Cartesian_Source) cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel");
 						else if (source_fit_mode==Delaunay_Source) {
 							if (delaunay_srcgrids[src_i] != NULL) {
-								delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",set_npix,interpolate,plot_mag);
+								delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,set_npix,interpolate,plot_mag);
+								delaunay_srcgrids[src_i]->plot_voronoi_grid("src_pixel");
+								plot_sbmap("src_pixel",xvals,yvals,zvals);
 							} else Complain("Delaunay grid has not been created");
 
 						}
@@ -11637,7 +11654,9 @@ void QLens::process_commands(bool read_file)
 					if (plot_fits) {
 						if (source_fit_mode==Cartesian_Source) cartesian_srcgrids[src_i]->output_fits_file(words[2]);
 						else if (source_fit_mode==Delaunay_Source) {
-							delaunay_srcgrids[src_i]->plot_surface_brightness(words[2],set_npix,interpolate,plot_mag,plot_fits);
+							delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,set_npix,interpolate,plot_mag);
+							delaunay_srcgrids[src_i]->plot_voronoi_grid(words[2]);
+							plot_sbmap(words[2],xvals,yvals,zvals,plot_fits);
 						}
 					} else {
 						if (set_title) plot_title = temp_title;
@@ -11647,7 +11666,9 @@ void QLens::process_commands(bool read_file)
 							if (source_fit_mode==Cartesian_Source) cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel");
 							else if (source_fit_mode==Delaunay_Source) {
 								if (delaunay_srcgrids[src_i] != NULL) {
-									delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",set_npix,interpolate,plot_mag);
+									delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,set_npix,interpolate,plot_mag);
+									delaunay_srcgrids[src_i]->plot_voronoi_grid("src_pixel");
+									plot_sbmap("src_pixel",xvals,yvals,zvals);
 								} else Complain("Delaunay grid has not been created");
 							}
 							if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
@@ -15752,7 +15773,9 @@ void QLens::process_commands(bool read_file)
 			DelaunaySourceGrid delaunay_grid(this,0,source_redshift);
 			delaunay_grid.create_pixel_grid(xin,yin,nn);
 			for (int i=0; i < nn; i++) delaunay_grid.surface_brightness[i] = SQR(xin[i])+SQR(yin[i]);
-			delaunay_grid.plot_surface_brightness("test",100,true,false,false);
+			dvector xvals,yvals,zvals;
+			delaunay_grid.output_surface_brightness(xvals,yvals,zvals,100,true,false);
+			plot_sbmap("test",xvals,yvals,zvals);
 			delaunay_grid.plot_voronoi_grid("test");
 			// For natural neighbor interpolation, there is a failure mode when points near the border of the grid are nearly colinear, resulting in sliver triangles. (Demonstrate in lines above.) Weird circles appear in the interpolated SB. Fix this at some point!!
 			//lensvector pt(3.4,8.8);

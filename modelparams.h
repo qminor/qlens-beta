@@ -90,6 +90,7 @@ class ModelParams
 	std::string get_parameters_string();
 	void set_include_limits(bool inc) { include_limits = inc; }
 	int get_n_vary_params() { return n_vary_params; }
+	QLens* get_qlensptr() { return qlens; }
 };
 
 #endif // MODELPARAMS_H

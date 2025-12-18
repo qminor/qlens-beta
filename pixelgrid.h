@@ -361,7 +361,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
 	void record_srcpixel_mappings();
 	void calculate_Lmatrix(const int img_index, PtsWgts* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, const int& ii, const double weight, const int& thread);
 	int assign_active_indices_and_count_source_pixels(const int source_pixel_i_initial, const bool activate_unmapped_pixels);
-	void plot_surface_brightness(string root, const int npix = 600, const bool interpolate = false, const bool plot_magnification = false, const bool plot_fits = false);
+	void output_surface_brightness(dvector& xvals, dvector& yvals, dvector& zvals, const int npix = 600, const bool interpolate = false, const bool plot_magnification = false);
 	void plot_voronoi_grid(string root);
 	double find_moment(const int p, const int q, const int npix, const double xc, const double yc, const double b, const double a, const double phi);
 	void find_source_moments(const int npix, double &qs, double &phi_s, double &sigavg, double &xavg, double &yavg);
@@ -868,7 +868,7 @@ struct ImageData : private Sort
 	bool Cholesky_dcmp(double** a, int n);
 	void Cholesky_solve(double** a, double* b, double* x, int n);
 	void Cholesky_fac_inverse(double** a, int n);
-	void plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask = false, bool show_foreground_mask = false, const int mask_k = 0);
+	void output_surface_brightness(dvector& xvals_in, dvector& yvals_in, dvector& sbvals_in, bool show_only_mask, bool show_extended_mask = false, bool show_foreground_mask = false, const int mask_k = 0);
 	std::string mkstring_int(const int i);
 	std::string mkstring_doub(const double db);
 	std::string get_imgdata_info_string();

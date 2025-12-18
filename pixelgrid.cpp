@@ -5202,10 +5202,10 @@ void DelaunaySourceGrid::find_source_gradient(const lensvector& input_pt, lensve
 }
 
 
-void DelaunaySourceGrid::plot_surface_brightness(string root, const int npix, const bool interpolate_sb, const bool plot_magnification, const bool plot_fits)
+void DelaunaySourceGrid::output_surface_brightness(dvector& xvals, dvector& yvals, dvector& sbvals, const int npix, const bool interpolate_sb, const bool plot_magnification)
 {
 	double x, y, xlength, ylength, pixel_xlength, pixel_ylength;
-	int i, j, npts_x, npts_y;
+	int i, j, k, npts_x, npts_y;
 	xlength = srcgrid_xmax-srcgrid_xmin;
 	ylength = srcgrid_ymax-srcgrid_ymin;
 	npts_x = (int) npix*sqrt(xlength/ylength);
@@ -5213,33 +5213,18 @@ void DelaunaySourceGrid::plot_surface_brightness(string root, const int npix, co
 	pixel_xlength = xlength/npts_x;
 	pixel_ylength = ylength/npts_y;
 
-	string img_filename;
-	string x_filename;
-	string y_filename;
-	ofstream pixel_output_file;
-	if (!plot_fits) {
-		string img_filename = root + ".dat";
-		string x_filename = root + ".x";
-		string y_filename = root + ".y";
+	xvals.input(npts_x+1);
+	yvals.input(npts_y+1);
+	for (i=0, x=srcgrid_xmin; i <= npts_x; i++, x += pixel_xlength) xvals[i] = x;
+	for (i=0, y=srcgrid_ymin; i <= npts_y; i++, y += pixel_ylength) yvals[i] = y;
+	sbvals.input(npts_x*npts_y);
 
-		ofstream pixel_xvals; qlens->open_output_file(pixel_xvals,x_filename);
-		for (i=0, x=srcgrid_xmin; i <= npts_x; i++, x += pixel_xlength) pixel_xvals << x << endl;
-
-		ofstream pixel_yvals; qlens->open_output_file(pixel_yvals,y_filename);
-		for (i=0, y=srcgrid_ymin; i <= npts_y; i++, y += pixel_ylength) pixel_yvals << y << endl;
-
-		qlens->open_output_file(pixel_output_file,img_filename.c_str());
-	}
 	int srcpt_i, trinum;
 	double sb;
-	double **sbvals;
-	if (plot_fits) {
-		sbvals = new double*[npts_x];
-		for (i=0; i < npts_x; i++) sbvals[i] = new double[npts_y];
-	}
 	//cout << "npts_x=" << npts_x << " " << xlength << " " << ylength << " " << npix << " " << srcgrid_xmax << " " << srcgrid_xmin << " " << srcgrid_ymax << " " << srcgrid_ymin << endl;
 	//cout << "npts_y=" << npts_y << endl;
 	lensvector pt;
+	k=0;
 	for (j=0, y=srcgrid_ymin+pixel_xlength/2; j < npts_y; j++, y += pixel_ylength) {
 		pt[1] = y;
 		for (i=0, x=srcgrid_xmin+pixel_xlength/2; i < npts_x; i++, x += pixel_xlength) {
@@ -5256,61 +5241,9 @@ void DelaunaySourceGrid::plot_surface_brightness(string root, const int npix, co
 				if (plot_magnification) sb = log(1.0/inv_magnification[srcpt_i])/ln10;
 				else sb = surface_brightness[srcpt_i];
 			}
-			if (plot_fits) sbvals[i][j] = sb;
+			sbvals[k++] = sb;
 			//cout << x << " " << y << " " << gridpts[srcpt_i][0] << " " << gridpts[srcpt_i][1] << endl;
-			if (!plot_fits) pixel_output_file << sb << " ";
 		}
-		if (!plot_fits) pixel_output_file << endl;
-	}
-	if (!plot_fits) {
-		plot_voronoi_grid(root);
-	}
-
-	if (plot_fits) {
-#ifndef USE_FITS
-		cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return;
-#else
-		int i,j,kk;
-		fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
-		int status = 0;   // CFITSIO status value MUST be initialized to zero!
-		int bitpix = -64, naxis = 2;
-		long naxes[2] = {npts_x,npts_y};
-		double *pixels;
-		if (qlens->fit_output_dir != ".") qlens->create_output_directory(); // in case it hasn't been created already
-		string filename = qlens->fit_output_dir + "/" + root;
-
-		if (!fits_create_file(&outfptr, filename.c_str(), &status))
-		{
-			if (!fits_create_img(outfptr, bitpix, naxis, naxes, &status))
-			{
-				if (naxis == 0) {
-					die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
-				} else {
-					fits_write_key(outfptr, TDOUBLE, "PXSIZE_X", &pixel_xlength, "pixel length along the x direction (in arcsec)", &status);
-					fits_write_key(outfptr, TDOUBLE, "PXSIZE_Y", &pixel_ylength, "pixel length along the y direction (in arcsec)", &status);
-
-					kk=0;
-					long fpixel[naxis];
-					for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
-					pixels = new double[npts_x];
-
-					for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
-					{
-						for (i=0; i < npts_x; i++) {
-							pixels[i] = sbvals[i][j];
-						}
-						fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
-					}
-					delete[] pixels;
-				}
-			}
-			fits_close_file(outfptr, &status);
-		} 
-
-		if (status) fits_report_error(stderr, status); // print any error message
-		for (i=0; i < npts_x; i++) delete[] sbvals[i];
-		delete[] sbvals;
-#endif
 	}
 }
 
@@ -10471,25 +10404,21 @@ void ImageData::add_point_image_from_centroid(ImageData* point_image_data, const
 }
 */
 
-void ImageData::plot_surface_brightness(string outfile_root, bool show_only_mask, bool show_extended_mask, bool show_foreground_mask, const int mask_k)
+void ImageData::output_surface_brightness(dvector& xvals_in, dvector& yvals_in, dvector& sbvals_in, bool show_only_mask, bool show_extended_mask, bool show_foreground_mask, const int mask_k)
 {
-	string sb_filename = outfile_root + ".dat";
-	string x_filename = outfile_root + ".x";
-	string y_filename = outfile_root + ".y";
-
-	ofstream pixel_image_file; qlens->open_output_file(pixel_image_file,sb_filename);
-	ofstream pixel_xvals; qlens->open_output_file(pixel_xvals,x_filename);
-	ofstream pixel_yvals; qlens->open_output_file(pixel_yvals,y_filename);
-	pixel_image_file << setiosflags(ios::scientific);
-	int i,j,k;
+	int i,j,k,l;
+	xvals_in.input(npixels_x+1);
+	yvals_in.input(npixels_y+1);
 	for (int i=0; i <= npixels_x; i++) {
-		pixel_xvals << xvals[i] << endl;
+		xvals_in[i] = xvals[i];
 	}
 	for (int j=0; j <= npixels_y; j++) {
-		pixel_yvals << yvals[j] << endl;
+		yvals_in[j] = yvals[j];
 	}	
+	sbvals_in.input(npixels_x*npixels_y);
 	bool show_sb;
 	if (show_extended_mask) {
+		l=0;
 		for (j=0; j < npixels_y; j++) {
 			for (i=0; i < npixels_x; i++) {
 				if ((!show_only_mask) or (extended_mask == NULL)) show_sb = true;
@@ -10507,27 +10436,25 @@ void ImageData::plot_surface_brightness(string outfile_root, bool show_only_mask
 				}
 				if (show_sb) {
 				//if ((!show_only_mask) or (extended_mask == NULL) or (extended_mask[mask_k][i][j])) {
-					pixel_image_file << surface_brightness[i][j];
+					sbvals_in[l++] = surface_brightness[i][j];
 				} else {
-					pixel_image_file << "NaN";
+					sbvals_in[l++] = numeric_limits<double>::quiet_NaN();
 				}
-				if (i < npixels_x-1) pixel_image_file << " ";
 			}
-			pixel_image_file << endl;
 		}
 	} else if (show_foreground_mask) {
+		l=0;
 		for (j=0; j < npixels_y; j++) {
 			for (i=0; i < npixels_x; i++) {
 				if ((!show_only_mask) or (foreground_mask_data == NULL) or (foreground_mask_data[i][j])) {
-					pixel_image_file << surface_brightness[i][j];
+					sbvals_in[l++] = surface_brightness[i][j];
 				} else {
-					pixel_image_file << "NaN";
+					sbvals_in[l++] = numeric_limits<double>::quiet_NaN();
 				}
-				if (i < npixels_x-1) pixel_image_file << " ";
 			}
-			pixel_image_file << endl;
 		}
 	} else {
+		l=0;
 		for (j=0; j < npixels_y; j++) {
 			for (i=0; i < npixels_x; i++) {
 				if ((!show_only_mask) or (in_mask == NULL)) show_sb = true;
@@ -10545,13 +10472,11 @@ void ImageData::plot_surface_brightness(string outfile_root, bool show_only_mask
 				}
 				//if ((!show_only_mask) or (in_mask == NULL) or (in_mask[mask_k] == NULL) or (in_mask[mask_k][i][j])) {
 				if (show_sb) {
-					pixel_image_file << surface_brightness[i][j];
+					sbvals_in[l++] = surface_brightness[i][j];
 				} else {
-					pixel_image_file << "NaN";
+					sbvals_in[l++] = numeric_limits<double>::quiet_NaN();
 				}
-				if (i < npixels_x-1) pixel_image_file << " ";
 			}
-			pixel_image_file << endl;
 		}
 	}
 }

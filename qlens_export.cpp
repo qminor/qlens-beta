@@ -590,6 +590,54 @@ PYBIND11_MODULE(qlens, m) {
 			if (!current.load_noise_map_fits(filename,hdu_index,show_header)) throw runtime_error("could not load noise map fits file '" + filename + "'");
 			current.qlens->use_noise_map = true;
 		})
+		.def("plot", [](ImageData &current, py::kwargs& kwargs){
+			int mask_i = -1;
+			bool nomask = false;
+			bool emask = false;
+			bool fgmask = false;
+
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="nomask") {
+					try {
+						nomask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'nomask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="emask") {
+					try {
+						emask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'emask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="fgmask") {
+					try {
+						fgmask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'fgmask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else throw std::runtime_error("argument to 'plot' not recognized");
+			}
+			bool show_mask = (nomask) ? false : true;
+			if (mask_i >= current.n_masks) throw std::runtime_error("mask index has not been created");
+
+			dvector xvals,yvals,zvals;
+			current.output_surface_brightness(xvals,yvals,zvals,show_mask,emask,fgmask,mask_i);
+
+			int nx,ny;
+			nx = xvals.size()-1;
+			ny = yvals.size()-1;
+
+			py::array_t<double> xvec(nx+1,xvals.array());
+			py::array_t<double> yvec(ny+1,yvals.array());
+			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
+			return std::make_tuple(xvec,yvec,zmat);
+		})
 		.def("mask_all_pixels", [](ImageData &current, py::kwargs &kwargs) {
 			int mask_i = 0;
 			for (auto item : kwargs) {
@@ -1757,6 +1805,55 @@ PYBIND11_MODULE(qlens, m) {
 	py::class_<DelaunaySourceGrid, ModelParams, std::unique_ptr<DelaunaySourceGrid, py::nodelete>>(m, "DelaunaySrcGrid")
 		.def(py::init<>([](QLens* qlens_in){return new DelaunaySourceGrid(qlens_in);}))
 		.def(py::init<const DelaunaySourceGrid*>())
+		.def("plot", [](DelaunaySourceGrid &current, py::kwargs& kwargs){
+			bool interpolate = false;
+			int npix = 600;
+			bool show_mag = false;
+			bool plot_fits = false;
+			string fits_filename = "";
+
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="interp") {
+					try {
+						interpolate = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'interp' argument");
+					}
+				} else if (py::cast<string>(item.first)=="npix") {
+					try {
+						npix = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'npix' argument");
+					}
+				} else if (py::cast<string>(item.first)=="show_mag") {
+					try {
+						show_mag = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'show_mag' argument");
+					}
+				} else if (py::cast<string>(item.first)=="output_fits") {
+					try {
+						fits_filename = py::cast<string>(item.second);
+						if (fits_filename != "") plot_fits = true;
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'output_fits' argument");
+					}
+				} else throw std::runtime_error("argument to 'plot' not recognized");
+			}
+
+			dvector xvals,yvals,zvals;
+			current.output_surface_brightness(xvals,yvals,zvals,npix,interpolate,show_mag);
+			if (plot_fits) current.get_qlensptr()->plot_sbmap(fits_filename,xvals,yvals,zvals,plot_fits);
+
+			int nx,ny;
+			nx = xvals.size()-1;
+			ny = yvals.size()-1;
+
+			py::array_t<double> xvec(nx+1,xvals.array());
+			py::array_t<double> yvec(ny+1,yvals.array());
+			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
+			return std::make_tuple(xvec,yvec,zmat);
+		})
 		;
 
 	py::class_<QLens_Wrap>(m, "QLens")
@@ -2056,16 +2153,16 @@ PYBIND11_MODULE(qlens, m) {
 						fits_filename = py::cast<string>(item.second);
 						if (fits_filename != "") plot_fits = true;
 					} catch (...) {
-						throw std::runtime_error("Invalid boolean value for 'nomask' argument");
+						throw std::runtime_error("Invalid boolean value for 'output_fits' argument");
 					}
 				} else if (py::cast<string>(item.first)=="src") {
 					try {
 						zsrc_i = py::cast<int>(item.second);
 						if ((zsrc_i < 0) or (zsrc_i >= current.n_extended_src_redshifts)) throw std::runtime_error("source redshift index does not exist");
 					} catch (...) {
-						throw std::runtime_error("Invalid boolean value for 'nomask' argument");
+						throw std::runtime_error("Invalid boolean value for 'src' argument");
 					}
-				} else throw std::runtime_error("argument to 'lens.output_kappa' not recognized");
+				} else throw std::runtime_error("argument to 'plotimg' not recognized");
 			}
 
 			dvector xvals,yvals,zvals;
