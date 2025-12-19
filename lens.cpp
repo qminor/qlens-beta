@@ -28,6 +28,10 @@ using namespace std;
 #include <filesystem>
 #endif
 
+#ifdef USE_FITS
+#include "fitsio.h"
+#endif
+
 #ifdef USE_COOLEST
 #include "json/json.h"
 #include <CCfits/CCfits>
