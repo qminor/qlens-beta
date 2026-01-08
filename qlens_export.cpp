@@ -1844,6 +1844,7 @@ PYBIND11_MODULE(qlens, m) {
 			dvector xvals,yvals,zvals;
 			current.output_surface_brightness(xvals,yvals,zvals,npix,interpolate,show_mag);
 			if (plot_fits) current.get_qlensptr()->plot_sbmap(fits_filename,xvals,yvals,zvals,plot_fits);
+			//
 
 			int nx,ny;
 			nx = xvals.size()-1;

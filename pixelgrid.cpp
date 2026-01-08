@@ -399,7 +399,7 @@ void CartesianSourcePixel::deallocate_multithreaded_variables()
 	}
 }
 
-CartesianSourceGrid::CartesianSourceGrid(QLens* qlens_in, const int band, const double zsrc_in) : ModelParams()
+CartesianSourceGrid::CartesianSourceGrid(QLens* qlens_in, const int band, const double zsrc_in) : ModelParams(), CartesianSourcePixel(qlens_in)
 {
 	parent_grid = this;
 	qlens = qlens_in;

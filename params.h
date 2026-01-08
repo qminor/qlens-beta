@@ -172,6 +172,16 @@ struct DerivedParam
 			}
 		}
 	}
+	DerivedParam(DerivedParam* dparam_in)
+	{
+		derived_param_type = dparam_in->derived_param_type;
+		funcparam = dparam_in->funcparam;
+		funcparam2 = dparam_in->funcparam2;
+		int_param = dparam_in->int_param;
+		use_kpc_units = dparam_in->use_kpc_units;
+		name = dparam_in->name;
+		latex_name = dparam_in->latex_name;
+	}
 	double get_derived_param(QLens* lens_in)
 	{
 		if (derived_param_type == KappaR) return lens_in->total_kappa(funcparam,int_param,use_kpc_units);
@@ -1159,12 +1169,15 @@ struct DerivedParamList
 			dparam_names = new string[n_dparams];
 			hist2d_dparam = new bool[n_dparams];
 			subplot_dparam = new bool[n_dparams];
+			dparams = new DerivedParam*[n_dparams];
 			for (int i=0; i < n_dparams; i++) {
 				dparam_names[i] = dparam_list_in.dparam_names[i];
 				hist2d_dparam[i] = dparam_list_in.hist2d_dparam[i];
 				subplot_dparam[i] = dparam_list_in.subplot_dparam[i];
+				dparams[i] = new DerivedParam(dparam_list_in.dparams[i]);
 			}
 		} else {
+			dparams = NULL;
 			dparam_names = NULL;
 			hist2d_dparam = NULL;
 			subplot_dparam = NULL;

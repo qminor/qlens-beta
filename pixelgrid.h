@@ -90,7 +90,7 @@ class CartesianSourcePixel
 	void assign_active_indices(int& source_pixel_i);
 
 	public:
-	CartesianSourcePixel() {}
+	CartesianSourcePixel(QLens* lens_in) { lens = lens_in; }
 	CartesianSourcePixel(QLens* lens_in, lensvector** xij, const int& i, const int& j, const int& level_in, CartesianSourceGrid* parent_ptr);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
 	static void deallocate_multithreaded_variables();

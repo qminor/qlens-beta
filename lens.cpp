@@ -15462,8 +15462,8 @@ QLens::~QLens()
 			}
 			delete[] ptsrc_beta_factors;
 		}
-
 	}
+
 	if ((point_image_data != NULL) and (borrowed_image_data==false)) delete[] point_image_data;
 	if ((imgdata_list != NULL) and (borrowed_image_data==false)) {
 		if (n_data_bands > 0) {
