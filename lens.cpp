@@ -12167,10 +12167,12 @@ double QLens::loglike_point_source(double* params)
 void QLens::fitmodel_calculate_derived_params(double* params, double* derived_params)
 {
 	if (dparam_list->n_dparams==0) return;
-	double transformed_params[param_list->nparams];
-	fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
-	if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
-	for (int i=0; i < dparam_list->n_dparams; i++) derived_params[i] = dparam_list->dparams[i]->get_derived_param(fitmodel);
+	fitmodel->param_list->update_untransformed_values(params);
+	fitmodel->dparam_list->get_dparams(derived_params);
+	//double transformed_params[param_list->nparams];
+	//fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
+	//if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
+	//for (int i=0; i < dparam_list->n_dparams; i++) derived_params[i] = dparam_list->dparams[i]->get_derived_param(fitmodel);
 	clear_raw_chisq();
 }
 

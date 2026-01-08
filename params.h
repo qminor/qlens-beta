@@ -1203,7 +1203,16 @@ struct DerivedParamList
 	double get_dparam(const int i)
 	{
 		if (i < n_dparams) return dparams[i]->get_derived_param(qlens);
-		else return -VERY_LARGE;
+		else {
+			die("specified derived parameter index has not been created");
+		}
+		return -VERY_LARGE;
+	}
+	void get_dparams(double *dparam_vals)
+	{
+		for (int i=0; i < n_dparams; i++) {
+			dparam_vals[i] = dparams[i]->get_derived_param(qlens);
+		}
 	}
 	void clear_dparams()
 	{

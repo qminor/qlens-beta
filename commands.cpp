@@ -17496,10 +17496,18 @@ void QLens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbi
 			if (!no2dposts) {
 				string hist2d_str = fit_output_dir + "/" + filename + ".hist2d_params";
 				ofstream hist2dfile(hist2d_str.c_str());
-				int nparams_tot = param_list->nparams + dparam_list->n_dparams;
-				for (int i=0; i < nparams_tot; i++) {
+				//int nparams_tot = param_list->nparams + dparam_list->n_dparams;
+				for (int i=0; i < param_list->nparams; i++) {
 					string pname;
 					bool pflag = param_list->hist2d_param_flag(i,pname);
+					hist2dfile << pname << " ";
+					if (pflag) hist2dfile << "1";
+					else hist2dfile << "0";
+					hist2dfile << endl;
+				}
+				for (int i=0; i < dparam_list->n_dparams; i++) {
+					string pname;
+					bool pflag = dparam_list->hist2d_param_flag(i,pname);
 					hist2dfile << pname << " ";
 					if (pflag) hist2dfile << "1";
 					else hist2dfile << "0";
@@ -17512,10 +17520,18 @@ void QLens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbi
 			if (make_subplot) {
 				string subplot_str = fit_output_dir + "/" + filename + ".subplot_params";
 				ofstream subplotfile(subplot_str.c_str());
-				int nparams_tot = param_list->nparams + dparam_list->n_dparams;
-				for (int i=0; i < nparams_tot; i++) {
+				//int nparams_tot = param_list->nparams + dparam_list->n_dparams;
+				for (int i=0; i < param_list->nparams; i++) {
 					string pname;
 					bool pflag = param_list->subplot_param_flag(i,pname);
+					subplotfile << pname << " ";
+					if (pflag) subplotfile << "1";
+					else subplotfile << "0";
+					subplotfile << endl;
+				}
+				for (int i=0; i < dparam_list->n_dparams; i++) {
+					string pname;
+					bool pflag = dparam_list->subplot_param_flag(i,pname);
 					subplotfile << pname << " ";
 					if (pflag) subplotfile << "1";
 					else subplotfile << "0";
