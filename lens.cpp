@@ -6244,8 +6244,8 @@ bool QLens::find_caustic_minmax(double& min, double& max, const double cc_num)
 	if (npts==0) return false;
 	double x_avg=0, y_avg=0;
 	for (int k=0; k < npts; k++) {
-		x_avg += critical_curve->cc_pts[k][0];
-		y_avg += critical_curve->cc_pts[k][1];
+		x_avg += critical_curve->caustic_pts[k][0];
+		y_avg += critical_curve->caustic_pts[k][1];
 	}
 	x_avg /= npts;
 	y_avg /= npts;
@@ -6253,7 +6253,7 @@ bool QLens::find_caustic_minmax(double& min, double& max, const double cc_num)
 	double rsqmax = 0;
 	double rsqmin = 1e30;
 	for (int k=0; k < npts; k++) {
-		rsq = SQR(critical_curve->cc_pts[k][0]-x_avg) + SQR(critical_curve->cc_pts[k][1]-y_avg);
+		rsq = SQR(critical_curve->caustic_pts[k][0]-x_avg) + SQR(critical_curve->caustic_pts[k][1]-y_avg);
 		if (rsq > rsqmax) rsqmax = rsq;
 		if (rsq < rsqmin) rsqmin = rsq;
 	}
