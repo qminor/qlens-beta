@@ -12978,7 +12978,7 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="caustic_minmax")
 		{
-			int cc_num=0;
+			int cc_num=-1;
 			double rmin,rmax,rmax_minor_axis;
 			if (nwords==2) {
 				if (!(ws[1] >> cc_num)) Complain("invalid c.c. number (must be positive integer)");

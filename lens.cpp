@@ -6233,7 +6233,7 @@ bool QLens::plot_critical_curves(string critfile)
 	return true;
 }
 
-bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis, const double cc_num)
+bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis, int cc_num)
 {
 	if (!sorted_critical_curves) sort_critical_curves();
 
@@ -6251,9 +6251,35 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 		return angle;
 	};
 
-
 	int n_cc = sorted_critical_curve.size();
 	if (n_cc==0) return false;
+
+	if (cc_num < 0) {
+		if (n_cc==1) cc_num = 0;
+		else {
+			// look for the first tangential critical curve we come across
+			int j,k;
+			double kappa_averaged_over_cc;
+			for (j=0; j < n_cc; j++) {
+				kappa_averaged_over_cc = 0;
+				for (k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
+					kappa_averaged_over_cc += kappa(sorted_critical_curve[j].cc_pts[k][0],sorted_critical_curve[j].cc_pts[k][1],reference_zfactors,default_zsrc_beta_factors);
+				}
+				kappa_averaged_over_cc /= sorted_critical_curve[j].cc_pts.size();
+				if (kappa_averaged_over_cc < 1.0) {
+					// this is a tangential critical curve
+					cc_num = j;
+					//cout << "Found tangential critical curve! cc_num=" << cc_num << endl;
+					break;
+				}
+			}
+			if (cc_num < 0) {
+				warn("could not find a tangential critical curve");
+				return false;
+			}
+		}
+	}
+
 	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
 	int npts = critical_curve->cc_pts.size();
 	if (npts==0) return false;
@@ -6277,21 +6303,21 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 		if (rsq < rsqmin) rsqmin = rsq;
 	}
 	if (theta_rmax >= M_PI) theta_rmax -= M_PI;
-	cout << "THETA_RMAX=" << theta_rmax << endl;
+	//cout << "THETA_RMAX=" << theta_rmax << endl;
 	double theta, theta_minor_axis_min, theta_minor_axis_max;
 	theta_minor_axis_min = theta_rmax + M_HALFPI - 0.1;
 	theta_minor_axis_max = theta_rmax + M_HALFPI + 0.1;
 	double rsqmax_minor_axis = 0;
 	for (int k=0; k < npts; k++) {
 		theta = get_angle_from_components(critical_curve->caustic_pts[k][0]-x_avg,critical_curve->caustic_pts[k][1]-y_avg);
-		cout << theta << endl;
+		//cout << theta << endl;
 		if ((theta > theta_minor_axis_min) and (theta < theta_minor_axis_max)) {
 			rsq = SQR(critical_curve->caustic_pts[k][0]-x_avg) + SQR(critical_curve->caustic_pts[k][1]-y_avg);
-			cout << "rsq = " << rsq << endl;
+			//cout << "rsq = " << rsq << endl;
 			if (rsq > rsqmax_minor_axis) rsqmax_minor_axis = rsq;
 		}
 	}
-	cout << "RSQMAX_MINOR_AXIS=" << rsqmax_minor_axis << endl;
+	//cout << "RSQMAX_MINOR_AXIS=" << rsqmax_minor_axis << endl;
 	min = sqrt(rsqmin);
 	max = sqrt(rsqmax);
 	max_minor_axis = sqrt(rsqmax_minor_axis);
