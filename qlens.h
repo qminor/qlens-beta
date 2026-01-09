@@ -1442,7 +1442,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	bool spline_critical_curves(bool verbal = true);
 	bool plot_critical_curves(string filename = "");
-	bool find_caustic_minmax(double& min, double& max, const double cc_num = 0);
+	bool find_caustic_minmax(double& min, double& max, double& max_minor_axis, const double cc_num = 0);
 	bool plotcrit_exclude_subhalo(string filename, int exclude_lensnum)
 	{
 		bool worked = false;

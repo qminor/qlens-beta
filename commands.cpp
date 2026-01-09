@@ -12976,9 +12976,9 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="caustic_minmax")
 		{
-			double rmin,rmax;
-			if (!find_caustic_minmax(rmin,rmax,0)) Complain("critical curves have not been found");
-			if (mpi_id==0) cout << "Caustic rmin=" << rmin << " rmax=" << rmax << endl;
+			double rmin,rmax,rmax_minor_axis;
+			if (!find_caustic_minmax(rmin,rmax,rmax_minor_axis,0)) Complain("critical curves have not been found");
+			if (mpi_id==0) cout << "Caustic rmin=" << rmin << " rmax=" << rmax << " rmax_minor_axis=" << rmax_minor_axis << endl;
 		}
 		else if (words[0]=="skip_newton")
 		{
