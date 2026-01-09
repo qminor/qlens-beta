@@ -2208,6 +2208,11 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("fit_label", &QLens_Wrap::get_fit_label, &QLens_Wrap::set_fit_label)
 		.def_readwrite("fit_output_dir", &QLens_Wrap::fit_output_dir)
 		.def_readwrite_static("ansi_output", &QLens_Wrap::use_ansi_output_during_fit)
+		.def("caustic_minmax", [](QLens_Wrap &current){ 
+			double rmin,rmax,rmax_minor_axis;
+			if (!current.find_caustic_minmax(rmin,rmax,rmax_minor_axis,0)) throw std::runtime_error("critical curves have not been found");
+			return std::make_tuple(rmin,rmax,rmax_minor_axis);
+		})
 		;
 
 	py::class_<QLens_Wrap::critical_curve>(m, "critical_curve")
