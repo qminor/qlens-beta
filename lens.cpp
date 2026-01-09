@@ -6276,6 +6276,7 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 		}
 		if (rsq < rsqmin) rsqmin = rsq;
 	}
+	cout << "THETA_RMAX=" << theta_rmax << endl;
 	double theta, theta_minor_axis_min, theta_minor_axis_max;
 	theta_minor_axis_min = theta_rmax + M_HALFPI - 0.1;
 	theta_minor_axis_max = theta_rmax + M_HALFPI + 0.1;
@@ -6287,6 +6288,7 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 			if (rsq > rsqmax_minor_axis) rsqmax_minor_axis = rsq;
 		}
 	}
+	cout << "RSQMAX_MINOR_AXIS=" << rsqmax_minor_axis << endl;
 	min = sqrt(rsqmin);
 	max = sqrt(rsqmax);
 	max_minor_axis = sqrt(rsqmax_minor_axis);
