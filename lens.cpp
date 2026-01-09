@@ -6283,8 +6283,10 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 	double rsqmax_minor_axis = 0;
 	for (int k=0; k < npts; k++) {
 		theta = get_angle_from_components(critical_curve->caustic_pts[k][0]-x_avg,critical_curve->caustic_pts[k][1]-y_avg);
+		cout << theta << endl;
 		if ((theta > theta_minor_axis_min) and (theta < theta_minor_axis_max)) {
 			rsq = SQR(critical_curve->caustic_pts[k][0]-x_avg) + SQR(critical_curve->caustic_pts[k][1]-y_avg);
+			cout << "rsq = " << rsq << endl;
 			if (rsq > rsqmax_minor_axis) rsqmax_minor_axis = rsq;
 		}
 	}
