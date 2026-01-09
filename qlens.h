@@ -13,6 +13,7 @@
 #include "simplex.h"
 #include "mcmchdr.h"
 #include "cosmo.h"
+#include "mcmceval.h"
 #ifdef USE_MUMPS
 #include "dmumps_c.h"
 #endif
@@ -1151,6 +1152,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "", string extra_command2 = "");
 	void run_plotter_range(string plotcommand, string range, string extra_command = "", string extra_command2 = "");
 	void run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists);
+	void make_histograms(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists, bool use_fisher_matrix);
 	void remove_equal_sign();
 	void remove_word(int n_remove);
 	void remove_comments(string& instring);
@@ -1440,6 +1442,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	bool spline_critical_curves(bool verbal = true);
 	bool plot_critical_curves(string filename = "");
+	bool find_caustic_minmax(double& min, double& max, const double cc_num = 0);
 	bool plotcrit_exclude_subhalo(string filename, int exclude_lensnum)
 	{
 		bool worked = false;

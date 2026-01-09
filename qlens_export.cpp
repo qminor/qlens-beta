@@ -1844,7 +1844,6 @@ PYBIND11_MODULE(qlens, m) {
 			dvector xvals,yvals,zvals;
 			current.output_surface_brightness(xvals,yvals,zvals,npix,interpolate,show_mag);
 			if (plot_fits) current.get_qlensptr()->plot_sbmap(fits_filename,xvals,yvals,zvals,plot_fits);
-			//
 
 			int nx,ny;
 			nx = xvals.size()-1;
@@ -2014,7 +2013,7 @@ PYBIND11_MODULE(qlens, m) {
 			bool show_errors = true;
 			bool resume = false;
 			for (auto item : kwargs) {
-				if (py::cast<string>(item.first)=="adopt") {
+				if (py::cast<string>(item.first)=="adopt") { // this option is for optimizer methods; for monte carlo methods, best fit point is automatically adopted 
 					try {
 						adopt_bestfit = py::cast<bool>(item.second);
 					} catch (...) {
@@ -2038,17 +2037,21 @@ PYBIND11_MODULE(qlens, m) {
 			}
 
 			if(fitmethod=="simplex") {
-					curr.chi_square_fit_simplex(show_errors);
+				curr.chi_square_fit_simplex(show_errors);
 			} else if (fitmethod=="powell") {
-					curr.chi_square_fit_powell(show_errors);
+				curr.chi_square_fit_powell(show_errors);
 			} else if (fitmethod=="nest") {
-					curr.nested_sampling();
+				curr.nested_sampling();
+				curr.adopt_model(curr.bestfitparams);
 			} else if (fitmethod=="multinest") {
-					curr.multinest(resume,false);
+				curr.multinest(resume,false);
+				curr.adopt_model(curr.bestfitparams);
 			} else if (fitmethod=="polychord") {
-					curr.polychord(resume,false);
+				curr.polychord(resume,false);
+				curr.adopt_model(curr.bestfitparams);
 			} else if (fitmethod=="twalk") {
-					curr.chi_square_twalk();
+				curr.chi_square_twalk();
+				curr.adopt_model(curr.bestfitparams);
 			} else {
 					throw std::runtime_error("Available fitmethods: simplex (default), powell, nest, multinest, polychord, twalk");
 			}
@@ -2056,17 +2059,17 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("set_source_mode", [](QLens_Wrap &curr, const std::string &source_mode="ptsource"){
 			if(source_mode=="ptsource") {
-					curr.source_fit_mode = Point_Source;
+				curr.source_fit_mode = Point_Source;
 			} else if (source_mode=="cartesian") {
-					curr.source_fit_mode = Cartesian_Source;
+				curr.source_fit_mode = Cartesian_Source;
 			} else if (source_mode=="delaunay") {
-					curr.source_fit_mode = Delaunay_Source;
+				curr.source_fit_mode = Delaunay_Source;
 			} else if (source_mode=="sbprofile") {
-					curr.source_fit_mode = Parameterized_Source;
+				curr.source_fit_mode = Parameterized_Source;
 			} else if (source_mode=="shapelet") {
-					curr.source_fit_mode = Shapelet_Source;
+				curr.source_fit_mode = Shapelet_Source;
 			} else {
-					throw std::runtime_error("Available source_modes: ptsource, cartesian, delaunay, sbprofile, shapelet");
+				throw std::runtime_error("Available source_modes: ptsource, cartesian, delaunay, sbprofile, shapelet");
 			}
 		})
 		.def("source_mode", [](QLens_Wrap &curr){
@@ -2081,6 +2084,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def("use_bestfit", [](QLens_Wrap &curr){
 			curr.adopt_model(curr.bestfitparams);
 		})
+		.def("adopt_chain_bestfit", &QLens_Wrap::adopt_bestfit_point_from_chain)
 		.def("test_lens", &QLens_Wrap::test_lens_functions)
 		.def("sort_critical_curves", &QLens_Wrap::sort_critical_curves)
 		.def("init_fitmodel", &QLens_Wrap::initialize_fitmodel, py::arg("run_fit_in") = true)
