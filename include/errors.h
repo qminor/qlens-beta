@@ -3,10 +3,12 @@
 #ifndef ERRORS_H
 #define ERRORS_H
 
+#include <string>
+
 void die(void);
-void die(char *, ...);
-void warn(char *, ...);
-void warn(bool, char *, ...);
+void die(const std::string, ...);
+void warn(const std::string, ...);
+void warn(const bool, const std::string, ...);
 
 void openerror(char *);
 void readerror(char *);

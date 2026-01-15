@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 	n_omp_threads = 1;
 #endif
 	Grid::allocate_multithreaded_variables(n_omp_threads);
-	SourcePixel::allocate_multithreaded_variables(n_omp_threads);
+	CartesianSourcePixel::allocate_multithreaded_variables(n_omp_threads);
 	DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 	QLens::allocate_multithreaded_variables(n_omp_threads);
@@ -216,7 +216,10 @@ int main(int argc, char *argv[])
 	}
 #endif
 
-	QLens lens;
+	Cosmology cosmo;
+	if (load_cosmology_file) cosmo.set_cosmology(cosmology);
+	else cosmo.set_cosmology(0.3,0.04,0.7,2.215); // defaults: omega_matter = 0.3, hubble = 0.7
+	QLens lens(&cosmo);
 #ifdef USE_OPENMP
 	if (disptime) lens.set_show_wtime(true); // useful for optimizing the number of threads and MPI processes to minimize the wall time per likelihood evaluation
 #endif
@@ -224,7 +227,7 @@ int main(int argc, char *argv[])
 	int mpi_group_leaders[ngroups];
 	for (int i=0; i < ngroups; i++) mpi_group_leaders[i] = subgroup_rank[i][0];
 	lens.set_mpi_params(mpi_id,mpi_np,ngroups,group_number,subgroup_id,subgroup_size[group_number],mpi_group_leaders,&subgroup[group_number],&subgroup_comm[group_number],&onegroup[mpi_id],&onegroup_comm[mpi_id]);
-	if (load_cosmology_file) lens.cosmo.set_cosmology(cosmology);
+
 	if (ngroups==mpi_np) {
 		lens.Set_MCMC_MPI(mpi_np,mpi_id);
 	} else {
@@ -283,7 +286,7 @@ int main(int argc, char *argv[])
 	Grid::deallocate_multithreaded_variables();
 	ImagePixelGrid::deallocate_multithreaded_variables();
 	DelaunayGrid::deallocate_multithreaded_variables();
-	SourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
+	CartesianSourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
 	QLens::deallocate_multithreaded_variables();
 
 #ifdef USE_MPI

@@ -156,3 +156,55 @@ def add_crit_to_plot(QLens_Object, srcplane_fig, imgplane_fig):
         
     plt.legend(loc="upper right")
 
+def add_crit_to_imgplot(QLens_Object, imgplane_fig):
+    if(QLens_Object is None or imgplane_fig is None):
+        raise RuntimeError("This function requires the first input to be a QLens object, and the 2nd input to be matplotlib ax objects (imgplane).")
+
+    L = QLens_Object
+
+    L.sort_critical_curves()
+
+    plt.figure(imgplane_fig.number)
+    imgplane_ax=plt.gca()
+    ## Plotting the critical curves
+
+    for last_cc in L.sorted_critical_curve:
+        pass
+    label=''
+    for curve in L.sorted_critical_curve:
+        cc_x = []
+        cc_y = []
+
+        for point in curve.cc_pts:
+            cc_x.append(point.x) # x coordinate
+            cc_y.append(point.y) # y coordinate
+
+        # Required to connect the curve continously
+
+        cc_x.append(cc_x[0])
+        cc_y.append(cc_y[0]) 
+
+        # imgplane_ax.scatter(sources_x, sources_y, color='r', s=3) # s is the size of the points
+        if (curve == last_cc):
+            label='Critical Curve ($z_{src}$=' + str(L.zsrc) + ')'
+        imgplane_ax.plot(cc_x, cc_y, color='k', label=label)
+        cc_x = []
+        cc_y = []
+
+    plt.legend(loc="upper right")
+
+
+def plot_sb(sbdata, QLens_Object, include_cc=False):
+    # This is very rudimentary, but it seems to work reasonably well
+    q = QLens_Object
+    fig, ax = plt.subplots(figsize=(8, 8))
+    x = sbdata[0]
+    y = sbdata[1]
+    z = sbdata[2]
+    extent = [x[0],x[-1],y[0],y[-1]] 
+    im = ax.imshow(z, interpolation='nearest', extent=extent, cmap='viridis', origin='lower')
+    fig.colorbar(im, ax=ax)
+    if (include_cc==True):
+        add_crit_to_imgplot(q,fig)
+    plt.show(block=False)
+

@@ -10,8 +10,11 @@
 #include "errors.h"
 #include "brent.h"
 #include "cosmo.h"
+#include "qlens.h"
 using namespace std;
 
+const double Cosmology::default_omega_baryon = 0.0488;
+const double Cosmology::default_del_R = 2.215;
 const double Cosmology::default_k_pivot = 0.05;
 const double Cosmology::default_spectral_index = 0.96;
 const double Cosmology::default_running = 0;
@@ -20,7 +23,6 @@ const double Cosmology::default_neutrino_mass = 0.06; // in eV; this is the mini
 const double Cosmology::min_tophat_mass = 1e2;
 const double Cosmology::max_tophat_mass = 1e18;
 const double Cosmology::default_sigma8 = 0.82; // Only used if normalizing by sigma8 rather than A_s
-
 
 
 void CosmologyParams::remove_comments(string& instring)
@@ -150,7 +152,7 @@ void Cosmology::setup_parameters(const bool initial_setup)
 	indx++;
 }
 
-void Cosmology::copy_cosmo_data(Cosmology* cosmo_in)
+void Cosmology::copy_cosmo_data(const Cosmology* cosmo_in)
 {
 	hubble = cosmo_in->hubble;
 	omega_m = cosmo_in->omega_m;
@@ -163,6 +165,37 @@ void Cosmology::copy_cosmo_data(Cosmology* cosmo_in)
 void Cosmology::update_meta_parameters(const bool varied_only_fitparams)
 {
 	set_cosmology(omega_m,omega_b,hubble,A_s);
+	if ((qlens) and (n_vary_params > 0)) {
+		qlens->update_zfactors_and_betafactors();
+		for (int i=0; i < qlens->nlens; i++) {
+			qlens->lens_list[i]->update_meta_parameters(); // if the cosmology has changed, update cosmology info and any parameters that depend on them (unless there are anchored parameters, in which case it will be done below)
+		}
+	}
+}
+
+void Cosmology::get_parameter_numbers_from_qlens(int& pi, int& pf)
+{
+	if (qlens) qlens->get_cosmo_parameter_numbers(pi,pf);
+}
+
+bool Cosmology::register_vary_parameters_in_qlens()
+{
+	return qlens->register_cosmo_vary_parameters();
+	// this is a virtual function that must be defined for each inherited class
+}
+
+void Cosmology::register_limits_in_qlens()
+{
+	if (qlens != NULL) {
+		qlens->register_cosmo_prior_limits();
+	}
+}
+
+void Cosmology::update_fitparams_in_qlens()
+{
+	if (qlens != NULL) {
+		qlens->update_cosmo_fitparams();
+	}
 }
 
 int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double n_massive_neutrinos, double omega_lamb, double hub, double A_s_in, bool normalize_by_sigma8)

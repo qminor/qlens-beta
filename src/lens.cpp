@@ -28,6 +28,10 @@ using namespace std;
 #include <filesystem>
 #endif
 
+#ifdef USE_FITS
+#include "fitsio.h"
+#endif
+
 #ifdef USE_COOLEST
 #include "json/json.h"
 #include <CCfits/CCfits>
@@ -186,7 +190,7 @@ void QLens::set_mpi_params(const int& mpi_id_in, const int& mpi_np_in)
 #endif
 }
 
-QLens::QLens() : UCMC(), ModelParams()
+QLens::QLens(Cosmology* cosmo_in) : UCMC(), ModelParams()
 {
 	lens_parent = NULL; // this is only set if creating from another lens
 	random_seed = 10;
@@ -213,7 +217,16 @@ QLens::QLens() : UCMC(), ModelParams()
 #endif
 
 	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
-	cosmo.set_cosmology(0.3,0.04,0.7,2.215); // defaults: omega_matter = 0.3, hubble = 0.7
+	if (cosmo_in != NULL) {
+		cosmo = cosmo_in;
+		cosmology_allocated_within_qlens = false;
+	}
+	else {
+		cosmo = new Cosmology();
+		cosmology_allocated_within_qlens = true;
+		cosmo->set_cosmology(0.3,0.04,0.7,2.215); // defaults: omega_matter = 0.3, hubble = 0.7
+	}
+	cosmo->set_qlens(this);
 	lens_redshift = 0.5;
 	source_redshift = 2.0;
 	ellipticity_gradient = false;
@@ -272,7 +285,7 @@ QLens::QLens() : UCMC(), ModelParams()
 	n_livepts = 1000; // for nested sampling
 	multinest_constant_eff_mode = false;
 	multinest_target_efficiency = 0.1;
-	multinest_mode_separation = false;
+	multimodal_sampling = false;
 	polychord_nrepeats = 5;
 	mcmc_threads = 1;
 	mcmc_tolerance = 1.01; // Gelman-Rubin statistic for T-Walk sampler
@@ -313,7 +326,6 @@ QLens::QLens() : UCMC(), ModelParams()
 	lensgrids = NULL;
 	//sbmin = -1e30;
 	//sbmax = 1e30;
-	n_derived_params = 0;
 	radial_grid = true;
 	grid_xlength = 20; // default gridsize
 	grid_ylength = 20;
@@ -332,14 +344,13 @@ QLens::QLens() : UCMC(), ModelParams()
 	fits_format = false;
 #endif
 	default_data_pixel_size = -1; // used for setting a pixel scale for FITS images (only if initialized to a positive number)
-	n_fit_parameters = 0;
 	n_ptsrc = 0;
 	ptsrc_list = NULL;
 	n_ptsrc_redshifts = 0;
 	ptsrc_zfactors = NULL;
 	ptsrc_beta_factors = NULL;
 	borrowed_image_data = false;
-	image_data = NULL;
+	point_image_data = NULL;
 
 	source_fit_mode = Point_Source;
 	use_ansi_characters = false;
@@ -368,7 +379,13 @@ QLens::QLens() : UCMC(), ModelParams()
 	include_imgfluxes_in_inversion = false;
 	include_srcflux_in_inversion = false;
 
-	param_settings = new ParamSettings;
+	lenslist = new LensList(this);
+	srclist = new SourceList(this);
+	pixsrclist = new PixSrcList(this);
+	ptsrclist = new PtSrcList(this);
+	imgdatalist = new ImgDataList(this);
+	param_list = new ParamList(this);
+	dparam_list = new DerivedParamList(this);
 	sim_err_pos = 0.005;
 	sim_err_flux = 0.01;
 	sim_err_td = 1;
@@ -376,7 +393,7 @@ QLens::QLens() : UCMC(), ModelParams()
 
 	n_model_bands = 0; // There can be one or more model bands to generate mock data, even if there are no "data" bands (i.e. no image data has been loaded)
 	n_data_bands = 0;
-	imgpixel_data_list = NULL;
+	imgdata_list = NULL;
 	n_image_pixel_grids = 0;
 	image_pixel_grids = NULL;
 	srcgrids = NULL;
@@ -570,8 +587,6 @@ QLens::QLens() : UCMC(), ModelParams()
 	tabulate_phi_N = 200;
 	tabulate_q_N = 10;
 	grid = NULL;
-	Gauss_NN = 60;
-	integral_tolerance = 1e-3;
 	default_parameter_mode = 0;
 	include_recursive_lensing = true;
 	use_mumps_subcomm = true; // this option should probably be removed, but keeping it for now in case a problem with sub_comm turns up
@@ -616,7 +631,10 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	my_group = lens_in->my_group;
 #endif
 
-	cosmo.copy_cosmo_data(&lens_in->cosmo); 
+	cosmo = new Cosmology();
+	cosmology_allocated_within_qlens = true;
+	cosmo->copy_cosmo_data(lens_in->cosmo); 
+	cosmo->set_qlens(this);
 
 	lens_redshift = lens_in->lens_redshift;
 	source_redshift = lens_in->source_redshift;
@@ -665,7 +683,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	n_livepts = lens_in->n_livepts; // for nested sampling
 	multinest_constant_eff_mode = lens_in->multinest_constant_eff_mode;
 	multinest_target_efficiency = lens_in->multinest_target_efficiency;
-	multinest_mode_separation = lens_in->multinest_mode_separation;
+	multimodal_sampling = lens_in->multimodal_sampling;
 	polychord_nrepeats = lens_in->polychord_nrepeats;
 	mcmc_tolerance = lens_in->mcmc_tolerance; // for T-Walk sampler
 	mcmc_logfile = lens_in->mcmc_logfile;
@@ -711,7 +729,6 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	n_pixellated_src = 0;
 	n_pixellated_lens = 0;
 	lensgrids = NULL;
-	n_derived_params = 0;
 	radial_grid = lens_in->radial_grid;
 	grid_xlength = lens_in->grid_xlength; // default gridsize
 	grid_ylength = lens_in->grid_ylength;
@@ -746,7 +763,13 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	include_imgfluxes_in_inversion = lens_in->include_imgfluxes_in_inversion;
 	include_srcflux_in_inversion = lens_in->include_srcflux_in_inversion;
 
-	param_settings = new ParamSettings(*lens_in->param_settings);
+	lenslist = new LensList(this);
+	srclist = new SourceList(this);
+	pixsrclist = new PixSrcList(this);
+	ptsrclist = new PtSrcList(this);
+	imgdatalist = new ImgDataList(this);
+	param_list = new ParamList(*lens_in->param_list,this);
+	dparam_list = new DerivedParamList(*lens_in->dparam_list,this);
 	sim_err_pos = lens_in->sim_err_pos;
 	sim_err_flux = lens_in->sim_err_flux;
 	sim_err_td = lens_in->sim_err_td;
@@ -755,19 +778,18 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	fitmodel = NULL;
 	fits_format = lens_in->fits_format;
 	default_data_pixel_size = lens_in->default_data_pixel_size;
-	n_fit_parameters = 0;
 	n_ptsrc = 0;
 	ptsrc_list = NULL;
 	n_ptsrc_redshifts = lens_in->n_ptsrc_redshifts;
 	ptsrc_zfactors = NULL;
 	ptsrc_beta_factors = NULL;
 	borrowed_image_data = false;
-	image_data = NULL;
+	point_image_data = NULL;
 	weak_lensing_data.input(lens_in->weak_lensing_data);
 
 	n_model_bands = 0; // There can be one or more model bands to generate mock data, even if there are no "data" bands (i.e. no image data has been loaded)
 	n_data_bands = 0;
-	imgpixel_data_list = NULL;
+	imgdata_list = NULL;
 	n_image_pixel_grids = 0;
 	image_pixel_grids = NULL;
 	srcgrids = NULL;
@@ -969,8 +991,6 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	tabulate_q_N = lens_in->tabulate_q_N;
 
 	grid = NULL;
-	Gauss_NN = lens_in->Gauss_NN;
-	integral_tolerance = lens_in->integral_tolerance;
 	include_recursive_lensing = lens_in->include_recursive_lensing;
 	use_mumps_subcomm = lens_in->use_mumps_subcomm;
 
@@ -985,7 +1005,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 
 void QLens::setup_parameters(const bool initial_setup)
 {
-	// this sets up the generic parameters (besides lens, source and cosmology parameters) that can be varied as model parameters during fitting
+	// this sets up the generic parameters (besides lens, source, cosmology and psf parameters) that can be varied as model parameters during fitting
 	if (initial_setup) {
 		// default initial values
 		syserr_pos = 0.0;
@@ -1035,70 +1055,67 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
-		// *NOTE*: Gauss_NN and integral_tolerance should probably just be set as static variables in LensProfile, so they don't need to be passed in here
-
 	SPLE_Lens* alphaptr;
-	Shear* shearptr;
+	//Shear* shearptr;
 	//Truncated_NFW* tnfwptr;
 	switch (name) {
 		case PTMASS:
-			new_lens = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this); break;
+			new_lens = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this->cosmo); break;
 		case SHEET:
-			new_lens = new MassSheet(zl, zs, mass_parameter, xc, yc, this); break;
+			new_lens = new MassSheet(zl, zs, mass_parameter, xc, yc, this->cosmo); break;
 		case DEFLECTION:
-			new_lens = new Deflection(zl, zs, scale1, scale2, this); break;
+			new_lens = new Deflection(zl, zs, scale1, scale2, this->cosmo); break;
 		case sple_LENS:
-			//new_lens = new SPLE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break; // the old way
+			//new_lens = new SPLE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, this->cosmo); break; // the old way
 			
 			//alphaptr = new SPLE_Lens();
 			//alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
 
-			alphaptr = new SPLE_Lens(mass_parameter, logslope_param, scale1, eparam, theta, xc, yc, pmode); // an alternative constructor to use; in this case you don't need to call initialize_parameters
-			new_lens = alphaptr;
+			new_lens = new SPLE_Lens(zl, zs, mass_parameter, logslope_param, scale1, eparam, theta, xc, yc, pmode, this->cosmo); // an alternative constructor to use; in this->cosmo case you don't need to call initialize_parameters
 			break;
 		case SHEAR:
-			shearptr = new Shear();
-			shearptr->initialize_parameters(eparam,theta,xc,yc);
-			new_lens = shearptr;
-			break;
-			//new_lens = new Shear(zl, zs, eparam, theta, xc, yc, this); break;
-		// Note: the Multipole profile is added using the function add_multipole_lens(..., this) because one of the input parameters is an int
+			//shearptr = new Shear();
+			//shearptr->initialize_parameters(eparam,theta,xc,yc);
+			//new_lens = shearptr;
+			//break;
+			new_lens = new Shear(zl, zs, eparam, theta, xc, yc, this->cosmo); break;
+		// Note: the Multipole profile is added using the function add_multipole_lens(..., this->cosmo) because one of the input parameters is an int
 		case nfw:
-			new_lens = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			new_lens = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case TRUNCATED_nfw:
-			//tnfwptr = new Truncated_NFW(pmode,special_param1); // this doesn't work yet...doesn't load lens redshift
+			//tnfwptr = new Truncated_NFW(pmode,special_param1); // this->cosmo doesn't work yet...doesn't load lens redshift
 			//cout << "HMM " << mass_parameter << " " << scale1 << " " << scale2 << " " << eparam << " " << theta << " " << xc << " " << yc << endl;
 			//tnfwptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
 			//new_lens = tnfwptr;
 			//break;
-			new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
+			new_lens = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, special_param1, pmode, this->cosmo); break;
 		case CORED_nfw:
-			new_lens = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			new_lens = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case dpie_LENS:
-			new_lens = new dPIE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			new_lens = new dPIE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case EXPDISK:
-			new_lens = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
+			new_lens = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, this->cosmo); break;
 		case HERNQUIST:
-			new_lens = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
+			new_lens = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, this->cosmo); break;
 		case CORECUSP:
 			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to create_and_add_lens(...) function for model CORECUSP");
-			new_lens = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			new_lens = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case SERSIC_LENS:
-			new_lens = new SersicLens(zl, zs, mass_parameter, scale1, logslope_param, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			new_lens = new SersicLens(zl, zs, mass_parameter, scale1, logslope_param, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case DOUBLE_SERSIC_LENS:
-			new_lens = new DoubleSersicLens(zl, zs, mass_parameter, special_param1, scale1, logslope_param, scale2, special_param2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			new_lens = new DoubleSersicLens(zl, zs, mass_parameter, special_param1, scale1, logslope_param, scale2, special_param2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case CORED_SERSIC_LENS:
-			new_lens = new Cored_SersicLens(zl, zs, mass_parameter, scale1, logslope_param, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
+			new_lens = new Cored_SersicLens(zl, zs, mass_parameter, scale1, logslope_param, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case TOPHAT_LENS:
-			new_lens = new TopHatLens(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
+			new_lens = new TopHatLens(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, this->cosmo); break;
 		case TESTMODEL: // Model for testing purposes
-			new_lens = new TestModel(zl, zs, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
+			new_lens = new TestModel(zl, zs, eparam, theta, xc, yc); break;
 		default:
 			die("Lens type not recognized");
 	}
 	if (new_lens==NULL) die("new_lens pointer was not set when creating lens");
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
-	add_lens(new_lens,zl,zs);
+	add_lens(new_lens);
 }
 
 bool QLens::spawn_lens_from_source_object(const int src_number, const double zl, const double zs, const int pmode, const bool vary_mass_parameter, const bool include_limits, const double mass_param_lower, const double mass_param_upper)
@@ -1145,66 +1162,11 @@ bool QLens::spawn_lens_from_source_object(const int src_number, const double zl,
 			die("surface brightness profile type not supported for fitting");
 	}
 	if (!spawn_lens) return false;
+	new_lens->set_zsrc_ref(reference_source_redshift);
 
-	add_lens(new_lens,zl,zs);
+	add_lens(new_lens);
 	return true;
 }
-
-/*
-void QLens::create_and_add_lens(LensProfileName name, const int emode, const double zl, const double zs, const double mass_parameter, const double scale1, const double scale2, const double eparam, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
-{
-	// eparam can be either q (axis ratio) or epsilon (ellipticity) depending on the ellipticity mode
-	
-	add_new_lens_entry(zl);
-
-	int old_emode = LensProfile::default_ellipticity_mode;
-	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
-
-		// *NOTE*: Gauss_NN and integral_tolerance should probably just be set as static variables in LensProfile, so they don't need to be passed in here
-
-	switch (name) {
-		case PTMASS:
-			lens_list[nlens-1] = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this); break;
-		case SHEET:
-			lens_list[nlens-1] = new MassSheet(zl, zs, mass_parameter, xc, yc, this); break;
-		case DEFLECTION:
-			lens_list[nlens-1] = new Deflection(zl, zs, scale1, scale2, this); break;
-		case sple_LENS:
-			lens_list[nlens-1] = new SPLE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
-		case SHEAR:
-			lens_list[nlens-1] = new Shear(zl, zs, eparam, theta, xc, yc, this); break;
-		// Note: the Multipole profile is added using the function add_multipole_lens(..., this) because one of the input parameters is an int
-		case nfw:
-			lens_list[nlens-1] = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
-		case TRUNCATED_nfw:
-			lens_list[nlens-1] = new Truncated_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, special_param1, pmode, this); break;
-		case CORED_nfw:
-			lens_list[nlens-1] = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
-		case dpie_LENS:
-			lens_list[nlens-1] = new dPIE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
-		case EXPDISK:
-			lens_list[nlens-1] = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
-		case HERNQUIST:
-			lens_list[nlens-1] = new Hernquist(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, this); break;
-		case CORECUSP:
-			if ((special_param1==-1000) or (special_param2==-1000)) die("special parameters need to be passed to create_and_add_lens(...) function for model CORECUSP");
-			lens_list[nlens-1] = new CoreCusp(zl, zs, mass_parameter, special_param1, special_param2, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
-		case SERSIC_LENS:
-			lens_list[nlens-1] = new SersicLens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
-		case CORED_SERSIC_LENS:
-			lens_list[nlens-1] = new Cored_SersicLens(zl, zs, mass_parameter, scale1, scale2, special_param1, eparam, theta, xc, yc, Gauss_NN, integral_tolerance, pmode, this); break;
-		case TESTMODEL: // Model for testing purposes
-			lens_list[nlens-1] = new TestModel(zl, zs, eparam, theta, xc, yc, Gauss_NN, integral_tolerance); break;
-		default:
-			die("Lens type not recognized");
-	}
-	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
-
-	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset_grid();
-	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
-}
-*/
 
 void QLens::create_and_add_lens(const char *splinefile, const int emode, const double zl, const double zs, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
 {
@@ -1213,10 +1175,9 @@ void QLens::create_and_add_lens(const char *splinefile, const int emode, const d
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 	if (emode > 3) die("lens emode greater than 3 does not exist");
-	lens_list[nlens-1] = new LensProfile(splinefile, zl, zs, q, theta, xc, yc, Gauss_NN, integral_tolerance, qx, f, this);
+	lens_list[nlens-1] = new LensProfile(splinefile, zl, zs, q, theta, xc, yc, qx, f, this->cosmo);
+	lens_list[nlens-1]->set_qlens_pointer(this);
 	if (emode != -1) LensProfile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
-
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1241,8 +1202,8 @@ void QLens::add_multipole_lens(const double zl, const double zs, int m, const do
 {
 	add_new_lens_entry(zl);
 
-	lens_list[nlens-1] = new Multipole(zl, zs, a_m, n, m, theta, xc, yc, kap, this, sine_term);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
+	lens_list[nlens-1] = new Multipole(zl, zs, a_m, n, m, theta, xc, yc, kap, this->cosmo, sine_term);
+	lens_list[nlens-1]->set_qlens_pointer(this);
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1270,8 +1231,8 @@ void QLens::add_tabulated_lens(const double zl, const double zs, int lnum, const
 
 	add_new_lens_entry(zl);
 
-	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N,this);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
+	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N,this->cosmo);
+	lens_list[nlens-1]->set_qlens_pointer(this);
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1300,8 +1261,8 @@ void QLens::add_qtabulated_lens(const double zl, const double zs, int lnum, cons
 
 	add_new_lens_entry(zl);
 
-	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N, this);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
+	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, lens_list[lnum], tabulate_rmin, dmax(grid_xlength,grid_ylength), tabulate_logr_N, tabulate_phi_N, tabulate_qmin, tabulate_q_N, this->cosmo);
+	lens_list[nlens-1]->set_qlens_pointer(this);
 
 	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1342,8 +1303,8 @@ bool QLens::add_tabulated_lens_from_file(const double zl, const double zs, const
 
 	add_new_lens_entry(zl);
 
-	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, tabfile, tabfilename, this);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
+	lens_list[nlens-1] = new Tabulated_Model(zl, zs, kscale, rscale, theta, xc, yc, tabfile, tabfilename, this->cosmo);
+	lens_list[nlens-1]->set_qlens_pointer(this);
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
@@ -1391,26 +1352,24 @@ bool QLens::add_qtabulated_lens_from_file(const double zl, const double zs, cons
 
 	add_new_lens_entry(zl);
 
-	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, tabfile, this);
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
+	lens_list[nlens-1] = new QTabulated_Model(zl, zs, kscale, rscale, q, theta, xc, yc, tabfile, this->cosmo);
+	lens_list[nlens-1]->set_qlens_pointer(this);
 
 	for (i=0; i < nlens; i++) lens_list[i]->lens_number = i;
 	reset_grid();
 	return true;
 }
 
-void QLens::add_lens(LensProfile *new_lens, const double zl, const double zs)
+void QLens::add_lens(LensProfile *new_lens)
 {
-	// NOTE: the integration points/weights should NOT be in the LensProfile classes. They should be in one place so they don't get computed & copied multiple times. FIX THIS!!!
-	new_lens->set_integration_parameters(Gauss_NN, integral_tolerance);
-	new_lens->setup_cosmology(this,zl,zs);
+	new_lens->setup_cosmology(this->cosmo);
+	new_lens->set_qlens_pointer(this);
 
 	add_new_lens_entry(new_lens->zlens);
 
 	new_lens->lens_number = nlens-1;
 	lens_list[nlens-1] = new_lens;
-	lens_list_vec.push_back(lens_list[nlens-1]); // used for Python wrapper
-	lens_list[nlens-1]->register_vary_flags();
+	register_lens_vary_parameters(nlens-1);
 
 	reset_grid();
 	if (auto_zsource_scaling) auto_zsource_scaling = false; // fix zsrc_ref now that a lens has been created, to make sure lens mass scale doesn't change when zsrc is varied
@@ -1432,6 +1391,7 @@ void QLens::add_new_lens_entry(const double zl)
 	lens_redshift_idx = new_lens_redshift_idx;
 	lens_list = newlist;
 	nlens++;
+	lenslist->input_ptr(lens_list,nlens);
 
 	//int j,k;
 	//if (n_lens_redshifts > 1) {
@@ -1474,7 +1434,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 		new_lens_redshifts[znum] = zl;
 		new_zlens_group_lens_indx[znum] = new_zlens_group_lens_indx_col;
 		new_zlens_group_size[znum] = 1;
-		new_reference_zfactors[znum] = cosmo.kappa_ratio(zl,source_redshift,reference_source_redshift);
+		new_reference_zfactors[znum] = cosmo->kappa_ratio(zl,source_redshift,reference_source_redshift);
 		for (i=znum; i < n_lens_redshifts; i++) {
 			new_lens_redshifts[i+1] = lens_redshifts[i];
 			new_zlens_group_lens_indx[i+1] = zlens_group_lens_indx[i];
@@ -1500,7 +1460,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 			for (i=1; i < n_lens_redshifts+1; i++) {
 				new_default_zsrc_beta_factors[i-1] = new double[i];
 				if (include_recursive_lensing) {
-					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = cosmo.calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo.cpp
+					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = cosmo->calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo->cpp
 				} else {
 					for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = 0;
 				}
@@ -1525,7 +1485,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 				for (j=0; j < znum; j++) {
 					new_extsrc_zfactors[i][j] = extended_src_zfactors[i][j];
 				}
-				new_extsrc_zfactors[i][znum] = cosmo.kappa_ratio(zl,extended_src_redshifts[i],reference_source_redshift);
+				new_extsrc_zfactors[i][znum] = cosmo->kappa_ratio(zl,extended_src_redshifts[i],reference_source_redshift);
 				for (j=znum; j < n_lens_redshifts; j++) {
 					new_extsrc_zfactors[i][j+1] = extended_src_zfactors[i][j];
 				}
@@ -1535,7 +1495,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 					for (j=1; j < n_lens_redshifts+1; j++) {
 						new_extsrc_beta_factors[i][j-1] = new double[j];
 						if (include_recursive_lensing) {
-							for (k=0; k < j; k++) new_extsrc_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
+							for (k=0; k < j; k++) new_extsrc_beta_factors[i][j-1][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo->cpp
 						} else {
 							for (k=0; k < j; k++) new_extsrc_beta_factors[i][j-1][k] = 0;
 						}
@@ -1572,7 +1532,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 				for (j=0; j < znum; j++) {
 					new_ptsrc_zfactors[i][j] = ptsrc_zfactors[i][j];
 				}
-				new_ptsrc_zfactors[i][znum] = cosmo.kappa_ratio(zl,ptsrc_redshifts[i],reference_source_redshift);
+				new_ptsrc_zfactors[i][znum] = cosmo->kappa_ratio(zl,ptsrc_redshifts[i],reference_source_redshift);
 				for (j=znum; j < n_lens_redshifts; j++) {
 					new_ptsrc_zfactors[i][j+1] = ptsrc_zfactors[i][j];
 				}
@@ -1582,7 +1542,7 @@ void QLens::add_new_lens_redshift(const double zl, const int lens_i, int* zlens_
 					for (j=1; j < n_lens_redshifts+1; j++) {
 						new_ptsrc_beta_factors[i][j-1] = new double[j];
 						if (include_recursive_lensing) {
-							for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+							for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo->cpp
 						} else {
 							for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = 0;
 						}
@@ -1687,7 +1647,7 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 				for (i=1; i < n_lens_redshifts-1; i++) {
 					new_default_zsrc_beta_factors[i-1] = new double[i];
 					if (include_recursive_lensing) {
-						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = cosmo.calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo.cpp
+						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = cosmo->calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift); // from cosmo->cpp
 					} else {
 						for (j=0; j < i; j++) new_default_zsrc_beta_factors[i-1][j] = 0;
 					}
@@ -1738,7 +1698,7 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 						for (j=1; j < n_lens_redshifts-1; j++) {
 							new_ptsrc_beta_factors[i][j-1] = new double[j];
 							if (include_recursive_lensing) {
-								for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+								for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo->cpp
 							} else {
 								for (k=0; k < j; k++) new_ptsrc_beta_factors[i][j-1][k] = 0;
 							}
@@ -1794,7 +1754,7 @@ void QLens::remove_old_lens_redshift(const int znum, const int lens_i, const boo
 						for (j=1; j < n_lens_redshifts-1; j++) {
 							new_extended_src_beta_factors[i][j-1] = new double[j];
 							if (include_recursive_lensing) {
-								for (k=0; k < j; k++) new_extended_src_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
+								for (k=0; k < j; k++) new_extended_src_beta_factors[i][j-1][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo->cpp
 							} else {
 								for (k=0; k < j; k++) new_extended_src_beta_factors[i][j-1][k] = 0;
 							}
@@ -1855,6 +1815,118 @@ void QLens::update_lens_redshift_data()
 	}
 }
 
+void QLens::remove_lens(int lensnumber, const bool delete_lens)
+{
+	int pi, pf;
+	get_lens_parameter_numbers(lensnumber,pi,pf);
+
+	if ((lensnumber >= nlens) or (nlens==0)) { warn(warnings,"Specified lens does not exist"); return; }
+	LensProfile** newlist = new LensProfile*[nlens-1];
+	int* new_lens_redshift_idx;
+	if (nlens > 1) new_lens_redshift_idx = new int[nlens-1];
+	int i,j;
+	for (i=0; i < nlens; i++) {
+		if ((i != lensnumber) and (lens_list[i]->center_anchored==true) and (lens_list[i]->get_center_anchor_number()==lensnumber)) lens_list[i]->delete_center_anchor();
+		if ((i != lensnumber) and (lens_list[i]->anchor_special_parameter==true) and (lens_list[i]->get_special_parameter_anchor_number()==lensnumber)) lens_list[i]->delete_special_parameter_anchor();
+		if (i != lensnumber) lens_list[i]->unanchor_parameter(lens_list[lensnumber]); // this unanchors the lens if any of its parameters are anchored to the lens being deleted
+	}
+	for (i=0; i < n_sb; i++) {
+		// if any source profiles are anchored to the center of this lens (typically to model foreground light), delete the anchor
+		if ((sb_list[i]->center_anchored_to_lens==true) and (sb_list[i]->get_center_anchor_number()==lensnumber)) sb_list[i]->delete_center_anchor();
+	}
+	remove_old_lens_redshift(lens_redshift_idx[lensnumber], lensnumber, true); // removes the lens redshift from the list if no other lenses share that redshift
+	for (i=0,j=0; i < nlens; i++) {
+		if (i != lensnumber) {
+			newlist[j] = lens_list[i];
+			new_lens_redshift_idx[j] = lens_redshift_idx[i];
+			j++;
+		}
+	}
+	if (delete_lens) delete lens_list[lensnumber];
+	delete[] lens_list;
+	delete[] lens_redshift_idx;
+	nlens--;
+
+	lens_list = newlist;
+	lenslist->input_ptr(lens_list,nlens);
+	if (nlens > 0) lens_redshift_idx = new_lens_redshift_idx;
+	else lens_redshift_idx = NULL;
+	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
+	reset_grid();
+
+	param_list->remove_params(pi,pf);
+	for (int i=dparam_list->n_dparams-1; i >= 0; i--) {
+		if (dparam_list->dparams[i]->int_param==lensnumber) { // this is problematic because "int_param" might not be referring to the lens number (some dparams use int_param for pixsrc number, for example). You need to refine the dparams so it says whether it's connected to a lens, pixsrc, ptsrc etc. and then update this code accordingly.
+			if (mpi_id==0) cout << "Removing derived param " << i << endl;
+			dparam_list->remove_dparam(i);
+		}
+	}
+}
+
+void QLens::clear_lenses()
+{
+	if (nlens > 0) {
+		int pi, pf, pi_min=1000, pf_max=0;
+		// since all the lens parameters are blocked together in the param_list list, we just need to find the initial and final parameters to remove
+		for (int i=0; i < nlens; i++) {
+			get_lens_parameter_numbers(i,pi,pf);
+			if (pi < pi_min) pi_min=pi;
+			if (pf > pf_max) pf_max=pf;
+		}	
+		for (int i=0; i < nlens; i++) {
+			delete lens_list[i];
+		}	
+		delete[] lens_list;
+		lenslist->clear_ptr();
+		param_list->remove_params(pi_min,pf_max);
+		nlens = 0;
+		if (lens_redshift_idx != NULL) {
+			delete[] lens_redshift_idx;
+			lens_redshift_idx = NULL;
+		}
+		if (lens_redshifts != NULL) {
+			delete[] lens_redshifts;
+			lens_redshifts = NULL;
+		}
+		if (zlens_group_size != NULL) {
+			delete[] zlens_group_size;
+			zlens_group_size = NULL;
+		}
+		if (zlens_group_lens_indx != NULL) {
+			for (int i=0; i < n_lens_redshifts; i++) delete[] zlens_group_lens_indx[i];
+			delete[] zlens_group_lens_indx;
+			zlens_group_lens_indx = NULL;
+		}
+		if (reference_zfactors != NULL) {
+			delete[] reference_zfactors;
+			reference_zfactors = NULL;
+		}
+		if (ptsrc_zfactors != NULL) {
+			for (int i=0; i < n_ptsrc_redshifts; i++) delete[] ptsrc_zfactors[i];
+			delete[] ptsrc_zfactors;
+			ptsrc_zfactors = NULL;
+		}
+		if (default_zsrc_beta_factors != NULL) {
+			for (int i=0; i < n_lens_redshifts-1; i++) delete[] default_zsrc_beta_factors[i];
+			delete[] default_zsrc_beta_factors;
+			default_zsrc_beta_factors = NULL;
+		}
+		if (ptsrc_beta_factors != NULL) {
+			for (int i=0; i < n_ptsrc_redshifts; i++) {
+				for (int j=0; j < n_lens_redshifts-1; j++) delete[] ptsrc_beta_factors[i][j];
+				if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
+			}
+			delete[] ptsrc_beta_factors;
+			ptsrc_beta_factors = NULL;
+		}
+
+		n_lens_redshifts = 0;
+
+		reset_grid();
+		dparam_list->clear_dparams(); // NOT ALL DPARAMS ARE TIED TO A LENS!!! Should check which dparams are tied to lenses and clear those
+	}
+}
+
 int QLens::add_new_extended_src_redshift(const double zs, const int src_i, const bool pixellated_src)
 {
 	int i, j, k, znum;
@@ -1901,7 +1973,7 @@ int QLens::add_new_extended_src_redshift(const double zs, const int src_i, const
 			}
 			new_zfactors[znum] = new double[n_lens_redshifts];
 			for (j=0; j < n_lens_redshifts; j++) {
-				new_zfactors[znum][j] = cosmo.kappa_ratio(lens_redshifts[j],zs,reference_source_redshift);
+				new_zfactors[znum][j] = cosmo->kappa_ratio(lens_redshifts[j],zs,reference_source_redshift);
 			}
 			for (i=znum; i < n_extended_src_redshifts; i++) {
 				new_zfactors[i+1] = new double[n_lens_redshifts];
@@ -1915,7 +1987,7 @@ int QLens::add_new_extended_src_redshift(const double zs, const int src_i, const
 					new_beta_factors[i][j-1] = new double[j];
 					if (include_recursive_lensing) {
 						// calculating all beta factors again, just to get it working quickly...fix it up later so it doesn't recalculate all of them over again
-						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
+						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo->cpp
 					} else {
 						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 					}
@@ -2102,7 +2174,7 @@ void QLens::remove_old_extended_src_redshift(const int znum, const bool removing
 							for (j=1; j < n_lens_redshifts; j++) {
 								new_beta_factors[i][j-1] = new double[j];
 								if (include_recursive_lensing) {
-									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo.cpp
+									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],extended_src_redshifts[i]); // from cosmo->cpp
 								} else {
 									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 								}
@@ -2166,8 +2238,10 @@ void QLens::remove_old_extended_src_redshift(const int znum, const bool removing
 				for (i=istart, i_old=istart_old; i < znum_j; i++, i_old++) new_image_pixel_grids[i] = image_pixel_grids[i_old];
 				for (i=znum_j, i_old=znum_j_old; i < istart+n_extended_src_redshifts; i++, i_old++) {
 					new_image_pixel_grids[i] = image_pixel_grids[i_old+1];
-					new_image_pixel_grids[i]->src_redshift_index--;
-					new_image_pixel_grids[i]->update_zfactors_and_beta_factors();
+					if (new_image_pixel_grids[i] != NULL) {
+						new_image_pixel_grids[i]->src_redshift_index--;
+						new_image_pixel_grids[i]->update_zfactors_and_beta_factors();
+					}
 				}
 			}
 			delete[] image_pixel_grids;
@@ -2247,7 +2321,7 @@ int QLens::add_new_ptsrc_redshift(const double zs, const int src_i)
 			}
 			new_zfactors[znum] = new double[n_lens_redshifts];
 			for (j=0; j < n_lens_redshifts; j++) {
-				new_zfactors[znum][j] = cosmo.kappa_ratio(lens_redshifts[j],zs,reference_source_redshift);
+				new_zfactors[znum][j] = cosmo->kappa_ratio(lens_redshifts[j],zs,reference_source_redshift);
 			}
 			for (i=znum; i < n_ptsrc_redshifts; i++) {
 				new_zfactors[i+1] = new double[n_lens_redshifts];
@@ -2261,7 +2335,7 @@ int QLens::add_new_ptsrc_redshift(const double zs, const int src_i)
 					new_beta_factors[i][j-1] = new double[j];
 					if (include_recursive_lensing) {
 						// calculating all beta factors again, just to get it working quickly...fix it up later so it doesn't recalculate all of them over again
-						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo->cpp
 					} else {
 						for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 					}
@@ -2374,7 +2448,7 @@ void QLens::remove_old_ptsrc_redshift(const int znum)
 							for (j=1; j < n_lens_redshifts; j++) {
 								new_beta_factors[i][j-1] = new double[j];
 								if (include_recursive_lensing) {
-									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo.cpp
+									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],ptsrc_redshifts[i]); // from cosmo->cpp
 								} else {
 									for (k=0; k < j; k++) new_beta_factors[i][j-1][k] = 0;
 								}
@@ -2421,9 +2495,9 @@ bool QLens::assign_mask(const int band, const int znum, const int mask_i)
 	if (n_assigned_masks != n_data_bands*n_extended_src_redshifts) die("number of assigned masks is incorrect (%i vs %i)",n_assigned_masks,(n_data_bands*n_extended_src_redshifts));
 	if (band >= n_data_bands) { warn("specified data band has not been created"); return false; }
 	if (znum >= n_extended_src_redshifts) { warn("source redshift index does not exist"); return false; }
-	if (imgpixel_data_list==NULL) { warn("image pixel data has not been loaded"); return false; }
+	if (imgdata_list==NULL) { warn("image pixel data has not been loaded"); return false; }
 	//int nmasks=0;
-	//for (int i=0; i < n_data_bands; i++) nmasks += imgpixel_data_list[band]->n_masks;
+	//for (int i=0; i < n_data_bands; i++) nmasks += imgdata_list[band]->n_masks;
 	//if (mask_i >= nmasks) { warn("mask index does not exist"); return false; }
 	int imggrid_i = band*n_extended_src_redshifts + znum;
 	assigned_mask[imggrid_i] = mask_i;
@@ -2521,451 +2595,6 @@ bool QLens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
 	return true;
 }
 
-bool QLens::set_lens_vary_parameters(const int lensnumber, boolvector &vary_flags)
-{
-	int pi, pf;
-	get_lens_parameter_numbers(lensnumber,pi,pf);
-	if (lens_list[lensnumber]->vary_parameters(vary_flags)==false) return false;
-	if (pf > pi) param_settings->remove_params(pi,pf);
-	return register_lens_vary_parameters(lensnumber);
-}
-
-bool QLens::register_lens_vary_parameters(const int lensnumber)
-{
-	int pi, pf, nparams;
-	get_n_fit_parameters(nparams);
-	dvector stepsizes(nparams);
-	get_all_parameter_names();
-	if (get_lens_parameter_numbers(lensnumber,pi,pf) == true) {
-		//cout << "Inserting parameters " << pi << " to " << pf << endl;
-		get_automatic_initial_stepsizes(stepsizes);
-		//param_settings->print_penalty_limits();
-		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
-		//cout << "Inserting parameters done " << endl;
-		//param_settings->print_penalty_limits();
-		int index=0, npar = pf-pi;
-		boolvector use_penalty_limits(npar);
-		dvector lower(npar), upper(npar);
-		lens_list[lensnumber]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
-		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
-		//param_settings->print_penalty_limits();
-	}
-	return true;
-}
-
-bool QLens::set_sb_vary_parameters(const int sbnumber, boolvector &vary_flags)
-{
-	int pi, pf, nparams;
-	get_sb_parameter_numbers(sbnumber,pi,pf);
-	if (sb_list[sbnumber]->vary_parameters(vary_flags)==false) return false;
-	if (pf > pi) param_settings->remove_params(pi,pf);
-	get_n_fit_parameters(nparams);
-	dvector stepsizes(nparams);
-	get_all_parameter_names();
-	if (get_sb_parameter_numbers(sbnumber,pi,pf) == true) {
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
-		int index=0, npar = pf-pi;
-		boolvector use_penalty_limits(npar);
-		dvector lower(npar), upper(npar);
-		sb_list[sbnumber]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
-		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
-	}
-	return true;
-}
-
-bool QLens::update_pixellated_src_varyflag(const int src_number, const string name, const bool flag)
-{
-	// updates one specific parameter
-	int pnum, pi, pf, nparams;
-	srcgrids[src_number]->get_parameter_vary_index(name,pnum);
-	get_pixsrc_parameter_numbers(src_number,pi,pf);
-	pnum += pi;
-	bool flag0;
-	srcgrids[src_number]->get_specific_varyflag(name,flag0);
-	if (flag==flag0) return true;
-	if (srcgrids[src_number]->update_specific_varyflag(name,flag)==false) return false;
-	if (flag==false) {
-		param_settings->remove_params(pnum,pnum+1);
-	} else {
-		get_n_fit_parameters(nparams);
-		get_all_parameter_names();
-		dvector stepsizes(nparams);
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
-	}
-	return true;
-}
-
-bool QLens::set_pixellated_src_vary_parameters(const int src_number, boolvector &vary_flags)
-{
-	int pi, pf, nparams;
-	get_pixsrc_parameter_numbers(src_number,pi,pf);
-	if (srcgrids[src_number]->set_varyflags(vary_flags)==false) return false;
-	if (pf > pi) param_settings->remove_params(pi,pf);
-	get_n_fit_parameters(nparams);
-	dvector stepsizes(nparams);
-	get_all_parameter_names();
-	if (get_pixsrc_parameter_numbers(src_number,pi,pf) == true) {
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
-		int index=0, npar = pf-pi;
-		boolvector use_penalty_limits(npar);
-		dvector lower(npar), upper(npar);
-		srcgrids[src_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
-		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
-	}
-	return true;
-}
-
-bool QLens::update_pixellated_lens_varyflag(const int pixlens_number, const string name, const bool flag)
-{
-	// updates one specific parameter
-	int pnum, pi, pf, nparams;
-	lensgrids[pixlens_number]->get_parameter_vary_index(name,pnum);
-	get_pixlens_parameter_numbers(pixlens_number,pi,pf);
-	pnum += pi;
-	bool flag0;
-	lensgrids[pixlens_number]->get_specific_varyflag(name,flag0);
-	if (flag==flag0) return true;
-	if (lensgrids[pixlens_number]->update_specific_varyflag(name,flag)==false) return false;
-	if (flag==false) {
-		param_settings->remove_params(pnum,pnum+1);
-	} else {
-		get_n_fit_parameters(nparams);
-		get_all_parameter_names();
-		dvector stepsizes(nparams);
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
-	}
-	return true;
-}
-
-bool QLens::set_pixellated_lens_vary_parameters(const int pixlens_number, boolvector &vary_flags)
-{
-	int pi, pf, nparams;
-	get_pixlens_parameter_numbers(pixlens_number,pi,pf);
-	if (lensgrids[pixlens_number]->set_varyflags(vary_flags)==false) return false;
-	if (pf > pi) param_settings->remove_params(pi,pf);
-	get_n_fit_parameters(nparams);
-	dvector stepsizes(nparams);
-	get_all_parameter_names();
-	if (get_pixlens_parameter_numbers(pixlens_number,pi,pf) == true) {
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
-		int index=0, npar = pf-pi;
-		boolvector use_penalty_limits(npar);
-		dvector lower(npar), upper(npar);
-		lensgrids[pixlens_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
-		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
-	}
-	return true;
-}
-
-bool QLens::update_ptsrc_varyflag(const int src_number, const string name, const bool flag)
-{
-	// updates one specific parameter
-	int pnum, pi, pf, nparams;
-	ptsrc_list[src_number]->get_parameter_vary_index(name,pnum);
-	get_ptsrc_parameter_numbers(src_number,pi,pf);
-	pnum += pi;
-	bool flag0;
-	ptsrc_list[src_number]->get_specific_varyflag(name,flag0);
-	if (flag==flag0) return true;
-	if (ptsrc_list[src_number]->update_specific_varyflag(name,flag)==false) return false;
-	if (flag==false) {
-		param_settings->remove_params(pnum,pnum+1);
-	} else {
-		get_n_fit_parameters(nparams);
-		get_all_parameter_names();
-		dvector stepsizes(nparams);
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
-	}
-	return true;
-}
-
-bool QLens::set_ptsrc_vary_parameters(const int src_number, boolvector &vary_flags)
-{
-	int pi, pf, nparams;
-	get_ptsrc_parameter_numbers(src_number,pi,pf);
-	if (ptsrc_list[src_number]->set_varyflags(vary_flags)==false) return false;
-	if (pf > pi) param_settings->remove_params(pi,pf);
-	get_n_fit_parameters(nparams);
-	dvector stepsizes(nparams);
-	get_all_parameter_names();
-	if (get_ptsrc_parameter_numbers(src_number,pi,pf) == true) {
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
-		int index=0, npar = pf-pi;
-		boolvector use_penalty_limits(npar);
-		dvector lower(npar), upper(npar);
-		ptsrc_list[src_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
-		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
-	}
-	return true;
-}
-
-bool QLens::update_psf_varyflag(const int psf_number, const string name, const bool flag)
-{
-	// updates one specific parameter
-	int pnum, pi, pf, nparams;
-	psf_list[psf_number]->get_parameter_vary_index(name,pnum);
-	get_psf_parameter_numbers(psf_number,pi,pf);
-	pnum += pi;
-	bool flag0;
-	psf_list[psf_number]->get_specific_varyflag(name,flag0);
-	if (flag==flag0) return true;
-	if (psf_list[psf_number]->update_specific_varyflag(name,flag)==false) return false;
-	if (flag==false) {
-		param_settings->remove_params(pnum,pnum+1);
-	} else {
-		get_n_fit_parameters(nparams);
-		get_all_parameter_names();
-		dvector stepsizes(nparams);
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
-	}
-	return true;
-}
-
-bool QLens::set_psf_vary_parameters(const int psf_number, boolvector &vary_flags)
-{
-	int pi, pf, nparams;
-	get_psf_parameter_numbers(psf_number,pi,pf);
-	if (psf_list[psf_number]->set_varyflags(vary_flags)==false) return false;
-	if (pf > pi) param_settings->remove_params(pi,pf);
-	get_n_fit_parameters(nparams);
-	dvector stepsizes(nparams);
-	get_all_parameter_names();
-	if (get_psf_parameter_numbers(psf_number,pi,pf) == true) {
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pi,pf,fit_parameter_names,stepsizes.array());
-		int index=0, npar = pf-pi;
-		boolvector use_penalty_limits(npar);
-		dvector lower(npar), upper(npar);
-		psf_list[psf_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
-		param_settings->update_specific_penalty_limits(pi,pf,use_penalty_limits,lower,upper);
-	}
-	return true;
-}
-
-bool QLens::update_cosmo_varyflag(const string name, const bool flag)
-{
-	// updates one specific parameter
-	int pnum, pi, pf, nparams;
-	cosmo.get_parameter_vary_index(name,pnum);
-	get_cosmo_parameter_numbers(pi,pf);
-	pnum += pi;
-	bool flag0;
-	cosmo.get_specific_varyflag(name,flag0);
-	if (flag==flag0) return true;
-	if (cosmo.update_specific_varyflag(name,flag)==false) return false;
-	if (flag==false) {
-		param_settings->remove_params(pnum,pnum+1);
-	} else {
-		get_n_fit_parameters(nparams);
-		get_all_parameter_names();
-		dvector stepsizes(nparams);
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
-	}
-	return true;
-}
-
-bool QLens::update_misc_varyflag(const string name, const bool flag)
-{
-	// updates one specific parameter
-	int pnum, pi, pf, nparams;
-	get_parameter_vary_index(name,pnum);
-	get_misc_parameter_numbers(pi,pf);
-	pnum += pi;
-	bool flag0;
-	get_specific_varyflag(name,flag0);
-	if (flag==flag0) return true;
-	if (update_specific_varyflag(name,flag)==false) return false;
-	if (flag==false) {
-		param_settings->remove_params(pnum,pnum+1);
-	} else {
-		get_n_fit_parameters(nparams);
-		get_all_parameter_names();
-		dvector stepsizes(nparams);
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->insert_params(pnum,pnum+1,fit_parameter_names,stepsizes.array());
-	}
-	return true;
-}
-
-void QLens::update_pixsrc_active_parameters(const int src_number)
-{
-	int pi,pf;
-	get_pixsrc_parameter_numbers(src_number,pi,pf);
-	update_active_parameters(srcgrids[src_number],pi);
-}
-
-void QLens::update_pixlens_active_parameters(const int pixlens_number)
-{
-	int pi,pf;
-	get_pixlens_parameter_numbers(pixlens_number,pi,pf);
-	update_active_parameters(lensgrids[pixlens_number],pi);
-}
-
-void QLens::update_ptsrc_active_parameters(const int src_number)
-{
-	int pi,pf;
-	get_ptsrc_parameter_numbers(src_number,pi,pf);
-	update_active_parameters(ptsrc_list[src_number],pi);
-}
-
-void QLens::update_active_parameters(ModelParams* param_object, const int pi)
-{
-	boolvector turned_off_params;
-	param_object->update_active_params(mpi_id,turned_off_params);
-	int pnum;
-	for (int i=turned_off_params.size()-1; i >= 0; i--) {
-		if (turned_off_params[i]) {
-			pnum = pi+i;
-			param_settings->remove_params(pnum,pnum+1);
-		}
-	}
-}
-
-
-void QLens::update_parameter_list()
-{
-	get_n_fit_parameters(n_fit_parameters);
-	if (n_fit_parameters > 0) {
-		dvector stepsizes(n_fit_parameters);
-		get_all_parameter_names();
-		get_automatic_initial_stepsizes(stepsizes);
-		param_settings->update_params(n_fit_parameters,fit_parameter_names,stepsizes.array());
-	} else {
-		param_settings->clear_params();
-	}
-}
-
-void QLens::remove_lens(int lensnumber)
-{
-	int pi, pf;
-	get_lens_parameter_numbers(lensnumber,pi,pf);
-
-	if ((lensnumber >= nlens) or (nlens==0)) { warn(warnings,"Specified lens does not exist"); return; }
-	LensProfile** newlist = new LensProfile*[nlens-1];
-	int* new_lens_redshift_idx;
-	if (nlens > 1) new_lens_redshift_idx = new int[nlens-1];
-	int i,j;
-	for (i=0; i < nlens; i++) {
-		if ((i != lensnumber) and (lens_list[i]->center_anchored==true) and (lens_list[i]->get_center_anchor_number()==lensnumber)) lens_list[i]->delete_center_anchor();
-		if ((i != lensnumber) and (lens_list[i]->anchor_special_parameter==true) and (lens_list[i]->get_special_parameter_anchor_number()==lensnumber)) lens_list[i]->delete_special_parameter_anchor();
-		if (i != lensnumber) lens_list[i]->unanchor_parameter(lens_list[lensnumber]); // this unanchors the lens if any of its parameters are anchored to the lens being deleted
-	}
-	for (i=0; i < n_sb; i++) {
-		// if any source profiles are anchored to the center of this lens (typically to model foreground light), delete the anchor
-		if ((sb_list[i]->center_anchored_to_lens==true) and (sb_list[i]->get_center_anchor_number()==lensnumber)) sb_list[i]->delete_center_anchor();
-	}
-	remove_old_lens_redshift(lens_redshift_idx[lensnumber], lensnumber, true); // removes the lens redshift from the list if no other lenses share that redshift
-	for (i=0,j=0; i < nlens; i++) {
-		if (i != lensnumber) {
-			newlist[j] = lens_list[i];
-			new_lens_redshift_idx[j] = lens_redshift_idx[i];
-			j++;
-		}
-	}
-	delete lens_list[lensnumber];
-	delete[] lens_list;
-	delete[] lens_redshift_idx;
-	nlens--;
-	lens_list_vec.erase(lens_list_vec.begin()+lensnumber); // Used for Python wrapper
-
-	lens_list = newlist;
-	if (nlens > 0) lens_redshift_idx = new_lens_redshift_idx;
-	else lens_redshift_idx = NULL;
-	for (int i=0; i < nlens; i++) lens_list[i]->lens_number = i;
-	reset_grid();
-
-	param_settings->remove_params(pi,pf);
-	update_parameter_list();
-	get_all_parameter_names(); // parameter names must be updated whenever lens models are removed/added
-	for (int i=n_derived_params-1; i >= 0; i--) {
-		if (dparam_list[i]->int_param==lensnumber) {
-			if (mpi_id==0) cout << "Removing derived param " << i << endl;
-			remove_derived_param(i);
-		}
-	}
-}
-
-void QLens::clear_lenses()
-{
-	if (nlens > 0) {
-		lens_list_vec.clear(); // Used for Python wrapper
-		int pi, pf, pi_min=1000, pf_max=0;
-		// since all the lens parameters are blocked together in the param_settings list, we just need to find the initial and final parameters to remove
-		for (int i=0; i < nlens; i++) {
-			get_lens_parameter_numbers(i,pi,pf);
-			if (pi < pi_min) pi_min=pi;
-			if (pf > pf_max) pf_max=pf;
-		}	
-		for (int i=0; i < nlens; i++) {
-			delete lens_list[i];
-		}	
-		delete[] lens_list;
-		param_settings->remove_params(pi_min,pf_max);
-		nlens = 0;
-		update_parameter_list(); // this is necessary to keep the parameter priors, transforms preserved
-		if (lens_redshift_idx != NULL) {
-			delete[] lens_redshift_idx;
-			lens_redshift_idx = NULL;
-		}
-		if (lens_redshifts != NULL) {
-			delete[] lens_redshifts;
-			lens_redshifts = NULL;
-		}
-		if (zlens_group_size != NULL) {
-			delete[] zlens_group_size;
-			zlens_group_size = NULL;
-		}
-		if (zlens_group_lens_indx != NULL) {
-			for (int i=0; i < n_lens_redshifts; i++) delete[] zlens_group_lens_indx[i];
-			delete[] zlens_group_lens_indx;
-			zlens_group_lens_indx = NULL;
-		}
-		if (reference_zfactors != NULL) {
-			delete[] reference_zfactors;
-			reference_zfactors = NULL;
-		}
-		if (ptsrc_zfactors != NULL) {
-			for (int i=0; i < n_ptsrc_redshifts; i++) delete[] ptsrc_zfactors[i];
-			delete[] ptsrc_zfactors;
-			ptsrc_zfactors = NULL;
-		}
-		if (default_zsrc_beta_factors != NULL) {
-			for (int i=0; i < n_lens_redshifts-1; i++) delete[] default_zsrc_beta_factors[i];
-			delete[] default_zsrc_beta_factors;
-			default_zsrc_beta_factors = NULL;
-		}
-		if (ptsrc_beta_factors != NULL) {
-			for (int i=0; i < n_ptsrc_redshifts; i++) {
-				for (int j=0; j < n_lens_redshifts-1; j++) delete[] ptsrc_beta_factors[i][j];
-				if (n_lens_redshifts > 1) delete[] ptsrc_beta_factors[i];
-			}
-			delete[] ptsrc_beta_factors;
-			ptsrc_beta_factors = NULL;
-		}
-
-		n_lens_redshifts = 0;
-
-		reset_grid();
-		get_all_parameter_names(); // parameter names must be updated whenever lens models are removed/added
-		clear_derived_params();
-	}
-}
-
 void QLens::set_source_redshift(const double zsrc)
 {
 	source_redshift = zsrc;
@@ -2976,11 +2605,11 @@ void QLens::set_source_redshift(const double zsrc)
 		if (n_ptsrc_redshifts > 1) die("cannot have multiple point source redshifts and zsrc_scaling on--fix so this is forbidden");
 		if (n_ptsrc_redshifts==1) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				ptsrc_zfactors[0][j] = cosmo.kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				ptsrc_zfactors[0][j] = cosmo->kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
 			}
 		}
 	} else {
-		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = cosmo.kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
+		for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = cosmo->kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 	}
 	recalculate_beta_factors();
 	//reset_grid();
@@ -2992,19 +2621,19 @@ void QLens::set_reference_source_redshift(const double zsrc)
 	int i,j;
 	reference_source_redshift = zsrc;
 	if (auto_zsource_scaling==true) auto_zsource_scaling = false; // Now that zsrc_ref has been set explicitly, don't automatically change it if zsrc is changed
-	for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = cosmo.kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
+	for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = cosmo->kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 	reset_grid();
 	if (n_extended_src_redshifts > 0) {
 		for (i=0; i < n_extended_src_redshifts; i++) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				extended_src_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],extended_src_redshifts[i],reference_source_redshift);
+				extended_src_zfactors[i][j] = cosmo->kappa_ratio(lens_redshifts[j],extended_src_redshifts[i],reference_source_redshift);
 			}
 		}
 	}
 	if (n_ptsrc_redshifts > 0) {
 		for (i=0; i < n_ptsrc_redshifts; i++) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				ptsrc_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				ptsrc_zfactors[i][j] = cosmo->kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
 			}
 		}
 	}
@@ -3016,7 +2645,7 @@ void QLens::recalculate_beta_factors()
 	if (n_lens_redshifts > 1) {
 		for (i=1; i < n_lens_redshifts; i++) {
 			if (include_recursive_lensing) {
-				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = cosmo.calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
+				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = cosmo->calculate_beta_factor(lens_redshifts[j],lens_redshifts[i],source_redshift);
 			} else {
 				for (j=0; j < i; j++) default_zsrc_beta_factors[i-1][j] = 0;
 			}
@@ -3080,68 +2709,80 @@ void QLens::record_singular_points(double *zfacs)
 	n_singular_points = singular_pts.size();
 }
 
-void QLens::add_source_object(SB_ProfileName name, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double sb_norm, const double scale, const double scale2, const double index_param, const double q, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
+void QLens::create_and_add_source_object(SB_ProfileName name, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double sb_norm, const double scale, const double scale2, const double index_param, const double q, const double theta, const double xc, const double yc, const double special_param1, const double special_param2, const int pmode)
 {
 	if (band_number > n_model_bands) die("cannot add band with index that is > number of bands");
 	int old_emode = SB_Profile::default_ellipticity_mode;
 	if (emode > 1) die("SB emode greater than 1 does not exist");
 	if (emode != -1) SB_Profile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
-	SB_Profile** newlist = new SB_Profile*[n_sb+1];
-	int* new_sbprofile_redshift_idx = new int[n_sb+1];
-	int* new_sbprofile_band_number = new int[n_sb+1];
-	int* new_sbprofile_imggrid_idx = new int[n_sb+1];
-	if (n_sb > 0) {
-		for (int i=0; i < n_sb; i++) {
-			newlist[i] = sb_list[i];
-			new_sbprofile_redshift_idx[i] = sbprofile_redshift_idx[i];
-			new_sbprofile_band_number[i] = sbprofile_band_number[i];
-			new_sbprofile_imggrid_idx[i] = sbprofile_imggrid_idx[i];
-		}
-		delete[] sb_list;
-		delete[] sbprofile_redshift_idx;
-		delete[] sbprofile_band_number;
-		delete[] sbprofile_imggrid_idx;
-	}
-
+	SB_Profile* new_src = NULL;
 	switch (name) {
 		case GAUSSIAN:
-			newlist[n_sb] = new Gaussian(sb_norm, scale, q, theta, xc, yc, this); break;
+			new_src = new Gaussian(band_number, zsrc_in, sb_norm, scale, q, theta, xc, yc, this); break;
 		case SERSIC:
-			newlist[n_sb] = new Sersic(sb_norm, scale, index_param, q, theta, xc, yc, pmode, this); break;
+			new_src = new Sersic(band_number, zsrc_in, sb_norm, scale, index_param, q, theta, xc, yc, pmode, this); break;
 		case CORE_SERSIC:
-			newlist[n_sb] = new CoreSersic(sb_norm, scale, index_param, scale2, special_param1, special_param2, q, theta, xc, yc, this); break;
+			new_src = new CoreSersic(band_number, zsrc_in, sb_norm, scale, index_param, scale2, special_param1, special_param2, q, theta, xc, yc, this); break;
 		case CORED_SERSIC:
-			newlist[n_sb] = new Cored_Sersic(sb_norm, scale, index_param, scale2, q, theta, xc, yc, this); break;
+			new_src = new Cored_Sersic(band_number, zsrc_in, sb_norm, scale, index_param, scale2, q, theta, xc, yc, this); break;
 		case DOUBLE_SERSIC:
-			newlist[n_sb] = new DoubleSersic(sb_norm, index_param, scale, special_param1, scale2, special_param2, q, theta, xc, yc, this); break;
+			new_src = new DoubleSersic(band_number, zsrc_in, sb_norm, index_param, scale, special_param1, scale2, special_param2, q, theta, xc, yc, this); break;
 		case sple:
-			newlist[n_sb] = new SPLE(sb_norm, index_param, scale, q, theta, xc, yc, this); break;
+			new_src = new SPLE(band_number, zsrc_in, sb_norm, index_param, scale, q, theta, xc, yc, this); break;
 		case dpie:
-			newlist[n_sb] = new dPIE(sb_norm, scale, scale2, q, theta, xc, yc, this); break;
+			new_src = new dPIE(band_number, zsrc_in, sb_norm, scale, scale2, q, theta, xc, yc, this); break;
 		case nfw_SOURCE:
-			newlist[n_sb] = new NFW_Source(sb_norm, scale, q, theta, xc, yc, this); break;
+			new_src = new NFW_Source(band_number, zsrc_in, sb_norm, scale, q, theta, xc, yc, this); break;
 		case TOPHAT:
-			newlist[n_sb] = new TopHat(sb_norm, scale, q, theta, xc, yc, this); break;
+			new_src = new TopHat(band_number, zsrc_in, sb_norm, scale, q, theta, xc, yc, this); break;
 		default:
 			die("Surface brightness profile type not recognized");
 	}
-	sbprofile_redshift_idx = new_sbprofile_redshift_idx;
-	sbprofile_band_number = new_sbprofile_band_number;
-	sbprofile_imggrid_idx = new_sbprofile_imggrid_idx;
-	//double zsrc = (is_lensed) ? zsrc_in : -1;
-	double zsrc = zsrc_in;
-	if (band_number==n_model_bands) add_new_model_band();
-	sbprofile_band_number[n_sb] = band_number;
-	add_new_extended_src_redshift(zsrc,n_sb,false);
-	sbprofile_imggrid_idx[n_sb] = band_number*n_extended_src_redshifts+sbprofile_redshift_idx[n_sb];
-	n_sb++;
-	sb_list = newlist;
-	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	if (new_src==NULL) die("new_src pointer was not set when creating source");
 	if (emode != -1) SB_Profile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
+	add_source(new_src,is_lensed);
 }
 
-void QLens::add_shapelet_source(const bool is_lensed, const int band_number, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode)
+void QLens::add_source(SB_Profile* new_src, const bool is_lensed)
+{
+	new_src->set_qlens_pointer(this);
+	int band_number = new_src->band;
+	if (band_number > n_model_bands) die("cannot add band with index that is > number of bands");
+
+	SB_Profile** newlist = new SB_Profile*[n_sb+1];
+	int* new_sbprofile_redshift_idx = new int[n_sb+1];
+	int* new_sbprofile_band_number = new int[n_sb+1];
+	int* new_sbprofile_imggrid_idx = new int[n_sb+1];
+	if (n_sb > 0) {
+		for (int i=0; i < n_sb; i++) {
+			newlist[i] = sb_list[i];
+			new_sbprofile_redshift_idx[i] = sbprofile_redshift_idx[i];
+			new_sbprofile_band_number[i] = sbprofile_band_number[i];
+			new_sbprofile_imggrid_idx[i] = sbprofile_imggrid_idx[i];
+		}
+		delete[] sb_list;
+		delete[] sbprofile_redshift_idx;
+		delete[] sbprofile_band_number;
+		delete[] sbprofile_imggrid_idx;
+	}
+
+	sbprofile_redshift_idx = new_sbprofile_redshift_idx;
+	sbprofile_band_number = new_sbprofile_band_number;
+	sbprofile_imggrid_idx = new_sbprofile_imggrid_idx;
+	if (band_number==n_model_bands) add_new_model_band();
+	sbprofile_band_number[n_sb] = band_number;
+	add_new_extended_src_redshift(new_src->zsrc,n_sb,false);
+	sbprofile_imggrid_idx[n_sb] = band_number*n_extended_src_redshifts+sbprofile_redshift_idx[n_sb];
+	n_sb++;
+	sb_list = newlist;
+	sb_list[n_sb-1] = new_src;
+	srclist->input_ptr(sb_list,n_sb);
+	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	register_sb_vary_parameters(n_sb-1);
+}
+
+void QLens::create_and_add_shapelet_source(const bool is_lensed, const int band_number, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	int* new_sbprofile_redshift_idx = new int[n_sb+1];
@@ -3160,7 +2801,7 @@ void QLens::add_shapelet_source(const bool is_lensed, const int band_number, con
 		delete[] sbprofile_imggrid_idx;
 	}
 
-	newlist[n_sb] = new Shapelet(amp00, sig_x, q, theta, xc, yc, nmax, truncate, pmode, this);
+	newlist[n_sb] = new Shapelet(band_number, zsrc_in, amp00, sig_x, q, theta, xc, yc, nmax, truncate, pmode, this);
 	sbprofile_redshift_idx = new_sbprofile_redshift_idx;
 	sbprofile_band_number = new_sbprofile_band_number;
 	sbprofile_imggrid_idx = new_sbprofile_imggrid_idx;
@@ -3172,10 +2813,11 @@ void QLens::add_shapelet_source(const bool is_lensed, const int band_number, con
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	srclist->input_ptr(sb_list,n_sb);
 	if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's has changed, will need to redo FFT setup
 }
 
-void QLens::add_mge_source(const bool is_lensed, const int band_number, const double zsrc_in, const double reg, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode)
+void QLens::create_and_add_mge_source(const bool is_lensed, const int band_number, const double zsrc_in, const double reg, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 	int* new_sbprofile_redshift_idx = new int[n_sb+1];
@@ -3194,7 +2836,7 @@ void QLens::add_mge_source(const bool is_lensed, const int band_number, const do
 		delete[] sbprofile_imggrid_idx;
 	}
 
-	newlist[n_sb] = new MGE(reg, amp0, sig_i, sig_f, q, theta, xc, yc, nmax, pmode, this);
+	newlist[n_sb] = new MGE(band_number, zsrc_in, reg, amp0, sig_i, sig_f, q, theta, xc, yc, nmax, pmode, this);
 	sbprofile_redshift_idx = new_sbprofile_redshift_idx;
 	sbprofile_band_number = new_sbprofile_band_number;
 	sbprofile_imggrid_idx = new_sbprofile_imggrid_idx;
@@ -3206,10 +2848,11 @@ void QLens::add_mge_source(const bool is_lensed, const int band_number, const do
 	n_sb++;
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	srclist->input_ptr(sb_list,n_sb);
 	if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's has changed, will need to redo FFT setup
 }
 
-void QLens::add_multipole_source(const bool is_lensed, const int band_number, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term)
+void QLens::create_and_add_multipole_source(const bool is_lensed, const int band_number, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term)
 {
 	SB_Profile** newlist = new SB_Profile*[n_sb+1];
 
@@ -3229,7 +2872,7 @@ void QLens::add_multipole_source(const bool is_lensed, const int band_number, co
 		delete[] sbprofile_imggrid_idx;
 	}
 
-	newlist[n_sb] = new SB_Multipole(a_m, n, m, theta, xc, yc, sine_term, this);
+	newlist[n_sb] = new SB_Multipole(band_number, zsrc_in, a_m, n, m, theta, xc, yc, sine_term, this);
 	sbprofile_redshift_idx = new_sbprofile_redshift_idx;
 	sbprofile_band_number = new_sbprofile_band_number;
 	sbprofile_imggrid_idx = new_sbprofile_imggrid_idx;
@@ -3240,10 +2883,11 @@ void QLens::add_multipole_source(const bool is_lensed, const int band_number, co
 	sbprofile_imggrid_idx[n_sb] = band_number*n_extended_src_redshifts+sbprofile_redshift_idx[n_sb];
 	n_sb++;
 	sb_list = newlist;
+	srclist->input_ptr(sb_list,n_sb);
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
 }
 
-void QLens::add_source_object(const char *splinefile, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
+void QLens::create_and_add_splined_source_object(const char *splinefile, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc)
 {
 	int old_emode = SB_Profile::default_ellipticity_mode;
 	if (emode > 1) die("SB emode greater than 1 does not exist");
@@ -3266,7 +2910,7 @@ void QLens::add_source_object(const char *splinefile, const bool is_lensed, cons
 		delete[] sbprofile_imggrid_idx;
 	}
 
-	newlist[n_sb] = new SB_Profile(splinefile, q, theta, xc, yc, qx, f, this);
+	newlist[n_sb] = new SB_Profile(splinefile, band_number, zsrc_in, q, theta, xc, yc, qx, f, this);
 	sbprofile_redshift_idx = new_sbprofile_redshift_idx;
 	sbprofile_band_number = new_sbprofile_band_number;
 	sbprofile_imggrid_idx = new_sbprofile_imggrid_idx;
@@ -3279,10 +2923,11 @@ void QLens::add_source_object(const char *splinefile, const bool is_lensed, cons
 
 	sb_list = newlist;
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
+	srclist->input_ptr(sb_list,n_sb);
 	if (emode != -1) SB_Profile::default_ellipticity_mode = old_emode; // restore ellipticity mode to its default setting
 }
 
-void QLens::remove_source_object(int sb_number)
+void QLens::remove_source_object(int sb_number, const bool delete_src)
 {
 	int pi, pf;
 	get_sb_parameter_numbers(sb_number,pi,pf);
@@ -3324,7 +2969,7 @@ void QLens::remove_source_object(int sb_number)
 		if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amp's has changed, will need to redo FFT setup
 	}
 
-	delete sb_list[sb_number];
+	if (delete_src) delete sb_list[sb_number];
 	delete[] sb_list;
 	delete[] sbprofile_redshift_idx;
 	delete[] sbprofile_band_number;
@@ -3342,18 +2987,17 @@ void QLens::remove_source_object(int sb_number)
 	}
 
 	sb_list = newlist;
+	srclist->input_ptr(sb_list,n_sb);
 	for (int i=0; i < n_sb; i++) sb_list[i]->sb_number = i;
 
-	param_settings->remove_params(pi,pf);
-	update_parameter_list();
-	get_all_parameter_names(); // parameter names must be updated whenever lens models are removed/added
+	param_list->remove_params(pi,pf);
 }
 
 void QLens::clear_source_objects()
 {
 	if (n_sb > 0) {
 		int pi, pf, pi_min=1000, pf_max=0;
-		// since all the source parameters are blocked together in the param_settings list, we just need to find the initial and final parameters to remove
+		// since all the source parameters are blocked together in the param_list list, we just need to find the initial and final parameters to remove
 		for (int i=0; i < n_sb; i++) {
 			get_sb_parameter_numbers(i,pi,pf);
 			if (pi < pi_min) pi_min=pi;
@@ -3367,11 +3011,12 @@ void QLens::clear_source_objects()
 			delete sb_list[i];
 		}	
 		delete[] sb_list;
+		srclist->clear_ptr();
 		if (sbprofile_redshift_idx != NULL) delete[] sbprofile_redshift_idx;
 		if (sbprofile_band_number != NULL) delete[] sbprofile_band_number;
 		if (sbprofile_imggrid_idx != NULL) delete[] sbprofile_imggrid_idx;
 		sbprofile_redshift_idx = NULL;
-		param_settings->remove_params(pi_min,pf_max);
+		param_list->remove_params(pi_min,pf_max);
 		n_sb = 0;
 		int n_old_zsrc = n_extended_src_redshifts;
 		if (n_extended_src_redshifts > 0) {
@@ -3386,25 +3031,22 @@ void QLens::clear_source_objects()
 
 void QLens::print_source_list(bool show_vary_params)
 {
-	cout << resetiosflags(ios::scientific);
-	double zs;
 	bool show_band = false;
 	if (n_model_bands > 1) show_band = true;
 	//cout << "N_ZSRC: "<< n_extended_src_redshifts << endl;
 	if (n_sb > 0) {
 		for (int i=0; i < n_sb; i++) {
 			//cout << "IDX=" << sbprofile_redshift_idx[i] << endl;
-			if (sbprofile_redshift_idx[i]==-1) zs = -1;
-			else zs = ((n_extended_src_redshifts > 1) or (extended_src_redshifts[sbprofile_redshift_idx[0]] != source_redshift)) ? extended_src_redshifts[sbprofile_redshift_idx[i]] : -1;
+			//if (sbprofile_redshift_idx[i]==-1) zs = -1;
+			//else zs = ((n_extended_src_redshifts > 1) or (extended_src_redshifts[sbprofile_redshift_idx[0]] != source_redshift)) ? extended_src_redshifts[sbprofile_redshift_idx[i]] : -1;
 			cout << i << ". ";
-			sb_list[i]->print_parameters(zs,show_band,sbprofile_band_number[i]);
+			sb_list[i]->print_parameters(show_band,sbprofile_band_number[i]);
 			if (show_vary_params)
 				sb_list[i]->print_vary_parameters();
 		}
 	}
 	else cout << "No source models have been specified" << endl;
 	cout << endl;
-	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
 void QLens::add_new_model_band()
@@ -3443,7 +3085,7 @@ void QLens::remove_model_band(const int band_number, const bool removing_pixella
 		}
 	}
 	if (removing_pixellated_src) {
-		if ((n_pixsrc_with_band <= 1) and (n_sbsrc_with_band==0)) {
+		if ((n_pixsrc_with_band <= 1) and (n_sbsrc_with_band==0) and (n_psf <= band_number)) {
 			remove_band = true; // the particular source in question might not have been removed yet
 			//cout << "removing band! band_number=" << band_number << " npixz=" << n_pixsrc_with_band << " nsbz=" << n_sbsrc_with_band << endl;
 		//} else {
@@ -3502,7 +3144,7 @@ void QLens::add_pixellated_source(const double zsrc, const int band_number)
 	if (band_number > n_model_bands) die("cannot add band with index that is > number of bands");
 	srcgrids = new ModelParams*[n_pixellated_src+1];
 	DelaunaySourceGrid** newlist = new DelaunaySourceGrid*[n_pixellated_src+1];
-	SourcePixelGrid** newlist2 = new SourcePixelGrid*[n_pixellated_src+1];
+	CartesianSourceGrid** newlist2 = new CartesianSourceGrid*[n_pixellated_src+1];
 	int* new_pixellated_src_redshift_idx = new int[n_pixellated_src+1];
 	int* new_pixellated_src_band = new int[n_pixellated_src+1];
 	if (n_pixellated_src > 0) {
@@ -3524,8 +3166,8 @@ void QLens::add_pixellated_source(const double zsrc, const int band_number)
 	pixellated_src_band[n_pixellated_src] = band_number;
 	add_new_extended_src_redshift(zsrc,n_pixellated_src,true);
 
-	newlist[n_pixellated_src] = new DelaunaySourceGrid(this); 
-	newlist2[n_pixellated_src] = new SourcePixelGrid(this);
+	newlist[n_pixellated_src] = new DelaunaySourceGrid(this,band_number,zsrc); 
+	newlist2[n_pixellated_src] = new CartesianSourceGrid(this,band_number,zsrc);
 
 	n_pixellated_src++;
 	delaunay_srcgrids = newlist;
@@ -3534,19 +3176,27 @@ void QLens::add_pixellated_source(const double zsrc, const int band_number)
 	for (int i=0; i < n_pixellated_src; i++) {
 		if (source_fit_mode==Delaunay_Source) srcgrids[i] = delaunay_srcgrids[i];
 		else srcgrids[i] = cartesian_srcgrids[i];
+		delaunay_srcgrids[i]->entry_number = i;
+		cartesian_srcgrids[i]->entry_number = i;
 	}
+	delaunay_srcgrids[n_pixellated_src-1]->srcgrid_redshift = zsrc;
+	cartesian_srcgrids[n_pixellated_src-1]->srcgrid_redshift = zsrc;
+	pixsrclist->input_ptr(srcgrids,n_pixellated_src);
 }
 
-void QLens::remove_pixellated_source(int src_number)
+void QLens::remove_pixellated_source(int src_number, const bool delete_pixsrc)
 {
 	if ((n_pixellated_src==0) or (src_number >= n_pixellated_src)) return;
+	int pi,pf;
+	get_pixsrc_parameter_numbers(src_number,pi,pf);
+
 	DelaunaySourceGrid** newlist;
-	SourcePixelGrid** newlist2;
+	CartesianSourceGrid** newlist2;
 	if (n_pixellated_src > 1) {
 		delete[] srcgrids;
 		srcgrids = new ModelParams*[n_pixellated_src-1];
 		newlist = new DelaunaySourceGrid*[n_pixellated_src-1];
-		newlist2 = new SourcePixelGrid*[n_pixellated_src-1];
+		newlist2 = new CartesianSourceGrid*[n_pixellated_src-1];
 	}
 	int* new_pixellated_src_redshift_idx;
 	int* new_pixellated_src_band;
@@ -3568,8 +3218,10 @@ void QLens::remove_pixellated_source(int src_number)
 		}
 	}
 
-	delete delaunay_srcgrids[src_number];
-	delete cartesian_srcgrids[src_number];
+	if (delete_pixsrc) {
+		delete delaunay_srcgrids[src_number];
+		delete cartesian_srcgrids[src_number];
+	}
 	delete[] delaunay_srcgrids;
 	delete[] cartesian_srcgrids;
 	delete[] pixellated_src_redshift_idx;
@@ -3582,6 +3234,8 @@ void QLens::remove_pixellated_source(int src_number)
 		for (int i=0; i < n_pixellated_src; i++) {
 			if (source_fit_mode==Delaunay_Source) srcgrids[i] = delaunay_srcgrids[i];
 			else srcgrids[i] = cartesian_srcgrids[i];
+			delaunay_srcgrids[i]->entry_number = i;
+			cartesian_srcgrids[i]->entry_number = i;
 		}
 	} else {
 		pixellated_src_redshift_idx = NULL;
@@ -3590,6 +3244,8 @@ void QLens::remove_pixellated_source(int src_number)
 		delaunay_srcgrids = NULL;
 		cartesian_srcgrids = NULL;
 	}
+	if (pf > pi) param_list->remove_params(pi,pf); // eliminate any fit parameters associated with the source being removed
+	pixsrclist->input_ptr(srcgrids,n_pixellated_src);
 }
 
 void QLens::print_pixellated_source_list(bool show_vary_params)
@@ -3740,7 +3396,11 @@ bool QLens::add_pixellated_lens(const double zlens)
 
 void QLens::remove_pixellated_lens(int pixlens_number)
 {
+	//cout << "BANDS: " << n_model_bands << endl;
 	if ((n_pixellated_lens==0) or (pixlens_number >= n_pixellated_lens)) return;
+	int pi,pf;
+	get_pixlens_parameter_numbers(pixlens_number,pi,pf);
+
 	int i,j;
 	if (image_pixel_grids != NULL) {
 		for (i=0; i < n_extended_src_redshifts; i++) {
@@ -3778,18 +3438,19 @@ void QLens::remove_pixellated_lens(int pixlens_number)
 		pixellated_lens_redshift_idx = NULL;
 		lensgrids = NULL;
 	}
+	if (pf > pi) param_list->remove_params(pi,pf); // eliminate any fit parameters associated with the source being removed
 }
 
 void QLens::add_point_source(const double zsrc, const lensvector &sourcept, const bool vary_source_coords)
 {
-	ImageData *new_image_data = new ImageData[n_ptsrc+1];
+	PointImageData *new_image_data = new PointImageData[n_ptsrc+1];
 	for (int i=0; i < n_ptsrc; i++) {
-		new_image_data[i].input(image_data[i]);
+		new_image_data[i].input(point_image_data[i]);
 	}
 	if (n_ptsrc > 0) {
-		delete[] image_data;
+		delete[] point_image_data;
 	}
-	image_data = new_image_data;
+	point_image_data = new_image_data;
 
 	PointSource** newlist = new PointSource*[n_ptsrc+1];
 	int* new_ptsrc_redshift_idx = new int[n_ptsrc+1];
@@ -3810,19 +3471,24 @@ void QLens::add_point_source(const double zsrc, const lensvector &sourcept, cons
 
 	n_ptsrc++;
 	ptsrc_list = newlist;
-	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->ptsrc_number = i;
+	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->entry_number = i;
+	register_ptsrc_vary_parameters(n_ptsrc-1);
+	ptsrclist->input_ptr(ptsrc_list,n_ptsrc);
 }
 
 void QLens::remove_point_source(int ptsrc_number)
 {
 	if ((n_ptsrc==0) or (ptsrc_number >= n_ptsrc)) return;
+	int pi,pf;
+	get_ptsrc_parameter_numbers(ptsrc_number,pi,pf);
+
 	PointSource** newlist;
 	int* new_ptsrc_redshift_idx;
-	ImageData *new_image_data;
+	PointImageData *new_image_data;
 	if (n_ptsrc > 1) {
 		newlist = new PointSource*[n_ptsrc-1];
 		new_ptsrc_redshift_idx = new int[n_ptsrc-1];
-		new_image_data = new ImageData[n_ptsrc-1];
+		new_image_data = new PointImageData[n_ptsrc-1];
 	}
 
 	remove_old_ptsrc_redshift(ptsrc_redshift_idx[ptsrc_number]); // removes the ptsrc redshift from the list if no other sources share that redshift
@@ -3831,7 +3497,7 @@ void QLens::remove_point_source(int ptsrc_number)
 		if (i != ptsrc_number) {
 			newlist[j] = ptsrc_list[i];
 			new_ptsrc_redshift_idx[j] = ptsrc_redshift_idx[i];
-			new_image_data[j].input(image_data[i]);
+			new_image_data[j].input(point_image_data[i]);
 			j++;
 		}
 	}
@@ -3844,17 +3510,21 @@ void QLens::remove_point_source(int ptsrc_number)
 	delete ptsrc_list[ptsrc_number];
 	delete[] ptsrc_list;
 	delete[] ptsrc_redshift_idx;
-	delete[] image_data;
+	delete[] point_image_data;
 	n_ptsrc--;
 	if (n_ptsrc > 0) {
 		ptsrc_redshift_idx = new_ptsrc_redshift_idx;
 		ptsrc_list = newlist;
-		image_data = new_image_data;
+		point_image_data = new_image_data;
 	} else {
 		ptsrc_redshift_idx = NULL;
 		ptsrc_list = NULL;
-		image_data = NULL;
+		point_image_data = NULL;
 	}
+	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->entry_number = i;
+
+	if (pf > pi) param_list->remove_params(pi,pf); // eliminate any fit parameters associated with the point source being removed
+	ptsrclist->input_ptr(ptsrc_list,n_ptsrc);
 }
 
 void QLens::print_point_source_list(bool show_vary_params)
@@ -3900,12 +3570,16 @@ void QLens::add_psf()
 	n_psf++;
 	psf_list = newlist;
 
+	for (int i=0; i < n_psf; i++) psf_list[i]->entry_number = i;
 	if (n_psf > n_model_bands) add_new_model_band();
 }
 
 void QLens::remove_psf(int psf_number)
 {
 	if ((n_psf==0) or (psf_number >= n_psf)) return;
+	int pi,pf;
+	get_psf_parameter_numbers(psf_number,pi,pf);
+
 	PSF** newlist;
 	if (n_psf > 1) {
 		newlist = new PSF*[n_psf-1];
@@ -3926,19 +3600,22 @@ void QLens::remove_psf(int psf_number)
 	} else {
 		psf_list = NULL;
 	}
+	for (int i=0; i < n_psf; i++) psf_list[i]->entry_number = i;
+
+	if (pf > pi) param_list->remove_params(pi,pf); // eliminate any fit parameters associated with the PSF being removed
 }
 
 void QLens::add_image_pixel_data()
 {
-	ImagePixelData** newlist = new ImagePixelData*[n_data_bands+1];
+	ImageData** newlist = new ImageData*[n_data_bands+1];
 	if (n_data_bands > 0) {
 		for (int i=0; i < n_data_bands; i++) {
-			newlist[i] = imgpixel_data_list[i];
+			newlist[i] = imgdata_list[i];
 		}
-		delete[] imgpixel_data_list;
+		delete[] imgdata_list;
 	}
 
-	newlist[n_data_bands] = new ImagePixelData(); 
+	newlist[n_data_bands] = new ImageData(n_data_bands); 
 	newlist[n_data_bands]->set_lens(this);
 
 	//if (n_model_bands != n_data_bands) die("number of model bands does not equal number of data bands (%i versus %i)",n_model_bands,n_data_bands);
@@ -3958,97 +3635,987 @@ void QLens::add_image_pixel_data()
 	}
 
 	n_data_bands++;
-	imgpixel_data_list = newlist;
-
+	imgdata_list = newlist;
+	imgdatalist->input_ptr(imgdata_list,n_data_bands);
 }
 
 void QLens::remove_image_pixel_data(int band_number)
 {
 	if ((n_data_bands==0) or (band_number >= n_data_bands)) return;
-	ImagePixelData** newlist;
+	ImageData** newlist;
 	if (n_data_bands > 1) {
-		newlist = new ImagePixelData*[n_data_bands-1];
+		newlist = new ImageData*[n_data_bands-1];
 		int i,j;
 		for (i=0, j=0; i < n_data_bands; i++) {
 			if (i != band_number) {
-				newlist[j] = imgpixel_data_list[i];
+				newlist[j] = imgdata_list[i];
 				j++;
 			}
 		}
 	}
 
-	delete imgpixel_data_list[band_number];
-	delete[] imgpixel_data_list;
+	delete imgdata_list[band_number];
+	delete[] imgdata_list;
 	n_data_bands--;
 	// NEED TO REDUCE ASSIGNED_MASK? ADD LINES HERE
 	if (n_data_bands > 0) {
-		imgpixel_data_list = newlist;
+		imgdata_list = newlist;
 	} else {
-		imgpixel_data_list = NULL;
+		imgdata_list = NULL;
 	}
-
+	imgdatalist->input_ptr(imgdata_list,n_data_bands);
 }
 
-void QLens::add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2, bool use_kpc)
+/*********************** Functions for inserting/removing/updating fit parameters in param_list ************************/
+
+bool QLens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
 {
-	DerivedParam** newlist = new DerivedParam*[n_derived_params+1];
-	if (n_derived_params > 0) {
-		for (int i=0; i < n_derived_params; i++)
-			newlist[i] = dparam_list[i];
-		delete[] dparam_list;
+	if (lens_i >= nlens) { pf=pi=0; return false; }
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < lens_i; i++) {
+		lens_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
 	}
-	if (param2 == -1e30) newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum,-1,use_kpc);
-	else newlist[n_derived_params] = new DerivedParam(type_in,param,lensnum,param2,use_kpc);
-	n_derived_params++;
-	dparam_list = newlist;
-	param_settings->add_dparam(dparam_list[n_derived_params-1]->name);
+	pi = dummy.size();
+	if (pi == n_fitparams) { pf=pi=0; return false; }
+	lens_list[lens_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	pf = dummy.size();
+	if (pf==pi) return false;
+	return true;
 }
 
-void QLens::remove_derived_param(int dparam_number)
+bool QLens::get_sb_parameter_numbers(const int sb_i, int& pi, int& pf)
 {
-	if ((dparam_number >= n_derived_params) or (n_derived_params == 0)) { warn(warnings,"Specified derived parameter does not exist"); return; }
-	DerivedParam** newlist = new DerivedParam*[n_derived_params-1];
+	if (sb_i >= n_sb) { pf=pi=0; return false; }
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < sb_i; i++) {
+		sb_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fitparams) { pf=pi=0; return false; }
+	sb_list[sb_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	pf = dummy.size();
+	pi += lensmodel_fit_parameters; // since lens fit parameters come before the source params
+	pf += lensmodel_fit_parameters; // since lens fit parameters come before the source params
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf)
+{
+	if (pixsrc_i >= n_pixellated_src) { pf=pi=0; return false; }
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < pixsrc_i; i++) {
+		srcgrids[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fitparams) { pf=pi=0; return false; }
+	srcgrids[pixsrc_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pf = dummy.size();
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters; // since lens and sb fit parameters come before the source params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters; // since lens and sb fit parameters come before the source params
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_pixlens_parameter_numbers(const int pixlens_i, int& pi, int& pf)
+{
+	if (pixlens_i >= n_pixellated_lens) { pf=pi=0; return false; }
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < pixlens_i; i++) {
+		lensgrids[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fitparams) { pf=pi=0; return false; }
+	lensgrids[pixlens_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pf = dummy.size();
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens, sb and pixsrc fit parameters come before the pixlens params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens, sb and pixsrc fit parameters come before the pixlens params
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_ptsrc_parameter_numbers(const int ptsrc_i, int& pi, int& pf)
+{
+	if (ptsrc_i >= n_ptsrc) { pf=pi=0; return false; }
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < ptsrc_i; i++) {
+		ptsrc_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fitparams) { pf=pi=0; return false; }
+	ptsrc_list[ptsrc_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pf = dummy.size();
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_psf_parameter_numbers(const int psf_i, int& pi, int& pf)
+{
+	if (psf_i >= n_psf) { pf=pi=0; return false; }
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	vector<string> dummy, dummy2, dummy3;
+	for (int i=0; i < psf_i; i++) {
+		psf_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+	}
+	pi = dummy.size();
+	if (pi == n_fitparams) { pf=pi=0; return false; }
+	psf_list[psf_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pf = dummy.size();
+	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, pixsrc, pixlens and ptsrc fit parameters come before the psf params
+	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, pixsrc, pixlens and ptsrc fit parameters come before the psf params
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_cosmo_parameter_numbers(int& pi, int& pf)
+{
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	vector<string> dummy, dummy2, dummy3;
+	cosmo->get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters; // since lens, sb, pixsrc, pixlens, ptsrc and psf fit parameters come before the cosmology params
+	pf = pi + dummy.size();
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::get_misc_parameter_numbers(int& pi, int& pf)
+{
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	vector<string> dummy, dummy2, dummy3;
+	get_fit_parameter_names(dummy,&dummy2,&dummy3);
+
+	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters + cosmo_fit_parameters; // since lens, sb, pixsrc, pixlens, ptsrc, psf and cosmo fit parameters come before the miscellaneous params
+	pf = pi + dummy.size();
+	if (pf==pi) return false;
+	return true;
+}
+
+bool QLens::register_lens_vary_parameters(const int lensnumber)
+{
+	//cout << "registering params for lens " << lensnumber << endl;
+	int pi, pf;
+	vector<string> fit_parameter_names, latex_parameter_names;
+	get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+	if ((lensnumber < 0) or (lensnumber >= nlens)) return false;
+	if (get_lens_parameter_numbers(lensnumber,pi,pf) == true) {
+		//cout << "pi=" << pi << " pf=" << pf << endl;
+		int index=0, index2=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		dvector stepsizes(npar), values(npar);
+
+		//cout << "Inserting parameters " << pi << " to " << pf << endl;
+		lens_list[lensnumber]->get_fit_parameters(values.array(),index2);
+		lens_list[lensnumber]->get_auto_stepsizes(stepsizes,index);
+		param_list->insert_params(pi,pf,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		//cout << "Inserting parameters done " << endl;
+		if (lens_list[lensnumber]->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+		}
+		//cout << "Updating lens prior limits from " << pi << " to " << (pf-1) << endl;
+		//param_list->update_untransformed_values(pi,pf,values);
+		lens_list[lensnumber]->get_auto_ranges(use_penalty_limits,lower,upper,index=0);
+		param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+		//param_list->print_penalty_limits();
+	}
+	return true;
+}
+
+void QLens::register_lens_prior_limits(const int lens_number)
+{
+	int pi, pf;
+	if (get_lens_parameter_numbers(lens_number,pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		if (lens_list[lens_number]->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+			//lens_list[lens_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+			//param_list->update_untransformed_prior_limits(pi,pf,use_penalty_limits,lower,upper);
+		}
+	}
+}
+
+void QLens::update_lens_fitparams(const int lens_number)
+{
+	int pi, pf;
+	if (get_lens_parameter_numbers(lens_number,pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		dvector values(npar);
+		lens_list[lens_number]->get_fit_parameters(values.array(),index);
+		param_list->update_untransformed_values(pi,pf,values.array());
+	}
+}
+
+bool QLens::register_sb_vary_parameters(const int sbnumber)
+{
+	int pi, pf;
+	vector<string> fit_parameter_names, latex_parameter_names;
+	get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+	if ((sbnumber < 0) or (sbnumber >= n_sb)) return false;
+	if (get_sb_parameter_numbers(sbnumber,pi,pf) == true) {
+		int index=0, index2=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		dvector stepsizes(npar), values(npar);
+		sb_list[sbnumber]->get_fit_parameters(values.array(),index2);
+		sb_list[sbnumber]->get_auto_stepsizes(stepsizes,index=0);
+		param_list->insert_params(pi,pf,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (sb_list[sbnumber]->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+		}
+		sb_list[sbnumber]->get_auto_ranges(use_penalty_limits,lower,upper,index=0);
+		//cout << "Updating source prior limits from " << pi << " to " << (pf-1) << endl;
+		//param_list->update_untransformed_values(pi,pf,values);
+		param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
+void QLens::register_sb_prior_limits(const int sb_number)
+{
+	int pi, pf;
+	if (get_sb_parameter_numbers(sb_number,pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		if (sb_list[sb_number]->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+			//sb_list[sb_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+			//param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+		}
+	}
+}
+
+void QLens::update_sb_fitparams(const int sb_number)
+{
+	int pi, pf;
+	if (get_sb_parameter_numbers(sb_number,pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		dvector values(npar);
+		sb_list[sb_number]->get_fit_parameters(values.array(),index);
+		param_list->update_untransformed_values(pi,pf,values.array());
+	}
+}
+
+bool QLens::update_pixellated_src_varyflag(const int src_number, const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf;
+	srcgrids[src_number]->get_parameter_vary_index(name,pnum);
+	get_pixsrc_parameter_numbers(src_number,pi,pf);
+	pnum += pi;
+	bool flag0;
+	srcgrids[src_number]->get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (srcgrids[src_number]->update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_list->remove_params(pnum,pnum+1);
+	} else {
+		dvector values(1), stepsizes(1);
+		double lower, upper;
+		vector<string> fit_parameter_names, latex_parameter_names;
+		get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+		srcgrids[src_number]->get_specific_parameter(name,values[0]);
+		srcgrids[src_number]->get_specific_stepsize(name,stepsizes[0]);
+		param_list->insert_params(pnum,pnum+1,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (srcgrids[src_number]->get_specific_limit(name,lower,upper)==true) {
+			param_list->set_untransformed_prior_limit(pnum,lower,upper);
+		}
+
+	}
+	return true;
+}
+
+bool QLens::register_pixellated_src_vary_parameters(const int pixsrc_number)
+{
+	int pi, pf;
+	vector<string> fit_parameter_names, latex_parameter_names;
+	get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+	if ((pixsrc_number < 0) or (pixsrc_number >= n_pixellated_src)) return false;
+	if (get_pixsrc_parameter_numbers(pixsrc_number,pi,pf) == true) {
+		int index=0, index2=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		dvector stepsizes(npar), values(npar);
+		srcgrids[pixsrc_number]->get_fit_parameters(values.array(),index2);
+		srcgrids[pixsrc_number]->get_auto_stepsizes(stepsizes,index=0);
+		//cout << "inserting parameters " << pi << " up to " << pf << endl;
+		param_list->insert_params(pi,pf,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (srcgrids[pixsrc_number]->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+		}
+		srcgrids[pixsrc_number]->get_auto_ranges(use_penalty_limits,lower,upper,index=0);
+		//cout << "Updating pixellated src prior limits from " << pi << " to " << (pf-1) << endl;
+		param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
+void QLens::register_pixellated_src_prior_limits(const int pixsrc_number)
+{
+	int pi, pf;
+	if (get_pixsrc_parameter_numbers(pixsrc_number,pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		if (srcgrids[pixsrc_number]->get_limits(lower,upper)==true) {
+			//cout << "Setting prior limits in param_list for params " << pi << " up to " << pf << endl;
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+			//sb_list[pixsrc_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+			//param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+		}
+	}
+}
+
+void QLens::update_pixellated_src_fitparams(const int pixsrc_number)
+{
+	int pi, pf;
+	if (get_pixsrc_parameter_numbers(pixsrc_number,pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		dvector values(npar);
+		srcgrids[pixsrc_number]->get_fit_parameters(values.array(),index);
+		param_list->update_untransformed_values(pi,pf,values.array());
+	}
+}
+
+bool QLens::update_pixellated_lens_varyflag(const int pixlens_number, const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf;
+	lensgrids[pixlens_number]->get_parameter_vary_index(name,pnum);
+	get_pixlens_parameter_numbers(pixlens_number,pi,pf);
+	pnum += pi;
+	bool flag0;
+	lensgrids[pixlens_number]->get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (lensgrids[pixlens_number]->update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_list->remove_params(pnum,pnum+1);
+	} else {
+		dvector values(1), stepsizes(1);
+		double lower, upper;
+		vector<string> fit_parameter_names, latex_parameter_names;
+		get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+		lensgrids[pixlens_number]->get_specific_parameter(name,values[0]);
+		lensgrids[pixlens_number]->get_specific_stepsize(name,stepsizes[0]);
+		param_list->insert_params(pnum,pnum+1,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (lensgrids[pixlens_number]->get_specific_limit(name,lower,upper)==true) {
+			param_list->set_untransformed_prior_limit(pnum,lower,upper);
+		}
+	}
+	return true;
+}
+
+bool QLens::set_pixellated_lens_vary_parameters(const int pixlens_number, boolvector &vary_flags)
+{
+	int pi, pf;
+	get_pixlens_parameter_numbers(pixlens_number,pi,pf);
+	if (lensgrids[pixlens_number]->set_varyflags(vary_flags)==false) return false;
+	if (pf > pi) param_list->remove_params(pi,pf);
+	vector<string> fit_parameter_names, latex_parameter_names;
+	get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+	if (get_pixlens_parameter_numbers(pixlens_number,pi,pf) == true) {
+		int index=0, index2=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		dvector stepsizes(npar), values(npar);
+		lensgrids[pixlens_number]->get_fit_parameters(values.array(),index2);
+		lensgrids[pixlens_number]->get_auto_stepsizes(stepsizes,index2);
+		param_list->insert_params(pi,pf,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (lensgrids[pixlens_number]->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+		}
+		lensgrids[pixlens_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+		//cout << "Updating pixellated lens prior limits from " << pi << " to " << (pf-1) << endl;
+		param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
+bool QLens::update_ptsrc_varyflag(const int src_number, const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf;
+	ptsrc_list[src_number]->get_parameter_vary_index(name,pnum);
+	get_ptsrc_parameter_numbers(src_number,pi,pf);
+	pnum += pi;
+	bool flag0;
+	ptsrc_list[src_number]->get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (ptsrc_list[src_number]->update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_list->remove_params(pnum,pnum+1);
+	} else {
+		dvector values(1), stepsizes(1);
+		double lower, upper;
+		vector<string> fit_parameter_names, latex_parameter_names;
+		get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+		ptsrc_list[src_number]->get_specific_parameter(name,values[0]);
+		ptsrc_list[src_number]->get_specific_stepsize(name,stepsizes[0]);
+		param_list->insert_params(pnum,pnum+1,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (ptsrc_list[src_number]->get_specific_limit(name,lower,upper)==true) {
+			param_list->set_untransformed_prior_limit(pnum,lower,upper);
+		}
+	}
+	return true;
+}
+
+bool QLens::register_ptsrc_vary_parameters(const int src_number)
+{
+	int pi, pf;
+	vector<string> fit_parameter_names, latex_parameter_names;
+	get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+	if ((src_number < 0) or (src_number >= n_ptsrc)) return false;
+	if (get_ptsrc_parameter_numbers(src_number,pi,pf) == true) {
+		int index=0, index2=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		dvector stepsizes(npar), values(npar);
+		ptsrc_list[src_number]->get_fit_parameters(values.array(),index2);
+		ptsrc_list[src_number]->get_auto_stepsizes(stepsizes,index=0);
+		param_list->insert_params(pi,pf,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (ptsrc_list[src_number]->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+		}
+		ptsrc_list[src_number]->get_auto_ranges(use_penalty_limits,lower,upper,index=0);
+		//cout << "Updating ptsrc prior limits from " << pi << " to " << (pf-1) << endl;
+		param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
+void QLens::register_ptsrc_prior_limits(const int ptsrc_number)
+{
+	int pi, pf;
+	if (get_ptsrc_parameter_numbers(ptsrc_number,pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		if (ptsrc_list[ptsrc_number]->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+			//sb_list[ptsrc_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+			//param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+		}
+	}
+}
+
+void QLens::update_ptsrc_fitparams(const int ptsrc_number)
+{
+	int pi, pf;
+	if (get_ptsrc_parameter_numbers(ptsrc_number,pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		dvector values(npar);
+		ptsrc_list[ptsrc_number]->get_fit_parameters(values.array(),index);
+		param_list->update_untransformed_values(pi,pf,values.array());
+	}
+}
+
+bool QLens::update_psf_varyflag(const int psf_number, const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf;
+	psf_list[psf_number]->get_parameter_vary_index(name,pnum);
+	get_psf_parameter_numbers(psf_number,pi,pf);
+	pnum += pi;
+	bool flag0;
+	psf_list[psf_number]->get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (psf_list[psf_number]->update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_list->remove_params(pnum,pnum+1);
+	} else {
+		dvector values(1), stepsizes(1);
+		double lower, upper;
+		vector<string> fit_parameter_names, latex_parameter_names;
+		get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+		psf_list[psf_number]->get_specific_parameter(name,values[0]);
+		psf_list[psf_number]->get_specific_stepsize(name,stepsizes[0]);
+		param_list->insert_params(pnum,pnum+1,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (psf_list[psf_number]->get_specific_limit(name,lower,upper)==true) {
+			param_list->set_untransformed_prior_limit(pnum,lower,upper);
+		}
+	}
+	return true;
+}
+
+bool QLens::set_psf_vary_parameters(const int psf_number, boolvector &vary_flags)
+{
+	int pi, pf;
+	get_psf_parameter_numbers(psf_number,pi,pf);
+	if (psf_list[psf_number]->set_varyflags(vary_flags)==false) return false;
+	if (pf > pi) param_list->remove_params(pi,pf);
+	vector<string> fit_parameter_names, latex_parameter_names;
+	get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+	if (get_psf_parameter_numbers(psf_number,pi,pf) == true) {
+		int index=0, index2=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		dvector stepsizes(npar), values(npar);
+		psf_list[psf_number]->get_fit_parameters(values.array(),index);
+		psf_list[psf_number]->get_auto_stepsizes(stepsizes,index);
+		param_list->insert_params(pi,pf,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (psf_list[psf_number]->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+		}
+		psf_list[psf_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+		//cout << "Updating lens plimits from " << pi << " to " << (pf-1) << endl;
+		param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
+bool QLens::update_cosmo_varyflag(const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf;
+	cosmo->get_parameter_vary_index(name,pnum);
+	get_cosmo_parameter_numbers(pi,pf);
+	pnum += pi;
+	bool flag0;
+	cosmo->get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (cosmo->update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_list->remove_params(pnum,pnum+1);
+	} else {
+		vector<string> fit_parameter_names, latex_parameter_names;
+		get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+		dvector values(1), stepsizes(1);
+		double lower, upper;
+		cosmo->get_specific_parameter(name,values[0]);
+		cosmo->get_specific_stepsize(name,stepsizes[0]);
+		param_list->insert_params(pnum,pnum+1,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (cosmo->get_specific_limit(name,lower,upper)==true) {
+			param_list->set_untransformed_prior_limit(pnum,lower,upper);
+		}
+
+	}
+	return true;
+}
+
+bool QLens::register_cosmo_vary_parameters()
+{
+	int pi, pf;
+	vector<string> fit_parameter_names, latex_parameter_names;
+	get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+	if (get_cosmo_parameter_numbers(pi,pf) == true) {
+		int index=0, index2=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		dvector stepsizes(npar), values(npar);
+		cosmo->get_fit_parameters(values.array(),index2);
+		cosmo->get_auto_stepsizes(stepsizes,index=0);
+		param_list->insert_params(pi,pf,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (cosmo->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+		}
+		cosmo->get_auto_ranges(use_penalty_limits,lower,upper,index=0);
+		//cout << "Updating cosmo prior limits from " << pi << " to " << (pf-1) << endl;
+		param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+	}
+	return true;
+}
+
+void QLens::register_cosmo_prior_limits()
+{
+	int pi, pf;
+	if (get_cosmo_parameter_numbers(pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		boolvector use_penalty_limits(npar);
+		dvector lower(npar), upper(npar);
+		if (cosmo->get_limits(lower,upper)==true) {
+			param_list->set_untransformed_prior_limits(pi,pf,lower,upper);
+			//sb_list[cosmo_number]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+			//param_list->update_untransformed_prior_limits_from_auto_ranges(pi,pf,use_penalty_limits,lower,upper);
+		}
+	}
+}
+
+void QLens::update_cosmo_fitparams()
+{
+	int pi, pf;
+	if (get_cosmo_parameter_numbers(pi,pf) == true) {
+		int index=0, npar = pf-pi;
+		dvector values(npar);
+		cosmo->get_fit_parameters(values.array(),index);
+		param_list->update_untransformed_values(pi,pf,values.array());
+	}
+}
+
+bool QLens::update_misc_varyflag(const string name, const bool flag)
+{
+	// updates one specific parameter
+	int pnum, pi, pf;
+	get_parameter_vary_index(name,pnum);
+	get_misc_parameter_numbers(pi,pf);
+	pnum += pi;
+	bool flag0;
+	get_specific_varyflag(name,flag0);
+	if (flag==flag0) return true;
+	if (update_specific_varyflag(name,flag)==false) return false;
+	if (flag==false) {
+		param_list->remove_params(pnum,pnum+1);
+	} else {
+		vector<string> fit_parameter_names, latex_parameter_names;
+		get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+		dvector values(1), stepsizes(1);
+		double lower, upper;
+		get_specific_parameter(name,values[0]);
+		get_specific_stepsize(name,stepsizes[0]);
+		param_list->insert_params(pnum,pnum+1,fit_parameter_names.data(),latex_parameter_names.data(),values.array(),stepsizes.array());
+		if (get_specific_limit(name,lower,upper)==true) {
+			param_list->set_untransformed_prior_limit(pnum,lower,upper);
+		}
+
+	}
+	return true;
+}
+
+void QLens::update_pixsrc_active_parameters(const int src_number)
+{
+	int pi,pf;
+	get_pixsrc_parameter_numbers(src_number,pi,pf);
+	update_active_parameters(srcgrids[src_number],pi);
+}
+
+void QLens::update_pixlens_active_parameters(const int pixlens_number)
+{
+	int pi,pf;
+	get_pixlens_parameter_numbers(pixlens_number,pi,pf);
+	update_active_parameters(lensgrids[pixlens_number],pi);
+}
+
+void QLens::update_ptsrc_active_parameters(const int src_number)
+{
+	int pi,pf;
+	get_ptsrc_parameter_numbers(src_number,pi,pf);
+	update_active_parameters(ptsrc_list[src_number],pi);
+}
+
+void QLens::update_active_parameters(ModelParams* param_object, const int pi)
+{
+	boolvector turned_off_params;
+	param_object->update_active_params(mpi_id,turned_off_params);
+	int pnum;
+	for (int i=turned_off_params.size()-1; i >= 0; i--) {
+		if (turned_off_params[i]) {
+			pnum = pi+i;
+			param_list->remove_params(pnum,pnum+1);
+		}
+	}
+}
+
+void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
+{
+	int i, index=0;
+	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
+	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_stepsizes(stepsizes,index);
+	for (i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) srcgrids[i]->get_auto_stepsizes(stepsizes,index);
+	}
+	for (i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_auto_stepsizes(stepsizes,index);
+	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_stepsizes(stepsizes,index);
+	for (i=0; i < n_psf; i++) psf_list[i]->get_auto_stepsizes(stepsizes,index);
+	cosmo->get_auto_stepsizes(stepsizes,index);
+	get_auto_stepsizes(stepsizes,index);
+
+	//if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes (%i vs %i)",index,n_fit_parameters);
+}
+
+void QLens::set_default_plimits()
+{
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	boolvector use_penalty_limits(n_fitparams);
+	dvector lower(n_fitparams), upper(n_fitparams);
+	int i, index=0;
+	for (i=0; i < n_fitparams; i++) use_penalty_limits[i] = false; // default
+
+	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	for (i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) srcgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	}
+	for (i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	for (i=0; i < n_psf; i++) psf_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	cosmo->get_auto_ranges(use_penalty_limits,lower,upper,index);
+	get_auto_ranges(use_penalty_limits,lower,upper,index);
+
+	if (index != n_fitparams) die("Index didn't go through all the fit parameters when setting default ranges (%i vs %i)",index,n_fitparams);
+	param_list->update_untransformed_prior_limits_from_auto_ranges(0,n_fitparams,use_penalty_limits,lower,upper);
+}
+
+void QLens::get_n_fit_parameters(int &nparams)
+{
+	int i;
+	lensmodel_fit_parameters = 0;
+	srcmodel_fit_parameters = 0;
+	pixsrc_fit_parameters = 0;
+	pixlens_fit_parameters = 0;
+	ptsrc_fit_parameters = 0;
+	psf_fit_parameters = 0;
+	cosmo_fit_parameters = 0;
+	for (i=0; i < nlens; i++) lensmodel_fit_parameters += lens_list[i]->get_n_vary_params();
+	nparams = lensmodel_fit_parameters;
+	for (i=0; i < n_sb; i++) srcmodel_fit_parameters += sb_list[i]->get_n_vary_params();
+	nparams += srcmodel_fit_parameters;
+	for (i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) pixsrc_fit_parameters += srcgrids[i]->get_n_vary_params();
+	}
+	nparams += pixsrc_fit_parameters;
+	for (i=0; i < n_pixellated_lens; i++) pixlens_fit_parameters += lensgrids[i]->get_n_vary_params();
+	nparams += pixlens_fit_parameters;
+	for (i=0; i < n_ptsrc; i++) ptsrc_fit_parameters += ptsrc_list[i]->get_n_vary_params();
+	nparams += ptsrc_fit_parameters;
+	for (i=0; i < n_psf; i++) psf_fit_parameters += psf_list[i]->get_n_vary_params();
+	nparams += psf_fit_parameters;
+	cosmo_fit_parameters = cosmo->get_n_vary_params();
+	nparams += cosmo_fit_parameters;
+	nparams += n_vary_params; // generic parameters within qlens class
+}
+
+bool QLens::update_parameter_list(const bool check_current_params) // if check_current_params=true, tests whether fitparams values match the actual values in the various model objects (and dies if there is a discrepancy)
+{
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	if (n_fitparams != param_list->nparams) die("RUHROH, number of parameters didn't match");
+	if (n_fitparams==0) { warn("no parameters are being varied"); return false; }
+	//fitparams.input(n_fitparams);
+	//double *fitparams = param_list->values;
+	double *fitparams = new double[n_fitparams];
+	int i, index = 0;
+	for (i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
+	if (index != lensmodel_fit_parameters) die("Index didn't go through all the lens model fit parameters (%i vs %i)",index,lensmodel_fit_parameters);
+	for (i=0; i < n_sb; i++) sb_list[i]->get_fit_parameters(fitparams,index);
+	for (i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) srcgrids[i]->get_fit_parameters(fitparams,index);
+	}
+	for (i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_fit_parameters(fitparams,index);
+	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_fit_parameters(fitparams,index);
+	for (i=0; i < n_psf; i++) psf_list[i]->get_fit_parameters(fitparams,index);
+	cosmo->get_fit_parameters(fitparams,index); // cosmology parameters
+	get_fit_parameters(fitparams,index); // generic parameters in qlens class
+	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters + cosmo_fit_parameters + n_vary_params;
+	if (index != expected_index) die("Index didn't go through all model fit parameters (%i vs %i)",index,expected_index);
+
+	vector<string> fit_parameter_names, latex_parameter_names;
+	get_all_parameter_names(fit_parameter_names,latex_parameter_names); // we have to generate all parameter names so it can add indices to avoid identical parameter names if needed
+	dvector stepsizes(n_fitparams);
+	get_automatic_initial_stepsizes(stepsizes);
+	param_list->update_untransformed_values(fitparams);
+	param_list->update_param_list(fit_parameter_names.data(),latex_parameter_names.data(),stepsizes.array(),check_current_params);
+	param_list->transform_parameters();
+	delete[] fitparams;
+	//set_default_plimits();
+	//transformed_parameter_names.resize(n_fitparams);
+	//transformed_latex_parameter_names.resize(n_fitparams);
+	//param_list->transform_parameter_names(fit_parameter_names.data(),transformed_parameter_names.data(),latex_parameter_names.data(),transformed_latex_parameter_names.data());
+
+	//if ((!ignore_limits) and (fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) return setup_limits();
+	return true;
+}
+
+/*
+bool QLens::setup_limits()
+{
+	param_list->prior_limits_hi.input(n_fit_parameters);
+	param_list->prior_limits_lo.input(n_fit_parameters);
+	int index=0;
+	for (int i=0; i < nlens; i++) {
+		if ((lens_list[i]->get_n_vary_params() > 0) and (lens_list[i]->get_limits(param_list->prior_limits_lo,param_list->prior_limits_hi,index)==false)) { warn("limits have not been defined for lens %i",i); return false; }
+	}
+	if (index != lensmodel_fit_parameters) die("index didn't go through all the lens model fit parameters when setting upper/lower limits");
+	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
+	for (int i=0; i < n_sb; i++) {
+		if ((sb_list[i]->get_n_vary_params() > 0) and (sb_list[i]->get_limits(param_list->prior_limits_lo,param_list->prior_limits_hi,index)==false)) { warn("limits have not been defined for source %i",i); return false; }
+	}
+	for (int i=0; i < n_pixellated_src; i++) {
+		if ((srcgrids[i] != NULL) and (srcgrids[i]->get_n_vary_params() > 0) and (srcgrids[i]->get_limits(param_list->prior_limits_lo,param_list->prior_limits_hi,index)==false)) { warn("limits have not been defined for pixellated source %i",i); return false; }
+	}
+	for (int i=0; i < n_pixellated_lens; i++) {
+		if ((lensgrids[i]->get_n_vary_params() > 0) and (lensgrids[i]->get_limits(param_list->prior_limits_lo,param_list->prior_limits_hi,index)==false)) { warn("limits have not been defined for pixellated source %i",i); return false; }
+	}
+	for (int i=0; i < n_ptsrc; i++) {
+		if ((ptsrc_list[i]->get_n_vary_params() > 0) and (ptsrc_list[i]->get_limits(param_list->prior_limits_lo,param_list->prior_limits_hi,index)==false)) { warn("limits have not been defined for point source %i",i); return false; }
+	}
+	for (int i=0; i < n_psf; i++) {
+		if ((psf_list[i]->get_n_vary_params() > 0) and (psf_list[i]->get_limits(param_list->prior_limits_lo,param_list->prior_limits_hi,index)==false)) { warn("limits have not been defined for point source %i",i); return false; }
+	}
+
+	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters;
+	if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
+
+	if ((cosmo->get_n_vary_params() > 0) and (cosmo->get_limits(param_list->prior_limits_lo,param_list->prior_limits_hi,index)==false)) { warn("limits have not been defined for cosmology parameters"); return false; }
+
+	if ((n_vary_params > 0) and (get_limits(param_list->prior_limits_lo,param_list->prior_limits_hi,index)==false)) { warn("limits have not been defined for generic parameters"); return false; }
+
+	if (index != n_fit_parameters) die("index didn't go through all the fit parameters when setting upper/lower limits (%i expected, %i found)",n_fit_parameters,index);
+	param_list->transform_limits(param_list->prior_limits_lo,param_list->prior_limits_hi);
+	param_list->override_limits(param_list->prior_limits_lo,param_list->prior_limits_hi);
+	param_list->set_prior_norms(param_list->prior_limits_lo,param_list->prior_limits_hi);
+	for (int i=0; i < n_fit_parameters; i++) {
+		if (param_list->prior_limits_lo[i] > param_list->prior_limits_hi[i]) {
+			double temp = param_list->prior_limits_hi[i]; param_list->prior_limits_hi[i] = param_list->prior_limits_lo[i]; param_list->prior_limits_lo[i] = temp;
+		}
+	}
+	return true;
+}
+*/
+
+void QLens::get_all_parameter_names(vector<string>& fit_parameter_names, vector<string>& latex_parameter_names)
+{
+	int n_fitparams;
+	get_n_fit_parameters(n_fitparams);
+	fit_parameter_names.clear();
+	latex_parameter_names.clear();
+	vector<string> latex_parameter_subscripts;
 	int i,j;
-	for (i=0, j=0; i < n_derived_params; i++)
-		if (i != dparam_number) { newlist[j] = dparam_list[i]; j++; }
-		else delete dparam_list[i];
-	delete[] dparam_list;
-	n_derived_params--;
-
-	dparam_list = newlist;
-	param_settings->remove_dparam(dparam_number);
-}
-
-void QLens::rename_derived_param(int dparam_number, string newname, string new_latex_name)
-{
-	if (dparam_number >= n_derived_params) die("Specified derived parameter does not exist");
-	dparam_list[dparam_number]->rename(words[4],words[5]);
-	param_settings->rename_dparam(dparam_number,newname);
-}
-
-void QLens::clear_derived_params()
-{
-	if (n_derived_params > 0) {
-		for (int i=0; i < n_derived_params; i++)
-			delete dparam_list[i];
-		delete[] dparam_list;
-		n_derived_params = 0;
+	for (i=0; i < nlens; i++) {
+		lens_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 	}
-	param_settings->clear_dparams();
-}
+	for (i=0; i < n_sb; i++) {
+		sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts,true);
+	}
+	for (i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) srcgrids[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+	}
+	for (i=0; i < n_pixellated_lens; i++) {
+		lensgrids[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+	}
+	for (i=0; i < n_ptsrc; i++) {
+		ptsrc_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+	}
+	for (i=0; i < n_psf; i++) {
+		psf_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+	}
+	cosmo->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
+	get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
 
-void QLens::print_derived_param_list()
-{
-	if (mpi_id==0) {
-		if (n_derived_params > 0) {
-			for (int i=0; i < n_derived_params; i++) {
-				cout << i << ". " << flush;
-				dparam_list[i]->print_param_description(this);
+	// find any parameters with matching names and number them so they can be distinguished
+	int count, n_names;
+	n_names = fit_parameter_names.size();
+	string *new_parameter_names = new string[n_names];
+	for (i=0; i < n_names; i++) {
+		count=1;
+		new_parameter_names[i] = fit_parameter_names[i];
+		for (j=i+1; j < n_names; j++) {
+			if (fit_parameter_names[j]==fit_parameter_names[i]) {
+				if (count==1) {
+					stringstream countstr;
+					string countstring;
+					countstr << count;
+					countstr >> countstring;
+					if (isdigit(new_parameter_names[i].at(new_parameter_names[i].length()-1))) new_parameter_names[i] += "_"; // in case parameter name already ends with a number
+					new_parameter_names[i] += countstring;
+					if (latex_parameter_subscripts[i].empty()) latex_parameter_subscripts[i] = countstring;
+					else latex_parameter_subscripts[i] += "," + countstring;
+					count++;
+				}
+				stringstream countstr;
+				string countstring;
+				countstr << count;
+				countstr >> countstring;
+				if (isdigit(fit_parameter_names[j].at(fit_parameter_names[j].length()-1))) fit_parameter_names[j] += "_"; // in case parameter name already ends with a number
+				fit_parameter_names[j] += countstring;
+				if (latex_parameter_subscripts[j].empty()) latex_parameter_subscripts[j] = countstring;
+				else latex_parameter_subscripts[j] += "," + countstring;
+				count++;
 			}
 		}
-		else cout << "No derived parameters have been created" << endl;
+		fit_parameter_names[i] = new_parameter_names[i];
+	}
+	delete[] new_parameter_names;
+
+	if (fit_parameter_names.size() != n_fitparams) die("get_all_parameter_names(...) did not assign names to all the fit parameters (%i vs %i)",n_fitparams,fit_parameter_names.size());
+	for (i=0; i < n_fitparams; i++) {
+		if (latex_parameter_subscripts[i] != "") latex_parameter_names[i] += "_{" + latex_parameter_subscripts[i] + "}";
 	}
 }
+
+bool QLens::lookup_parameter_value(const string pname, double& pval)
+{
+	bool found_param = false;
+	int i;
+	for (i=0; i < param_list->nparams; i++) {
+		if (param_list->param_names[i]==pname) {
+			found_param = true;
+			pval = param_list->values[i];
+		}
+	}
+	if (!found_param) {
+		for (i=0; i < dparam_list->n_dparams; i++) {
+			if (dparam_list->dparams[i]->name==pname) {
+				found_param = true;
+				pval = dparam_list->dparams[i]->get_derived_param(this);
+			}
+		}
+	}
+	return found_param;
+}
+
+void QLens::create_parameter_value_string(string &pvals)
+{
+	pvals = "";
+	int i;
+	int n_derived_params = dparam_list->n_dparams;
+	for (i=0; i < param_list->nparams; i++) {
+		stringstream pvalstr;
+		string pvalstring;
+		pvalstr << param_list->values[i];
+		pvalstr >> pvalstring;
+		pvals += pvalstring;
+		if ((n_derived_params > 0) or (i < param_list->nparams-1)) pvals += " ";
+	}
+	double pval;
+	for (i=0; i < n_derived_params; i++) {
+		pval = dparam_list->dparams[i]->get_derived_param(this);
+		stringstream pvalstr;
+		string pvalstring;
+		pvalstr << pval;
+		pvalstr >> pvalstring;
+		pvals += pvalstring;
+		if (i < n_derived_params-1) pvals += " ";
+	}
+}
+
+/*
+bool QLens::output_parameter_values()
+{
+	int n_fitparams = param_list->nparams;
+	if (n_fitparams==0) return false;
+	if (mpi_id==0) {
+		for (int i=0; i < n_fitparams; i++) {
+			cout << i << ". " << param_list->param_names[i] << ": " << param_list->values[i] << endl;
+		}
+		cout << endl;
+	}
+	return true;
+}
+*/
+
+/*********************** Functions for setting up grid for critical curves, image searching ***********************/
 
 void QLens::set_gridcenter(double xc, double yc)
 {
@@ -4072,7 +4639,7 @@ void QLens::set_gridsize(double xl, double yl)
 	grid_ymax = grid_ycenter + grid_ylength/2;
 	if (n_image_pixel_grids > 0) {
 		for (int i=0; i < n_extended_src_redshifts; i++) {
-			if ((image_pixel_grids[i]) and (image_pixel_grids[i]->image_pixel_data == NULL)) {
+			if ((image_pixel_grids[i]) and (image_pixel_grids[i]->image_data == NULL)) {
 				// if an image pixel grid has been created, but it is not tied to a data image, then update the dimensions of this grid
 				image_pixel_grids[i]->update_grid_dimensions(grid_xmin,grid_xmax,grid_ymin,grid_ymax);
 			}
@@ -4092,8 +4659,8 @@ void QLens::set_grid_corners(double xmin, double xmax, double ymin, double ymax)
 	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
 	if (n_image_pixel_grids > 0) {
 		for (int i=0; i < n_extended_src_redshifts; i++) {
-			if ((image_pixel_grids[i]) and (image_pixel_grids[i]->image_pixel_data == NULL)) {
-			//if ((n_extended_src_redshifts > 0) and ((!imgpixel_data_list) or (!imgpixel_data_list[0])) and (default_data_pixel_size <= 0)) {
+			if ((image_pixel_grids[i]) and (image_pixel_grids[i]->image_data == NULL)) {
+			//if ((n_extended_src_redshifts > 0) and ((!imgdata_list) or (!imgdata_list[0])) and (default_data_pixel_size <= 0)) {
 				// if an image pixel grid has been created, but it is not tied to a data image, then update the dimensions of this grid
 				image_pixel_grids[i]->update_grid_dimensions(xmin,xmax,ymin,ymax);
 			}
@@ -4104,9 +4671,9 @@ void QLens::set_grid_corners(double xmin, double xmax, double ymin, double ymax)
 void QLens::set_grid_from_pixels()
 {
 	double pixsize_x, pixsize_y;
-	if ((n_data_bands > 0) and (imgpixel_data_list[0])) {
-		pixsize_x = imgpixel_data_list[0]->pixel_size;
-		pixsize_y = imgpixel_data_list[0]->pixel_xy_ratio;
+	if ((n_data_bands > 0) and (imgdata_list[0])) {
+		pixsize_x = imgdata_list[0]->pixel_size;
+		pixsize_y = imgdata_list[0]->pixel_xy_ratio;
 	} else {
 		pixsize_x=pixsize_y=default_data_pixel_size;
 	}
@@ -4122,7 +4689,7 @@ void QLens::set_grid_from_pixels()
 	if (autogrid_before_grid_creation) autogrid_before_grid_creation = false;
 	if (n_image_pixel_grids > 0) {
 		for (int i=0; i < n_extended_src_redshifts; i++) {
-			if ((image_pixel_grids[i]) and (image_pixel_grids[i]->image_pixel_data == NULL)) {
+			if ((image_pixel_grids[i]) and (image_pixel_grids[i]->image_data == NULL)) {
 				double grid_xmin, grid_xmax, grid_ymin, grid_ymax;
 				grid_xmin = grid_xcenter - grid_xlength/2;
 				grid_xmax = grid_xcenter + grid_xlength/2;
@@ -4140,10 +4707,10 @@ void QLens::set_img_npixels(const int npix_x, const int npix_y)
 	n_image_pixels_x = npix_x;
 	n_image_pixels_y = npix_y;
 	if (n_image_pixel_grids > 0) {
-		//if ((n_extended_src_redshifts > 0) and ((!imgpixel_data_list) or (!imgpixel_data_list[0]))) {
+		//if ((n_extended_src_redshifts > 0) and ((!imgdata_list) or (!imgdata_list[0]))) {
 		// only remake the image pixel grids if they're not tied to image data
 		for (int i=0; i < n_extended_src_redshifts; i++) {
-			if ((image_pixel_grids[i]) and (image_pixel_grids[i]->image_pixel_data == NULL)) {
+			if ((image_pixel_grids[i]) and (image_pixel_grids[i]->image_data == NULL)) {
 				delete image_pixel_grids[i];
 				image_pixel_grids[i] = NULL; // this will force qlens to recreate the grid with the new pixel dimensions
 			}
@@ -4466,8 +5033,8 @@ void QLens::subgrid_around_perturber_galaxies(lensvector *centers, double *einst
 		for (j=0; j < n_perturbers; j++) {
 			min_distsqr = 1e30;
 			for (i=ptsrc_redshift_groups[zindx]; i < ptsrc_redshift_groups[zindx+1]; i++) {
-				for (k=0; k < image_data[i].n_images; k++) {
-					distsqr = SQR(image_data[i].pos[k][0] - galcenter[j][0]) + SQR(image_data[i].pos[k][1] - galcenter[j][1]);
+				for (k=0; k < point_image_data[i].n_images; k++) {
+					distsqr = SQR(point_image_data[i].pos[k][0] - galcenter[j][0]) + SQR(point_image_data[i].pos[k][1] - galcenter[j][1]);
 					if (distsqr < min_distsqr) min_distsqr = distsqr;
 				}
 			}
@@ -4705,7 +5272,7 @@ void QLens::plot_weak_lensing_shear_data(const bool include_model_shear, const s
 		y = weak_lensing_data.pos[i][1];
 		zsrc = weak_lensing_data.zsrc[i];
 		for (int i=0; i < n_lens_redshifts; i++) {
-			zfacs[i] = cosmo.kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
+			zfacs[i] = cosmo->kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
 		}
 		shear1 = weak_lensing_data.reduced_shear1[i];
 		shear2 = weak_lensing_data.reduced_shear2[i];
@@ -4908,7 +5475,7 @@ void QLens::calculate_critical_curve_perturbation_radius(int lens_number, bool v
 	double zlsub, zlprim;
 	zlsub = lens_list[perturber_lens_number]->zlens;
 	zlprim = lens_list[0]->zlens;
-	double menc = avg_kappa*M_PI*SQR(rmax_numerical)*cosmo.sigma_crit_kpc(zlsub,reference_source_redshift);
+	double menc = avg_kappa*M_PI*SQR(rmax_numerical)*cosmo->sigma_crit_kpc(zlsub,reference_source_redshift);
 
 	if (verbose) {
 		cout << "direction of maximum warping = " << radians_to_degrees(theta_shear) << endl;
@@ -5103,9 +5670,9 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 	//double ktilde_approx2 = 1 - alpha*(r_over_rc);
 		//double blergh2_approx = 1 - alpha*(delta_s_over_thetac + 2*r_over_rc);
 
-	double kpc_to_arcsec_sub = 206.264806/cosmo.angular_diameter_distance(zlsub);
+	double kpc_to_arcsec_sub = 206.264806/cosmo->angular_diameter_distance(zlsub);
 	// the following quantities are scaled by 1/alpha
-	avg_sigma_enclosed = avg_kappa*cosmo.sigma_crit_kpc(zlsub,reference_source_redshift);
+	avg_sigma_enclosed = avg_kappa*cosmo->sigma_crit_kpc(zlsub,reference_source_redshift);
 	mass_enclosed = avg_sigma_enclosed*M_PI*SQR(rmax_numerical/kpc_to_arcsec_sub);
 
 	double menc_scaled_to_primary_lensplane = 0;
@@ -5138,8 +5705,8 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 			kappa0_m = kappa_exclude(xm,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			shear_exclude(xm,shear_tot_m,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
-			double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
-			//double fac1 = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift));
+			double mass_scale_factor = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
+			//double fac1 = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift));
 			//double fac2 = (1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
 			//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
 			menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
@@ -5159,7 +5726,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 			i1 = lens_redshift_idx[primary_lens_number];
 			i2 = lens_redshift_idx[perturber_lens_number];
 			double beta = default_zsrc_beta_factors[i2-1][i1];
-			double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
+			double mass_scale_factor = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
 			menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
 			avgkap_scaled_to_primary_lensplane = avg_kappa*(1-beta*(kappa0+shear_tot));
 
@@ -5171,7 +5738,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 			//cout << "blergh=" << blergh2 << " approx=" << blergh2_approx << " better_approx=" << blergh2_approx0 << endl;
 		}
 	} else {
-		double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z);
+		double mass_scale_factor = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z);
 		menc_scaled_to_primary_lensplane = mass_enclosed*mass_scale_factor;
 		avgkap_scaled_to_primary_lensplane = avg_kappa;
 	}
@@ -5269,7 +5836,7 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 
 	double avg_kappa = reference_zfactors[lens_redshift_idx[lens_number]]*lens_list[lens_number]->kappa_avg_r(r);
 
-	double avg_sigma_enclosed = avg_kappa*cosmo.sigma_crit_arcsec(zlsub,reference_source_redshift);
+	double avg_sigma_enclosed = avg_kappa*cosmo->sigma_crit_arcsec(zlsub,reference_source_redshift);
 	double mass_enclosed = avg_sigma_enclosed*M_PI*SQR(r0);
 
 	menc_scaled = 0;
@@ -5302,8 +5869,8 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 			kappa0_m = kappa_exclude(xm,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			shear_exclude(xm,shear_tot_m,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
-			double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(r0/r)*(1 - beta*(kappa0 + shear_tot + r0*k0deriv));
-			//double fac1 = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift));
+			double mass_scale_factor = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(r0/r)*(1 - beta*(kappa0 + shear_tot + r0*k0deriv));
+			//double fac1 = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift));
 			//double fac2 = (1 - beta*(kappa0 + shear_tot + r0*k0deriv));
 			//cout << fac1 << " " << fac2 << " " << mass_scale_factor << endl;
 			menc_scaled = mass_enclosed*mass_scale_factor;
@@ -5319,12 +5886,12 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 			i1 = lens_redshift_idx[primary_lens_number];
 			i2 = lens_redshift_idx[lens_number];
 			double beta = default_zsrc_beta_factors[i2-1][i1];
-			double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
+			double mass_scale_factor = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift))*(1 - beta*(kappa0 + shear_tot));
 			menc_scaled = mass_enclosed*mass_scale_factor;
 			avgkap_scaled = avg_kappa*(1-beta*(kappa0+shear_tot));
 		}
 	} else {
-		double mass_scale_factor = (cosmo.sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo.sigma_crit_kpc(zlsub,reference_source_redshift));
+		double mass_scale_factor = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift));
 		menc_scaled = mass_enclosed*mass_scale_factor;
 		avgkap_scaled = avg_kappa;
 	}
@@ -5413,7 +5980,6 @@ bool QLens::get_einstein_radius(int lens_number, double& re_major_axis, double& 
 	lens_list[lens_number]->get_einstein_radius(re_major_axis,re_average,reference_zfactors[lens_redshift_idx[lens_number]]);
 	return true;
 }
-
 
 double QLens::inverse_magnification_r(const double r)
 {
@@ -5667,6 +6233,96 @@ bool QLens::plot_critical_curves(string critfile)
 	return true;
 }
 
+bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis, int cc_num)
+{
+	if (!sorted_critical_curves) sort_critical_curves();
+
+	auto get_angle_from_components = [](const double &comp1, const double &comp2)
+	{
+		double angle = atan(abs(comp2/comp1));
+		if (comp1 < 0) {
+			if (comp2 < 0)
+				angle = angle - M_PI;
+			else
+				angle = M_PI - angle;
+		} else if (comp2 < 0) {
+			angle = -angle;
+		}
+		return angle;
+	};
+
+	int n_cc = sorted_critical_curve.size();
+	if (n_cc==0) return false;
+
+	if (cc_num < 0) {
+		if (n_cc==1) cc_num = 0;
+		else {
+			// look for the first tangential critical curve we come across
+			int j,k;
+			double kappa_averaged_over_cc;
+			for (j=0; j < n_cc; j++) {
+				kappa_averaged_over_cc = 0;
+				for (k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
+					kappa_averaged_over_cc += kappa(sorted_critical_curve[j].cc_pts[k][0],sorted_critical_curve[j].cc_pts[k][1],reference_zfactors,default_zsrc_beta_factors);
+				}
+				kappa_averaged_over_cc /= sorted_critical_curve[j].cc_pts.size();
+				if (kappa_averaged_over_cc < 1.0) {
+					// this is a tangential critical curve
+					cc_num = j;
+					//cout << "Found tangential critical curve! cc_num=" << cc_num << endl;
+					break;
+				}
+			}
+			if (cc_num < 0) {
+				warn("could not find a tangential critical curve");
+				return false;
+			}
+		}
+	}
+
+	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
+	int npts = critical_curve->cc_pts.size();
+	if (npts==0) return false;
+	double x_avg=0, y_avg=0;
+	for (int k=0; k < npts; k++) {
+		x_avg += critical_curve->caustic_pts[k][0];
+		y_avg += critical_curve->caustic_pts[k][1];
+	}
+	x_avg /= npts;
+	y_avg /= npts;
+	double rsq,rsqmax,rsqmin,theta_rmax;
+	rsqmax = 0;
+	rsqmin = 1e30;
+	for (int k=0; k < npts; k++) {
+		rsq = SQR(critical_curve->caustic_pts[k][0]-x_avg) + SQR(critical_curve->caustic_pts[k][1]-y_avg);
+		if (rsq > rsqmax) {
+			rsqmax = rsq;
+			theta_rmax = get_angle_from_components(critical_curve->caustic_pts[k][0]-x_avg,critical_curve->caustic_pts[k][1]-y_avg);
+		}
+		if (rsq < rsqmin) rsqmin = rsq;
+	}
+	if (theta_rmax >= M_PI) theta_rmax -= M_PI;
+	//cout << "THETA_RMAX=" << theta_rmax << endl;
+	double theta, theta_minor_axis_min, theta_minor_axis_max;
+	theta_minor_axis_min = theta_rmax + M_HALFPI - 0.1;
+	theta_minor_axis_max = theta_rmax + M_HALFPI + 0.1;
+	double rsqmax_minor_axis = 0;
+	for (int k=0; k < npts; k++) {
+		theta = get_angle_from_components(critical_curve->caustic_pts[k][0]-x_avg,critical_curve->caustic_pts[k][1]-y_avg);
+		//cout << theta << endl;
+		if ((theta > theta_minor_axis_min) and (theta < theta_minor_axis_max)) {
+			rsq = SQR(critical_curve->caustic_pts[k][0]-x_avg) + SQR(critical_curve->caustic_pts[k][1]-y_avg);
+			//cout << "rsq = " << rsq << endl;
+			if (rsq > rsqmax_minor_axis) rsqmax_minor_axis = rsq;
+		}
+	}
+	//cout << "RSQMAX_MINOR_AXIS=" << rsqmax_minor_axis << endl;
+	min = sqrt(rsqmin);
+	max = sqrt(rsqmax);
+	max_minor_axis = sqrt(rsqmax_minor_axis);
+	return true;
+}
+
 double QLens::einstein_radius_of_primary_lens(const double zfac, double &reav)
 {
 #ifdef USE_OPENMP
@@ -5680,12 +6336,15 @@ double QLens::einstein_radius_of_primary_lens(const double zfac, double &reav)
 	double xc0, yc0, xc1, yc1, xc, yc;
 	lens_list[primary_lens_number]->get_center_coords(xc0,yc0);
 	centered = new bool[nlens];
-	centered[primary_lens_number]=true;
+	if (lens_list[primary_lens_number]->kapavgptr_rsq_spherical != NULL) centered[primary_lens_number]=true;
+	else centered[primary_lens_number] = false;
 	bool multiple_lenses = false;
 	if (include_secondary_lens) {
-		centered[secondary_lens_number]=true;
-		lens_list[secondary_lens_number]->get_center_coords(xc1,yc1);
-		multiple_lenses = true;
+		if (lens_list[secondary_lens_number]->kapavgptr_rsq_spherical != NULL) {
+			centered[secondary_lens_number]=true;
+			lens_list[secondary_lens_number]->get_center_coords(xc1,yc1);
+			multiple_lenses = true;
+		}
 	}
 	for (int j=0; j < nlens; j++) {
 		if (j==primary_lens_number) continue;
@@ -5744,18 +6403,28 @@ double QLens::einstein_radius_root(const double r)
 	return (kapavg-1);
 }
 
-void QLens::plot_total_kappa(double rmin, double rmax, int steps, const char *kname, const char *kdname)
+void QLens::plot_total_kappa(const double rmin, const double rmax, const int steps, const char *kname, const char *kdname)
 {
-	double r, rstep, total_kappa, total_dkappa;
-	rstep = pow(rmax/rmin, 1.0/steps);
-	int i,j;
 	ofstream kout(kname);
 	ofstream kdout;
 	if (kdname != NULL) kdout.open(kdname);
 	if (use_scientific_notation) kout << setiosflags(ios::scientific);
 	if (use_scientific_notation) kdout << setiosflags(ios::scientific);
-	double arcsec_to_kpc = cosmo.angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
-	double sigma_cr_kpc = cosmo.sigma_crit_kpc(lens_redshift, reference_source_redshift);
+	dvector rvals(steps), kappavals(steps), dkappavals(steps);
+	output_total_kappa(rmin, rmax, steps, rvals, kappavals, dkappavals);
+	double arcsec_to_kpc = cosmo->angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_kpc = cosmo->sigma_crit_kpc(lens_redshift, reference_source_redshift);
+	for (int i=0; i < steps; i++) {
+		kout << rvals[i] << " " << kappavals[i] << " " << rvals[i]*arcsec_to_kpc << " " << kappavals[i]*sigma_cr_kpc << endl;
+		if (kdname != NULL) kdout << rvals[i] << " " << dkappavals[i] << " " << rvals[i]*arcsec_to_kpc << " " << dkappavals[i]*sigma_cr_kpc/arcsec_to_kpc << endl;
+	}
+}
+
+void QLens::output_total_kappa(const double rmin, const double rmax, const int steps, dvector& rvals, dvector& kappavals, dvector& dkappavals)
+{
+	double r, rstep, total_kappa, total_dkappa;
+	rstep = pow(rmax/rmin, 1.0/steps);
+	int i,j;
 	double kap, kap2;
 	double theta, thetastep;
 	int thetasteps = 200;
@@ -5784,8 +6453,9 @@ void QLens::plot_total_kappa(double rmin, double rmax, int steps, const char *kn
 		}
 		total_kappa /= thetasteps;
 		total_dkappa /= thetasteps;
-		kout << r << " " << total_kappa << " " << r*arcsec_to_kpc << " " << total_kappa*sigma_cr_kpc << endl;
-		if (kdname != NULL) kdout << r << " " << total_dkappa << r*arcsec_to_kpc << " " << total_dkappa*sigma_cr_kpc/arcsec_to_kpc << endl;
+		rvals[i] = r;
+		kappavals[i] = total_kappa;
+		dkappavals[i] = total_dkappa;
 	}
 	delete[] onezfac;
 
@@ -5815,7 +6485,7 @@ void QLens::plot_total_kappa(double rmin, double rmax, int steps, const char *kn
 double QLens::einstein_radius_single_lens(const double src_redshift, const int lensnum)
 {
 	double re_avg,re_major,zfac;
-	zfac = cosmo.kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
+	zfac = cosmo->kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
 	lens_list[lensnum]->get_einstein_radius(re_major,re_avg,zfac);
 	return re_avg;
 }
@@ -5823,7 +6493,7 @@ double QLens::einstein_radius_single_lens(const double src_redshift, const int l
 double QLens::get_xi_parameter(const double src_redshift, const int lensnum)
 {
 	double re_avg,re_major,zfac,xi_param;
-	zfac = cosmo.kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
+	zfac = cosmo->kappa_ratio(lens_list[lensnum]->zlens,src_redshift,reference_source_redshift);
 	xi_param = lens_list[lensnum]->get_xi_parameter(zfac);
 	//double xitot = get_total_xi_parameter(src_redshift);
 	//cout << "CHECK: " << xitot << " " << xi_param << endl;
@@ -5833,7 +6503,7 @@ double QLens::get_xi_parameter(const double src_redshift, const int lensnum)
 double QLens::get_total_xi_parameter(const double src_redshift)
 {
 	double r_ein,zfac,xi_param;
-	zfac = cosmo.kappa_ratio(lens_list[primary_lens_number]->zlens,src_redshift,reference_source_redshift);
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->zlens,src_redshift,reference_source_redshift);
 	einstein_radius_of_primary_lens(zfac,r_ein);
 	//cout << "RE=" << r_ein << endl;
 	double xc,yc,xcc,ycc;
@@ -5894,7 +6564,7 @@ double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 	double z, r_arcsec = r;
 	if (lensnum==-1) z = lens_list[primary_lens_number]->get_redshift();
 	else z = lens_list[lensnum]->get_redshift();
-	if (use_kpc) r_arcsec *= 206.264806/cosmo.angular_diameter_distance(z);
+	if (use_kpc) r_arcsec *= 206.264806/cosmo->angular_diameter_distance(z);
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
@@ -5915,33 +6585,34 @@ double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 	return total_kappa;
 }
 
-double QLens::total_dkappa(const double r, const int lensnum, const bool use_kpc)
+double QLens::total_dlogkappa(const double r, const int lensnum, const bool use_kpc)
 {
-	double total_dkappa;
+	double total_dlogkappa;
 	int j;
 	double kap, kap2;
 	double theta, thetastep;
 	int thetasteps = 200;
 	thetastep = 2*M_PI/thetasteps;
-	double x, y, x2, y2, dr;
-	dr = 1e-5;
+	double x, y, x2, y2, dlogr, rfac;
+	dlogr = 1e-5;
+	rfac = exp(dlogr);
 	double z, r_arcsec = r;
 	if (lensnum==-1) z = lens_list[primary_lens_number]->get_redshift();
 	else z = lens_list[lensnum]->get_redshift();
-	if (use_kpc) r_arcsec *= 206.264806/cosmo.angular_diameter_distance(z);
+	if (use_kpc) r_arcsec *= 206.264806/cosmo->angular_diameter_distance(z);
 	
 	if (autocenter==true) {
 	for (int i=0; i < nlens; i++)
 		if (i==primary_lens_number) { lens_list[i]->get_center_coords(grid_xcenter,grid_ycenter); }
 	}
-	total_dkappa = 0;
+	total_dlogkappa = 0;
 	double *onezfac = new double[n_lens_redshifts];
 	for (j=0; j < n_lens_redshifts; j++) onezfac[j] = 1.0;
 	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
 		x = grid_xcenter + r_arcsec*cos(theta);
 		y = grid_ycenter + r_arcsec*sin(theta);
-		x2 = (r_arcsec+dr)*cos(theta);
-		y2 = (r_arcsec+dr)*sin(theta);
+		x2 = (r_arcsec*rfac)*cos(theta);
+		y2 = (r_arcsec*rfac)*sin(theta);
 		if (lensnum==-1) {
 			kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
 			kap2 = kappa(x2,y2,onezfac,default_zsrc_beta_factors);
@@ -5949,10 +6620,10 @@ double QLens::total_dkappa(const double r, const int lensnum, const bool use_kpc
 			kap = lens_list[lensnum]->kappa(x,y);
 			kap2 = lens_list[lensnum]->kappa(x2,y2);
 		}
-		total_dkappa += (kap2 - kap)/dr;
+		total_dlogkappa += (log(kap2/kap))/dlogr;
 	}
-	total_dkappa /= thetasteps;
-	return total_dkappa;
+	total_dlogkappa /= thetasteps;
+	return total_dlogkappa;
 }
 
 void QLens::plot_mass_profile(double rmin, double rmax, int rpts, const char *massname)
@@ -5962,8 +6633,8 @@ void QLens::plot_mass_profile(double rmin, double rmax, int rpts, const char *ma
 	int i;
 	ofstream mout(massname);
 	if (use_scientific_notation) mout << setiosflags(ios::scientific);
-	double arcsec_to_kpc = cosmo.angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
-	double sigma_cr_arcsec = cosmo.sigma_crit_arcsec(lens_redshift, reference_source_redshift);
+	double arcsec_to_kpc = cosmo->angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_arcsec = cosmo->sigma_crit_arcsec(lens_redshift, reference_source_redshift);
 	mout << "#radius(arcsec) mass(m_solar) radius(kpc)\n";
 	for (i=0, r=rmin; i < rpts; i++, r *= rstep) {
 		kavg = 0;
@@ -5999,8 +6670,8 @@ void QLens::plot_total_sbprofile(double rmin, double rmax, int steps, const char
 	ofstream sbout;
 	open_output_file(sbout,sbname);
 	if (use_scientific_notation) sbout << setiosflags(ios::scientific);
-	double arcsec_to_kpc = cosmo.angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
-	double sigma_cr_kpc = cosmo.sigma_crit_kpc(lens_redshift, reference_source_redshift);
+	double arcsec_to_kpc = cosmo->angular_diameter_distance(lens_redshift)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_kpc = cosmo->sigma_crit_kpc(lens_redshift, reference_source_redshift);
 	double sb;
 	double theta, thetastep;
 	int thetasteps = 200;
@@ -6181,14 +6852,14 @@ bool QLens::add_simulated_image_data(const lensvector &sourcept, const double sr
 			imgs[i].td -= min_td;
 		}
 	}
-	image_data[n_ptsrc-1].input(n_images,imgs,err_pos,err_flux,sim_err_td,include_image,include_time_delays);
+	point_image_data[n_ptsrc-1].input(n_images,imgs,err_pos,err_flux,sim_err_td,include_image,include_time_delays);
 
 	sort_image_data_into_redshift_groups();
 	include_imgpos_chisq = true;
 	return true;
 }
 
-bool QLens::add_image_data_from_unlensed_sourcepts(const bool include_errors_from_fisher_matrix, const int param_i, const double scale_errors)
+bool QLens::add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_from_fisher_matrix, const int param_i, const double scale_errors)
 {
 	int i,n_images = n_ptsrc;
 	if (n_images==0) { warn("could not find any images; no data added"); return false; }
@@ -6226,79 +6897,14 @@ bool QLens::add_image_data_from_unlensed_sourcepts(const bool include_errors_fro
 			err_pos[i] = sim_err_pos;
 		}
 		err_flux[i] = sim_err_flux;
-		//image_data[0].add_image(sourcepts_fit[i], sim_err_pos, 0, 0, 0, 0);
+		//point_image_data[0].add_image(sourcepts_fit[i], sim_err_pos, 0, 0, 0, 0);
 	}
-	image_data[0].input(n_images,imgs,err_pos,err_flux,0,include,false);
+	point_image_data[0].input(n_images,imgs,err_pos,err_flux,0,include,false);
 
 	sort_image_data_into_redshift_groups();
 	include_imgpos_chisq = true;
 	return true;
 }
-
-/*
-bool QLens::add_fit_sourcept(const lensvector &sourcept, const double zsrc)
-{
-	int i,j,k;
-	//if ((nlens==0) and (zsrc != lens_redshift)) { warn("no lens model has been created"); return false; }
-
-	ImageData *new_image_data = new ImageData[n_ptsrc+1];
-	for (i=0; i < n_ptsrc; i++) {
-		new_image_data[i].input(image_data[i]);
-	}
-	if (n_ptsrc > 0) {
-		delete[] image_data;
-	}
-	image_data = new_image_data;
-
-	double *new_redshifts, **new_zfactors, ***new_beta_factors;
-	new_redshifts = new double[n_sourcepts_fit+1];
-	if (n_lens_redshifts > 0) new_zfactors = new double*[n_sourcepts_fit+1];
-	new_beta_factors = new double**[n_sourcepts_fit+1];
-	for (i=0; i < n_sourcepts_fit; i++) {
-		new_redshifts[i] = specific_ptsrc_redshifts[i];
-		if (n_lens_redshifts > 0) new_zfactors[i] = specific_ptsrc_zfactors[i];
-		if (n_lens_redshifts > 1) new_beta_factors[i] = specific_ptsrc_beta_factors[i];
-	}
-	new_redshifts[n_sourcepts_fit] = zsrc;
-	if (n_lens_redshifts > 0) {
-		new_zfactors[n_sourcepts_fit] = new double[n_lens_redshifts];
-		for (j=0; j < n_lens_redshifts; j++) {
-			new_zfactors[n_sourcepts_fit][j] = cosmo.kappa_ratio(lens_redshifts[j],zsrc,reference_source_redshift);
-		}
-	}
-	if (n_lens_redshifts > 1) {
-		new_beta_factors[n_sourcepts_fit] = new double*[n_lens_redshifts-1];
-		for (j=1; j < n_lens_redshifts; j++) {
-			new_beta_factors[n_sourcepts_fit][j-1] = new double[j];
-			if (include_recursive_lensing) {
-				for (k=0; k < j; k++) new_beta_factors[n_sourcepts_fit][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],zsrc);
-			} else {
-				for (k=0; k < j; k++) new_beta_factors[n_sourcepts_fit][j-1][k] = 0;
-			}
-		}
-	} else new_beta_factors[n_sourcepts_fit] = NULL;
-	if (specific_ptsrc_redshifts != NULL) delete[] specific_ptsrc_redshifts;
-	if (specific_ptsrc_zfactors != NULL) delete[] specific_ptsrc_zfactors;
-	if (specific_ptsrc_beta_factors != NULL) delete[] specific_ptsrc_beta_factors;
-	specific_ptsrc_redshifts = new_redshifts;
-	if (n_lens_redshifts > 0) {
-		specific_ptsrc_zfactors = new_zfactors;
-		specific_ptsrc_beta_factors = new_beta_factors;
-	}
-	sourcepts_fit.push_back(sourcept);
-	vary_sourcepts_x.push_back(false);
-	vary_sourcepts_y.push_back(false);
-	n_sourcepts_fit++;
-	point_imgs.resize(n_sourcepts_fit);
-
-	lensvector lower; lower[0] = -1e30; lower[1] = -1e30;
-	lensvector upper; upper[0] = 1e30; upper[1] = 1e30;
-	sourcepts_lower_limit.push_back(lower);
-	sourcepts_upper_limit.push_back(upper);
-
-	return true;
-}
-*/
 
 void QLens::write_point_image_data(string filename)
 {
@@ -6312,8 +6918,8 @@ void QLens::write_point_image_data(string filename)
 	outfile << "zlens = " << lens_redshift << endl;
 	outfile << n_ptsrc << " # number of source points" << endl;
 	for (int i=0; i < n_ptsrc; i++) {
-		outfile << image_data[i].n_images << " " << ptsrc_redshifts[ptsrc_redshift_idx[i]] << " # number of images, source redshift" << endl;
-		image_data[i].write_to_file(outfile);
+		outfile << point_image_data[i].n_images << " " << ptsrc_redshifts[ptsrc_redshift_idx[i]] << " # number of images, source redshift" << endl;
+		point_image_data[i].write_to_file(outfile);
 	}
 }
 
@@ -6398,7 +7004,7 @@ bool QLens::load_point_image_data(string filename)
 		}
 		add_point_source(zsrc,zeros,vary_source_coords);
 		if (nn==0) warn("no images in data file for source point %i",i);
-		image_data[i].input(nn);
+		point_image_data[i].input(nn);
 		for (j=0; j < nn; j++) {
 			if (read_data_line(data_infile,datawords,n_datawords)==false) {
 				warn("data file could not be read; unexpected end of file"); 
@@ -6410,46 +7016,46 @@ bool QLens::load_point_image_data(string filename)
 				clear_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[0],image_data[i].pos[j][0])==false) {
+			if (datastring_convert(datawords[0],point_image_data[i].pos[j][0])==false) {
 				warn("image position x-coordinate has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[1],image_data[i].pos[j][1])==false) {
+			if (datastring_convert(datawords[1],point_image_data[i].pos[j][1])==false) {
 				warn("image position y-coordinate has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[2],image_data[i].sigma_pos[j])==false) {
+			if (datastring_convert(datawords[2],point_image_data[i].sigma_pos[j])==false) {
 				warn("image position measurement error has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[3],image_data[i].flux[j])==false) {
+			if (datastring_convert(datawords[3],point_image_data[i].flux[j])==false) {
 				warn("image flux has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[4],image_data[i].sigma_f[j])==false) {
+			if (datastring_convert(datawords[4],point_image_data[i].sigma_f[j])==false) {
 				warn("image flux measurement error has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_image_data();
 				return false;
 			}
 			if (n_datawords==7) {
-				if (datastring_convert(datawords[5],image_data[i].time_delays[j])==false) {
+				if (datastring_convert(datawords[5],point_image_data[i].time_delays[j])==false) {
 					warn("image time delay has incorrect format; could not read entry for source point %i, image number %i",i,j);
 					clear_image_data();
 					return false;
 				}
-				if (datastring_convert(datawords[6],image_data[i].sigma_t[j])==false) {
+				if (datastring_convert(datawords[6],point_image_data[i].sigma_t[j])==false) {
 					warn("image time delay has incorrect format; could not read entry for source point %i, image number %i",i,j);
 					clear_image_data();
 					return false;
 				}
 			} else {
 				time_delay_info_included = false;
-				image_data[i].time_delays[j] = 0;
-				image_data[i].sigma_t[j] = 0;
+				point_image_data[i].time_delays[j] = 0;
+				point_image_data[i].sigma_t[j] = 0;
 			}
 		}
 	}
@@ -6461,7 +7067,7 @@ bool QLens::load_point_image_data(string filename)
 				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = 1.0;
 			}
 			else {
-				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = cosmo.kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
+				for (i=0; i < n_lens_redshifts; i++) reference_zfactors[i] = cosmo->kappa_ratio(lens_redshifts[i],source_redshift,reference_source_redshift);
 			}
 		}
 		// if source redshifts are given in the datafile, turn off auto scaling of zsrc_ref so user can experiment with different zsrc values if desired (without changing zsrc_ref)
@@ -6473,20 +7079,20 @@ bool QLens::load_point_image_data(string filename)
 	int ncombs, max_combinations = -1;
 	int n;
 	for (i=0; i < n_ptsrc; i++) {
-		ncombs = image_data[i].n_images * (image_data[i].n_images-1) / 2;
+		ncombs = point_image_data[i].n_images * (point_image_data[i].n_images-1) / 2;
 		if (ncombs > max_combinations) max_combinations = ncombs;
 	}
 	double *distsqrs = new double[max_combinations];
 	for (i=0; i < n_ptsrc; i++) {
 		n=0;
-		for (k=0; k < image_data[i].n_images; k++) {
-			for (j=k+1; j < image_data[i].n_images; j++) {
-				distsqrs[n] = SQR(image_data[i].pos[k][0] - image_data[i].pos[j][0]) + SQR(image_data[i].pos[k][1] - image_data[i].pos[j][1]);
+		for (k=0; k < point_image_data[i].n_images; k++) {
+			for (j=k+1; j < point_image_data[i].n_images; j++) {
+				distsqrs[n] = SQR(point_image_data[i].pos[k][0] - point_image_data[i].pos[j][0]) + SQR(point_image_data[i].pos[k][1] - point_image_data[i].pos[j][1]);
 				n++;
 			}
 		}
 		sort(n,distsqrs);
-		image_data[i].max_distsqr = distsqrs[n-1]; // this saves the maximum distance between any pair of images (useful for image chi-square for missing image penalty values)
+		point_image_data[i].max_distsqr = distsqrs[n-1]; // this saves the maximum distance between any pair of images (useful for image chi-square for missing image penalty values)
 	}
 	delete[] distsqrs;
 
@@ -6494,14 +7100,14 @@ bool QLens::load_point_image_data(string filename)
 		double *tdsqrs = new double[max_combinations];
 		for (i=0; i < n_ptsrc; i++) {
 			n=0;
-			for (k=0; k < image_data[i].n_images; k++) {
-				for (j=k+1; j < image_data[i].n_images; j++) {
-					tdsqrs[n] = SQR(image_data[i].time_delays[k] - image_data[i].time_delays[j]);
+			for (k=0; k < point_image_data[i].n_images; k++) {
+				for (j=k+1; j < point_image_data[i].n_images; j++) {
+					tdsqrs[n] = SQR(point_image_data[i].time_delays[k] - point_image_data[i].time_delays[j]);
 					n++;
 				}
 			}
 			sort(n,tdsqrs);
-			image_data[i].max_tdsqr = tdsqrs[n-1]; // this saves the maximum distance between any pair of images (useful for image chi-square for missing image penalty values)
+			point_image_data[i].max_tdsqr = tdsqrs[n-1]; // this saves the maximum distance between any pair of images (useful for image chi-square for missing image penalty values)
 		}
 		delete[] tdsqrs;
 	}
@@ -6524,7 +7130,7 @@ void QLens::sort_image_data_into_redshift_groups()
 
 	int i,k,l,j=0;
 
-	ImageData *sorted_image_data = new ImageData[n_ptsrc];
+	PointImageData *sorted_image_data = new PointImageData[n_ptsrc];
 	//double *sorted_redshifts = new double[n_ptsrc_redshifts];
 	PointSource **sorted_ptsrc_list = new PointSource*[n_ptsrc];
 	int *sorted_ptsrc_redshift_idx = new int[n_ptsrc];
@@ -6534,7 +7140,7 @@ void QLens::sort_image_data_into_redshift_groups()
 	for (i=0; i < n_ptsrc; i++) assigned[i] = false;
 	for (i=0; i < n_ptsrc; i++) {
 		if (!assigned[i]) {
-			sorted_image_data[j].input(image_data[i]);
+			sorted_image_data[j].input(point_image_data[i]);
 			sorted_ptsrc_list[j] = ptsrc_list[i];
 			sorted_ptsrc_redshift_idx[j] = ptsrc_redshift_idx[i];
 			//sorted_redshifts[j] = specific_ptsrc_redshifts[i];
@@ -6543,7 +7149,7 @@ void QLens::sort_image_data_into_redshift_groups()
 			for (k=i+1; k < n_ptsrc; k++) {
 				if (!assigned[k]) {
 					if (ptsrc_redshift_idx[k]==ptsrc_redshift_idx[i]) {
-						sorted_image_data[j].input(image_data[k]);
+						sorted_image_data[j].input(point_image_data[k]);
 						sorted_ptsrc_list[j] = ptsrc_list[k];
 						sorted_ptsrc_redshift_idx[j] = ptsrc_redshift_idx[k];
 						//sorted_redshifts[j] = specific_ptsrc_redshifts[k];
@@ -6557,12 +7163,13 @@ void QLens::sort_image_data_into_redshift_groups()
 	}
 	if (ptsrc_redshift_groups.size() != (n_ptsrc_redshifts+1)) die("number of sorted redshift groups is wrong (%i vs %i)",ptsrc_redshift_groups.size()-1,n_ptsrc_redshifts);
 	delete[] assigned;
-	delete[] image_data;
+	delete[] point_image_data;
 	delete[] ptsrc_list;
 	delete[] ptsrc_redshift_idx;
-	image_data = sorted_image_data;
+	point_image_data = sorted_image_data;
 	ptsrc_list = sorted_ptsrc_list;
 	ptsrc_redshift_idx = sorted_ptsrc_redshift_idx;
+	ptsrclist->input_ptr(ptsrc_list,n_ptsrc);
 }
 
 /*
@@ -6571,7 +7178,7 @@ void QLens::remove_image_data(int image_set)
 	if (image_set >= n_ptsrc) { warn(warnings,"Specified image dataset has not been loaded"); return; }
 	if (n_ptsrc==1) { clear_image_data(); return; }
 	sourcepts_fit.erase(sourcepts_fit.begin()+image_set);
-	ImageData *new_image_data = new ImageData[n_sourcepts_fit-1];
+	PointImageData *new_image_data = new PointImageData[n_sourcepts_fit-1];
 	int i,j,k;
 	double *new_redshifts, **new_zfactors, ***new_beta_factors;
 	new_redshifts = new double[n_sourcepts_fit-1];
@@ -6581,7 +7188,7 @@ void QLens::remove_image_data(int image_set)
 	}
 	for (i=0,j=0; i < n_sourcepts_fit; i++) {
 		if (i != image_set) {
-			new_image_data[j].input(image_data[i]);
+			new_image_data[j].input(point_image_data[i]);
 			new_redshifts[j] = specific_ptsrc_redshifts[i];
 			if (n_lens_redshifts > 0) {
 				new_zfactors[j] = specific_ptsrc_zfactors[i];
@@ -6599,10 +7206,10 @@ void QLens::remove_image_data(int image_set)
 		}
 	}
 	delete[] specific_ptsrc_redshifts;
-	delete[] image_data;
+	delete[] point_image_data;
 
 	n_sourcepts_fit--;
-	image_data = new_image_data;
+	point_image_data = new_image_data;
 	specific_ptsrc_redshifts = new_redshifts;
 	if (n_lens_redshifts > 0) {
 		delete[] specific_ptsrc_zfactors;
@@ -6620,12 +7227,12 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 	// flux is an optional argument; if not specified, its default is -1, meaning fluxes will not be calculated or displayed
 	if (dataset_number >= n_ptsrc) { warn("specified dataset number does not exist"); return false; }
 
-	int i,n_srcpts = image_data[dataset_number].n_images;
+	int i,n_srcpts = point_image_data[dataset_number].n_images;
 	lensvector *srcpts = new lensvector[n_srcpts];
 	double *specific_zfacs = ptsrc_zfactors[ptsrc_redshift_idx[dataset_number]];
 	double **specific_betafacs = ptsrc_beta_factors[ptsrc_redshift_idx[dataset_number]];
 	for (i=0; i < n_srcpts; i++) {
-		find_sourcept(image_data[dataset_number].pos[i],srcpts[i],0,specific_zfacs,specific_betafacs);
+		find_sourcept(point_image_data[dataset_number].pos[i],srcpts[i],0,specific_zfacs,specific_betafacs);
 	}
 
 	if (use_scientific_notation==false) {
@@ -6639,12 +7246,12 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 		time_delays_mod = new double[n_srcpts];
 		double min_td_obs, min_td_mod;
 		double pot;
-		td_factor = cosmo.time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[ptsrc_redshift_idx[dataset_number]]);
+		td_factor = cosmo->time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[ptsrc_redshift_idx[dataset_number]]);
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (i=0; i < n_srcpts; i++) {
-			pot = potential(image_data[dataset_number].pos[i],specific_zfacs,specific_betafacs);
-			time_delays_mod[i] = 0.5*(SQR(image_data[dataset_number].pos[i][0] - srcpts[i][0]) + SQR(image_data[dataset_number].pos[i][1] - srcpts[i][1])) - pot;
+			pot = potential(point_image_data[dataset_number].pos[i],specific_zfacs,specific_betafacs);
+			time_delays_mod[i] = 0.5*(SQR(point_image_data[dataset_number].pos[i][0] - srcpts[i][0]) + SQR(point_image_data[dataset_number].pos[i][1] - srcpts[i][1])) - pot;
 			if (time_delays_mod[i] < min_td_mod) min_td_mod = time_delays_mod[i];
 		}
 		for (i=0; i < n_srcpts; i++) {
@@ -6661,10 +7268,10 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 		cout << endl;
 		double imgflux;
 		for (i=0; i < n_srcpts; i++) {
-			cout << image_data[dataset_number].pos[i][0] << "\t" << image_data[dataset_number].pos[i][1] << "\t" << srcpts[i][0] << "\t" << srcpts[i][1];
+			cout << point_image_data[dataset_number].pos[i][0] << "\t" << point_image_data[dataset_number].pos[i][1] << "\t" << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (srcfile != NULL) (*srcfile) << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (flux != -1) {
-				imgflux = flux/inverse_magnification(image_data[dataset_number].pos[i],0,specific_zfacs,specific_betafacs);
+				imgflux = flux/inverse_magnification(point_image_data[dataset_number].pos[i],0,specific_zfacs,specific_betafacs);
 				cout << "\t" << imgflux;
 			}
 			if (include_time_delays) {
@@ -6683,26 +7290,26 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 	return true;
 }
 
-vector<ImageDataSet> QLens::export_to_ImageDataSet()
+vector<PtImageDataSet> QLens::export_to_ImageDataSet()
 {
-	vector<ImageDataSet> image_data_sets;
-	image_data_sets.clear();
-	image_data_sets.resize(n_ptsrc);
+	vector<PtImageDataSet> ptimage_data_sets;
+	ptimage_data_sets.clear();
+	ptimage_data_sets.resize(n_ptsrc);
 	int i,j;
 	for (i=0; i < n_ptsrc; i++) {
-		image_data_sets[i].set_n_images(image_data[i].n_images);
-		image_data_sets[i].zsrc = ptsrc_redshifts[ptsrc_redshift_idx[i]];
-		for (j=0; j < image_data[i].n_images; j++) {
-			image_data_sets[i].images[j].pos[0] = image_data[i].pos[j][0];
-			image_data_sets[i].images[j].pos[1] = image_data[i].pos[j][1];
-			image_data_sets[i].images[j].flux = image_data[i].flux[j];
-			image_data_sets[i].images[j].td = image_data[i].time_delays[j];
-			image_data_sets[i].images[j].sigma_pos = image_data[i].sigma_pos[j];
-			image_data_sets[i].images[j].sigma_flux = image_data[i].sigma_f[j];
-			image_data_sets[i].images[j].sigma_td = image_data[i].sigma_t[j];
+		ptimage_data_sets[i].set_n_images(point_image_data[i].n_images);
+		ptimage_data_sets[i].zsrc = ptsrc_redshifts[ptsrc_redshift_idx[i]];
+		for (j=0; j < point_image_data[i].n_images; j++) {
+			ptimage_data_sets[i].images[j].pos[0] = point_image_data[i].pos[j][0];
+			ptimage_data_sets[i].images[j].pos[1] = point_image_data[i].pos[j][1];
+			ptimage_data_sets[i].images[j].flux = point_image_data[i].flux[j];
+			ptimage_data_sets[i].images[j].td = point_image_data[i].time_delays[j];
+			ptimage_data_sets[i].images[j].sigma_pos = point_image_data[i].sigma_pos[j];
+			ptimage_data_sets[i].images[j].sigma_flux = point_image_data[i].sigma_f[j];
+			ptimage_data_sets[i].images[j].sigma_td = point_image_data[i].sigma_t[j];
 		}
 	}
-	return image_data_sets;
+	return ptimage_data_sets;
 }
 
 /********************************* Functions for weak lensing data (reading, writing, simulating etc.) *********************************/
@@ -6771,7 +7378,7 @@ bool QLens::load_weak_lensing_data(string filename)
 	//if (n_lens_redshifts > 0) {
 		//for (i=0; i < n_sourcepts_fit; i++) {
 			//for (j=0; j < n_lens_redshifts; j++) {
-				//weak_lensing_data.specific_ptsrc_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],specific_ptsrc_redshifts[i],reference_source_redshift);
+				//weak_lensing_data.specific_ptsrc_zfactors[i][j] = cosmo->kappa_ratio(lens_redshifts[j],specific_ptsrc_redshifts[i],reference_source_redshift);
 			//}
 		//}
 	//}
@@ -6782,7 +7389,7 @@ bool QLens::load_weak_lensing_data(string filename)
 			//for (j=1; j < n_lens_redshifts; j++) {
 				//specific_ptsrc_beta_factors[i][j-1] = new double[j];
 				//if (include_recursive_lensing) {
-					//for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo.cpp
+					//for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j],specific_ptsrc_redshifts[i]); // from cosmo->cpp
 				//} else {
 					//for (k=0; k < j; k++) specific_ptsrc_beta_factors[i][j-1][k] = 0;
 				//}
@@ -6799,7 +7406,7 @@ void QLens::add_simulated_weak_lensing_data(const string id, lensvector &sourcep
 	double *zfacs = new double[n_lens_redshifts];
 
 	for (int i=0; i < n_lens_redshifts; i++) {
-		zfacs[i] = cosmo.kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
+		zfacs[i] = cosmo->kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
 	}
 	double shear1, shear2;
 	reduced_shear_components(sourcept,shear1,shear2,0,zfacs);
@@ -6937,12 +7544,12 @@ void QLens::print_image_data(bool include_errors)
 			cout << "Source " << i << ": zsrc=" << zsrc;
 			if ((n_lens_redshifts==0) or ((n_lens_redshifts==1) and (zsrc==lens_redshifts[0]))) cout << " (unlensed)";
 			cout << endl;
-			image_data[i].print_list(include_errors,use_scientific_notation);
+			point_image_data[i].print_list(include_errors,use_scientific_notation);
 		}
 	}
 }
 
-void ImageData::input(const int &nn)
+void PointImageData::input(const int &nn)
 {
 	n_images = nn;
 	pos = new lensvector[n_images];
@@ -6955,7 +7562,7 @@ void ImageData::input(const int &nn)
 	max_distsqr = 1e30;
 }
 
-void ImageData::input(const ImageData& imgs_in)
+void PointImageData::input(const PointImageData& imgs_in)
 {
 	if (n_images != 0) {
 		// delete arrays so we can re-create them
@@ -6987,7 +7594,7 @@ void ImageData::input(const ImageData& imgs_in)
 	max_distsqr = imgs_in.max_distsqr;
 }
 
-void ImageData::input(const int &nn, image* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays)
+void PointImageData::input(const int &nn, image* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays)
 {
 	// this function is used to store simulated data
 	int n_images_include=0;
@@ -7022,7 +7629,7 @@ void ImageData::input(const int &nn, image* images, double* sigma_pos_in, double
 }
 
 
-void ImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in)
+void PointImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in)
 {
 	int n_images_new = n_images+1;
 	if (n_images != 0) {
@@ -7078,14 +7685,14 @@ void ImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const d
 	use_in_chisq[n_images-1] = true;
 }
 
-bool ImageData::set_use_in_chisq(int image_i, bool use_in_chisq_in)
+bool PointImageData::set_use_in_chisq(int image_i, bool use_in_chisq_in)
 {
 	if (image_i >= n_images) return false;
 	use_in_chisq[image_i] = use_in_chisq_in;
 	return true;
 }
 
-void ImageData::print_list(bool print_errors, bool use_sci)
+void PointImageData::print_list(bool print_errors, bool use_sci)
 {
 	if (n_images==0) {
 		cout << "# no image data available" << endl << endl;
@@ -7119,7 +7726,7 @@ void ImageData::print_list(bool print_errors, bool use_sci)
 	}
 }
 
-void ImageData::write_to_file(ofstream &outfile)
+void PointImageData::write_to_file(ofstream &outfile)
 {
 	for (int i=0; i < n_images; i++) {
 		outfile << pos[i][0] << " " << pos[i][1];
@@ -7134,7 +7741,7 @@ void ImageData::write_to_file(ofstream &outfile)
 	}
 }
 
-ImageData::~ImageData()
+PointImageData::~PointImageData()
 {
 	if (n_images != 0) {
 		delete[] pos;
@@ -7323,15 +7930,15 @@ void WeakLensingData::clear()
 bool QLens::initialize_fitmodel(const bool running_fit_in)
 {
 	if (source_fit_mode == Point_Source) {
-		if (((!include_weak_lensing_chisq) or (weak_lensing_data.n_sources==0)) and ((n_ptsrc==0) or (image_data==NULL))) {
+		if (((!include_weak_lensing_chisq) or (weak_lensing_data.n_sources==0)) and ((n_ptsrc==0) or (point_image_data==NULL))) {
 			warn("image data points have not been defined");
 			return false;
 		}
-		if ((image_data==NULL) and (include_imgpos_chisq)) { warn("cannot evaluate image position chi-square; no image data have been defined"); return false; }
-		else if ((image_data==NULL) and (include_flux_chisq)) { warn("cannot evaluate image flux chi-square; no image data have been defined"); return false; }
-		else if ((image_data==NULL) and (include_time_delay_chisq)) { warn("cannot evaluate image time delay chi-square; no image data have been defined"); return false; }
+		if ((point_image_data==NULL) and (include_imgpos_chisq)) { warn("cannot evaluate image position chi-square; no image data have been defined"); return false; }
+		else if ((point_image_data==NULL) and (include_flux_chisq)) { warn("cannot evaluate image flux chi-square; no image data have been defined"); return false; }
+		else if ((point_image_data==NULL) and (include_time_delay_chisq)) { warn("cannot evaluate image time delay chi-square; no image data have been defined"); return false; }
 	} else {
-		if (imgpixel_data_list==NULL) { warn("image data pixels have not been loaded"); return false; }
+		if (imgdata_list==NULL) { warn("image data pixels have not been loaded"); return false; }
 		if (source_fit_mode==Shapelet_Source) {
 			bool found_invertible_source = false;
 			for (int i=0; i < n_sb; i++) {
@@ -7424,6 +8031,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		}
 		fitmodel->lens_list[i]->qlens = fitmodel; // point to the fitmodel, since the cosmology may be varied (by varying H0, e.g.)
 	}
+	fitmodel->lenslist->input_ptr(fitmodel->lens_list,nlens);
 
 	//if ((source_fit_mode != Point_Source) and (n_pixellated_src == 0) and ((n_image_prior) or (n_ptsrc > 0))) {
 		 //add_pixellated_source(source_redshift); // THIS IS UGLY. There must be a better way to do this
@@ -7492,15 +8100,17 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	}
 	fitmodel->n_ptsrc = n_ptsrc;
 	if (n_ptsrc > 0) {
-		fitmodel->image_data = image_data;
+		fitmodel->point_image_data = point_image_data;
 		fitmodel->ptsrc_list = new PointSource*[n_ptsrc];
 		fitmodel->ptsrc_redshift_idx = new int[n_ptsrc];
 		for (i=0; i < n_ptsrc; i++) {
 			fitmodel->ptsrc_redshift_idx[i] = ptsrc_redshift_idx[i];
 			fitmodel->ptsrc_list[i] = new PointSource(fitmodel);
 			fitmodel->ptsrc_list[i]->copy_ptsrc_data(ptsrc_list[i]);
+			fitmodel->ptsrc_list[i]->entry_number = i;
 		}
 	}
+	fitmodel->ptsrclist->input_ptr(fitmodel->ptsrc_list,n_ptsrc);
 
 	fitmodel->n_sb = n_sb;
 	if (n_sb > 0) {
@@ -7543,19 +8153,22 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			fitmodel->sb_list[i]->qlens = fitmodel; // point to the fitmodel
 		}
 	}
+	fitmodel->srclist->input_ptr(fitmodel->sb_list,n_sb);
 
 	fitmodel->n_pixellated_src = n_pixellated_src;
 	if (n_pixellated_src > 0) {
 		fitmodel->srcgrids = new ModelParams*[n_pixellated_src];
 		fitmodel->delaunay_srcgrids = new DelaunaySourceGrid*[n_pixellated_src];
-		fitmodel->cartesian_srcgrids = new SourcePixelGrid*[n_pixellated_src];
+		fitmodel->cartesian_srcgrids = new CartesianSourceGrid*[n_pixellated_src];
 		fitmodel->pixellated_src_redshift_idx = new int[n_pixellated_src];
 		fitmodel->pixellated_src_band = new int[n_pixellated_src];
 		for (i=0; i < n_pixellated_src; i++) {
 			fitmodel->pixellated_src_redshift_idx[i] = pixellated_src_redshift_idx[i];
 			fitmodel->pixellated_src_band[i] = pixellated_src_band[i];
-			fitmodel->delaunay_srcgrids[i] = new DelaunaySourceGrid(fitmodel);
-			fitmodel->cartesian_srcgrids[i] = new SourcePixelGrid(fitmodel);
+			fitmodel->delaunay_srcgrids[i] = new DelaunaySourceGrid(fitmodel,pixellated_src_band[i]);
+			fitmodel->cartesian_srcgrids[i] = new CartesianSourceGrid(fitmodel,pixellated_src_band[i]);
+			fitmodel->delaunay_srcgrids[i]->entry_number = i;
+			fitmodel->cartesian_srcgrids[i]->entry_number = i;
 			if (source_fit_mode==Delaunay_Source) {
 				fitmodel->delaunay_srcgrids[i]->copy_pixsrc_data(delaunay_srcgrids[i]);
 				fitmodel->srcgrids[i] = fitmodel->delaunay_srcgrids[i];
@@ -7565,6 +8178,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			}
 		}
 	}
+	fitmodel->pixsrclist->input_ptr(fitmodel->srcgrids,n_pixellated_src);
 
 	fitmodel->n_pixellated_lens = n_pixellated_lens;
 	if (n_pixellated_lens > 0) {
@@ -7590,9 +8204,10 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	if (source_fit_mode != Point_Source) {
 		fitmodel->n_data_bands = n_data_bands;
 		fitmodel->n_model_bands = n_model_bands;
-		fitmodel->imgpixel_data_list = imgpixel_data_list;
+		fitmodel->imgdata_list = imgdata_list;
 		for (int i=0; i < n_data_bands; i++) fitmodel->load_pixel_grid_from_data(i);
 	}
+	fitmodel->imgdatalist->input_ptr(fitmodel->imgdata_list,n_data_bands);
 
 	for (i=0; i < nlens; i++) {
 		// if the lens is anchored to another lens, re-anchor so that it points to the corresponding
@@ -7628,7 +8243,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	}
 
 	fitmodel->fitmethod = fitmethod;
-	fitmodel->n_fit_parameters = n_fit_parameters;
+	//fitmodel->n_fit_parameters = n_fit_parameters;
 	fitmodel->lensmodel_fit_parameters = lensmodel_fit_parameters;
 	fitmodel->srcmodel_fit_parameters = srcmodel_fit_parameters;
 	fitmodel->pixsrc_fit_parameters = pixsrc_fit_parameters;
@@ -7636,7 +8251,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	fitmodel->ptsrc_fit_parameters = ptsrc_fit_parameters;
 	fitmodel->psf_fit_parameters = psf_fit_parameters;
 	fitmodel->cosmo_fit_parameters = cosmo_fit_parameters;
-	if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
+	//if ((fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) fitmodel->setup_limits();
 
 	if (open_chisq_logfile) {
 		string logfile_str = fit_output_dir + "/" + fit_output_filename + ".log";
@@ -7696,18 +8311,18 @@ void QLens::update_zfactors_and_betafactors()
 	// This must be done anytime the cosmology has changed
 	int i,j,k;
 	if (n_lens_redshifts > 0) {
-		for (j=0; j < n_lens_redshifts; j++) reference_zfactors[j] = cosmo.kappa_ratio(lens_redshifts[j],source_redshift,reference_source_redshift);
+		for (j=0; j < n_lens_redshifts; j++) reference_zfactors[j] = cosmo->kappa_ratio(lens_redshifts[j],source_redshift,reference_source_redshift);
 		for (j=0; j < n_lens_redshifts-1; j++) {
-			for (k=0; k < j+1; k++) default_zsrc_beta_factors[j][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j+1],source_redshift);
+			for (k=0; k < j+1; k++) default_zsrc_beta_factors[j][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j+1],source_redshift);
 		}
 	}
 
 	if (n_extended_src_redshifts > 0) {
 		for (i=0; i < n_extended_src_redshifts; i++) {
 			if (n_lens_redshifts > 0) {
-				for (j=0; j < n_lens_redshifts; j++) extended_src_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],extended_src_redshifts[i],reference_source_redshift);
+				for (j=0; j < n_lens_redshifts; j++) extended_src_zfactors[i][j] = cosmo->kappa_ratio(lens_redshifts[j],extended_src_redshifts[i],reference_source_redshift);
 				for (j=0; j < n_lens_redshifts-1; j++) {
-					for (k=0; k < j+1; k++) extended_src_beta_factors[i][j][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j+1],extended_src_redshifts[i]);
+					for (k=0; k < j+1; k++) extended_src_beta_factors[i][j][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j+1],extended_src_redshifts[i]);
 				}
 			}
 		}
@@ -7716,9 +8331,9 @@ void QLens::update_zfactors_and_betafactors()
 	if (n_ptsrc_redshifts > 0) {
 		for (i=0; i < n_ptsrc_redshifts; i++) {
 			if (n_lens_redshifts > 0) {
-				for (j=0; j < n_lens_redshifts; j++) ptsrc_zfactors[i][j] = cosmo.kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
+				for (j=0; j < n_lens_redshifts; j++) ptsrc_zfactors[i][j] = cosmo->kappa_ratio(lens_redshifts[j],ptsrc_redshifts[i],reference_source_redshift);
 				for (j=0; j < n_lens_redshifts-1; j++) {
-					for (k=0; k < j+1; k++) ptsrc_beta_factors[i][j][k] = cosmo.calculate_beta_factor(lens_redshifts[k],lens_redshifts[j+1],ptsrc_redshifts[i]);
+					for (k=0; k < j+1; k++) ptsrc_beta_factors[i][j][k] = cosmo->calculate_beta_factor(lens_redshifts[k],lens_redshifts[j+1],ptsrc_redshifts[i]);
 				}
 			}
 		}
@@ -7750,14 +8365,17 @@ double QLens::update_model(const double* params)
 		psf_list[i]->update_fit_parameters(params,index);
 	}
 
-	cosmo.update_fit_parameters(params,index);
+	cosmo->update_fit_parameters(params,index);
 	// *NOTE*: Maybe consider putting the cosmological parameters at the very FRONT of the parameter list? Then the cosmology is updated before updating the lenses
-	if (cosmo.get_n_vary_params() > 0) {
+	/*
+	// the below lines should now be taken care of in the  Cosmology class, since it now has a pointer to qlens (code is in cosmo.cpp under update_meta_parameters)
+	if (cosmo->get_n_vary_params() > 0) {
 		update_zfactors_and_betafactors();
 		for (i=0; i < nlens; i++) {
 			if ((!lens_list[i]->at_least_one_param_anchored) and (!lens_list[i]->anchor_special_parameter)) lens_list[i]->update_meta_parameters(); // if the cosmology has changed, update cosmology info and any parameters that depend on them (unless there are anchored parameters, in which case it will be done below)
 		}
 	}
+	*/
 
 	update_fit_parameters(params,index); // this is for the parameters that are part of the QLens class
 	if (status==false) log_penalty_prior = 1e30;
@@ -7767,9 +8385,40 @@ double QLens::update_model(const double* params)
 	}
 	update_anchored_parameters_and_redshift_data();
 
-	if (index != n_fit_parameters) die("Index (%i) didn't go through all the fit parameters (ntot=%i), indicating a lens model mismatch",index,n_fit_parameters);
+	if (index != param_list->nparams) die("Index (%i) didn't go through all the fit parameters (ntot=%i), indicating a lens model mismatch",index,param_list->nparams);
 	return log_penalty_prior;
 }
+
+void QLens::update_prior_limits(const double* lower, const double* upper, const bool* changed_limits)
+{
+	int i, index=0;
+	for (i=0; i < nlens; i++) {
+		lens_list[i]->update_limits(lower,upper,changed_limits,index);
+	}
+	for (i=0; i < n_sb; i++) {
+		sb_list[i]->update_limits(lower,upper,changed_limits,index);
+	}
+	for (i=0; i < n_pixellated_src; i++) {
+		if (srcgrids[i] != NULL) srcgrids[i]->update_limits(lower,upper,changed_limits,index);
+	}
+	for (i=0; i < n_pixellated_lens; i++) {
+		lensgrids[i]->update_limits(lower,upper,changed_limits,index);
+	}
+	for (i=0; i < n_ptsrc; i++) {
+		ptsrc_list[i]->update_limits(lower,upper,changed_limits,index);
+	}
+	for (i=0; i < n_psf; i++) {
+		psf_list[i]->update_limits(lower,upper,changed_limits,index);
+	}
+
+	cosmo->update_limits(lower,upper,changed_limits,index);
+
+	update_limits(lower,upper,changed_limits,index); // this is for the parameters that are part of the QLens class
+
+	if (index != param_list->nparams) die("Index (%i) didn't go through all the fit parameters (ntot=%i) when updating prior limits, indicating a lens model mismatch",index,param_list->nparams);
+}
+
+
 
 void QLens::find_analytic_srcpos(lensvector *beta_i)
 {
@@ -7795,13 +8444,13 @@ void QLens::find_analytic_srcpos(lensvector *beta_i)
 		src_norm=0;
 		specific_zfacs = ptsrc_zfactors[ptsrc_redshift_idx[i]];
 		specific_betafacs = ptsrc_beta_factors[ptsrc_redshift_idx[i]];
-		for (j=0; j < image_data[i].n_images; j++) {
-			if (image_data[i].use_in_chisq[j]) {
+		for (j=0; j < point_image_data[i].n_images; j++) {
+			if (point_image_data[i].use_in_chisq[j]) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(image_data[i].pos[j],beta_ji,jac,0,specific_zfacs,specific_betafacs);
+					sourcept_jacobian(point_image_data[i].pos[j],beta_ji,jac,0,specific_zfacs,specific_betafacs);
 					mag = jac.inverse();
 					lensmatsqr(mag,magsqr);
-					siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
+					siginv = 1.0/(SQR(point_image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 					amatrix[0][0] += magsqr[0][0]*siginv;
 					amatrix[1][0] += magsqr[1][0]*siginv;
 					amatrix[0][1] += magsqr[0][1]*siginv;
@@ -7809,8 +8458,8 @@ void QLens::find_analytic_srcpos(lensvector *beta_i)
 					bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
 					bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
 				} else {
-					find_sourcept(image_data[i].pos[j],beta_ji,0,specific_zfacs,specific_betafacs);
-					siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
+					find_sourcept(point_image_data[i].pos[j],beta_ji,0,specific_zfacs,specific_betafacs);
+					siginv = 1.0/(SQR(point_image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 					beta_i[i][0] += beta_ji[0]*siginv;
 					beta_i[i][1] += beta_ji[1]*siginv;
 					src_norm += siginv;
@@ -7860,7 +8509,7 @@ double QLens::chisq_pos_source_plane()
 	lensvector *beta;
 
 	for (i=0; i < n_ptsrc; i++) {
-		if (image_data[i].n_images > n_images_hi) n_images_hi = image_data[i].n_images;
+		if (point_image_data[i].n_images > n_images_hi) n_images_hi = point_image_data[i].n_images;
 	}
 	double* mag00 = new double[n_images_hi];
 	double* mag11 = new double[n_images_hi];
@@ -7876,10 +8525,10 @@ double QLens::chisq_pos_source_plane()
 		bvec[0] = bvec[1] = 0;
 		src_bf[0] = src_bf[1] = 0;
 		src_norm=0;
-		for (j=0; j < image_data[i].n_images; j++) {
-			if (image_data[i].use_in_chisq[j]) {
+		for (j=0; j < point_image_data[i].n_images; j++) {
+			if (point_image_data[i].use_in_chisq[j]) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(image_data[i].pos[j],beta_ji[j],jac,0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					sourcept_jacobian(point_image_data[i].pos[j],beta_ji[j],jac,0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					mag = jac.inverse();
 					mag00[j] = mag[0][0];
 					mag01[j] = mag[0][1];
@@ -7887,7 +8536,7 @@ double QLens::chisq_pos_source_plane()
 
 					if (use_analytic_bestfit_src) {
 						lensmatsqr(mag,magsqr);
-						siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
+						siginv = 1.0/(SQR(point_image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 						amatrix[0][0] += magsqr[0][0]*siginv;
 						amatrix[1][0] += magsqr[1][0]*siginv;
 						amatrix[0][1] += magsqr[0][1]*siginv;
@@ -7896,9 +8545,9 @@ double QLens::chisq_pos_source_plane()
 						bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
 					}
 				} else {
-					find_sourcept(image_data[i].pos[j],beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					find_sourcept(point_image_data[i].pos[j],beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					if (use_analytic_bestfit_src) {
-						siginv = 1.0/(SQR(image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
+						siginv = 1.0/(SQR(point_image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
 						src_bf[0] += beta_ji[j][0]*siginv;
 						src_bf[1] += beta_ji[j][1]*siginv;
 						src_norm += siginv;
@@ -7921,11 +8570,11 @@ double QLens::chisq_pos_source_plane()
 			beta = &ptsrc_list[i]->pos;
 		}
 
-		for (j=0; j < image_data[i].n_images; j++) {
-			if (image_data[i].use_in_chisq[j]) {
+		for (j=0; j < point_image_data[i].n_images; j++) {
+			if (point_image_data[i].use_in_chisq[j]) {
 				delta_beta[0] = (*beta)[0] - beta_ji[j][0];
 				delta_beta[1] = (*beta)[1] - beta_ji[j][1];
-				sigsq = SQR(image_data[i].sigma_pos[j]);
+				sigsq = SQR(point_image_data[i].sigma_pos[j]);
 				if (syserr_pos != 0.0) {
 					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
 					 sigsq += syserr_pos*syserr_pos;
@@ -8004,20 +8653,20 @@ double QLens::chisq_pos_image_plane()
 			}
 
 			n_tot_images_part += n_visible_images;
-			if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
+			if ((n_images_penalty==true) and (n_visible_images > point_image_data[i].n_images)) {
 				chisq_part += 1e30;
 				continue;
 			}
 
-			int n_dists = n_visible_images*image_data[i].n_images;
+			int n_dists = n_visible_images*point_image_data[i].n_images;
 			double *distsqrs = new double[n_dists];
 			int *data_k = new int[n_dists];
 			int *model_j = new int[n_dists];
 			n=0;
-			for (k=0; k < image_data[i].n_images; k++) {
+			for (k=0; k < point_image_data[i].n_images; k++) {
 				for (j=0; j < n_images; j++) {
 					if (ignore[j]) continue;
-					distsqrs[n] = SQR(image_data[i].pos[k][0] - img[j].pos[0]) + SQR(image_data[i].pos[k][1] - img[j].pos[1]);
+					distsqrs[n] = SQR(point_image_data[i].pos[k][0] - img[j].pos[0]) + SQR(point_image_data[i].pos[k][1] - img[j].pos[1]);
 					data_k[n] = k;
 					model_j[n] = j;
 					n++;
@@ -8026,13 +8675,13 @@ double QLens::chisq_pos_image_plane()
 
 			if (n != n_dists) die("count of all data-model image combinations does not equal expected number (%i vs %i)",n,n_dists);
 			sort(n_dists,distsqrs,data_k,model_j);
-			int *closest_image_j = new int[image_data[i].n_images];
+			int *closest_image_j = new int[point_image_data[i].n_images];
 			int *closest_image_k = new int[n_images];
-			double *closest_distsqrs = new double[image_data[i].n_images];
-			for (k=0; k < image_data[i].n_images; k++) closest_image_j[k] = -1;
+			double *closest_distsqrs = new double[point_image_data[i].n_images];
+			for (k=0; k < point_image_data[i].n_images; k++) closest_image_j[k] = -1;
 			for (j=0; j < n_images; j++) closest_image_k[j] = -1;
 			int m=0;
-			int mmax = dmin(n_visible_images,image_data[i].n_images);
+			int mmax = dmin(n_visible_images,point_image_data[i].n_images);
 			for (n=0; n < n_dists; n++) {
 				if ((closest_image_j[data_k[n]] == -1) and (closest_image_k[model_j[n]] == -1)) {
 					closest_image_j[data_k[n]] = model_j[n];
@@ -8043,19 +8692,19 @@ double QLens::chisq_pos_image_plane()
 				}
 			}
 
-			for (k=0; k < image_data[i].n_images; k++) {
-				sigsq = SQR(image_data[i].sigma_pos[k]);
+			for (k=0; k < point_image_data[i].n_images; k++) {
+				sigsq = SQR(point_image_data[i].sigma_pos[k]);
 				if (syserr_pos != 0.0) {
 					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
 					 sigsq += syserr_pos*syserr_pos;
 				}
 				if (closest_image_j[k] != -1) {
-					if (image_data[i].use_in_chisq[k]) {
+					if (point_image_data[i].use_in_chisq[k]) {
 						chisq_each_srcpt += closest_distsqrs[k]/sigsq + signormfac;
 					}
 				} else {
 					// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
-					chisq_each_srcpt += 4*image_data[i].max_distsqr/sigsq + signormfac;
+					chisq_each_srcpt += 4*point_image_data[i].max_distsqr/sigsq + signormfac;
 				}
 			}
 			chisq_part += chisq_each_srcpt;
@@ -8143,20 +8792,20 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 			}
 
 			n_tot_images_part += n_visible_images;
-			if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
+			if ((n_images_penalty==true) and (n_visible_images > point_image_data[i].n_images)) {
 				chisq_part += 1e30;
-				if ((mpi_id==0) and (verbose)) cout << "nimg_penalty incurred for source " << i << " (# model images = " << n_visible_images << ", # data images = " << image_data[i].n_images << ")" << endl;
+				if ((mpi_id==0) and (verbose)) cout << "nimg_penalty incurred for source " << i << " (# model images = " << n_visible_images << ", # data images = " << point_image_data[i].n_images << ")" << endl;
 			}
 
-			int n_dists = n_visible_images*image_data[i].n_images;
+			int n_dists = n_visible_images*point_image_data[i].n_images;
 			double *distsqrs = new double[n_dists];
 			int *data_k = new int[n_dists];
 			int *model_j = new int[n_dists];
 			n=0;
-			for (k=0; k < image_data[i].n_images; k++) {
+			for (k=0; k < point_image_data[i].n_images; k++) {
 				for (j=0; j < n_images; j++) {
 					if (ignore[j]) continue;
-					distsqrs[n] = SQR(image_data[i].pos[k][0] - img[j].pos[0]) + SQR(image_data[i].pos[k][1] - img[j].pos[1]);
+					distsqrs[n] = SQR(point_image_data[i].pos[k][0] - img[j].pos[0]) + SQR(point_image_data[i].pos[k][1] - img[j].pos[1]);
 					data_k[n] = k;
 					model_j[n] = j;
 					n++;
@@ -8164,13 +8813,13 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 			}
 			if (n != n_dists) die("count of all data-model image combinations does not equal expected number (%i vs %i)",n,n_dists);
 			sort(n_dists,distsqrs,data_k,model_j);
-			int *closest_image_j = new int[image_data[i].n_images];
+			int *closest_image_j = new int[point_image_data[i].n_images];
 			int *closest_image_k = new int[n_images];
-			double *closest_distsqrs = new double[image_data[i].n_images];
-			for (k=0; k < image_data[i].n_images; k++) closest_image_j[k] = -1;
+			double *closest_distsqrs = new double[point_image_data[i].n_images];
+			for (k=0; k < point_image_data[i].n_images; k++) closest_image_j[k] = -1;
 			for (j=0; j < n_images; j++) closest_image_k[j] = -1;
 			int m=0;
-			int mmax = dmin(n_visible_images,image_data[i].n_images);
+			int mmax = dmin(n_visible_images,point_image_data[i].n_images);
 			for (n=0; n < n_dists; n++) {
 				if ((closest_image_j[data_k[n]] == -1) and (closest_image_k[model_j[n]] == -1)) {
 					closest_image_j[data_k[n]] = model_j[n];
@@ -8182,31 +8831,31 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 			}
 
 			double chisq_this_img, chi_x, chi_y;
-			int this_src_nimgs = image_data[i].n_images;
-			for (k=0; k < image_data[i].n_images; k++) {
-				sigsq = SQR(image_data[i].sigma_pos[k]);
+			int this_src_nimgs = point_image_data[i].n_images;
+			for (k=0; k < point_image_data[i].n_images; k++) {
+				sigsq = SQR(point_image_data[i].sigma_pos[k]);
 				if (syserr_pos != 0.0) {
 					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
 					 sigsq += syserr_pos*syserr_pos;
 				}
 				if ((mpi_id==0) and (verbose)) cout << "source " << i << ", image " << k << ": ";
 				if (closest_image_j[k] != -1) {
-					if (image_data[i].use_in_chisq[k]) {
+					if (point_image_data[i].use_in_chisq[k]) {
 						rms_err_each_srcpt += closest_distsqrs[k];
 						n_matched_images_each_srcpt++;
 						chisq_this_img = closest_distsqrs[k]/sigsq + signormfac;
-						chi_x = (img[closest_image_j[k]].pos[0]-image_data[i].pos[k][0])/sqrt(sigsq);
-						chi_y = (img[closest_image_j[k]].pos[1]-image_data[i].pos[k][1])/sqrt(sigsq);
+						chi_x = (img[closest_image_j[k]].pos[0]-point_image_data[i].pos[k][0])/sqrt(sigsq);
+						chi_y = (img[closest_image_j[k]].pos[1]-point_image_data[i].pos[k][1])/sqrt(sigsq);
 						closest_chivals.push_back(abs(chi_x));
 						closest_xvals_model.push_back(img[closest_image_j[k]].pos[0]);
 						closest_yvals_model.push_back(img[closest_image_j[k]].pos[1]);
-						closest_xvals_data.push_back(image_data[i].pos[k][0]);
-						closest_yvals_data.push_back(image_data[i].pos[k][1]);
+						closest_xvals_data.push_back(point_image_data[i].pos[k][0]);
+						closest_yvals_data.push_back(point_image_data[i].pos[k][1]);
 						closest_chivals.push_back(abs(chi_y));
 						closest_xvals_model.push_back(img[closest_image_j[k]].pos[0]);
 						closest_yvals_model.push_back(img[closest_image_j[k]].pos[1]);
-						closest_xvals_data.push_back(image_data[i].pos[k][0]);
-						closest_yvals_data.push_back(image_data[i].pos[k][1]);
+						closest_xvals_data.push_back(point_image_data[i].pos[k][0]);
+						closest_yvals_data.push_back(point_image_data[i].pos[k][1]);
 
 						if ((mpi_id==0) and (verbose)) cout << "chi_x=" << chi_x << ", chi_y=" << chi_y << ", chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 						chisq_each_srcpt += chisq_this_img;
@@ -8214,7 +8863,7 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 					else if ((mpi_id==0) and (verbose)) cout << "ignored in chisq,  matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 				} else {
 					// add a penalty value to chi-square for not reproducing this data image; the distance is twice the maximum distance between any pair of images
-					chisq_this_img += 4*image_data[i].max_distsqr/sigsq + signormfac;
+					chisq_this_img += 4*point_image_data[i].max_distsqr/sigsq + signormfac;
 					if ((mpi_id==0) and (verbose)) cout << "chisq=" << chisq_this_img << " (not matched to model image)" << endl << flush;
 					chisq_each_srcpt += chisq_this_img;
 				}
@@ -8327,26 +8976,26 @@ void QLens::find_analytic_srcflux(double *bestfit_flux)
 	int i,j,k=0;
 
 	for (i=0; i < n_ptsrc; i++)
-		for (j=0; j < image_data[i].n_images; j++) n_total_images++;
+		for (j=0; j < point_image_data[i].n_images; j++) n_total_images++;
 	double image_mag;
 
 	lensmatrix jac;
 	for (i=0; i < n_ptsrc; i++) {
 		double num=0, denom=0;
-		for (j=0; j < image_data[i].n_images; j++) {
-			if (image_data[i].sigma_f[j]==0) { k++; continue; }
-			hessian(image_data[i].pos[j],jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
+		for (j=0; j < point_image_data[i].n_images; j++) {
+			if (point_image_data[i].sigma_f[j]==0) { k++; continue; }
+			hessian(point_image_data[i].pos[j],jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
 			jac[1][0] = -jac[1][0];
 			image_mag = 1.0/determinant(jac);
 			if (include_parity_in_chisq) {
-				num += image_data[i].flux[j] * image_mag / SQR(image_data[i].sigma_f[j]);
+				num += point_image_data[i].flux[j] * image_mag / SQR(point_image_data[i].sigma_f[j]);
 			} else {
-				num += abs(image_data[i].flux[j] * image_mag) / SQR(image_data[i].sigma_f[j]);
+				num += abs(point_image_data[i].flux[j] * image_mag) / SQR(point_image_data[i].sigma_f[j]);
 			}
-			denom += SQR(image_mag/image_data[i].sigma_f[j]);
+			denom += SQR(image_mag/point_image_data[i].sigma_f[j]);
 			k++;
 		}
 		if (denom==0) bestfit_flux[i] = -1; // indicates we cannot find the source flux
@@ -8376,7 +9025,7 @@ double QLens::chisq_flux()
 	int i,j,k;
 
 	for (i=0; i < n_ptsrc; i++) {
-		if (image_data[i].n_images > n_images_hi) n_images_hi = image_data[i].n_images;
+		if (point_image_data[i].n_images > n_images_hi) n_images_hi = point_image_data[i].n_images;
 	}
 	double* image_mags = new double[n_images_hi];
 
@@ -8384,20 +9033,20 @@ double QLens::chisq_flux()
 	double flux_src, num, denom;
 	for (i=0; i < n_ptsrc; i++) {
 		k=0; num=0; denom=0;
-		for (j=0; j < image_data[i].n_images; j++) {
-			if (image_data[i].sigma_f[j]==0) { k++; continue; }
-			hessian(image_data[i].pos[j],jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
+		for (j=0; j < point_image_data[i].n_images; j++) {
+			if (point_image_data[i].sigma_f[j]==0) { k++; continue; }
+			hessian(point_image_data[i].pos[j],jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
 			jac[1][0] = -jac[1][0];
 			image_mags[k] = 1.0/determinant(jac);
 			if (include_parity_in_chisq) {
-				num += image_data[i].flux[j] * image_mags[k] / SQR(image_data[i].sigma_f[j]);
+				num += point_image_data[i].flux[j] * image_mags[k] / SQR(point_image_data[i].sigma_f[j]);
 			} else {
-				num += abs(image_data[i].flux[j] * image_mags[k]) / SQR(image_data[i].sigma_f[j]);
+				num += abs(point_image_data[i].flux[j] * image_mags[k]) / SQR(point_image_data[i].sigma_f[j]);
 			}
-			denom += SQR(image_mags[k]/image_data[i].sigma_f[j]);
+			denom += SQR(image_mags[k]/point_image_data[i].sigma_f[j]);
 			k++;
 		}
 
@@ -8413,14 +9062,14 @@ double QLens::chisq_flux()
 
 		k=0;
 		if (include_parity_in_chisq) {
-			for (j=0; j < image_data[i].n_images; j++) {
-				if (image_data[i].sigma_f[j]==0) { k++; continue; }
-				chisq += SQR((image_data[i].flux[j] - image_mags[k++]*flux_src)/image_data[i].sigma_f[j]);
+			for (j=0; j < point_image_data[i].n_images; j++) {
+				if (point_image_data[i].sigma_f[j]==0) { k++; continue; }
+				chisq += SQR((point_image_data[i].flux[j] - image_mags[k++]*flux_src)/point_image_data[i].sigma_f[j]);
 			}
 		} else {
-			for (j=0; j < image_data[i].n_images; j++) {
-				if (image_data[i].sigma_f[j]==0) { k++; continue; }
-				chisq += SQR((abs(image_data[i].flux[j]) - abs(image_mags[k++]*flux_src))/image_data[i].sigma_f[j]);
+			for (j=0; j < point_image_data[i].n_images; j++) {
+				if (point_image_data[i].sigma_f[j]==0) { k++; continue; }
+				chisq += SQR((abs(point_image_data[i].flux[j]) - abs(image_mags[k++]*flux_src))/point_image_data[i].sigma_f[j]);
 			}
 		}
 	}
@@ -8436,7 +9085,7 @@ double QLens::chisq_time_delays()
 	int i,j,k;
 
 	for (i=0; i < n_ptsrc; i++) {
-		if (image_data[i].n_images > n_images_hi) n_images_hi = image_data[i].n_images;
+		if (point_image_data[i].n_images > n_images_hi) n_images_hi = point_image_data[i].n_images;
 	}
 
 	double td_factor;
@@ -8450,28 +9099,28 @@ double QLens::chisq_time_delays()
 	for (k=0, i=0; i < n_ptsrc; i++) {
 		specific_zfacs = ptsrc_zfactors[ptsrc_redshift_idx[i]];
 		specific_betafacs = ptsrc_beta_factors[ptsrc_redshift_idx[i]];
-		td_factor = cosmo.time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[ptsrc_redshift_idx[i]]);
+		td_factor = cosmo->time_delay_factor_arcsec(lens_redshift,ptsrc_redshifts[ptsrc_redshift_idx[i]]);
 		min_td_obs=1e30;
 		min_td_mod=1e30;
-		for (j=0; j < image_data[i].n_images; j++) {
-			if (image_data[i].sigma_t[j]==0) continue;
-			find_sourcept(image_data[i].pos[j],beta_ij,0,specific_zfacs,specific_betafacs);
-			pot = potential(image_data[i].pos[j],specific_zfacs,specific_betafacs);
-			time_delays_mod[j] = 0.5*(SQR(image_data[i].pos[j][0] - beta_ij[0]) + SQR(image_data[i].pos[j][1] - beta_ij[1])) - pot;
+		for (j=0; j < point_image_data[i].n_images; j++) {
+			if (point_image_data[i].sigma_t[j]==0) continue;
+			find_sourcept(point_image_data[i].pos[j],beta_ij,0,specific_zfacs,specific_betafacs);
+			pot = potential(point_image_data[i].pos[j],specific_zfacs,specific_betafacs);
+			time_delays_mod[j] = 0.5*(SQR(point_image_data[i].pos[j][0] - beta_ij[0]) + SQR(point_image_data[i].pos[j][1] - beta_ij[1])) - pot;
 			if (time_delays_mod[j] < min_td_mod) min_td_mod = time_delays_mod[j];
 
-			if (image_data[i].time_delays[j] < min_td_obs) min_td_obs = image_data[i].time_delays[j];
+			if (point_image_data[i].time_delays[j] < min_td_obs) min_td_obs = point_image_data[i].time_delays[j];
 		}
-		for (k=0, j=0; j < image_data[i].n_images; j++) {
-			if (image_data[i].sigma_t[j]==0) { k++; continue; }
+		for (k=0, j=0; j < point_image_data[i].n_images; j++) {
+			if (point_image_data[i].sigma_t[j]==0) { k++; continue; }
 			time_delays_mod[k] -= min_td_mod;
 			if (time_delays_mod[k] != 0.0) time_delays_mod[k] *= td_factor; // td_factor contains the cosmological factors and is in units of days
-			time_delays_obs[k] = image_data[i].time_delays[j] - min_td_obs;
+			time_delays_obs[k] = point_image_data[i].time_delays[j] - min_td_obs;
 			k++;
 		}
-		for (k=0, j=0; j < image_data[i].n_images; j++) {
-			if (image_data[i].sigma_t[j]==0) { k++; continue; }
-			chisq += SQR((time_delays_obs[k] - time_delays_mod[k]) / image_data[i].sigma_t[j]);
+		for (k=0, j=0; j < point_image_data[i].n_images; j++) {
+			if (point_image_data[i].sigma_t[j]==0) { k++; continue; }
+			chisq += SQR((time_delays_obs[k] - time_delays_mod[k]) / point_image_data[i].sigma_t[j]);
 			k++;
 		}
 	}
@@ -8507,12 +9156,12 @@ double QLens::chisq_time_delays_from_model_imgs()
 
 		/*
 		if (n_images<=1) {
-			for (k=0; k < image_data[i].n_images; k++) {
-				sigsq = SQR(image_data[i].sigma_t[k]);
-				if (image_data[i].use_in_chisq[k]) {
-					chisq_each_srcpt += 100*image_data[i].max_tdsqr/sigsq;
+			for (k=0; k < point_image_data[i].n_images; k++) {
+				sigsq = SQR(point_image_data[i].sigma_t[k]);
+				if (point_image_data[i].use_in_chisq[k]) {
+					chisq_each_srcpt += 100*point_image_data[i].max_tdsqr/sigsq;
 				}
-				//chisq_each_srcpt += 100*image_data[i].max_tdsqr/sigsq;
+				//chisq_each_srcpt += 100*point_image_data[i].max_tdsqr/sigsq;
 			}
 			chisq += chisq_each_srcpt;
 			continue;
@@ -8524,25 +9173,25 @@ double QLens::chisq_time_delays_from_model_imgs()
 		skip = false;
 
 		n_tot_images += n_visible_images;
-		if ((n_images_penalty==true) and (n_visible_images > image_data[i].n_images)) {
+		if ((n_images_penalty==true) and (n_visible_images > point_image_data[i].n_images)) {
 			chisq += 1e30;
 			continue;
 		}
 
-		int n_dists = n_images*image_data[i].n_images;
+		int n_dists = n_images*point_image_data[i].n_images;
 		double *distsqrs = new double[n_dists];
 		int *data_k = new int[n_dists];
 		int *model_j = new int[n_dists];
 		n=0;
-		for (k=0; k < image_data[i].n_images; k++) {
-			if (image_data[i].time_delays[k]==0) {
+		for (k=0; k < point_image_data[i].n_images; k++) {
+			if (point_image_data[i].time_delays[k]==0) {
 				zero_td_exists = true;
 				zero_td_indx = k;
 			}
 		}
-		for (k=0; k < image_data[i].n_images; k++) {
+		for (k=0; k < point_image_data[i].n_images; k++) {
 			for (j=0; j < n_images; j++) {
-				distsqrs[n] = SQR(image_data[i].pos[k][0] - ptsrc_list[i]->images[j].pos[0]) + SQR(image_data[i].pos[k][1] - ptsrc_list[i]->images[j].pos[1]);
+				distsqrs[n] = SQR(point_image_data[i].pos[k][0] - ptsrc_list[i]->images[j].pos[0]) + SQR(point_image_data[i].pos[k][1] - ptsrc_list[i]->images[j].pos[1]);
 				data_k[n] = k;
 				model_j[n] = j;
 				n++;
@@ -8550,12 +9199,12 @@ double QLens::chisq_time_delays_from_model_imgs()
 		}
 		if (n != n_dists) die("count of all data-model image combinations does not equal expected number (%i vs %i)",n,n_dists);
 		sort(n_dists,distsqrs,data_k,model_j);
-		int *closest_image_j = new int[image_data[i].n_images];
+		int *closest_image_j = new int[point_image_data[i].n_images];
 		int *closest_image_k = new int[n_images];
-		for (k=0; k < image_data[i].n_images; k++) closest_image_j[k] = -1;
+		for (k=0; k < point_image_data[i].n_images; k++) closest_image_j[k] = -1;
 		for (j=0; j < n_images; j++) closest_image_k[j] = -1;
 		int m=0;
-		int mmax = dmin(n_images,image_data[i].n_images);
+		int mmax = dmin(n_images,point_image_data[i].n_images);
 		for (n=0; n < n_dists; n++) {
 			if ((closest_image_j[data_k[n]] == -1) and (closest_image_k[model_j[n]] == -1)) {
 				closest_image_j[data_k[n]] = model_j[n];
@@ -8575,16 +9224,16 @@ double QLens::chisq_time_delays_from_model_imgs()
 		}
 
 		if (!skip) {
-			for (k=0; k < image_data[i].n_images; k++) {
-				sigsq = SQR(image_data[i].sigma_t[k]);
+			for (k=0; k < point_image_data[i].n_images; k++) {
+				sigsq = SQR(point_image_data[i].sigma_t[k]);
 				j = closest_image_j[k];
 				if (j != -1) {
-					if (image_data[i].use_in_chisq[k]) {
-						chisq_each_srcpt += SQR(ptsrc_list[i]->images[j].td - td_offset - image_data[i].time_delays[k])/sigsq;
+					if (point_image_data[i].use_in_chisq[k]) {
+						chisq_each_srcpt += SQR(ptsrc_list[i]->images[j].td - td_offset - point_image_data[i].time_delays[k])/sigsq;
 					}
 				} else {
 					// add a penalty value to chi-square for not reproducing this data image; the effective time delay difference is 10 times the maximum difference between any pair of time delays
-					chisq_each_srcpt += 100*image_data[i].max_tdsqr/sigsq;
+					chisq_each_srcpt += 100*point_image_data[i].max_tdsqr/sigsq;
 				}
 			}
 		}
@@ -8623,7 +9272,7 @@ double QLens::chisq_weak_lensing()
 		#pragma omp for private(i,j,g1,g2) schedule(static) reduction(+:chisq)
 		for (i=0; i < nsrc; i++) {
 			for (j=0; j < n_lens_redshifts; j++) {
-				zfacs[i][j] = cosmo.kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
+				zfacs[i][j] = cosmo->kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
 			}
 			reduced_shear_components(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
 			chisq += SQR((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]) + SQR((wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i]);
@@ -8648,7 +9297,7 @@ bool QLens::output_weak_lensing_chivals(string filename)
 	}
 	for (i=0; i < nsrc; i++) {
 		for (j=0; j < n_lens_redshifts; j++) {
-			zfacs[i][j] = cosmo.kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
+			zfacs[i][j] = cosmo->kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
 		}
 		reduced_shear_components(weak_lensing_data.pos[i],g1,g2,0,zfacs[i]);
 		chi1 = (wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i];
@@ -8665,13 +9314,13 @@ double QLens::get_avg_ptsrc_dist(const int ptsrc_i)
 	// is this even useful? maybe get rid of this, since it's better to use analytic_bestfit_src combined with xshift, yshift params
 	double avg_srcdist;
 	int j,k,n_srcpts,n_src_pairs;
-	if (image_data[ptsrc_i].n_images > 1) {
+	if (point_image_data[ptsrc_i].n_images > 1) {
 		avg_srcdist=0;
 		n_src_pairs=0;
-		n_srcpts = image_data[ptsrc_i].n_images;
+		n_srcpts = point_image_data[ptsrc_i].n_images;
 		lensvector *srcpts = new lensvector[n_srcpts];
 		for (j=0; j < n_srcpts; j++) {
-			find_sourcept(image_data[ptsrc_i].pos[j],srcpts[j],0,ptsrc_zfactors[ptsrc_redshift_idx[ptsrc_i]],ptsrc_beta_factors[ptsrc_redshift_idx[ptsrc_i]]);
+			find_sourcept(point_image_data[ptsrc_i].pos[j],srcpts[j],0,ptsrc_zfactors[ptsrc_redshift_idx[ptsrc_i]],ptsrc_beta_factors[ptsrc_redshift_idx[ptsrc_i]]);
 			for (k=0; k < j; k++) {
 				avg_srcdist += sqrt(SQR(srcpts[j][0] - srcpts[k][0]) + SQR(srcpts[j][1] - srcpts[k][1]));
 				n_src_pairs++;
@@ -8685,75 +9334,8 @@ double QLens::get_avg_ptsrc_dist(const int ptsrc_i)
 	}
 }
 
-void QLens::get_automatic_initial_stepsizes(dvector& stepsizes)
-{
-	int i, index=0;
-	for (i=0; i < nlens; i++) lens_list[i]->get_auto_stepsizes(stepsizes,index);
-	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_stepsizes(stepsizes,index);
-	for (i=0; i < n_pixellated_src; i++) {
-		if (srcgrids[i] != NULL) srcgrids[i]->get_auto_stepsizes(stepsizes,index);
-	}
-	for (i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_auto_stepsizes(stepsizes,index);
-	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_stepsizes(stepsizes,index);
-	for (i=0; i < n_psf; i++) psf_list[i]->get_auto_stepsizes(stepsizes,index);
-	cosmo.get_auto_stepsizes(stepsizes,index);
-	get_auto_stepsizes(stepsizes,index);
 
-	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default stepsizes (%i vs %i)",index,n_fit_parameters);
-}
-
-void QLens::set_default_plimits()
-{
-	get_n_fit_parameters(n_fit_parameters);
-	boolvector use_penalty_limits(n_fit_parameters);
-	dvector lower(n_fit_parameters), upper(n_fit_parameters);
-	int i, index=0;
-	for (i=0; i < n_fit_parameters; i++) use_penalty_limits[i] = false; // default
-
-	for (i=0; i < nlens; i++) lens_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	for (i=0; i < n_sb; i++) sb_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	for (i=0; i < n_pixellated_src; i++) {
-		if (srcgrids[i] != NULL) srcgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	}
-	for (i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	for (i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	for (i=0; i < n_psf; i++) psf_list[i]->get_auto_ranges(use_penalty_limits,lower,upper,index);
-	cosmo.get_auto_ranges(use_penalty_limits,lower,upper,index);
-	get_auto_ranges(use_penalty_limits,lower,upper,index);
-
-	if (index != n_fit_parameters) die("Index didn't go through all the fit parameters when setting default ranges (%i vs %i)",index,n_fit_parameters);
-	param_settings->update_penalty_limits(use_penalty_limits,lower,upper);
-}
-
-void QLens::get_n_fit_parameters(int &nparams)
-{
-	lensmodel_fit_parameters = 0;
-	srcmodel_fit_parameters = 0;
-	pixsrc_fit_parameters = 0;
-	pixlens_fit_parameters = 0;
-	ptsrc_fit_parameters = 0;
-	psf_fit_parameters = 0;
-	cosmo_fit_parameters = 0;
-	for (int i=0; i < nlens; i++) lensmodel_fit_parameters += lens_list[i]->get_n_vary_params();
-	nparams = lensmodel_fit_parameters;
-	for (int i=0; i < n_sb; i++) srcmodel_fit_parameters += sb_list[i]->get_n_vary_params();
-	nparams += srcmodel_fit_parameters;
-	for (int i=0; i < n_pixellated_src; i++) {
-		if (srcgrids[i] != NULL) pixsrc_fit_parameters += srcgrids[i]->get_n_vary_params();
-	}
-	nparams += pixsrc_fit_parameters;
-	for (int i=0; i < n_pixellated_lens; i++) pixlens_fit_parameters += lensgrids[i]->get_n_vary_params();
-	nparams += pixlens_fit_parameters;
-	for (int i=0; i < n_ptsrc; i++) ptsrc_fit_parameters += ptsrc_list[i]->get_n_vary_params();
-	nparams += ptsrc_fit_parameters;
-	for (int i=0; i < n_psf; i++) psf_fit_parameters += psf_list[i]->get_n_vary_params();
-	nparams += psf_fit_parameters;
-	cosmo_fit_parameters = cosmo.get_n_vary_params();
-	nparams += cosmo_fit_parameters;
-	nparams += n_vary_params; // generic parameters within qlens class
-}
-
-bool QLens::setup_fit_parameters(const bool ignore_limits)
+bool QLens::fit_set_optimizations()
 {
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
@@ -8783,397 +9365,7 @@ bool QLens::setup_fit_parameters(const bool ignore_limits)
 			}
 		}
 	}
-	get_n_fit_parameters(n_fit_parameters);
-	if (n_fit_parameters==0) { warn("no parameters are being varied"); return false; }
-	fitparams.input(n_fit_parameters);
-	int index = 0;
-	for (int i=0; i < nlens; i++) lens_list[i]->get_fit_parameters(fitparams,index);
-	if (index != lensmodel_fit_parameters) die("Index didn't go through all the lens model fit parameters (%i vs %i)",index,lensmodel_fit_parameters);
-	for (int i=0; i < n_sb; i++) sb_list[i]->get_fit_parameters(fitparams,index);
-	for (int i=0; i < n_pixellated_src; i++) {
-		if (srcgrids[i] != NULL) srcgrids[i]->get_fit_parameters(fitparams,index);
-	}
-	for (int i=0; i < n_pixellated_lens; i++) lensgrids[i]->get_fit_parameters(fitparams,index);
-	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->get_fit_parameters(fitparams,index);
-	for (int i=0; i < n_psf; i++) psf_list[i]->get_fit_parameters(fitparams,index);
-	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters;
-	if (index != expected_index) die("Index didn't go through all the lens+source model fit parameters (%i vs %i)",index,expected_index);
-	cosmo.get_fit_parameters(fitparams,index); // cosmology parameters
-	get_fit_parameters(fitparams,index); // generic parameters in qlens class
 
-	get_all_parameter_names();
-	dvector stepsizes(n_fit_parameters);
-	get_automatic_initial_stepsizes(stepsizes);
-	param_settings->update_params(n_fit_parameters,fit_parameter_names,stepsizes.array());
-	//set_default_plimits();
-	param_settings->transform_parameters(fitparams.array());
-	transformed_parameter_names.resize(n_fit_parameters);
-	transformed_latex_parameter_names.resize(n_fit_parameters);
-	param_settings->transform_parameter_names(fit_parameter_names.data(),transformed_parameter_names.data(),latex_parameter_names.data(),transformed_latex_parameter_names.data());
-
-	if ((!ignore_limits) and (fitmethod!=POWELL) and (fitmethod!=SIMPLEX)) return setup_limits();
-	return true;
-}
-
-bool QLens::setup_limits()
-{
-	upper_limits.input(n_fit_parameters);
-	lower_limits.input(n_fit_parameters);
-	upper_limits_initial.input(n_fit_parameters);
-	lower_limits_initial.input(n_fit_parameters);
-	int index=0;
-	for (int i=0; i < nlens; i++) {
-		if ((lens_list[i]->get_n_vary_params() > 0) and (lens_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for lens %i",i); return false; }
-	}
-	if (index != lensmodel_fit_parameters) die("index didn't go through all the lens model fit parameters when setting upper/lower limits");
-	//if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-	for (int i=0; i < n_sb; i++) {
-		if ((sb_list[i]->get_n_vary_params() > 0) and (sb_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for source %i",i); return false; }
-	}
-	for (int i=0; i < n_pixellated_src; i++) {
-		if ((srcgrids[i] != NULL) and (srcgrids[i]->get_n_vary_params() > 0) and (srcgrids[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for pixellated source %i",i); return false; }
-	}
-	for (int i=0; i < n_pixellated_lens; i++) {
-		if ((lensgrids[i]->get_n_vary_params() > 0) and (lensgrids[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for pixellated source %i",i); return false; }
-	}
-	for (int i=0; i < n_ptsrc; i++) {
-		if ((ptsrc_list[i]->get_n_vary_params() > 0) and (ptsrc_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for point source %i",i); return false; }
-	}
-	for (int i=0; i < n_psf; i++) {
-		if ((psf_list[i]->get_n_vary_params() > 0) and (psf_list[i]->get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for point source %i",i); return false; }
-	}
-
-	int expected_index = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters;
-	if (index != expected_index) die("index didn't go through all the lens+source model fit parameters when setting upper/lower limits (%i vs %i)", index, expected_index);
-
-	if ((cosmo.get_n_vary_params() > 0) and (cosmo.get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for cosmology parameters"); return false; }
-
-	if ((n_vary_params > 0) and (get_limits(lower_limits,upper_limits,lower_limits_initial,upper_limits_initial,index)==false)) { warn("limits have not been defined for generic parameters"); return false; }
-
-	if (index != n_fit_parameters) die("index didn't go through all the fit parameters when setting upper/lower limits (%i expected, %i found)",n_fit_parameters,index);
-	param_settings->transform_limits(lower_limits.array(),upper_limits.array());
-	param_settings->transform_limits(lower_limits_initial.array(),upper_limits_initial.array());
-	param_settings->override_limits(lower_limits.array(),upper_limits.array());
-	param_settings->override_limits(lower_limits_initial.array(),upper_limits_initial.array());
-	param_settings->set_prior_norms(lower_limits.array(),upper_limits.array());
-	for (int i=0; i < n_fit_parameters; i++) {
-		if (lower_limits[i] > upper_limits[i]) {
-			double temp = upper_limits[i]; upper_limits[i] = lower_limits[i]; lower_limits[i] = temp;
-		}
-		if (lower_limits_initial[i] > upper_limits_initial[i]) {
-			double temp = upper_limits_initial[i]; upper_limits_initial[i] = lower_limits_initial[i]; lower_limits_initial[i] = temp;
-		}
-	}
-	return true;
-}
-
-void QLens::get_all_parameter_names()
-{
-	get_n_fit_parameters(n_fit_parameters);
-	fit_parameter_names.clear();
-	latex_parameter_names.clear();
-	vector<string> latex_parameter_subscripts;
-	int i,j;
-	for (i=0; i < nlens; i++) {
-		lens_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
-	}
-	for (i=0; i < n_sb; i++) {
-		sb_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts,true);
-	}
-	for (i=0; i < n_pixellated_src; i++) {
-		if (srcgrids[i] != NULL) srcgrids[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
-	}
-	for (i=0; i < n_pixellated_lens; i++) {
-		lensgrids[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
-	}
-	for (i=0; i < n_ptsrc; i++) {
-		ptsrc_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
-	}
-	for (i=0; i < n_psf; i++) {
-		psf_list[i]->get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
-	}
-	cosmo.get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
-	get_fit_parameter_names(fit_parameter_names,&latex_parameter_names,&latex_parameter_subscripts);
-
-	// find any parameters with matching names and number them so they can be distinguished
-	int count, n_names;
-	n_names = fit_parameter_names.size();
-	string *new_parameter_names = new string[n_names];
-	for (i=0; i < n_names; i++) {
-		count=1;
-		new_parameter_names[i] = fit_parameter_names[i];
-		for (j=i+1; j < n_names; j++) {
-			if (fit_parameter_names[j]==fit_parameter_names[i]) {
-				if (count==1) {
-					stringstream countstr;
-					string countstring;
-					countstr << count;
-					countstr >> countstring;
-					if (isdigit(new_parameter_names[i].at(new_parameter_names[i].length()-1))) new_parameter_names[i] += "_"; // in case parameter name already ends with a number
-					new_parameter_names[i] += countstring;
-					if (latex_parameter_subscripts[i].empty()) latex_parameter_subscripts[i] = countstring;
-					else latex_parameter_subscripts[i] += "," + countstring;
-					count++;
-				}
-				stringstream countstr;
-				string countstring;
-				countstr << count;
-				countstr >> countstring;
-				if (isdigit(fit_parameter_names[j].at(fit_parameter_names[j].length()-1))) fit_parameter_names[j] += "_"; // in case parameter name already ends with a number
-				fit_parameter_names[j] += countstring;
-				if (latex_parameter_subscripts[j].empty()) latex_parameter_subscripts[j] = countstring;
-				else latex_parameter_subscripts[j] += "," + countstring;
-				count++;
-			}
-		}
-		fit_parameter_names[i] = new_parameter_names[i];
-	}
-	delete[] new_parameter_names;
-
-	if (fit_parameter_names.size() != n_fit_parameters) die("get_all_parameter_names() did not assign names to all the fit parameters (%i vs %i)",n_fit_parameters,fit_parameter_names.size());
-	for (i=0; i < n_fit_parameters; i++) {
-		if (latex_parameter_subscripts[i] != "") latex_parameter_names[i] += "_{" + latex_parameter_subscripts[i] + "}";
-	}
-}
-
-bool QLens::lookup_parameter_value(const string pname, double& pval)
-{
-	bool found_param = false;
-	setup_fit_parameters();
-	int i;
-	for (i=0; i < n_fit_parameters; i++) {
-		if (transformed_parameter_names[i]==pname) {
-			found_param = true;
-			pval = fitparams[i];
-		}
-	}
-	if (!found_param) {
-		for (i=0; i < n_derived_params; i++) {
-			if (dparam_list[i]->name==pname) {
-				found_param = true;
-				pval = dparam_list[i]->get_derived_param(this);
-			}
-		}
-	}
-	return found_param;
-}
-
-void QLens::create_parameter_value_string(string &pvals)
-{
-	pvals = "";
-	setup_fit_parameters();
-	int i;
-	for (i=0; i < n_fit_parameters; i++) {
-		stringstream pvalstr;
-		string pvalstring;
-		pvalstr << fitparams[i];
-		pvalstr >> pvalstring;
-		pvals += pvalstring;
-		if ((n_derived_params > 0) or (i < n_fit_parameters-1)) pvals += " ";
-	}
-	double pval;
-	for (i=0; i < n_derived_params; i++) {
-		pval = dparam_list[i]->get_derived_param(this);
-		stringstream pvalstr;
-		string pvalstring;
-		pvalstr << pval;
-		pvalstr >> pvalstring;
-		pvals += pvalstring;
-		if (i < n_derived_params-1) pvals += " ";
-	}
-}
-
-bool QLens::output_parameter_values()
-{
-	if (setup_fit_parameters(true)==false) return false;
-	if (mpi_id==0) {
-		for (int i=0; i < n_fit_parameters; i++) {
-			cout << i << ". " << transformed_parameter_names[i] << ": " << fitparams[i] << endl;
-		}
-		cout << endl;
-	}
-	return true;
-}
-
-bool QLens::update_parameter_value(const int param_num, const double param_val)
-{
-	if (setup_fit_parameters()==false) return false;
-	if (param_num >= n_fit_parameters) return false;
-	double newparams[n_fit_parameters];
-	double new_transformed_params[n_fit_parameters];
-	for (int i=0; i < n_fit_parameters; i++) newparams[i] = fitparams[i];
-	newparams[param_num] = param_val;
-	bool status = true;
-	param_settings->inverse_transform_parameters(newparams,new_transformed_params);
-	if (update_model(new_transformed_params) != 0.0) status = false;
-	return status;
-}
-
-
-bool QLens::output_parameter_prior_ranges()
-{
-	if (setup_fit_parameters()==false) return false;
-	int max_length=0;
-	for (int i=0; i < n_fit_parameters; i++) {
-		if (transformed_parameter_names[i].length() > max_length) max_length = transformed_parameter_names[i].length();
-	}
-	int extra_length;
- 
-	if (mpi_id==0) {
-		for (int i=0; i < n_fit_parameters; i++) {
-			cout << i << ". " << transformed_parameter_names[i] << ": " << flush;
-			extra_length = max_length - transformed_parameter_names[i].length();
-			for (int j=0; j < extra_length; j++) cout << " ";
-			//if ((n_fit_parameters > 10) and (i < 10)) cout << " ";
-			cout << flush;
-			if (!param_settings->output_prior(i)) return false;
-			if (lower_limits.size() != 0) {
-				cout << ", [" << lower_limits[i] << "," << upper_limits[i] << "]";
-				if ((fitparams[i] < lower_limits[i]) or (fitparams[i] > upper_limits[i])) cout << " *NOTE*: current value (" << fitparams[i] << ") is outside prior range" << endl;
-			}
-			cout << endl;
-		}
-		cout << endl;
-	}
-	return true;
-}
-
-bool QLens::get_lens_parameter_numbers(const int lens_i, int& pi, int& pf)
-{
-	if (lens_i >= nlens) { pf=pi=0; return false; }
-	get_n_fit_parameters(n_fit_parameters);
-	vector<string> dummy, dummy2, dummy3;
-	for (int i=0; i < lens_i; i++) {
-		lens_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-	}
-	pi = dummy.size();
-	if (pi == n_fit_parameters) { pf=pi=0; return false; }
-	lens_list[lens_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-	pf = dummy.size();
-	if (pf==pi) return false;
-	return true;
-}
-
-bool QLens::get_sb_parameter_numbers(const int sb_i, int& pi, int& pf)
-{
-	if (sb_i >= n_sb) { pf=pi=0; return false; }
-	get_n_fit_parameters(n_fit_parameters);
-	vector<string> dummy, dummy2, dummy3;
-	for (int i=0; i < sb_i; i++) {
-		sb_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-	}
-	pi = dummy.size();
-	if (pi == n_fit_parameters) { pf=pi=0; return false; }
-	sb_list[sb_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-	pf = dummy.size();
-	pi += lensmodel_fit_parameters; // since lens fit parameters come before the source params
-	pf += lensmodel_fit_parameters; // since lens fit parameters come before the source params
-	if (pf==pi) return false;
-	return true;
-}
-
-bool QLens::get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf)
-{
-	if (pixsrc_i >= n_pixellated_src) { pf=pi=0; return false; }
-	get_n_fit_parameters(n_fit_parameters);
-	vector<string> dummy, dummy2, dummy3;
-	for (int i=0; i < pixsrc_i; i++) {
-		srcgrids[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-	}
-	pi = dummy.size();
-	if (pi == n_fit_parameters) { pf=pi=0; return false; }
-	srcgrids[pixsrc_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-
-	pf = dummy.size();
-	pi += lensmodel_fit_parameters + srcmodel_fit_parameters; // since lens and sb fit parameters come before the source params
-	pf += lensmodel_fit_parameters + srcmodel_fit_parameters; // since lens and sb fit parameters come before the source params
-	if (pf==pi) return false;
-	return true;
-}
-
-bool QLens::get_pixlens_parameter_numbers(const int pixlens_i, int& pi, int& pf)
-{
-	if (pixlens_i >= n_pixellated_lens) { pf=pi=0; return false; }
-	get_n_fit_parameters(n_fit_parameters);
-	vector<string> dummy, dummy2, dummy3;
-	for (int i=0; i < pixlens_i; i++) {
-		lensgrids[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-	}
-	pi = dummy.size();
-	if (pi == n_fit_parameters) { pf=pi=0; return false; }
-	lensgrids[pixlens_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-
-	pf = dummy.size();
-	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens, sb and pixsrc fit parameters come before the pixlens params
-	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters; // since lens, sb and pixsrc fit parameters come before the pixlens params
-	if (pf==pi) return false;
-	return true;
-}
-
-bool QLens::get_ptsrc_parameter_numbers(const int ptsrc_i, int& pi, int& pf)
-{
-	if (ptsrc_i >= n_ptsrc) { pf=pi=0; return false; }
-	get_n_fit_parameters(n_fit_parameters);
-	vector<string> dummy, dummy2, dummy3;
-	for (int i=0; i < ptsrc_i; i++) {
-		ptsrc_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-	}
-	pi = dummy.size();
-	if (pi == n_fit_parameters) { pf=pi=0; return false; }
-	ptsrc_list[ptsrc_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-
-	pf = dummy.size();
-	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
-	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters; // since lens, sb, ptsrc and pixlens fit parameters come before the ptsrc params
-	if (pf==pi) return false;
-	return true;
-}
-
-bool QLens::get_psf_parameter_numbers(const int psf_i, int& pi, int& pf)
-{
-	if (psf_i >= n_psf) { pf=pi=0; return false; }
-	get_n_fit_parameters(n_fit_parameters);
-	vector<string> dummy, dummy2, dummy3;
-	for (int i=0; i < psf_i; i++) {
-		psf_list[i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-	}
-	pi = dummy.size();
-	if (pi == n_fit_parameters) { pf=pi=0; return false; }
-	psf_list[psf_i]->get_fit_parameter_names(dummy,&dummy2,&dummy3);
-
-	pf = dummy.size();
-	pi += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, pixsrc, pixlens and ptsrc fit parameters come before the psf params
-	pf += lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters; // since lens, sb, pixsrc, pixlens and ptsrc fit parameters come before the psf params
-	if (pf==pi) return false;
-	return true;
-}
-
-bool QLens::get_cosmo_parameter_numbers(int& pi, int& pf)
-{
-	get_n_fit_parameters(n_fit_parameters);
-	vector<string> dummy, dummy2, dummy3;
-	cosmo.get_fit_parameter_names(dummy,&dummy2,&dummy3);
-
-	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters; // since lens, sb, pixsrc, pixlens, ptsrc and psf fit parameters come before the cosmology params
-	pf = pi + dummy.size();
-	if (pf==pi) return false;
-	return true;
-}
-
-bool QLens::get_misc_parameter_numbers(int& pi, int& pf)
-{
-	get_n_fit_parameters(n_fit_parameters);
-	vector<string> dummy, dummy2, dummy3;
-	get_fit_parameter_names(dummy,&dummy2,&dummy3);
-
-	pi = lensmodel_fit_parameters + srcmodel_fit_parameters + pixsrc_fit_parameters + pixlens_fit_parameters + ptsrc_fit_parameters + psf_fit_parameters + cosmo_fit_parameters; // since lens, sb, pixsrc, pixlens, ptsrc, psf and cosmo fit parameters come before the miscellaneous params
-	pf = pi + dummy.size();
-	if (pf==pi) return false;
-	return true;
-}
-
-void QLens::fit_set_optimizations()
-{
 	if ((lensmodel_fit_parameters==0) and (psf_fit_parameters==0)) redo_lensing_calculations_before_inversion = false; // so we don't waste time redoing the ray tracing if lens doesn't change and we're not shifting ray-tracing points (note, the offset in ray-tracing points is in the PSF object)
 	else redo_lensing_calculations_before_inversion = true;
 
@@ -9186,6 +9378,7 @@ void QLens::fit_set_optimizations()
 	if (source_fit_mode==Point_Source) include_time_delays = false; // calculating time delays from images found not necessary during point source fit, since the chisq_time_delays finds time delays separately
 
 	fisher_inverse.erase(); // reset parameter covariance matrix in case it was used in a previous fit
+	return true;
 }
 
 void QLens::fit_restore_defaults()
@@ -9199,8 +9392,7 @@ void QLens::fit_restore_defaults()
 
 double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime, bool show_diagnostics, bool show_status, bool show_lensinfo)
 {
-	if (setup_fit_parameters()==false) return -1e30;
-	fit_set_optimizations();
+	if (fit_set_optimizations()==false) return -1e30;
 	if (fit_output_dir != ".") create_output_directory();
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -9245,7 +9437,7 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 		}
 	}
 
-	//fitmodel->param_settings->print_penalty_limits();
+	//fitmodel->param_list->print_penalty_limits();
 
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_point_source);
@@ -9266,7 +9458,7 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 	}
 #endif
 
-	double chisqval = 2 * (this->*LogLikePtr)(fitparams.array());
+	double chisqval = 2 * (this->*LogLikePtr)(param_list->values);
 	if (einstein_radius_prior) fitmodel->get_einstein_radius_prior(true); // just to show what the Re prior is returning
 	if (!show_status) display_chisq_status = default_display_status;
 	if ((chisqval >= 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
@@ -9299,16 +9491,15 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 
 void QLens::plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2)
 {
-	if (setup_fit_parameters()==false) return;
-	fit_set_optimizations();
+	if (fit_set_optimizations()==false) return;
 	if (fit_output_dir != ".") create_output_directory();
 	if (!initialize_fitmodel(false)) {
 		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
 		return;
 	}
 
-	if (param1 >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param1,n_fit_parameters); return; }
-	if (param2 >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param2,n_fit_parameters); return; }
+	if (param1 >= param_list->nparams) { warn("Parameter %i does not exist (%i parameters total)",param1,param_list->nparams); return; }
+	if (param2 >= param_list->nparams) { warn("Parameter %i does not exist (%i parameters total)",param2,param_list->nparams); return; }
 
 	double (QLens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -9345,9 +9536,9 @@ void QLens::plot_chisq_2d(const int param1, const int param2, const int n1, cons
 	for (j=0, p2=i2+0.5*step2; j < n2; j++, p2 += step2) {
 		for (i=0, p1=i1+0.5*step1; i < n1; i++, p1 += step1) {
 			cout << "p1=" << p1 << " p2=" << p2 << endl;
-			fitparams[param1] = p1;
-			fitparams[param2] = p2;
-			chisqvals[i][j] = 2.0 * (this->*loglikeptr)(fitparams.array());
+			param_list->values[param1] = p1;
+			param_list->values[param2] = p2;
+			chisqvals[i][j] = 2.0 * (this->*loglikeptr)(param_list->values);
 			if (chisqvals[i][j] < chisqmin) {
 				chisqmin = chisqvals[i][j];
 				p1min = p1;
@@ -9374,15 +9565,14 @@ void QLens::plot_chisq_2d(const int param1, const int param2, const int n1, cons
 
 void QLens::plot_chisq_1d(const int param, const int n, const double ip, const double fp, string filename)
 {
-	if (setup_fit_parameters()==false) return;
-	fit_set_optimizations();
+	if (fit_set_optimizations()==false) return;
 	if (fit_output_dir != ".") create_output_directory();
 	if (!initialize_fitmodel(false)) {
 		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
 		return;
 	}
 
-	if (param >= n_fit_parameters) { warn("Parameter %i does not exist (%i parameters total)",param,n_fit_parameters); return; }
+	if (param >= param_list->nparams) { warn("Parameter %i does not exist (%i parameters total)",param,param_list->nparams); return; }
 
 	double (QLens::*LogLikePtr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -9400,8 +9590,8 @@ void QLens::plot_chisq_1d(const int param, const int n, const double ip, const d
 	ofstream chisqout(filename.c_str());
 	double pmin;
 	for (i=0, p=ip; i <= n; i++, p += step) {
-		fitparams[param] = p;
-		chisqvals[i] = 2.0 * (this->*LogLikePtr)(fitparams.array());
+		param_list->values[param] = p;
+		chisqvals[i] = 2.0 * (this->*LogLikePtr)(param_list->values);
 		if (chisqvals[i] < chisqmin) {
 			chisqmin = chisqvals[i];
 			pmin = p;
@@ -9414,11 +9604,10 @@ void QLens::plot_chisq_1d(const int param, const int n, const double ip, const d
 	fit_restore_defaults();
 }
 
-double QLens::chi_square_fit_simplex()
+double QLens::chi_square_fit_simplex(const bool show_parameter_errors)
 {
 	fitmethod = SIMPLEX;
-	if (setup_fit_parameters()==false) return 0.0;
-	fit_set_optimizations();
+	if (fit_set_optimizations()==false) return -1e30;
 	if (!initialize_fitmodel(false)) {
 		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
 		return 1e30;
@@ -9431,14 +9620,16 @@ double QLens::chi_square_fit_simplex()
 		loglikeptr = static_cast<double (Simplex::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
-	dvector stepsizes(param_settings->stepsizes,n_fit_parameters);
+	int n_fitparams = param_list->nparams;
+	dvector stepsizes(param_list->stepsizes,n_fitparams);
 	if (mpi_id==0) {
 		cout << "Initial stepsizes: ";
-		for (int i=0; i < n_fit_parameters; i++) cout << stepsizes[i] << " ";
+		for (int i=0; i < n_fitparams; i++) cout << stepsizes[i] << " ";
 		cout << endl << endl;
 	}
 
-	initialize_simplex(fitparams.array(),n_fit_parameters,stepsizes.array(),chisq_tolerance);
+	double *fitparams = param_list->values;
+	initialize_simplex(fitparams,n_fitparams,stepsizes.array(),chisq_tolerance);
 	simplex_set_display_bfpont(simplex_show_bestfit);
 	simplex_set_function(loglikeptr);
 	simplex_set_fmin(simplex_minchisq/2);
@@ -9448,7 +9639,7 @@ double QLens::chi_square_fit_simplex()
 	set_annealing_schedule_parameters(simplex_temp_initial,simplex_temp_final,simplex_cooling_factor,simplex_nmax_anneal,simplex_nmax);
 	int n_iterations;
 
-	double chisq_initial = (this->*loglikeptr)(fitparams.array());
+	double chisq_initial = (this->*loglikeptr)(fitparams);
 	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 
 	display_chisq_status = true;
@@ -9459,12 +9650,12 @@ double QLens::chi_square_fit_simplex()
 	if (use_ansi_output_during_fit) use_ansi_characters = true;
 	else use_ansi_characters = false;
 	n_iterations = downhill_simplex_anneal(verbal);
-	simplex_minval(fitparams.array(),chisq_bestfit);
+	simplex_minval(fitparams,chisq_bestfit);
 	chisq_bestfit *= 2; // since the loglike function actually returns 0.5*chisq
 	int chisq_evals = fitmodel->chisq_it;
 	fitmodel->chisq_it = 0; // To ensure it displays the chi-square status
 	if (display_chisq_status) {
-		(this->*loglikeptr)(fitparams.array());
+		(this->*loglikeptr)(fitparams);
 		if (mpi_id==0) cout << endl << endl;
 	}
 	//use_ansi_characters = false;
@@ -9484,18 +9675,18 @@ double QLens::chi_square_fit_simplex()
 			//use_ansi_characters = true;
 			n_iterations = downhill_simplex_anneal(verbal);
 			//use_ansi_characters = false;
-			simplex_minval(fitparams.array(),chisq_bestfit);
+			simplex_minval(fitparams,chisq_bestfit);
 			chisq_bestfit *= 2; // since the loglike function actually returns 0.5*chisq
 			chisq_evals += fitmodel->chisq_it;
 			fitmodel->chisq_it = 0; // To ensure it displays the chi-square status
 			if (display_chisq_status) {
-				(this->*loglikeptr)(fitparams.array());
+				(this->*loglikeptr)(fitparams);
 				if (mpi_id==0) cout << endl << endl;
 			}
 		}
 	}
 	use_ansi_characters = false;
-	bestfitparams.input(fitparams);
+	bestfitparams.input(fitparams,n_fitparams);
 
 	display_chisq_status = false;
 	if (mpi_id==0) {
@@ -9507,7 +9698,7 @@ double QLens::chi_square_fit_simplex()
 		}
 	}
 
-	output_fit_results(stepsizes,chisq_bestfit,chisq_evals);
+	output_fit_results(stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
 
 	if (turned_on_chisqmag) use_magnification_in_chisq = false; // restore chisqmag to original setting
 	fit_restore_defaults();
@@ -9516,11 +9707,10 @@ double QLens::chi_square_fit_simplex()
 	return chisq_bestfit;
 }
 
-double QLens::chi_square_fit_powell()
+double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 {
 	fitmethod = POWELL;
-	if (setup_fit_parameters()==false) return 0.0;
-	fit_set_optimizations();
+	if (fit_set_optimizations()==false) return -1e30;
 	if (!initialize_fitmodel(true)) {
 		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
 		return 1e30;
@@ -9535,14 +9725,16 @@ double QLens::chi_square_fit_powell()
 
 	initialize_powell(loglikeptr,chisq_tolerance);
 
-	dvector stepsizes(param_settings->stepsizes,n_fit_parameters);
+	int n_fitparams = param_list->nparams;
+	dvector stepsizes(param_list->stepsizes,n_fitparams);
 	if (mpi_id==0) {
 		cout << "Initial stepsizes: ";
-		for (int i=0; i < n_fit_parameters; i++) cout << stepsizes[i] << " ";
+		for (int i=0; i < n_fitparams; i++) cout << stepsizes[i] << " ";
 		cout << endl << endl;
 	}
 
-	double chisq_initial = (this->*loglikeptr)(fitparams.array());
+	double *fitparams = param_list->values;
+	double chisq_initial = (this->*loglikeptr)(fitparams);
 	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 
 	display_chisq_status = true;
@@ -9550,13 +9742,13 @@ double QLens::chi_square_fit_powell()
 	fitmodel->chisq_it = 0;
 	if (use_ansi_output_during_fit) use_ansi_characters = true;
 	else use_ansi_characters = false;
-	powell_minimize(fitparams.array(),n_fit_parameters,stepsizes.array());
+	powell_minimize(fitparams,n_fitparams,stepsizes.array());
 	use_ansi_characters = false;
-	chisq_bestfit = 2*(this->*loglikeptr)(fitparams.array());
+	chisq_bestfit = 2*(this->*loglikeptr)(fitparams);
 	int chisq_evals = fitmodel->chisq_it;
 	fitmodel->chisq_it = 0; // To ensure it displays the chi-square status
 	if (display_chisq_status) {
-		(this->*loglikeptr)(fitparams.array());
+		(this->*loglikeptr)(fitparams);
 		if (mpi_id==0) cout << endl;
 	}
 
@@ -9571,22 +9763,22 @@ double QLens::chi_square_fit_powell()
 		for (int i=0; i < n_repeats; i++) {
 			if (mpi_id==0) cout << "Repeating optimization (trial " << i+1 << ")\n";
 			use_ansi_characters = true;
-			powell_minimize(fitparams.array(),n_fit_parameters,stepsizes.array());
+			powell_minimize(fitparams,n_fitparams,stepsizes.array());
 			use_ansi_characters = false;
-			chisq_bestfit = 2*(this->*loglikeptr)(fitparams.array());
+			chisq_bestfit = 2*(this->*loglikeptr)(fitparams);
 			chisq_evals += fitmodel->chisq_it;
 			fitmodel->chisq_it = 0; // To ensure it displays the chi-square status
 			if (display_chisq_status) {
-				(this->*loglikeptr)(fitparams.array());
+				(this->*loglikeptr)(fitparams);
 				if (mpi_id==0) cout << endl;
 			}
 		}
 	}
-	bestfitparams.input(fitparams);
+	bestfitparams.input(fitparams,n_fitparams);
 	display_chisq_status = false;
 	if (group_id==0) fitmodel->logfile << "Optimization finished: min chisq = " << chisq_bestfit << endl;
 
-	output_fit_results(stepsizes,chisq_bestfit,chisq_evals);
+	output_fit_results(stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
 
 	if (turned_on_chisqmag) use_magnification_in_chisq = false; // restore chisqmag to original setting
 	fit_restore_defaults();
@@ -9595,10 +9787,11 @@ double QLens::chi_square_fit_powell()
 	return chisq_bestfit;
 }
 
-void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, const int chisq_evals)
+void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, const int chisq_evals, const bool show_parameter_errors)
 {
 	bool fisher_matrix_is_nonsingular;
-	if (calculate_parameter_errors) {
+	double *fitparams = param_list->values;
+	if (show_parameter_errors) {
 		if (mpi_id==0) cout << "Calculating parameter errors... (press CTRL-C to skip)" << endl;
 		fisher_matrix_is_nonsingular = calculate_fisher_matrix(fitparams,stepsizes);
 		if (fisher_matrix_is_nonsingular) bestfit_fisher_inverse.input(fisher_inverse);
@@ -9614,8 +9807,9 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 		cout << "\nBest-fit model: 2*loglike = " << chisq_bestfit << " (after " << chisq_evals << " evals)" << endl << endl;
 	}
 
-	double transformed_params[n_fit_parameters];
-	fitmodel->param_settings->inverse_transform_parameters(fitparams.array(),transformed_params);
+	int n_fitparams = param_list->nparams;
+	double transformed_params[n_fitparams];
+	fitmodel->param_list->inverse_transform_parameters(fitparams,transformed_params);
 	fitmodel->update_model(transformed_params);
 	for (int i=0; i < nlens; i++) {
 		fitmodel->lens_list[i]->reset_angle_modulo_2pi();
@@ -9635,23 +9829,23 @@ void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, c
 			fitmodel->print_point_source_list(false);
 		}
 
-		if (calculate_parameter_errors) {
+		if (show_parameter_errors) {
 			if (fisher_matrix_is_nonsingular) {
 				cout << "Marginalized 1-sigma errors from Fisher matrix:\n";
-				for (int i=0; i < n_fit_parameters; i++) {
-					cout << transformed_parameter_names[i] << ": " << fitparams[i] << " +/- " << sqrt(abs(fisher_inverse[i][i])) << endl;
+				for (int i=0; i < n_fitparams; i++) {
+					cout << param_list->param_names[i] << ": " << fitparams[i] << " +/- " << sqrt(abs(fisher_inverse[i][i])) << endl;
 				}
 			} else {
 				cout << "Error: Fisher matrix is singular, marginalized errors cannot be calculated\n";
-				for (int i=0; i < n_fit_parameters; i++)
-					cout << transformed_parameter_names[i] << ": " << fitparams[i] << endl;
+				for (int i=0; i < n_fitparams; i++)
+					cout << param_list->param_names[i] << ": " << fitparams[i] << endl;
 			}
 		} else {
-			for (int i=0; i < n_fit_parameters; i++)
-				cout << transformed_parameter_names[i] << ": " << fitparams[i] << endl;
+			for (int i=0; i < n_fitparams; i++)
+				cout << param_list->param_names[i] << ": " << fitparams[i] << endl;
 		}
 		cout << endl;
-		if (auto_save_bestfit) output_bestfit_model();
+		if (auto_save_bestfit) output_bestfit_model(show_parameter_errors);
 	}
 }
 
@@ -9667,29 +9861,30 @@ void fisher_quitproc(int sig)
 	exit(0);
 }
 
-bool QLens::calculate_fisher_matrix(const dvector &params, const dvector &stepsizes)
+bool QLens::calculate_fisher_matrix(double *params, const dvector &stepsizes)
 {
 	// this function calculates the marginalized error using the Gaussian approximation
 	// (only accurate if we are near maximum likelihood point and it is close to Gaussian around this point)
 	static const double increment2 = 1e-4;
 	if ((mpi_id==0) and (source_fit_mode==Point_Source) and (!imgplane_chisq) and (!use_magnification_in_chisq)) warn("Fisher matrix errors may not be accurate if source plane chi-square is used without magnification");
 
-	dmatrix fisher(n_fit_parameters,n_fit_parameters);
+	int n_fitparams = param_list->nparams;
+	dmatrix fisher(n_fitparams,n_fitparams);
 	fisher_inverse.erase();
-	fisher_inverse.input(n_fit_parameters,n_fit_parameters);
-	dvector xhi(params);
-	dvector xlo(params);
+	fisher_inverse.input(n_fitparams,n_fitparams);
+	dvector xhi(params,n_fitparams);
+	dvector xlo(params,n_fitparams);
 	double x0, curvature;
 	int i,j;
 	double step, derivlo, derivhi;
-	for (i=0; i < n_fit_parameters; i++) {
+	for (i=0; i < n_fitparams; i++) {
 		x0 = params[i];
 		xhi[i] += increment2*stepsizes[i];
-		if ((param_settings->use_penalty_limits[i]==true) and (xhi[i] > param_settings->penalty_limits_hi[i])) xhi[i] = x0;
+		if ((param_list->defined_prior_limits[i]==true) and (xhi[i] > param_list->prior_limits_hi[i])) xhi[i] = x0;
 		xlo[i] -= increment2*stepsizes[i];
-		if ((param_settings->use_penalty_limits[i]==true) and (xlo[i] < param_settings->penalty_limits_lo[i])) xlo[i] = x0;
+		if ((param_list->defined_prior_limits[i]==true) and (xlo[i] < param_list->prior_limits_lo[i])) xlo[i] = x0;
 		step = xhi[i] - xlo[i];
-		for (j=0; j < n_fit_parameters; j++) {
+		for (j=0; j < n_fitparams; j++) {
 			derivlo = loglike_deriv(xlo,j,stepsizes[j]);
 			derivhi = loglike_deriv(xhi,j,stepsizes[j]);
 			fisher[i][j] = (derivhi - derivlo) / step;
@@ -9711,7 +9906,7 @@ bool QLens::calculate_fisher_matrix(const dvector &params, const dvector &stepsi
 
 	double offdiag_avg;
 	// average the off-diagonal elements to enforce symmetry
-	for (i=1; i < n_fit_parameters; i++) {
+	for (i=1; i < n_fitparams; i++) {
 		for (j=0; j < i; j++) {
 			offdiag_avg = 0.5*(fisher[i][j]+ fisher[j][i]);
 			//if (abs((fisher[i][j]-fisher[j][i])/offdiag_avg) > 0.01) die("Fisher off-diags differ by more than 1%!");
@@ -9735,9 +9930,9 @@ double QLens::loglike_deriv(const dvector &params, const int index, const double
 	dvector xlo(params);
 	double dif, x0 = xhi[index];
 	xhi[index] += increment*step;
-	if ((param_settings->use_penalty_limits[index]==true) and (xhi[index] > param_settings->penalty_limits_hi[index])) xhi[index] = x0;
+	if ((param_list->defined_prior_limits[index]==true) and (xhi[index] > param_list->prior_limits_hi[index])) xhi[index] = x0;
 	xlo[index] -= increment*step;
-	if ((param_settings->use_penalty_limits[index]==true) and (xlo[index] < param_settings->penalty_limits_lo[index])) xlo[index] = x0;
+	if ((param_list->defined_prior_limits[index]==true) and (xlo[index] < param_list->prior_limits_lo[index])) xlo[index] = x0;
 	dif = xhi[index] - xlo[index];
 	double (QLens::*loglikeptr)(double*);
 	if (source_fit_mode==Point_Source) {
@@ -9751,8 +9946,8 @@ double QLens::loglike_deriv(const dvector &params, const int index, const double
 void QLens::nested_sampling()
 {
 	fitmethod = NESTED_SAMPLING;
-	if (setup_fit_parameters()==false) return;
-	fit_set_optimizations();
+	if (!param_list->all_prior_limits_defined()) { warn("not all prior limits have been defined"); return; }
+	if (fit_set_optimizations()==false) return;
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
@@ -9772,7 +9967,10 @@ void QLens::nested_sampling()
 		return;
 	}
 
-	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
+	double *fitparams = param_list->values;
+	int n_fitparams = param_list->nparams;
+	int n_derived_params = dparam_list->n_dparams;
+	InputPoint(fitparams,param_list->prior_limits_hi,param_list->prior_limits_lo,n_fitparams);
 	SetNDerivedParams(n_derived_params);
 
 	if (source_fit_mode==Point_Source) {
@@ -9786,23 +9984,23 @@ void QLens::nested_sampling()
 		int i;
 		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 		ofstream pnumfile(pnumfile_str.c_str());
-		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile << n_fitparams << " " << n_derived_params << endl;
 		pnumfile.close();
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
-		for (i=0; i < n_fit_parameters; i++)
+		for (i=0; i < n_fitparams; i++)
 		{
-			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
+			prangefile << param_list->prior_limits_lo[i] << " " << param_list->prior_limits_hi[i] << endl;
 		}
 		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
@@ -9814,7 +10012,7 @@ void QLens::nested_sampling()
 		}
 	}
 
-	double *param_errors = new double[n_fit_parameters];
+	double *param_errors = new double[n_fitparams];
 #ifdef USE_OPENMP
 	double wt0, wt;
 	if (show_wtime) {
@@ -9827,10 +10025,10 @@ void QLens::nested_sampling()
 	double lnZ;
 
 	use_ansi_characters = true;
-	MonoSample(filename.c_str(),n_livepts,lnZ,fitparams.array(),param_errors,mcmc_logfile,NULL,chain_info,data_info);
+	MonoSample(filename.c_str(),n_livepts,lnZ,fitparams,param_errors,mcmc_logfile,NULL,chain_info,data_info);
 	use_ansi_characters = false;
-	bestfitparams.input(fitparams);
-	chisq_bestfit = 2*(this->*LogLikePtr)(fitparams.array());
+	bestfitparams.input(fitparams,n_fitparams);
+	chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -9842,8 +10040,8 @@ void QLens::nested_sampling()
 	if (mpi_id==0) {
 		cout << endl;
 		cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
-		for (int i=0; i < n_fit_parameters; i++) {
-			cout << transformed_parameter_names[i] << ": " << fitparams[i] << " +/- " << param_errors[i] << endl;
+		for (int i=0; i < n_fitparams; i++) {
+			cout << param_list->param_names[i] << ": " << fitparams[i] << " +/- " << param_errors[i] << endl;
 		}
 		cout << endl;
 		output_bestfit_model();
@@ -9858,9 +10056,9 @@ void QLens::nested_sampling()
 void QLens::multinest(const bool resume_previous, const bool skip_run)
 {
 	fitmethod = MULTINEST;
+	if (!param_list->all_prior_limits_defined()) { warn("not all prior limits have been defined"); return; }
 #ifdef USE_MULTINEST
-	if (setup_fit_parameters()==false) return;
-	fit_set_optimizations();
+	if (fit_set_optimizations()==false) return;
 	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
@@ -9886,28 +10084,30 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
+	int n_fitparams = param_list->nparams;
+	int n_derived_params = dparam_list->n_dparams;
 	if (mpi_id==0) {
 		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
 		int i;
 		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 		ofstream pnumfile(pnumfile_str.c_str());
-		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile << n_fitparams << " " << n_derived_params << endl;
 		pnumfile.close();
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
-		for (i=0; i < n_fit_parameters; i++)
+		for (i=0; i < n_fitparams; i++)
 		{
-			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
+			prangefile << param_list->prior_limits_lo[i] << " " << param_list->prior_limits_hi[i] << endl;
 		}
 		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
@@ -9934,13 +10134,13 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	double efr, tol, Ztol, logZero;
 
 	IS = 0;					// do Nested Importance Sampling (bad idea)
-	mmodal = (multinest_mode_separation) ? 1 : 0;					// do mode separation?
+	mmodal = (multimodal_sampling) ? 1 : 0;					// do mode separation?
 	ceff = (multinest_constant_eff_mode) ? 1 : 0;
 	efr = multinest_target_efficiency;				// set the required efficiency
 	nlive = n_livepts;
 	tol = 0.5;				// tol, defines the stopping criteria
-	nPar = n_fit_parameters+n_derived_params;					// total no. of parameters including free & derived parameters
-	nClsPar = n_fit_parameters;				// no. of parameters to do mode separation on
+	nPar = n_fitparams+n_derived_params;					// total no. of parameters including free & derived parameters
+	nClsPar = n_fitparams;				// no. of parameters to do mode separation on
 	updInt = 10;				// after how many iterations feedback is required & the output files should be updated
 							// note: posterior files are updated & dumper routine is called after every updInt*10 iterations
 	Ztol = -1e90;				// all the modes with logZ < Ztol are ignored
@@ -9957,8 +10157,8 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	maxiter = 0;				// max no. of iterations, a non-positive value means infinity. MultiNest will terminate if either it 
 							// has done max no. of iterations or convergence criterion (defined through tol) has been satisfied
 	void *context = 0;				// not required by MultiNest, any additional information user wants to pass
-	int pWrap[n_fit_parameters];				// which parameters to have periodic boundary conditions?
-	for (int i = 0; i < n_fit_parameters; i++) pWrap[i] = 0;
+	int pWrap[n_fitparams];				// which parameters to have periodic boundary conditions?
+	for (int i = 0; i < n_fitparams; i++) pWrap[i] = 0;
 	//MPI_Fint fortran_comm = MPI_Comm_c2f((*group_comm));
 
 	use_ansi_characters = true;
@@ -9980,13 +10180,13 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 
 		int follower_rank = (group_id==0) ? -1 : group_num;
 
-		nested::run(fortran_comm, follower_rank, mpi_ngroups, IS, mmodal, ceff, nlive, tol, efr, n_fit_parameters, nPar, nClsPar, maxModes, updInt, Ztol, filename.c_str(), seed, pWrap, fb, resume, outfile, initMPI, logZero, maxiter, multinest_loglikelihood, dumper_multinest, context);
+		nested::run(fortran_comm, follower_rank, mpi_ngroups, IS, mmodal, ceff, nlive, tol, efr, n_fitparams, nPar, nClsPar, maxModes, updInt, Ztol, filename.c_str(), seed, pWrap, fb, resume, outfile, initMPI, logZero, maxiter, multinest_loglikelihood, dumper_multinest, context);
 #else
-		nested::run(IS, mmodal, ceff, nlive, tol, efr, n_fit_parameters, nPar, nClsPar, maxModes, updInt, Ztol, filename.c_str(), seed, pWrap, fb, resume, outfile, initMPI, logZero, maxiter, multinest_loglikelihood, dumper_multinest, context);
+		nested::run(IS, mmodal, ceff, nlive, tol, efr, n_fitparams, nPar, nClsPar, maxModes, updInt, Ztol, filename.c_str(), seed, pWrap, fb, resume, outfile, initMPI, logZero, maxiter, multinest_loglikelihood, dumper_multinest, context);
 #endif
 	}
 
-	bestfitparams.input(n_fit_parameters);
+	bestfitparams.input(n_fitparams);
 
 	use_ansi_characters = false;
 
@@ -10018,7 +10218,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 		//double area=1.0;
 		stats_in >> lnZ;
 		stats_in.close();
-		//for (int i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
+		//for (int i=0; i < n_fitparams; i++) area *= (param_list->prior_limits_hi[i]-param_list->prior_limits_lo[i]);
 		//lnZ += log(area);
 
 		const int n_characters = 16384;
@@ -10054,7 +10254,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 			}
 
 			double weight, chi2;
-			int n_tot_params = n_fit_parameters + n_derived_params;
+			int n_tot_params = n_fitparams + n_derived_params;
 			xparams = new double[n_tot_params];
 			params = new double[n_tot_params];
 			covs = new double[n_tot_params];
@@ -10076,8 +10276,8 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 				for (i=0; i < n_tot_params; i++) instream >> xparams[i];
 				transform_cube(params,xparams);
 				mnout << weight << "   ";
-				for (i=0; i < n_fit_parameters; i++) mnout << params[i] << "   ";
-				for (i=0; i < n_derived_params; i++) mnout << xparams[n_fit_parameters+i] << "   ";
+				for (i=0; i < n_fitparams; i++) mnout << params[i] << "   ";
+				for (i=0; i < n_derived_params; i++) mnout << xparams[n_fitparams+i] << "   ";
 				if (using_livepts_file) {
 					double negloglike;
 					instream >> negloglike;
@@ -10086,7 +10286,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 				mnout << chi2 << endl;
 				if (chi2 < minchisq) {
 					minchisq = chi2;
-					for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
+					for (i=0; i < n_fitparams; i++) bestfitparams[i] = params[i];
 				}
 				for (i=0; i < n_tot_params; i++) {
 					avgs[i] += weight*params[i];
@@ -10112,7 +10312,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 #endif
 	if (cont == 0) return;
 #ifdef USE_MPI
-		MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
+		MPI_Bcast(bestfitparams.array(),n_fitparams,MPI_DOUBLE,0,MPI_COMM_WORLD);
 #endif
 	if (group_num==0) {
 		chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
@@ -10122,12 +10322,12 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 		cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
 		cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):    (chisq=" << minchisq << ")\n";
 		if (using_livepts_file) {
-			for (int i=0; i < n_fit_parameters; i++) {
-				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << endl;
+			for (int i=0; i < n_fitparams; i++) {
+				cout << param_list->param_names[i] << ": " << bestfitparams[i] << endl;
 			}
 		} else {
-			for (int i=0; i < n_fit_parameters; i++) {
-				cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
+			for (int i=0; i < n_fitparams; i++) {
+				cout << param_list->param_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
 			}
 		}
 		cout << endl;
@@ -10146,9 +10346,9 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 void QLens::polychord(const bool resume_previous, const bool skip_run)
 {
 	fitmethod = POLYCHORD;
+	if (!param_list->all_prior_limits_defined()) { warn("not all prior limits have been defined"); return; }
 #ifdef USE_POLYCHORD
-	if (setup_fit_parameters()==false) return;
-	fit_set_optimizations();
+	if (fit_set_optimizations()==false) return;
 	if ((mpi_id==0) and (!resume_previous) and (!skip_run) and (fit_output_dir != ".")) {
 		// I should probably give the nested sampling output a unique extension like ".nest" or something, so that mkdist can't ever confuse it with twalk output in the same dir
 		// Do this later...
@@ -10175,28 +10375,30 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
+	int n_fitparams = param_list->nparams;
+	int n_derived_params = dparam_list->n_dparams;
 	if (mpi_id==0) {
 		// This code gets repeated in a few spots and should really be put in a separate function...DO THIS LATER!
 		int i;
 		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 		ofstream pnumfile(pnumfile_str.c_str());
-		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile << n_fitparams << " " << n_derived_params << endl;
 		pnumfile.close();
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
-		for (i=0; i < n_fit_parameters; i++)
+		for (i=0; i < n_fitparams; i++)
 		{
-			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
+			prangefile << param_list->prior_limits_lo[i] << " " << param_list->prior_limits_hi[i] << endl;
 		}
 		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
@@ -10219,11 +10421,11 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 	use_ansi_characters = true;
 
 	mcsampler_set_lensptr(this);
-	Settings settings(n_fit_parameters,n_derived_params);
+	Settings settings(n_fitparams,n_derived_params);
 
 	settings.nlive         = n_livepts;
-	settings.num_repeats   = n_fit_parameters*polychord_nrepeats;
-	settings.do_clustering = false;
+	settings.num_repeats   = n_fitparams*polychord_nrepeats;
+	settings.do_clustering = (multimodal_sampling) ? true : false;
 
 	settings.precision_criterion = 1e-3;
 	settings.logzero = -1e30;
@@ -10259,7 +10461,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 	}
 #endif
 
-	bestfitparams.input(n_fit_parameters);
+	bestfitparams.input(n_fitparams);
 	// Now convert the PolyChord output to a form that mkdist can read
 	double *params, *covs, *avgs;
 	double lnZ;
@@ -10279,7 +10481,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 		//double area=1.0;
 		stats_in >> lnZ;
 		stats_in.close();
-		//for (i=0; i < n_fit_parameters; i++) area *= (upper_limits[i]-lower_limits[i]);
+		//for (i=0; i < n_fitparams; i++) area *= (param_list->prior_limits_hi[i]-param_list->prior_limits_lo[i]);
 		//lnZ += log(area);
 
 		string polyin_filename = filename + ".txt";
@@ -10301,7 +10503,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 
 		double weight, chi2;
 		double minchisq = 1e30;
-		int n_tot_params = n_fit_parameters + n_derived_params;
+		int n_tot_params = n_fitparams + n_derived_params;
 		params = new double[n_tot_params];
 		covs = new double[n_tot_params];
 		avgs = new double[n_tot_params];
@@ -10330,7 +10532,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 			polyout << chi2 << endl;
 			if (chi2 < minchisq) {
 				minchisq = chi2;
-				for (i=0; i < n_fit_parameters; i++) bestfitparams[i] = params[i];
+				for (i=0; i < n_fitparams; i++) bestfitparams[i] = params[i];
 			}
 			for (i=0; i < n_tot_params; i++) {
 				avgs[i] += weight*params[i];
@@ -10348,7 +10550,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 	}
 
 #ifdef USE_MPI
-	MPI_Bcast(bestfitparams.array(),n_fit_parameters,MPI_DOUBLE,0,MPI_COMM_WORLD);
+	MPI_Bcast(bestfitparams.array(),n_fitparams,MPI_DOUBLE,0,MPI_COMM_WORLD);
 #endif
 	if (group_num==0) {
 		chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
@@ -10357,8 +10559,8 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 	if (mpi_id==0) {
 		cout << endl << "Log-evidence: ln(Z) = " << lnZ << endl;
 		cout << "\nBest-fit parameters and error estimates (from dispersions of chain output points):\n";
-		for (int i=0; i < n_fit_parameters; i++) {
-			cout << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
+		for (int i=0; i < n_fitparams; i++) {
+			cout << param_list->param_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(covs[i]) << endl;
 		}
 		cout << endl;
 		output_bestfit_model();
@@ -10375,8 +10577,8 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 
 void QLens::chi_square_twalk()
 {
-	if (setup_fit_parameters()==false) return;
-	fit_set_optimizations();
+	if (fit_set_optimizations()==false) return;
+	if (!param_list->all_prior_limits_defined()) { warn("not all prior limits have been defined"); return; }
 	if ((mpi_id==0) and (fit_output_dir != ".")) {
 #if __cplusplus >= 201703L // C++17 standard or later
 		if (filesystem::exists(fit_output_dir)) {
@@ -10393,7 +10595,10 @@ void QLens::chi_square_twalk()
 		return;
 	}
 
-	InputPoint(fitparams.array(),upper_limits.array(),lower_limits.array(),upper_limits_initial.array(),lower_limits_initial.array(),n_fit_parameters);
+	int n_fitparams = param_list->nparams;
+	int n_derived_params = dparam_list->n_dparams;
+	double *fitparams = param_list->values;
+	InputPoint(fitparams,param_list->prior_limits_hi,param_list->prior_limits_lo,n_fitparams);
 	SetNDerivedParams(n_derived_params);
 
 	if (source_fit_mode==Point_Source) {
@@ -10407,23 +10612,23 @@ void QLens::chi_square_twalk()
 		int i;
 		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 		ofstream pnumfile(pnumfile_str.c_str());
-		pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+		pnumfile << n_fitparams << " " << n_derived_params << endl;
 		pnumfile.close();
 		string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 		ofstream pnamefile(pnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 		ofstream lpnamefile(lpnamefile_str.c_str());
-		for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
-		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		string prange_str = fit_output_dir + "/" + fit_output_filename + ".ranges";
 		ofstream prangefile(prange_str.c_str());
-		for (i=0; i < n_fit_parameters; i++)
+		for (i=0; i < n_fitparams; i++)
 		{
-			prangefile << lower_limits[i] << " " << upper_limits[i] << endl;
+			prangefile << param_list->prior_limits_lo[i] << " " << param_list->prior_limits_hi[i] << endl;
 		}
 		for (i=0; i < n_derived_params; i++) prangefile << "-1e30 1e30" << endl;
 		prangefile.close();
@@ -10446,9 +10651,9 @@ void QLens::chi_square_twalk()
 	display_chisq_status = false; // just in case it was turned on
 
 	use_ansi_characters = true;
-	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams.array(),mcmc_logfile,NULL,chain_info,data_info);
+	TWalk(filename.c_str(),0.9836,4,2.4,2.5,6.0,mcmc_tolerance,mcmc_threads,fitparams,mcmc_logfile,NULL,chain_info,data_info);
 	use_ansi_characters = false;
-	bestfitparams.input(fitparams);
+	bestfitparams.input(fitparams,n_fitparams);
 	chisq_bestfit = 2*(this->*LogLikePtr)(bestfitparams.array());
 
 #ifdef USE_OPENMP
@@ -10469,18 +10674,19 @@ void QLens::chi_square_twalk()
 bool QLens::adopt_model(dvector &fitpars)
 {
 	if ((nlens==0) and (n_ptsrc==0) and (n_sb==0)) { if (mpi_id==0) warn(warnings,"No lens/source model has been specified"); return false; }
-	if (n_fit_parameters == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
-	if (fitpars.size() != n_fit_parameters) {
+	int n_fitparams = param_list->nparams;
+	if (n_fitparams == 0) { if (mpi_id==0) warn(warnings,"No best-fit point has been saved from a previous fit"); return false; }
+	if (fitpars.size() != n_fitparams) {
 		if (mpi_id==0) {
 			if (fitpars.size()==0) warn(warnings,"fit has not been run; best-fit solution is not available");
 			else warn(warnings,"Best-fit number of parameters does not match current number; this likely means your current lens/source model does not match the model that was used for fitting.");
 		}
 		return false;
 	}
-	double transformed_params[n_fit_parameters];
-	param_settings->inverse_transform_parameters(fitpars.array(),transformed_params);
-	double log_penalty_prior;
-	log_penalty_prior = update_model(transformed_params); // the model is adopted here
+	double transformed_params[n_fitparams];
+	param_list->update_param_values(fitpars.array());
+	param_list->inverse_transform_parameters();
+	double log_penalty_prior = update_model(param_list->untransformed_values); // the model is adopted here
 
 	int i;
 	if ((n_extended_src_redshifts > 1) and (source_fit_mode != Point_Source)) {
@@ -10516,46 +10722,48 @@ bool QLens::adopt_model(dvector &fitpars)
 	return true;
 }
 
-void QLens::output_bestfit_model()
+void QLens::output_bestfit_model(const bool show_parameter_errors)
 {
 	if ((nlens == 0) and (n_sb==0)) { warn(warnings,"No fit model has been specified"); return; }
-	if (n_fit_parameters == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
-	if (bestfitparams.size() != n_fit_parameters) { warn(warnings,"Best-fit point number of params does not match current number"); return; }
+	int n_fitparams = param_list->nparams;
+	int n_derived_params = dparam_list->n_dparams;
+	if (n_fitparams == 0) { warn(warnings,"No best-fit point has been saved from a previous fit"); return; }
+	if (bestfitparams.size() != n_fitparams) { warn(warnings,"Best-fit point number of params does not match current number"); return; }
 	if (fit_output_dir != ".") create_output_directory();
 
 	int i;
 	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 	ofstream pnumfile(pnumfile_str.c_str());
-	pnumfile << n_fit_parameters << " " << n_derived_params << endl;
+	pnumfile << n_fitparams << " " << n_derived_params << endl;
 	pnumfile.close();
 	string pnamefile_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
 	ofstream pnamefile(pnamefile_str.c_str());
-	for (i=0; i < n_fit_parameters; i++) pnamefile << transformed_parameter_names[i] << endl;
-	for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+	for (i=0; i < n_fitparams; i++) pnamefile << param_list->param_names[i] << endl;
+	for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 	pnamefile.close();
 	string lpnamefile_str = fit_output_dir + "/" + fit_output_filename + ".latex_paramnames";
 	ofstream lpnamefile(lpnamefile_str.c_str());
-	for (i=0; i < n_fit_parameters; i++) lpnamefile << transformed_parameter_names[i] << "\t" << transformed_latex_parameter_names[i] << endl;
-	for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+	for (i=0; i < n_fitparams; i++) lpnamefile << param_list->param_names[i] << "\t" << param_list->latex_names[i] << endl;
+	for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 	lpnamefile.close();
 
 	string bestfit_filename = fit_output_dir + "/" + fit_output_filename + ".bf";
 	int n,j;
 	ofstream bf_out(bestfit_filename.c_str());
 	bf_out << chisq_bestfit << " ";
-	for (i=0; i < n_fit_parameters; i++) bf_out << bestfitparams[i] << " ";
+	for (i=0; i < n_fitparams; i++) bf_out << bestfitparams[i] << " ";
 	bf_out << endl;
 	bf_out.close();
 
 	string outfile_str = fit_output_dir + "/" + fit_output_filename + ".bestfit";
 	ofstream outfile(outfile_str.c_str());
-	if ((calculate_parameter_errors) and (bestfit_fisher_inverse.is_initialized()))
+	if ((show_parameter_errors) and (bestfit_fisher_inverse.is_initialized()))
 	{
-		if (bestfit_fisher_inverse.rows() != n_fit_parameters) die("dimension of Fisher matrix does not match number of fit parameters (%i vs %i)",bestfit_fisher_inverse.rows(),n_fit_parameters);
+		if (bestfit_fisher_inverse.rows() != n_fitparams) die("dimension of Fisher matrix does not match number of fit parameters (%i vs %i)",bestfit_fisher_inverse.rows(),n_fitparams);
 		string fisher_inv_filename = fit_output_dir + "/" + fit_output_filename + ".pcov"; // inverse-fisher matrix is the parameter covariance matrix
 		ofstream fisher_inv_out(fisher_inv_filename.c_str());
-		for (i=0; i < n_fit_parameters; i++) {
-			for (j=0; j < n_fit_parameters; j++) {
+		for (i=0; i < n_fitparams; i++) {
+			for (j=0; j < n_fitparams; j++) {
 				fisher_inv_out << bestfit_fisher_inverse[i][j] << " ";
 			}
 			fisher_inv_out << endl;
@@ -10565,8 +10773,8 @@ void QLens::output_bestfit_model()
 		if ((include_flux_chisq) and (bestfit_flux != 0)) outfile << "Best-fit source flux = " << bestfit_flux << endl;
 		outfile << endl;
 		outfile << "Marginalized 1-sigma errors from Fisher matrix:\n";
-		for (int i=0; i < n_fit_parameters; i++) {
-			outfile << transformed_parameter_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(abs(bestfit_fisher_inverse[i][i])) << endl;
+		for (int i=0; i < n_fitparams; i++) {
+			outfile << param_list->param_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(abs(bestfit_fisher_inverse[i][i])) << endl;
 		}
 		outfile << endl;
 	} else {
@@ -10577,17 +10785,17 @@ void QLens::output_bestfit_model()
 		}
 		if ((include_flux_chisq) and (bestfit_flux != 0)) outfile << "Best-fit source flux = " << bestfit_flux << endl;
 		outfile << endl;
-		for (int i=0; i < n_fit_parameters; i++) {
-			outfile << transformed_parameter_names[i] << ": " << bestfitparams[i] << endl;
+		for (int i=0; i < n_fitparams; i++) {
+			outfile << param_list->param_names[i] << ": " << bestfitparams[i] << endl;
 		}
 		outfile << endl;
 	}
 	string prange_str = fit_output_dir + "/" + fit_output_filename + ".pranges";
 	ofstream prangefile(prange_str.c_str());
-	for (int i=0; i < n_fit_parameters; i++)
+	for (int i=0; i < n_fitparams; i++)
 	{
-		if (param_settings->use_penalty_limits[i])
-			prangefile << param_settings->penalty_limits_lo[i] << " " << param_settings->penalty_limits_hi[i] << endl;
+		if (param_list->defined_prior_limits[i])
+			prangefile << param_list->prior_limits_lo[i] << " " << param_list->prior_limits_hi[i] << endl;
 		else
 			prangefile << "-1e30 1e30" << endl;
 	}
@@ -10630,16 +10838,17 @@ bool QLens::add_dparams_to_chain(string file_ext)
 		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&QLens::fitmodel_loglike_extended_source);
 	}
 
-	int i, nparams, n_dparams_old;
+	int i, n_fitparams, nparams, n_derived_params, n_dparams_old;
+	n_fitparams = param_list->nparams;
+	n_derived_params = dparam_list->n_dparams;
 	string pnumfile_str = fit_output_dir + "/" + fit_output_filename + ".nparam";
 	ifstream pnumfile(pnumfile_str.c_str());
 	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
 	pnumfile >> nparams >> n_dparams_old;
-	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	if (nparams != n_fitparams) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
 	pnumfile.close();
 
-	if (setup_fit_parameters()==false) return false;
-	fit_set_optimizations();
+	if (fit_set_optimizations()==false) return false;
 	if (!initialize_fitmodel(true)) {
 		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
 		return false;
@@ -10650,10 +10859,10 @@ bool QLens::add_dparams_to_chain(string file_ext)
 	if (mpi_id==0) {
 		int i;
 		int n_dparams_tot = n_dparams_old + n_derived_params;
-		int n_totparams_old = n_fit_parameters + n_dparams_old;
+		int n_totparams_old = n_fitparams + n_dparams_old;
 		string pnumfile_str = fit_output_dir + "/" + fit_output_filename + "." + file_ext + ".nparam";
 		ofstream pnumfile(pnumfile_str.c_str());
-		pnumfile << n_fit_parameters << " " << n_dparams_tot << endl;
+		pnumfile << n_fitparams << " " << n_dparams_tot << endl;
 		pnumfile.close();
 
 		string pnamefile_old_str = fit_output_dir + "/" + fit_output_filename + ".paramnames";
@@ -10664,7 +10873,7 @@ bool QLens::add_dparams_to_chain(string file_ext)
 			pnamefile_old.getline(dataline,n_characters);
 			pnamefile << dataline << endl;
 		}
-		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list[i]->name << endl;
+		for (i=0; i < n_derived_params; i++) pnamefile << dparam_list->dparams[i]->name << endl;
 		pnamefile.close();
 		pnamefile_old.close();
 
@@ -10676,7 +10885,7 @@ bool QLens::add_dparams_to_chain(string file_ext)
 			lpnamefile_old.getline(dataline,n_characters);
 			lpnamefile << dataline << endl;
 		}
-		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list[i]->name << "\t" << dparam_list[i]->latex_name << endl;
+		for (i=0; i < n_derived_params; i++) lpnamefile << dparam_list->dparams[i]->name << "\t" << dparam_list->dparams[i]->latex_name << endl;
 		lpnamefile.close();
 		lpnamefile_old.close();
 
@@ -10693,7 +10902,7 @@ bool QLens::add_dparams_to_chain(string file_ext)
 		prangefile_old.close();
 	}
 
-	double *params = new double[n_fit_parameters];
+	double *params = new double[n_fitparams];
 	double *dparams_old = new double[n_dparams_old];
 	double weight, chisq;
 	string chain_old_str = fit_output_dir + "/" + fit_output_filename;
@@ -10724,7 +10933,7 @@ bool QLens::add_dparams_to_chain(string file_ext)
 	for (line=group_num; line < nlines; line += mpi_ngroups) {
 		istringstream datastream(chain_lines[line]);
 		datastream >> weight;
-		for (i=0; i < n_fit_parameters; i++) {
+		for (i=0; i < n_fitparams; i++) {
 			datastream >> params[i];
 		}
 		fitmodel_calculate_derived_params(params, dparams_new[line]);
@@ -10761,7 +10970,7 @@ bool QLens::add_dparams_to_chain(string file_ext)
 			istringstream datastream(chain_lines[line]);
 			datastream >> weight;
 			chain_file << weight << "   ";
-			for (i=0; i < n_fit_parameters; i++) {
+			for (i=0; i < n_fitparams; i++) {
 				datastream >> params[i];
 				chain_file << params[i] << "   ";
 			}
@@ -10798,7 +11007,7 @@ bool QLens::adopt_bestfit_point_from_chain()
 	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
 	pnumfile >> nparams >> n_dparams;
 	n_tot_parameters = nparams + n_dparams;
-	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	if (nparams != param_list->nparams) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
 	pnumfile.close();
 
 	static const int n_characters = 5000;
@@ -10847,7 +11056,7 @@ bool QLens::adopt_bestfit_point_from_chain()
 	//if (max_weight==-1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
 	if (minchisq==1e30) { warn("no points from chain fell within range min/max values for specified parameter"); return false; }
 
-	dvector chain_params(params,n_fit_parameters);
+	dvector chain_params(params,param_list->nparams);
 	adopt_model(chain_params);
 
 	delete[] params;
@@ -10862,12 +11071,13 @@ bool QLens::load_bestfit_model(const bool custom_filename, string fit_filename)
 	ifstream pnumfile(pnumfile_str.c_str());
 	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
 	pnumfile >> nparams;
-	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in best-fit model file"); return false; }
+	int n_fitparams = param_list->nparams;
+	if (nparams != n_fitparams) { warn("number of fit parameters in qlens does not match corresponding number in best-fit model file"); return false; }
 	pnumfile.close();
 
 	static const int n_characters = 5000;
 	char dataline[n_characters];
-	double *params = new double[n_fit_parameters];
+	double *params = new double[n_fitparams];
 
 	string bf_str = fit_output_dir + "/" + fit_output_filename + ".bf";
 	ifstream bf_file(bf_str.c_str());
@@ -10879,7 +11089,7 @@ bool QLens::load_bestfit_model(const bool custom_filename, string fit_filename)
 		datastream >> params[i];
 	}
 
-	dvector bf_params(params,n_fit_parameters);
+	dvector bf_params(params,n_fitparams);
 	adopt_model(bf_params);
 
 	delete[] params;
@@ -10893,12 +11103,13 @@ bool QLens::adopt_point_from_chain(const unsigned long line_num)
 	ifstream pnumfile(pnumfile_str.c_str());
 	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
 	pnumfile >> nparams >> n_dparams_old;
-	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	int n_fitparams = param_list->nparams;
+	if (nparams != n_fitparams) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
 	pnumfile.close();
 
 	static const int n_characters = 5000;
 	char dataline[n_characters];
-	double *params = new double[n_fit_parameters];
+	double *params = new double[n_fitparams];
 
 	string chain_str = fit_output_dir + "/" + fit_output_filename;
 	ifstream chain_file(chain_str.c_str());
@@ -10922,10 +11133,10 @@ bool QLens::adopt_point_from_chain(const unsigned long line_num)
 	istringstream datastream(dataline);
 	double weight;
 	datastream >> weight;
-	for (i=0; i < n_fit_parameters; i++) {
+	for (i=0; i < n_fitparams; i++) {
 		datastream >> params[i];
 	}
-	dvector chain_params(params,n_fit_parameters);
+	dvector chain_params(params,n_fitparams);
 	adopt_model(chain_params);
 
 	delete[] params;
@@ -10940,11 +11151,12 @@ bool QLens::adopt_point_from_chain_paramrange(const int paramnum, const double m
 	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
 	pnumfile >> nparams >> n_dparams;
 	n_tot_parameters = nparams + n_dparams;
-	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	int n_fitparams = param_list->nparams;
+	if (nparams != n_fitparams) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
 	if (paramnum >= n_tot_parameters) { warn("parameter number is less than number of fit+derived parameters in chain"); return false; }
 	pnumfile.close();
-	if (paramnum >= n_fit_parameters) {
-		ndparam = paramnum - n_fit_parameters;
+	if (paramnum >= n_fitparams) {
+		ndparam = paramnum - n_fitparams;
 		if (mpi_id==0) cout << "The parameter selected is derived parameter no. " << ndparam << endl;
 	}
 
@@ -10993,7 +11205,7 @@ bool QLens::adopt_point_from_chain_paramrange(const int paramnum, const double m
 	}
 	datastream >> chisq;
 	if (mpi_id==0) cout << "Line number of point adopted: " << line_num << " (out of " << nline << " total lines); chisq=" << chisq << endl;
-	dvector chain_params(params,n_fit_parameters);
+	dvector chain_params(params,n_fitparams);
 	adopt_model(chain_params);
 
 	delete[] params;
@@ -11015,12 +11227,13 @@ bool QLens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, 
 	ifstream pnumfile(pnumfile_str.c_str());
 	if (!pnumfile.is_open()) { warn("could not open file '%s'",pnumfile_str.c_str()); return false; }
 	pnumfile >> nparams >> n_dparams_old;
-	if (nparams != n_fit_parameters) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
+	int n_fitparams = param_list->nparams;
+	if (nparams != n_fitparams) { warn("number of fit parameters in qlens does not match corresponding number in chain"); return false; }
 	pnumfile.close();
 
 	static const int n_characters = 5000;
 	char dataline[n_characters];
-	double *params = new double[n_fit_parameters];
+	double *params = new double[n_fitparams];
 
 	string chain_str = fit_output_dir + "/" + fit_output_filename;
 	ifstream chain_file(chain_str.c_str());
@@ -11056,10 +11269,10 @@ bool QLens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, 
 		istringstream datastream(dataline);
 		datastream >> weight;
 		tot += weight;
-		for (i=0; i < n_fit_parameters; i++) {
+		for (i=0; i < n_fitparams; i++) {
 			datastream >> params[i];
 		}
-		dvector chain_params(params,n_fit_parameters);
+		dvector chain_params(params,n_fitparams);
 		adopt_model(chain_params);
 		//print_lens_list(false);
 		lens_list[lensnum]->plot_kappa_profile(nbins,rvals,kappa_r_vals,kappa_avg_vals);
@@ -11085,8 +11298,8 @@ bool QLens::plot_kappa_profile_percentiles_from_chain(int lensnum, double rmin, 
 	double kavglo1, kavglo2, kavghi1, kavghi2;
 	double mavglo1, mavglo2, mavghi1, mavghi2;
 	ofstream outfile(kappa_filename.c_str());
-	double sigma_cr_arcsec = cosmo.sigma_crit_arcsec(zl, reference_source_redshift);
-	double arcsec_to_kpc = cosmo.angular_diameter_distance(zl)/(1e-3*(180/M_PI)*3600);
+	double sigma_cr_arcsec = cosmo->sigma_crit_arcsec(zl, reference_source_redshift);
+	double arcsec_to_kpc = cosmo->angular_diameter_distance(zl)/(1e-3*(180/M_PI)*3600);
 	double rval_kpc;
 	for (i=0; i < nbins; i++) {
 		kaplo1 = find_percentile(n_points, 0.02275, tot, kappa_r_pts[i], weights[i]);
@@ -11155,6 +11368,811 @@ double QLens::find_percentile(const unsigned long npoints, const double pct, con
 		}
 	}
 	return 0.0;
+}
+
+void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampled_posts, bool no2dposts, bool use_fisher_matrix, bool run_python_script)
+{
+	auto file_exists = [](const string &filename)
+	{
+		ifstream infile(filename.c_str());
+		bool exists = infile.good();
+		infile.close();
+		return exists;
+	};
+
+	auto adjust_ranges_to_include_markers = [](double *minvals, double *maxvals, double *markers, const int n_markers)
+	{
+		const double extra_length_frac = 0.05;
+		for (int i=0; i < n_markers; i++) {
+			if (minvals[i] > markers[i]) {
+				if ((maxvals[i]-markers[i]) > 4*(maxvals[i]-minvals[i])) warn("marker %i is WAY out of range of parameter chain; will not show marker",i);
+				else {
+					minvals[i] = markers[i];
+					minvals[i] -= extra_length_frac*(maxvals[i]-minvals[i]);
+				}
+			}
+			else if (maxvals[i] < markers[i]) {
+				if ((markers[i]-minvals[i]) > 4*(maxvals[i]-minvals[i])) warn("marker %i is WAY out of range of parameter chain; will not show marker",i);
+				else {
+					maxvals[i] = markers[i];
+					maxvals[i] += extra_length_frac*(maxvals[i]-minvals[i]);
+				}
+			}
+		}
+	};
+
+	int i,j;
+	int n_threads=1, n_processes=1;
+	bool show_markers = false;
+	bool make_subplot = param_list->subplot_params_defined();
+	string file_root = fit_output_dir + "/" + fit_output_filename;
+	string marker_filename;
+	string subplot_paramnames_filename;
+
+	if (resampled_posts) file_root += ".new";
+	if (param_markers != "") {
+		show_markers = true;
+		marker_filename = file_root + ".markers";
+		if (mpi_id==0) {
+			ofstream markerfile(marker_filename.c_str());
+			markerfile << param_markers << endl;
+			markerfile.close();
+		}
+	}
+
+	if (make_subplot) {
+		string subplot_paramnames_filename = file_root + ".subplot_params";
+		if (mpi_id==0) {
+			ofstream subplotfile(subplot_paramnames_filename.c_str());
+			//int nparams_tot = param_list->nparams + dparam_list->n_dparams;
+			for (i=0; i < param_list->nparams; i++) {
+				string pname;
+				bool pflag = param_list->subplot_param_flag(i,pname);
+				subplotfile << pname << " ";
+				if (pflag) subplotfile << "1";
+				else subplotfile << "0";
+				subplotfile << endl;
+			}
+			for (i=0; i < dparam_list->n_dparams; i++) {
+				string pname;
+				bool pflag = dparam_list->subplot_param_flag(i,pname);
+				subplotfile << pname << " ";
+				if (pflag) subplotfile << "1";
+				else subplotfile << "0";
+				subplotfile << endl;
+			}
+			subplotfile.close();
+		}
+	}
+
+	if (mpi_id==0) {
+		if (!no2dposts) {
+			string hist2d_str = file_root + ".hist2d_params";
+			ofstream hist2dfile(hist2d_str.c_str());
+			//int nparams_tot = param_list->nparams + dparam_list->n_dparams;
+			for (i=0; i < param_list->nparams; i++) {
+				string pname;
+				bool pflag = param_list->hist2d_param_flag(i,pname);
+				hist2dfile << pname << " ";
+				if (pflag) hist2dfile << "1";
+				else hist2dfile << "0";
+				hist2dfile << endl;
+			}
+			for (i=0; i < dparam_list->n_dparams; i++) {
+				string pname;
+				bool pflag = dparam_list->hist2d_param_flag(i,pname);
+				hist2dfile << pname << " ";
+				if (pflag) hist2dfile << "1";
+				else hist2dfile << "0";
+				hist2dfile << endl;
+			}
+			hist2dfile.close();
+		}
+	}
+
+	i=0;
+	j=0;
+	int cut = -1;
+	bool silent = false;
+	bool transform_parameters = false;
+	bool importance_sampling = false;
+	bool smoothing = false;
+	bool exclude_derived_params = false;
+	bool latex_table_format = false;
+	bool make_1d_posts = true;
+	bool make_2d_posts = true;
+	int n_markers_allowed = 10000;
+	bool use_bestfit_markers = false;
+	char param_transform_filename[100] = "";
+	char prior_weight_filename[100] = "";
+	bool make_derived_posterior = false;
+	double threshold = 3e-3;
+	bool print_marker_values = false;
+
+	//int nparams_subset = -1;
+	string filename, istring, jstring;
+	int nparams, nparams_eff, n_fitparams = -1;
+	if (!use_fisher_matrix) {
+		for(;;)
+		{
+			stringstream jstream;
+			jstream << j;
+			jstream >> jstring;
+			filename = file_root + "_0." + jstring;
+			if (file_exists(filename)) j++;
+			else break;
+		}
+		if (j==0) {
+			for(;;) {
+				stringstream istream;
+				istream << i;
+				istream >> istring;
+				filename = file_root + "_" + istring;
+				if (file_exists(filename)) i++;
+				else break;
+			}
+			if (i==0) {
+				if (file_exists(file_root)) {
+					// in this case the "chain" data is from nested sampling, and no cut needs to be made
+					if (cut == -1) cut = 0;
+					i++;
+				}
+				else die("No data files found");
+			}
+		} else {
+			for (;;) {
+				stringstream istream;
+				istream << i;
+				istream >> istring;
+				filename = file_root + "_" + istring + ".0";
+				if (file_exists(filename)) i++;
+				else break;
+			}
+			if (i==0) {
+				if (file_exists(file_root)) {
+					i++;
+				}
+				else die("No data files found");
+			}
+		}
+		if (cut != 0) {
+			if (i > 0) n_threads = i; // set number of chains for MCMC data
+			if (j > 0) n_processes = j; // set number of MPI processes that were used to produce MCMC data
+		}
+	} else {
+		filename = file_root + ".pcov";
+		if (!file_exists(filename)) die("Inverse-Fisher matrix file not found");
+	}
+
+	string nparam_filename = file_root + ".nparam";
+	ifstream nparam_file(nparam_filename.c_str());
+	if (nparam_file.good()) {
+		nparam_file >> n_fitparams;
+		nparam_file.close();
+	}
+
+	McmcEval Eval;
+	FisherEval FEval;
+	double logev = 1e30;
+
+	if (use_fisher_matrix) {
+		FEval.input(file_root.c_str(),silent);
+		FEval.get_nparams(nparams);
+	}
+	else
+	{
+		bool mpi_silent = true;
+		if (mpi_id==0) mpi_silent = silent;
+		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,logev,n_processes,cut,MULT|LIKE,mpi_silent,n_fitparams,transform_parameters,param_transform_filename,importance_sampling,prior_weight_filename);
+		Eval.get_nparams(nparams);
+	}
+	if (nparams==0) die();
+	nparams_eff = nparams;
+	if (n_fitparams==-1) n_fitparams = nparams;
+	if (exclude_derived_params) nparams_eff = n_fitparams;
+	//if (nparams_subset < nparams) {
+		//if (nparams_subset > 0) nparams_eff = nparams_subset;
+		//else if (nparams_subset == 0) warn("specified subset number of parameters is equal to or less than zero; using all parameters");
+	//}
+
+	// Make it so you can turn parameters on/off in this file! This will require revising nparams_eff after the flags are read in
+	string *param_names = new string[nparams];
+	string paramnames_filename, dummy;
+	paramnames_filename = file_root + ".paramnames";
+	ifstream paramnames_file(paramnames_filename.c_str());
+	for (i=0; i < nparams; i++) {
+		if (!(paramnames_file >> param_names[i])) die("not all parameter names are given in file '%s'",paramnames_filename.c_str());
+	}
+	paramnames_file.close();
+
+	string *latex_param_names = new string[nparams];
+	if ((latex_table_format) or (make_1d_posts) or (make_2d_posts)) {
+		string latex_paramnames_filename = file_root + ".latex_paramnames";
+		ifstream latex_paramnames_file(latex_paramnames_filename.c_str());
+		string dummy;
+		const int n_characters = 1024;
+		char line[n_characters];
+		for (i=0; i < nparams; i++) {
+			if (!(latex_paramnames_file.getline(line,n_characters))) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			istringstream instream(line);
+			if (!(instream >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			if (!(instream >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			while (instream >> dummy) latex_param_names[i] += " " + dummy;
+		}
+		latex_paramnames_file.close();
+	}
+
+	double *prior_minvals = new double[nparams];
+	double *prior_maxvals = new double[nparams];
+	for (i=0; i < nparams; i++) {
+		prior_minvals[i] = -1e30;
+		prior_maxvals[i] = 1e30;
+	}
+	string paramranges_filename = file_root + ".ranges";
+	ifstream paramranges_file(paramranges_filename.c_str());
+	if (paramranges_file.is_open()) {
+		for (i=0; i < nparams; i++) {
+			if (!(paramranges_file >> prior_minvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
+			if (!(paramranges_file >> prior_maxvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
+			if (prior_minvals[i] > prior_maxvals[i]) die("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str());
+		}
+		paramranges_file.close();
+	} else warn("parameter range file '%s' not found",paramranges_filename.c_str());
+
+	if ((make_1d_posts) or (make_2d_posts)) {
+		if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
+
+		if (mpi_id==0) {
+			string out_paramnames_filename = file_root + ".py_paramnames";
+			ofstream paramnames_out(out_paramnames_filename.c_str());
+			for (i=0; i < nparams_eff; i++) {
+				paramnames_out << param_names[i] << endl;
+			}
+			paramnames_out.close();
+
+			string out_latex_paramnames_filename = file_root + ".py_latex_paramnames";
+			ofstream latex_paramnames_out(out_latex_paramnames_filename.c_str());
+			for (i=0; i < nparams_eff; i++) {
+				latex_paramnames_out << param_names[i] << "   " << latex_param_names[i] << endl;
+			}
+			latex_paramnames_out.close();
+		}
+	}
+
+	bool *hist2d_active_params = new bool[nparams_eff];
+	for (i=0; i < nparams_eff; i++) {
+		hist2d_active_params[i] = true;
+	}
+	if (make_2d_posts) {
+		string hist2d_paramnames_filename = file_root + ".hist2d_params";
+		if (file_exists(hist2d_paramnames_filename)) {
+			string *hist2d_param_names = new string[nparams_eff];
+			ifstream hist2d_paramnames_file(hist2d_paramnames_filename.c_str());
+			for (i=0; i < nparams_eff; i++) {
+				if (!(hist2d_paramnames_file >> hist2d_param_names[i])) die("not all hist2d_parameter names are given in file '%s'",hist2d_paramnames_filename.c_str());
+				if (hist2d_param_names[i] != param_names[i]) die("hist2d parameter names do not match names given in paramnames file");
+				int pflag;
+				if (!(hist2d_paramnames_file >> pflag)) die("hist2d parameter flag not given in file '%s'",hist2d_paramnames_filename.c_str());
+				if (pflag == 0) hist2d_active_params[i] = false;
+				else if (pflag == 1) hist2d_active_params[i] = true;
+				else die("invalid hist2d parameter flag in file '%s'; should either be 0 or 1",hist2d_paramnames_filename.c_str());
+			}
+			hist2d_paramnames_file.close();
+			delete[] hist2d_param_names;
+		}
+	}
+	int nparams_eff_2d = 0;
+	for (i=nparams_eff-1; i >= 0; i--) {
+		if (hist2d_active_params[i]) {
+			nparams_eff_2d = i+1;
+			break;
+		}
+	}
+
+	bool *subplot_active_params = new bool[nparams_eff];
+	if (make_subplot) {
+		string *subplot_param_names = new string[nparams_eff];
+		ifstream subplot_paramnames_file(subplot_paramnames_filename.c_str());
+		for (i=0; i < nparams_eff; i++) {
+			if (!(subplot_paramnames_file >> subplot_param_names[i])) die("not all subplot_parameter names are given in file '%s'",subplot_paramnames_filename.c_str());
+			if (subplot_param_names[i] != param_names[i]) die("subplot parameter names do not match names given in paramnames file");
+			int pflag;
+			if (!(subplot_paramnames_file >> pflag)) die("subplot parameter flag not given in file '%s'",subplot_paramnames_filename.c_str());
+			if (pflag == 0) subplot_active_params[i] = false;
+			else if (pflag == 1) subplot_active_params[i] = true;
+			else die("invalid subplot parameter flag in file '%s'; should either be 0 or 1",subplot_paramnames_filename.c_str());
+			if ((subplot_active_params[i]) and (!hist2d_active_params[i])) die("subplot parameter '%s' must also have the hist2d flag set to 'true' in <label>.hist2d_params",subplot_param_names[i].c_str());
+		}
+		subplot_paramnames_file.close();
+		delete[] subplot_param_names;
+	}
+	
+	double *markers = new double[nparams_eff];
+	int n_markers = (n_markers_allowed < nparams_eff ? n_markers_allowed : nparams_eff);
+	if (show_markers) {
+		if (use_bestfit_markers) {
+			double *bestfit = new double[nparams];
+			Eval.min_chisq_pt(bestfit);
+			for (i=0; i < n_markers; i++) markers[i] = bestfit[i];
+			delete[] bestfit;
+		} else {
+			marker_filename = file_root + ".markers";
+			ifstream marker_file(marker_filename.c_str());
+			for (i=0; i < n_markers; i++) {
+				if (!(marker_file >> markers[i])) {
+					if (i==0) {
+						if (mpi_id==0) cerr << "marker values could not be read from file '" << marker_filename << "'; will not use markers when plotting" << endl;
+						show_markers = false;
+						break;
+					}
+					n_markers = i;
+					break;
+				}
+			}
+		}
+	}
+
+	if (use_fisher_matrix) {
+		if (mpi_id==0) {
+			if (make_1d_posts) {
+				for (i=0; i < nparams_eff; i++) {
+					string dist_out;
+					dist_out = file_root + "_p_" + param_names[i] + ".dat";
+					FEval.MkDist(201, dist_out.c_str(), i);
+				}
+			}
+			if (make_2d_posts) {
+				for (i=0; i < nparams_eff_2d; i++) {
+					if (hist2d_active_params[i]) {
+						for (j=i+1; j < nparams_eff_2d; j++) {
+							if (hist2d_active_params[j]) {
+								string dist_out;
+								dist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
+								FEval.MkDist2D(61,61,dist_out.c_str(),i,j);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		double *minvals = new double[nparams];
+		double *maxvals = new double[nparams];
+		for (i=0; i < nparams; i++) {
+			minvals[i] = -1e30;
+			maxvals[i] = 1e30;
+		}
+
+		if ((make_1d_posts) and (mpi_id==0)) {
+			Eval.FindRanges(minvals,maxvals,nbins_1d,threshold);
+			if (show_markers) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
+			double rap[20];
+			for (i=0; i < nparams_eff; i++) {
+				string hist_out;
+				hist_out = file_root + "_p_" + param_names[i] + ".dat";
+				if (smoothing) Eval.MkHist(minvals[i], maxvals[i], nbins_1d, hist_out.c_str(), i, HIST|SMOOTH, rap);
+				else Eval.MkHist(minvals[i], maxvals[i], nbins_1d, hist_out.c_str(), i, HIST, rap);
+			}
+		}
+
+		if ((make_derived_posterior) and (mpi_id==0)) {
+			double rap[20];
+			double mean, sig;
+			//Eval.setRadius(radius);
+			Eval.calculate_derived_param();
+			if (smoothing) Eval.DerivedHist(-1e30, 1e30, nbins_1d, (file_root + "_p_derived.dat").c_str(), mean, sig, HIST|SMOOTH, rap);
+			else Eval.DerivedHist(-1e30, 1e30, nbins_1d, (file_root + "_p_derived.dat").c_str(), mean, sig, HIST, rap);
+			double cl_l1,cl_l2,cl_h1,cl_h2;
+			cl_l1 = Eval.derived_cl(0.02275);
+			cl_l2 = Eval.derived_cl(0.15865);
+			cl_h1 = Eval.derived_cl(0.84135);
+			cl_h2 = Eval.derived_cl(0.97725);
+			double center,sigma;
+			// NOTE: You need to enforce boundaries in FindDerivedSigs, otherwise outlier points will screw up the derived confidence limits
+			//Eval.FindDerivedSigs(center,sigma);
+			cout << "Confidence limits: " << cl_l1 << " " << cl_l2 << " " << cl_h1 << " " << cl_h2 << endl;
+			//cout << "Sig: " << center << " " << sigma << endl;
+		}
+
+		if (make_2d_posts) {
+			int omp_nthreads = 1;
+#ifdef USE_OPENMP
+			double wtime, wtime0;
+			#pragma omp parallel
+			{
+				#pragma omp master
+				omp_nthreads = omp_get_num_threads();
+			}
+			wtime0 = omp_get_wtime();
+#endif
+			bool derived_param_fail = false; // if contours can't be made for a derived parameter, we'll have it drop the derived parameters and try again
+			Eval.FindRanges(minvals,maxvals,nbins_2d,threshold);
+			if ((!make_1d_posts) and (show_markers)) adjust_ranges_to_include_markers(minvals,maxvals,markers,n_markers);
+			do {
+				int k, n_2dposts;
+				vector<int> post2d_i, post2d_j;
+				for (i=0; i < nparams_eff_2d; i++) {
+					if (hist2d_active_params[i]) {
+						for (j=i+1; j < nparams_eff_2d; j++) {
+							if (hist2d_active_params[j]) {
+								post2d_i.push_back(i);
+								post2d_j.push_back(j);
+							}
+						}
+					}
+				}
+				n_2dposts = post2d_i.size();
+				if (mpi_id==0) {
+					cout << "Generating 2D histograms (total of " << n_2dposts << ") with ";
+					if (mpi_np > 1) cout << mpi_np << " processes and ";
+					cout << omp_nthreads << " threads..." << endl;
+				}
+#ifdef USE_OPENMP
+				int omp_nthreads0=omp_nthreads;
+				while (n_2dposts < mpi_np*omp_nthreads) {
+					omp_nthreads--;
+				}
+				if (omp_nthreads < omp_nthreads0) {
+					omp_set_num_threads(omp_nthreads);
+					if (mpi_id==0) cout << "Too many threads, reducing number of threads to " << omp_nthreads << "..." << endl;
+				}
+#endif
+
+				int mpi_chunk, mpi_start, mpi_end;
+				mpi_chunk = n_2dposts / mpi_np;
+				mpi_start = mpi_id*mpi_chunk;
+				if (mpi_id == mpi_np-1) mpi_chunk += (n_2dposts % mpi_np); // assign the remainder elements to the last mpi process
+				mpi_end = mpi_start + mpi_chunk;
+
+				if (derived_param_fail) derived_param_fail = false;
+				#pragma omp parallel for private(i,j,k) schedule(dynamic)
+				for (k=mpi_start; k < mpi_end; k++) {
+					i = post2d_i[k];
+					j = post2d_j[k];
+					string hist_out;
+					hist_out = file_root + "_2D_" + param_names[j] + "_" + param_names[i];
+					if (!Eval.MkHist2D(minvals[i],maxvals[i],minvals[j],maxvals[j],nbins_2d,nbins_2d,hist_out.c_str(),i,j, SMOOTH)) {
+						if ((i>=n_fitparams) or (j>=n_fitparams)) {
+							derived_param_fail = true;
+							warn("producing contours failed for derived parameter; we will drop the derived parameters and try again");
+						}
+					}
+					if (derived_param_fail) i = nparams_eff_2d + 1; // make sure it exits loop
+				}
+
+				if (derived_param_fail) nparams_eff_2d = n_fitparams;
+			} while (derived_param_fail);
+#ifdef USE_MPI
+			MPI_Barrier(MPI_COMM_WORLD);
+#endif
+
+#ifdef USE_OPENMP
+			wtime = omp_get_wtime() - wtime0;
+			if (mpi_id==0) cout << "Wall time for calculating 2D histograms: " << wtime << endl;
+#endif
+		}
+
+//		if (mpi_id==0) {
+//			if (output_min_chisq_point) {
+//				Eval.output_min_chisq_pt(param_names);
+//			}
+//			if (output_min_chisq_point_format2) {
+//				Eval.output_min_chisq_pt2(param_names);
+//			}
+//
+//			if (output_mean_and_errors) {
+//				Eval.FindRanges(minvals,maxvals,nbins_1d,threshold);
+//				string covar_out = file_root + ".cov";
+//				double *centers = new double[nparams];
+//				double *sigs = new double[nparams];
+//				Eval.FindCoVar(covar_out.c_str(),centers,sigs,minvals,maxvals);
+//				for (i=0; i < nparams_eff; i++) {
+//					// NOTE: The following errors are from standard deviation, not from CL's 
+//					cout << param_names[i] << ": " << centers[i] << " +/- " << sigs[i] << endl;
+//				}
+//				cout << endl;
+//				delete[] centers;
+//				delete[] sigs;
+//			}
+//			if (output_cl) {
+//				Eval.FindRanges(minvals,maxvals,nbins_1d,threshold);
+//				double *halfpct = new double[nparams];
+//				double *lowcl = new double[nparams];
+//				double *hicl = new double[nparams];
+//				int powers_of_ten;
+//				if (!silent) {
+//					if (cl_2sigma) cout << "50th percentile values and errors (based on 2.5\% and 97.5\% percentiles of marginalized posteriors):\n\n";
+//					else cout << "50th percentile values and errors (based on 15.8\% and 84.1\% percentiles of marginalized posteriors):\n\n";
+//				}
+//				if (fixed_precision) {
+//					//cout << resetiosflags(ios::scientific);
+//					cout << setprecision(precision);
+//					cout << fixed;
+//				}
+//				for (i=0; i < nparams_eff; i++) {
+//					if (cl_2sigma) {
+//						lowcl[i] = Eval.cl(0.025,i,minvals[i],maxvals[i]);
+//						hicl[i] = Eval.cl(0.975,i,minvals[i],maxvals[i]);
+//					} else {
+//						lowcl[i] = Eval.cl(0.15865,i,minvals[i],maxvals[i]);
+//						hicl[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
+//					}
+//					halfpct[i] = Eval.cl(0.5,i,minvals[i],maxvals[i]);
+//					if (show_uncertainties_as_percentiles) {
+//						double lowerr = pct_scaling*(halfpct[i] - lowcl[i]);
+//						double hierr = pct_scaling*(hicl[i] - halfpct[i]);
+//						double lowpct = halfpct[i] - lowerr;
+//						double hipct = halfpct[i] + hierr;
+//						//cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
+//						cout << param_names[i] << ": " << halfpct[i] << " " << lowpct << " " << hipct << endl;
+//					} else {
+//						if (!latex_table_format) {
+//							cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
+//						} else {
+//							bool show_as_powers = false;
+//							bool increase_precision = false; // do this if a number is less than 0.1
+//							double half, hierr, lowerr;
+//							half = halfpct[i];
+//							hierr = hicl[i] - halfpct[i];
+//							lowerr = halfpct[i] - lowcl[i];
+//							if (half > 1e4) {
+//								show_as_powers = true;
+//								powers_of_ten = 0;
+//								do {
+//									half /= 10;
+//									hierr /= 10;
+//									lowerr /= 10;
+//									powers_of_ten++;
+//								} while (half > 10);
+//							}
+//							else if (abs(half) < 0.1) {
+//								increase_precision = true;
+//								powers_of_ten = -1;
+//								double halfdup = abs(half);
+//								do {
+//									halfdup *= 10;
+//									powers_of_ten--;
+//								} while (halfdup < 0.1);
+//								cout << setprecision(precision-powers_of_ten-1);
+//								cout << fixed;
+//							}
+//							if (!suppress_latex_names) {
+//								cout << "$" << latex_param_names[i];
+//								if (show_as_powers) cout << "(10^" << powers_of_ten << ")";
+//								cout << "$ & ";
+//								if (show_prior_ranges) {
+//									cout << defaultfloat;
+//									if ((prior_minvals[i] > -1e30) and (prior_maxvals[i] < 1e30)) {
+//										cout << "$(" << prior_minvals[i] << "," << prior_maxvals[i] << ")$ & ";
+//									} else {
+//										cout << "... & ";
+//									}
+//									cout << fixed;
+//								}
+//							}
+//							cout << "$" << half << "_{-" << lowerr << "}^{+" << hierr << "}$ & " << endl;
+//							if (increase_precision) {
+//								cout << setprecision(precision);
+//								cout << fixed;
+//							}
+//						}
+//					}
+//				}
+//				if (add_dummy_params) {
+//					for (int i=0; i < ndummy; i++) {
+//						if (!suppress_latex_names) {
+//							cout << "dummy" << i << " & ";
+//							if (show_prior_ranges) cout << "... & ";
+//						}
+//						cout << "... & " << endl;
+//					}
+//				}
+//				if (latex_table_format) {
+//					if (logev != 1e30) {
+//						if (!suppress_latex_names) {
+//							cout << "$\\ln\\mathcal{E}$ & "; 
+//							if (show_prior_ranges) cout << "... & ";
+//						}
+//						cout << logev << " & " << endl;
+//					}
+//				}
+//				cout << endl;
+//				delete[] halfpct;
+//				delete[] lowcl;
+//				delete[] hicl;
+//			}
+//			if (output_percentile) {
+//				Eval.FindRanges(minvals,maxvals,nbins_1d,threshold);
+//				// The following gives the 
+//				cout << percentile << " percentile:\n\n";
+//				double val;
+//				for (i=0; i < nparams_eff; i++) {
+//					val = Eval.cl(percentile,i,minvals[i],maxvals[i]);
+//					cout << param_names[i] << " = " << val << endl;
+//				}
+//				cout << endl;
+//			}
+//			if (print_marker_values) {
+//				if (show_markers) {
+//					cout << "True parameter values (and bestfit values):\n";
+//					for (i=0; i < n_markers; i++) {
+//						// NOTE: The following errors are from standard deviation, not from CL's 
+//						cout << param_names[i] << ": " << markers[i] << " (" << Eval.output_min_chisq_value(i) << ")" << endl;
+//					}
+//					cout << endl;
+//				}
+//			}
+//		}
+
+		delete[] minvals;
+		delete[] maxvals;
+	}
+
+	bool add_title = false;
+	bool include_shading = true;
+#ifdef USE_MPI
+	MPI_Barrier(MPI_COMM_WORLD);
+#endif
+	if (mpi_id==0) {
+		int system_returnval;
+		if (make_1d_posts)
+		{
+			string pyname = fit_output_dir + "/" + fit_output_filename + ".py";
+			ofstream pyscript(pyname.c_str());
+			pyscript << "import GetDistPlots, os" << endl;
+			pyscript << "g=GetDistPlots.GetDistPlotter('./')" << endl;
+			pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
+			pyscript << "outdir=''" << endl;
+			pyscript << "roots=['" << fit_output_filename << "']" << endl;
+			if (show_markers) {
+				pyscript << "marker_list=[";
+				for (i=0; i < n_markers; i++) {
+					pyscript << markers[i];
+					if (i < nparams_eff-1) pyscript << ",";
+				}
+				pyscript << "]" << endl;
+			} else {
+				pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
+			}
+			pyscript << "g.plots_1d(roots,markers=marker_list,marker_color='orange')" << endl;
+			//if (add_title) pyscript << "g.add_title(r'" << plot_title << "')" << endl; // 1d title doesn't look good
+			pyscript << "g.export(os.path.join(outdir,'" << fit_output_filename << ".pdf'))" << endl;
+			pyscript.close();
+			if (run_python_script) {
+				string pycommand = "cd " + fit_output_dir + "; python3 " + fit_output_filename + ".py; cd ..";
+				if (system(pycommand.c_str()) == 0) {
+					cout << "Plot for 1D posteriors saved to '" << fit_output_dir + "/" + fit_output_filename << ".pdf'\n";
+					//string rmcommand = "rm " + pyname;
+					//system_returnval = system(rmcommand.c_str());
+				}
+				else cout << "Error: Could not generate PDF file for 1D posteriors\n";
+			} else {
+				cout << "Plotting script for 1D posteriors saved to '" << pyname << "'\n";
+			}
+		}
+
+		if (make_2d_posts)
+		{
+			string pyname = fit_output_dir + "/" + fit_output_filename + "_2D.py";
+			ofstream pyscript2d(pyname.c_str());
+			pyscript2d << "import GetDistPlots, os" << endl;
+			pyscript2d << "g=GetDistPlots.GetDistPlotter('./')" << endl;
+			pyscript2d << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
+			pyscript2d << "outdir=''" << endl;
+			pyscript2d << "roots=['" << fit_output_filename << "']" << endl;
+			pyscript2d << "pairs=[]" << endl;
+			for (i=0; i < nparams_eff_2d; i++) {
+				for (j=i+1; j < nparams_eff_2d; j++) {
+					if ((hist2d_active_params[i]) and (hist2d_active_params[j])) {
+						pyscript2d << "pairs.append(['" << param_names[i] << "','" << param_names[j] << "'])\n";
+					}
+				}
+			}
+			pyscript2d << "g.plots_2d(roots,param_pairs=pairs,";
+			if (include_shading) pyscript2d << "shaded=True";
+			else pyscript2d << "shaded=False";
+			pyscript2d << ")" << endl;
+			if (add_title) pyscript2d << "g.add_title(r'" << plot_title << "')" << endl;
+			pyscript2d << "g.export(os.path.join(outdir,'" << fit_output_filename << "_2D.pdf'))" << endl;
+			/*
+			if (run_python_script) {
+				string pycommand = "python " + pyname;
+				if (system(pycommand.c_str()) == 0) {
+					cout << "Plot for 2D posteriors saved to '" << fit_output_dir + "/" + fit_output_filename << "_2D.pdf'\n";
+					//string rmcommand = "rm " + pyname;
+					//system_returnval = system(rmcommand.c_str());
+				}
+				else cout << "Error: Could not generate PDF file for 2D posteriors\n";
+			} else {
+				cout << "Plotting script for 2D posteriors saved to '" << pyname << "'\n";
+			}
+			*/
+
+
+			if (make_1d_posts) {
+				// make script for triangle plot
+				int n_triplots = 1;
+				if (make_subplot) n_triplots++;
+				for (int k=0; k < n_triplots; k++) {
+					if (k==0) pyname = fit_output_dir + "/" + fit_output_filename + "_tri.py";
+					else pyname = fit_output_dir + "/" + fit_output_filename + "_subtri.py";
+					ofstream pyscript(pyname.c_str());
+					pyscript << "import GetDistPlots, os" << endl;
+					pyscript << "g=GetDistPlots.GetDistPlotter('./')" << endl;
+					pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
+					pyscript << "outdir=''" << endl;
+					pyscript << "roots=['" << fit_output_filename << "']" << endl;
+					if (show_markers) {
+						pyscript << "marker_list=[";
+						for (i=0; i < n_markers; i++) {
+							if ((hist2d_active_params[i]) and ((k==0) or (subplot_active_params[i]))) {
+								pyscript << markers[i];
+								if ((k==0) and (i != n_markers-1)) pyscript << ",";
+								else if (k==1) {
+									bool last_param = true;
+									for (int ii=i+1; ii < n_markers; ii++) {
+										if (subplot_active_params[ii]==true) last_param = false;
+									}
+									if (!last_param) pyscript << ",";
+								}
+							}
+						}
+						pyscript << "]" << endl;
+					} else {
+						pyscript << "marker_list=[]   # put parameter values in this list if you want to mark the 'true' or best-fit values on posteriors" << endl;
+					}
+					pyscript << "g.triangle_plot(roots, [";
+					for (i=0; i < nparams_eff_2d; i++) {
+						if ((hist2d_active_params[i]) and ((k==0) or (subplot_active_params[i]))) {
+							pyscript << "'" << param_names[i] << "'";
+							if ((k==0) and (i != nparams_eff_2d-1)) pyscript << ",";
+							else if (k==1) {
+								bool last_param = true;
+								for (int ii=i+1; ii < nparams_eff_2d; ii++) {
+									if (subplot_active_params[ii]==true) last_param = false;
+								}
+								if (!last_param) pyscript << ",";
+							}
+						}
+					}
+					pyscript << "],markers=marker_list,marker_color='orange',show_marker_2d=";
+					if (show_markers) pyscript << "True";
+					else pyscript << "False";
+					pyscript << ",marker_2d='x',";
+					if (include_shading) pyscript << "shaded=True";
+					else pyscript << "shaded=False";
+					pyscript << ")" << endl;
+					if (add_title) pyscript << "g.add_title(r'" << plot_title << "')" << endl;
+					pyscript << "g.export(os.path.join(outdir,'" << fit_output_filename;
+					if (k==0) pyscript << "_tri.pdf'))" << endl;
+					else pyscript << "_subtri.pdf'))" << endl;
+					if (run_python_script) {
+						string pycommand;
+						if (k==0) pycommand = "cd " + fit_output_dir + "; python3 " + fit_output_filename + "_tri.py; cd ..";
+						else if (k==1) pycommand = "cd " + fit_output_dir + "; python3 " + fit_output_filename + "_subtri.py; cd ..";
+						if (system(pycommand.c_str()) == 0) {
+							if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << fit_output_dir + "/" + fit_output_filename << "_tri.pdf'\n";
+							else cout << "Triangle subplot saved to '" << fit_output_filename << "_subtri.pdf'\n";
+							//string rmcommand = "rm " + pyname;
+							//system_returnval = system(rmcommand.c_str());
+						}
+						else cout << "Error: Could not generate PDF file for triangle plot (1d + 2d posteriors)\n";
+					} else {
+						cout << "Plotting script for triangle plot saved to '" << pyname << "'\n";
+					}
+				}
+			}
+		}
+	}
+	delete[] prior_minvals;
+	delete[] prior_maxvals;
+	delete[] param_names;
+	delete[] latex_param_names;
+	delete[] markers;
+	delete[] subplot_active_params;
+	delete[] hist2d_active_params;
 }
 
 bool QLens::output_egrad_values_and_knots(const int srcnum, const string suffix)
@@ -11286,9 +12304,9 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const int srcnum, const do
 			scriptout << scaled_lopct << " " << scaled_hipct << endl;
 		}
 		scriptout << endl;
-		if ((k==2) and (n_data_bands > 0) and (imgpixel_data_list[0])) {
+		if ((k==2) and (n_data_bands > 0) and (imgdata_list[0])) {
 			// Now output ranges in (xc,yc)
-			double pixsize = imgpixel_data_list[0]->pixel_size;
+			double pixsize = imgdata_list[0]->pixel_size;
 			double xlo, xhi, ylo, yhi;
 			xlo = xcavg - pixsize/2;
 			xhi = xcavg + pixsize/2;
@@ -11397,7 +12415,7 @@ bool QLens::get_stepsizes_from_percentiles(const double pct_scaling, dvector& st
 	int i,j,nparams;
 	pnumfile >> nparams;
 	pnumfile.close();
-	if (nparams != n_fit_parameters) { warn("nparams from chains directory does not match n_fit_parameters from current parameter list"); return false; }
+	if (nparams != param_list->nparams) { warn("nparams from chains directory does not match n_fit_parameters from current parameter list"); return false; }
 
 	double *scaled_lopct = new double[nparams];
 	double *scaled_hipct = new double[nparams];
@@ -11460,11 +12478,11 @@ bool QLens::output_coolest_files(const string filename)
 	fin >> coolest;
 	fin.close();
 
-	if ((n_data_bands == 0) or (imgpixel_data_list[0]==NULL)) {
+	if ((n_data_bands == 0) or (imgdata_list[0]==NULL)) {
 		warn("no image data has been loaded; cannot write .json file for coolest");
 		return false;
 	}
-	double pixsize = imgpixel_data_list[0]->pixel_size;
+	double pixsize = imgdata_list[0]->pixel_size;
 	coolest["instrument"]["pixel_size"] = pixsize;
 	//cout << "pixel size: " << coolest["instrument"]["pixel_size"].asDouble() << endl;
 	//cout << "standard: " << coolest["standard"].asString() << endl;
@@ -11503,7 +12521,7 @@ bool QLens::output_coolest_files(const string filename)
 	pixels_obs["num_pix_x"] = n_image_pixels_x;
 	pixels_obs["num_pix_y"] = n_image_pixels_y;
 	pixels_obs["fits_file"] = Json::Value();
-	pixels_obs["fits_file"]["path"] = imgpixel_data_list[0]->data_fits_filename;
+	pixels_obs["fits_file"]["path"] = imgdata_list[0]->data_fits_filename;
 	coolest["observation"]["pixels"] = pixels_obs;
 
 	Json::Value noise;
@@ -11518,7 +12536,7 @@ bool QLens::output_coolest_files(const string filename)
 		pixels_noise["num_pix_x"] = n_image_pixels_x;
 		pixels_noise["num_pix_y"] = n_image_pixels_y;
 		pixels_noise["fits_file"] = Json::Value();
-		pixels_noise["fits_file"]["path"] = imgpixel_data_list[0]->noise_map_fits_filename;
+		pixels_noise["fits_file"]["path"] = imgdata_list[0]->noise_map_fits_filename;
 		noise["type"] = "NoiseMap";
 		noise["noise_map"] = pixels_noise;
 	} else {
@@ -11721,18 +12739,19 @@ double QLens::fitmodel_loglike_point_source(double* params)
 	bool showed_first_chisq = false; // used just to know whether to print a comma before showing the next chisq component
 	double loglike=0, chisq_total=0, chisq;
 	double log_penalty_prior;
-	double transformed_params[n_fit_parameters];
+	int n_fitparams = param_list->nparams;
+	double transformed_params[n_fitparams];
 	if (params != NULL) {
-		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
-		//fitmodel->param_settings->print_penalty_limits();
+		fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
+		//fitmodel->param_list->print_penalty_limits();
 		bool penalty_incurred = false;
-		for (int i=0; i < n_fit_parameters; i++) {
-			if (fitmodel->param_settings->use_penalty_limits[i]==true) {
+		for (int i=0; i < n_fitparams; i++) {
+			if (fitmodel->param_list->defined_prior_limits[i]==true) {
 				//cout << "USE_LIMITS " << i << endl;
-				if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) penalty_incurred = true;
+				if ((transformed_params[i] < fitmodel->param_list->untransformed_prior_limits_lo[i]) or (transformed_params[i] > fitmodel->param_list->untransformed_prior_limits_hi[i])) penalty_incurred = true;
 			}
 		}
-		//fitmodel->param_settings->print_penalty_limits();
+		//fitmodel->param_list->print_penalty_limits();
 		if (penalty_incurred) return 1e30;
 		log_penalty_prior = fitmodel->update_model(transformed_params);
 		if (log_penalty_prior >= 1e30) return log_penalty_prior; // don't bother to evaluate chi-square if there is huge prior penalty; wastes time
@@ -11740,7 +12759,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
-				for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
+				for (int i=0; i < n_fitparams; i++) fitmodel->logfile << params[i] << " ";
 			}
 			fitmodel->logfile << flush;
 		}
@@ -11756,7 +12775,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 			double** remember_grid_betafac = Grid::grid_betafactors;
 			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,false,rms_err,n_matched_imgs);
 			else chisq = fitmodel->chisq_pos_image_plane();
-			// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. This is has already been done for SourcePixelGrid (versus SourcePixel), so just copy what you did there. DO THIS BEFORE RELEASING PUBLICLY!!!!
+			// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. This is has already been done for CartesianSourceGrid (versus CartesianSourcePixel), so just copy what you did there. DO THIS BEFORE RELEASING PUBLICLY!!!!
 			Grid::grid_zfactors = remember_grid_zfac;
 			Grid::grid_betafactors = remember_grid_betafac;
 		}
@@ -11768,7 +12787,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 				double** remember_grid_betafac = Grid::grid_betafactors;
 				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,false,rms_err,n_matched_imgs);
 				else chisq = fitmodel->chisq_pos_image_plane();
-			// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. This is has already been done for SourcePixelGrid (versus SourcePixel), so just copy what you did there. DO THIS BEFORE RELEASING PUBLICLY!!!!
+			// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. This is has already been done for CartesianSourceGrid (versus CartesianSourcePixel), so just copy what you did there. DO THIS BEFORE RELEASING PUBLICLY!!!!
 				Grid::grid_zfactors = remember_grid_zfac;
 				Grid::grid_betafactors = remember_grid_betafac;
 				used_imgplane_chisq = true;
@@ -11780,7 +12799,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 				if (used_imgplane_chisq) {
 					if (!imgplane_chisq) cout << "imgplane_chisq: "; // so user knows the imgplane chi-square is being used (we're below the threshold to switch from srcplane to imgplane)
 					int tot_data_images = 0;
-					for (int i=0; i < n_ptsrc; i++) tot_data_images += image_data[i].n_images;
+					for (int i=0; i < n_ptsrc; i++) tot_data_images += point_image_data[i].n_images;
 					if (use_ansi_characters) cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
 					if (fitmodel->chisq_it % chisq_display_frequency == 0) {
 						if (!use_ansi_characters) cout << "# images: " << fitmodel->n_visible_images << " vs. " << tot_data_images << " data";
@@ -11789,8 +12808,8 @@ double QLens::fitmodel_loglike_point_source(double* params)
 							double signormfac, chisq_sys = chisq;
 							int i,k;
 							for (i=0; i < n_ptsrc; i++) {
-								for (k=0; k < image_data[i].n_images; k++) {
-									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
+								for (k=0; k < point_image_data[i].n_images; k++) {
+									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/point_image_data[i].sigma_pos[k]));
 									chisq_sys -= signormfac;
 								}
 							}
@@ -11806,8 +12825,8 @@ double QLens::fitmodel_loglike_point_source(double* params)
 							double signormfac, chisq_sys = chisq;
 							int i,k;
 							for (i=0; i < n_ptsrc; i++) {
-								for (k=0; k < image_data[i].n_images; k++) {
-									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/image_data[i].sigma_pos[k]));
+								for (k=0; k < point_image_data[i].n_images; k++) {
+									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/point_image_data[i].sigma_pos[k]));
 									chisq_sys -= signormfac;
 								}
 							}
@@ -11864,8 +12883,8 @@ double QLens::fitmodel_loglike_point_source(double* params)
 	}
  
  	if (params != NULL) {
-		fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
-		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+		fitmodel->param_list->add_prior_terms_to_loglike(params,loglike);
+		fitmodel->param_list->add_jacobian_terms_to_loglike(transformed_params,loglike);
 		if (use_custom_prior) loglike += fitmodel_custom_prior();
 	}
 	if ((einstein_radius_prior) and (nlens > 0)) loglike += fitmodel->get_einstein_radius_prior(false);
@@ -11885,23 +12904,22 @@ double QLens::fitmodel_loglike_point_source(double* params)
 
 double QLens::fitmodel_loglike_extended_source(double* params)
 {
-
 #ifdef USE_OPENMP
 	double update_wtime0, update_wtime;
 	if (show_wtime) {
 		update_wtime0 = omp_get_wtime();
 	}
 #endif
-
-	double transformed_params[n_fit_parameters];
+	double transformed_params[param_list->nparams];
 	double loglike=0, chisq=0, chisq0, chisq_td;
 	double log_penalty_prior;
+	int n_fitparams = param_list->nparams;
 	if (params != NULL) {
-		fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
-		for (int i=0; i < n_fit_parameters; i++) {
-			if (fitmodel->param_settings->use_penalty_limits[i]==true) {
-				//cout << "parameter " << i << ": plimits " << fitmodel->param_settings->penalty_limits_lo[i] << fitmodel->param_settings->penalty_limits_hi[i] << endl;
-				if ((transformed_params[i] < fitmodel->param_settings->penalty_limits_lo[i]) or (transformed_params[i] > fitmodel->param_settings->penalty_limits_hi[i])) {
+		fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
+		for (int i=0; i < n_fitparams; i++) {
+			if (fitmodel->param_list->defined_prior_limits[i]==true) {
+				//cout << "parameter " << i << ": plimits " << fitmodel->param_list->penalty_limits_lo[i] << fitmodel->param_list->penalty_limits_hi[i] << endl;
+				if ((transformed_params[i] < fitmodel->param_list->untransformed_prior_limits_lo[i]) or (transformed_params[i] > fitmodel->param_list->untransformed_prior_limits_hi[i])) {
 					//cout << "RUHROH parameter " << i << ": " << transformed_params[i] << endl;
 					return 1e30;
 				}
@@ -11916,7 +12934,7 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 
 		if (group_id==0) {
 			if (fitmodel->logfile.is_open()) {
-				for (int i=0; i < n_fit_parameters; i++) fitmodel->logfile << params[i] << " ";
+				for (int i=0; i < n_fitparams; i++) fitmodel->logfile << params[i] << " ";
 				fitmodel->logfile << flush;
 			}
 		}
@@ -11951,8 +12969,8 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 		loglike += chisq_td/2;
 	}
 	if (params != NULL) {
-		fitmodel->param_settings->add_prior_terms_to_loglike(params,loglike);
-		fitmodel->param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+		fitmodel->param_list->add_prior_terms_to_loglike(params,loglike);
+		fitmodel->param_list->add_jacobian_terms_to_loglike(transformed_params,loglike);
 		if (concentration_prior) {
 			for (int i=0; i < nlens; i++) {
 				if ((lens_list[i]->lenstype==nfw) and (lens_list[i]->use_concentration_prior)) loglike += lens_list[i]->concentration_prior();
@@ -11979,18 +12997,18 @@ double QLens::fitmodel_loglike_extended_source(double* params)
 double QLens::loglike_point_source(double* params)
 {
 	// can use this version for testing purposes in case there is any doubt about whether the fitmodel version is faithfully reproducing the original
-	double transformed_params[n_fit_parameters];
-	param_settings->inverse_transform_parameters(params,transformed_params);
-	for (int i=0; i < n_fit_parameters; i++) {
-		if (param_settings->use_penalty_limits[i]==true) {
-			if ((transformed_params[i] < param_settings->penalty_limits_lo[i]) or (transformed_params[i] > param_settings->penalty_limits_hi[i])) return 1e30;
+	double transformed_params[param_list->nparams];
+	param_list->inverse_transform_parameters(params,transformed_params);
+	for (int i=0; i < param_list->nparams; i++) {
+		if (param_list->defined_prior_limits[i]==true) {
+			if ((transformed_params[i] < param_list->untransformed_prior_limits_lo[i]) or (transformed_params[i] > param_list->untransformed_prior_limits_hi[i])) return 1e30;
 		}
 	}
 	//if (update_fitmodel(transformed_params)==false) return 1e30;
 	if (fitmodel->update_model(transformed_params) != 0.0) return 1e30;
 	if (group_id==0) {
 		if (logfile.is_open()) {
-			for (int i=0; i < n_fit_parameters; i++) logfile << params[i] << " ";
+			for (int i=0; i < param_list->nparams; i++) logfile << params[i] << " ";
 		}
 		logfile << flush;
 	}
@@ -12000,7 +13018,7 @@ double QLens::loglike_point_source(double* params)
 		chisq = chisq_pos_image_plane();
 		if ((display_chisq_status) and (mpi_id==0)) {
 			int tot_data_images = 0;
-			for (int i=0; i < n_ptsrc; i++) tot_data_images += image_data[i].n_images;
+			for (int i=0; i < n_ptsrc; i++) tot_data_images += point_image_data[i].n_images;
 			cout << "# images: " << n_visible_images << " vs. " << tot_data_images << " data, ";
 			if (chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
 		}
@@ -12034,8 +13052,8 @@ double QLens::loglike_point_source(double* params)
 
 	loglike = chisq_total/2.0;
 
-	param_settings->add_prior_terms_to_loglike(params,loglike);
-	param_settings->add_jacobian_terms_to_loglike(transformed_params,loglike);
+	param_list->add_prior_terms_to_loglike(params,loglike);
+	param_list->add_jacobian_terms_to_loglike(transformed_params,loglike);
 	if (use_custom_prior) loglike = fitmodel_custom_prior();
 	chisq_it++;
 	return loglike;
@@ -12043,11 +13061,13 @@ double QLens::loglike_point_source(double* params)
 
 void QLens::fitmodel_calculate_derived_params(double* params, double* derived_params)
 {
-	if (n_derived_params==0) return;
-	double transformed_params[n_fit_parameters];
-	fitmodel->param_settings->inverse_transform_parameters(params,transformed_params);
-	if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
-	for (int i=0; i < n_derived_params; i++) derived_params[i] = dparam_list[i]->get_derived_param(fitmodel);
+	if (dparam_list->n_dparams==0) return;
+	fitmodel->param_list->update_untransformed_values(params);
+	fitmodel->dparam_list->get_dparams(derived_params);
+	//double transformed_params[param_list->nparams];
+	//fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
+	//if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
+	//for (int i=0; i < dparam_list->n_dparams; i++) derived_params[i] = dparam_list->dparams[i]->get_derived_param(fitmodel);
 	clear_raw_chisq();
 }
 
@@ -12091,7 +13111,7 @@ double QLens::fitmodel_custom_prior()
 
 void QLens::set_Gauss_NN(const int& nn)
 {
-	Gauss_NN = nn;
+	LensProfile::Gauss_NN = nn;
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
 			lens_list[i]->SetGaussLegendre(nn);
@@ -12101,7 +13121,7 @@ void QLens::set_Gauss_NN(const int& nn)
 
 void QLens::set_integral_tolerance(const double& acc)
 {
-	integral_tolerance = acc;
+	LensProfile::integral_tolerance = acc;
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
 			lens_list[i]->set_integral_tolerance(acc);
@@ -12153,20 +13173,20 @@ void QLens::reassign_sb_param_pointers_and_names()
 void QLens::print_lens_cosmology_info(const int lmin, const int lmax)
 {
 	if (lmax >= nlens) return;
-	double sigma_cr = cosmo.sigma_crit_kpc(lens_redshift,reference_source_redshift);
-	double dlens = cosmo.angular_diameter_distance(lens_redshift);
-	cout << "H0 = " << cosmo.get_hubble()*100 << " km/s/Mpc" << endl;
-	cout << "omega_m = " << cosmo.get_omega_m() << endl;
+	double sigma_cr = cosmo->sigma_crit_kpc(lens_redshift,reference_source_redshift);
+	double dlens = cosmo->angular_diameter_distance(lens_redshift);
+	cout << "H0 = " << cosmo->get_hubble()*100 << " km/s/Mpc" << endl;
+	cout << "omega_m = " << cosmo->get_omega_m() << endl;
 	//cout << "omega_lambda = " << 1-omega_matter << endl;
 	cout << "zlens = " << lens_redshift << endl;
 	cout << "zsrc = " << source_redshift << endl;
 	cout << "D_lens: " << dlens << " Mpc  (angular diameter distance to lens plane)" << endl;
-	double rhocrit = 1e-9*cosmo.critical_density(lens_redshift);
+	double rhocrit = 1e-9*cosmo->critical_density(lens_redshift);
 	cout << "rho_crit(zlens): " << rhocrit << " M_sol/kpc^3" << endl;
 	cout << "Sigma_crit(zlens,zsrc_ref): " << sigma_cr << " M_sol/kpc^2" << endl;
-	double kpc_to_arcsec = 206.264806/cosmo.angular_diameter_distance(lens_redshift);
+	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(lens_redshift);
 	cout << "1 arcsec = " << (1.0/kpc_to_arcsec) << " kpc" << endl;
-	cout << "sigma8 = " << cosmo.rms_sigma8() << endl;
+	cout << "sigma8 = " << cosmo->rms_sigma8() << endl;
 	cout << endl;
 	if (nlens > 0) {
 		for (int i=lmin; i <= lmax; i++) {
@@ -12181,8 +13201,8 @@ bool QLens::output_mass_r(const double r, const int lensnum, const bool use_kpc)
 	if (lensnum >= nlens) return false;
 	double zlens, sigma_cr, kpc_to_arcsec, r_arcsec, r_kpc, mass_r_2d, rho_r_3d, mass_r_3d;
 	double zl = lens_list[lensnum]->zlens;
-	sigma_cr = cosmo.sigma_crit_arcsec(zl,reference_source_redshift);
-	kpc_to_arcsec = 206.264806/cosmo.angular_diameter_distance(zl);
+	sigma_cr = cosmo->sigma_crit_arcsec(zl,reference_source_redshift);
+	kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zl);
 	if (!use_kpc) {
 		r_kpc = r/kpc_to_arcsec;
 		r_arcsec = r;
@@ -12210,9 +13230,9 @@ double QLens::mass2d_r(const double r, const int lensnum, const bool use_kpc)
 {
 	double sigma_cr, mass_r_2d, z;
 	z = lens_list[lensnum]->zlens;
-	double r_arcsec = (use_kpc) ? r*206.264806/cosmo.angular_diameter_distance(z) : r;
+	double r_arcsec = (use_kpc) ? r*206.264806/cosmo->angular_diameter_distance(z) : r;
 
-	sigma_cr = cosmo.sigma_crit_arcsec(z,reference_source_redshift);
+	sigma_cr = cosmo->sigma_crit_arcsec(z,reference_source_redshift);
 	mass_r_2d = sigma_cr*lens_list[lensnum]->mass_rsq(r_arcsec*r_arcsec);
 	return mass_r_2d;
 }
@@ -12221,8 +13241,8 @@ double QLens::mass3d_r(const double r, const int lensnum, const bool use_kpc)
 {
 	double sigma_cr, mass_r_3d, z;
 	z = lens_list[lensnum]->zlens;
-	double r_arcsec = (use_kpc) ? r*206.264806/cosmo.angular_diameter_distance(z) : r;
-	sigma_cr = cosmo.sigma_crit_arcsec(z,reference_source_redshift);
+	double r_arcsec = (use_kpc) ? r*206.264806/cosmo->angular_diameter_distance(z) : r;
+	sigma_cr = cosmo->sigma_crit_arcsec(z,reference_source_redshift);
 	mass_r_3d = sigma_cr*lens_list[lensnum]->calculate_scaled_mass_3d(r_arcsec);
 	return mass_r_3d;
 }
@@ -12230,7 +13250,7 @@ double QLens::mass3d_r(const double r, const int lensnum, const bool use_kpc)
 double QLens::calculate_average_log_slope(const int lensnum, const double rmin, const double rmax, const bool use_kpc)
 {
 	double z = lens_list[lensnum]->zlens;
-	double kpc_to_arcsec = 206.264806/cosmo.angular_diameter_distance(z);
+	double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(z);
 	double rmin_arcsec = rmin, rmax_arcsec = rmax;
 	if (use_kpc) {
 		rmin_arcsec *= kpc_to_arcsec;
@@ -12241,7 +13261,6 @@ double QLens::calculate_average_log_slope(const int lensnum, const double rmin, 
 
 void QLens::print_lens_list(bool show_vary_params)
 {
-	cout << resetiosflags(ios::scientific);
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
 			cout << i << ". ";
@@ -12255,7 +13274,6 @@ void QLens::print_lens_list(bool show_vary_params)
 	}
 	else cout << "No lens models have been specified" << endl;
 	cout << endl;
-	if (use_scientific_notation) cout << setiosflags(ios::scientific);
 }
 
 void QLens::print_fit_model()
@@ -12281,10 +13299,10 @@ void QLens::print_fit_model()
 		print_point_source_list(true);
 	}
 
-	if (cosmo.get_n_vary_params() > 0) {
+	if (cosmo->get_n_vary_params() > 0) {
 		cout << "Cosmology parameters:" << endl;
-		cosmo.print_parameters();
-		cosmo.print_vary_parameters();
+		cosmo->print_parameters();
+		cosmo->print_vary_parameters();
 		cout << endl;
 	}
 	if (n_vary_params > 0) {
@@ -12367,7 +13385,7 @@ void QLens::plot_logkappa_map(const int x_N, const int y_N, const string filenam
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			if ((!ignore_mask) and (imgpixel_data_list[0] != NULL) and (!imgpixel_data_list[0]->inside_mask(x,y))) logkapout << "NaN ";
+			if ((!ignore_mask) and (imgdata_list[0] != NULL) and (!imgdata_list[0]->inside_mask(x,y))) logkapout << "NaN ";
 			else {
 				kap = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
 				//kap = kappa_exclude(pos,0,reference_zfactors,default_zsrc_beta_factors); // for looking at convergence of perturber
@@ -12614,9 +13632,9 @@ bool QLens::create_sourcegrid_cartesian(const int band_number, const int zsrc_i,
 	}
 	if (src_i < 0) { warn("no pixellated source corresponding to given redshift has been created"); return false; }
 
-	ImagePixelData *image_pixel_data;
-	if (n_data_bands > band_number) image_pixel_data = imgpixel_data_list[band_number];
-	else image_pixel_data = NULL;
+	ImageData *image_data;
+	if (n_data_bands > band_number) image_data = imgdata_list[band_number];
+	else image_data = NULL;
 
 	bool at_least_one_lensed_src = false;
 	for (int k=0; k < n_sb; k++) {
@@ -12638,9 +13656,9 @@ bool QLens::create_sourcegrid_cartesian(const int band_number, const int zsrc_i,
 			if (image_pixel_grids[imggrid_i] == NULL) {
 				//image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,0);
 				bool raytrace = true;
-				if ((use_mask) and (image_pixel_data != NULL)) raytrace = false;
+				if ((use_mask) and (image_data != NULL)) raytrace = false;
 				image_pixel_grids[imggrid_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace,band_number,zsrc_i,imggrid_i);
-				if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[imggrid_i]->set_fit_window((*image_pixel_data),true,assigned_mask[imggrid_i],include_fgmask_in_inversion);
+				if ((use_mask) and (image_data != NULL)) image_pixel_grids[imggrid_i]->set_fit_window((*image_data),true,assigned_mask[imggrid_i],include_fgmask_in_inversion);
 				if (band_number < n_psf) psf_list[band_number]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 			}
 		}
@@ -12739,9 +13757,9 @@ bool QLens::create_sourcegrid_delaunay(const int src_i, const bool use_mask, con
 	int band_number = pixellated_src_band[src_i];
 	int imggrid_i = band_number*n_extended_src_redshifts + zsrc_i;
 
-	ImagePixelData *image_pixel_data;
-	if (n_data_bands > band_number) image_pixel_data = imgpixel_data_list[band_number];
-	else image_pixel_data = NULL;
+	ImageData *image_data;
+	if (n_data_bands > band_number) image_data = imgdata_list[band_number];
+	else image_data = NULL;
 
 	double xmin,xmax,ymin,ymax;
 	xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
@@ -12750,9 +13768,9 @@ bool QLens::create_sourcegrid_delaunay(const int src_i, const bool use_mask, con
 	ymax += 1e-10;
 	if (image_pixel_grids[imggrid_i] == NULL) {
 		bool raytrace = true;
-		if ((use_mask) and (image_pixel_data != NULL)) raytrace = false;
+		if ((use_mask) and (image_data != NULL)) raytrace = false;
 		image_pixel_grids[imggrid_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace,band_number,zsrc_i,imggrid_i);
-		if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[imggrid_i]->set_fit_window((*image_pixel_data),true,assigned_mask[imggrid_i],include_fgmask_in_inversion); 
+		if ((use_mask) and (image_data != NULL)) image_pixel_grids[imggrid_i]->set_fit_window((*image_data),true,assigned_mask[imggrid_i],include_fgmask_in_inversion); 
 		if (band_number < n_psf) psf_list[band_number]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 	}
 
@@ -12791,9 +13809,9 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	if ((src_i < 0) or (src_i >= n_pixellated_src)) { warn("no pixellated source corresponding to given redshift has been created"); return false; }
 	if (delaunay_srcgrids[src_i]==NULL) die("Delaunay source grid should not be NULL!"); // just for debugging; remove this line later
 
-	ImagePixelData *image_pixel_data;
-	if (n_data_bands > band_number) image_pixel_data = imgpixel_data_list[band_number]; // temporary until I sort out the band stuff
-	else image_pixel_data = NULL;
+	ImageData *image_data;
+	if (n_data_bands > band_number) image_data = imgdata_list[band_number]; // temporary until I sort out the band stuff
+	else image_data = NULL;
 
 	double *srcpts_x, *srcpts_y;
 	int *ivals, *jvals;
@@ -12810,9 +13828,9 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		pixptr_j = image_pixel_grids[imggrid_i]->masked_pixels_j;
 	//}
 	double avg_sb = -1e30;
-	if (image_pixel_data) {
-		double bgnoise = (use_noise_map) ? image_pixel_data->bg_pixel_noise : background_pixel_noise;
-		avg_sb = image_pixel_data->find_avg_sb(10*bgnoise);
+	if (image_data) {
+		double bgnoise = (use_noise_map) ? image_data->bg_pixel_noise : background_pixel_noise;
+		avg_sb = image_data->find_avg_sb(10*bgnoise);
 	}
 
 	int i,j,k,l,n,npix=0,npix_in_lensing_mask=0; // npix_in_lensing_mask will be different from npix_in_mask if include_fgmask_in_inversion is turned on
@@ -12830,7 +13848,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
-		if ((include_fgmask_in_inversion) and (!(image_pixel_data->in_mask[zsrc_i][i][j]))) {
+		if ((include_fgmask_in_inversion) and (!(image_data->in_mask[zsrc_i][i][j]))) {
 			include_in_delaunay_grid[n] = false; // if we're including the foreground mask in the inversion, we still only use the pixels within the lensing mask to define our source grid
 		} else {
 			if (include_fgmask_in_inversion) npix_in_lensing_mask++;
@@ -12839,15 +13857,15 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			nsubpix = INTSQR(nysubpix); // why not just store the square and avoid having to always take the square?
 			if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
 				include = true;
-				sb = image_pixel_data->surface_brightness[i][j];
+				sb = image_data->surface_brightness[i][j];
 				if (sb > max_sb) max_sb = sb;
 				if (sb < min_sb) min_sb = sb;
 			} else {
-				if ((delaunay_high_sn_mode) and (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb)) {
+				if ((delaunay_high_sn_mode) and (image_data->surface_brightness[i][j] > sbfrac*avg_sb)) {
 					if ((delaunay_mode==1) or (delaunay_mode==2)) include = true;
 					else if ((delaunay_mode==3) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true; // switch to mode 1 if S/N high enough
 					else if ((delaunay_mode==4) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true; // switch to mode 2 if S/N high enough
-					else if (image_pixel_data->surface_brightness[i][j] > 3*sbfrac*avg_sb) include = true; // if threshold is high enough, just include it
+					else if (image_data->surface_brightness[i][j] > 3*sbfrac*avg_sb) include = true; // if threshold is high enough, just include it
 				}
 				else if ((delaunay_mode==0) or (delaunay_mode==5)) include = true;
 				else if ((delaunay_mode==1) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true;
@@ -13098,9 +14116,9 @@ bool QLens::create_lensgrid_cartesian(const int band_number, const int zsrc_i, c
 	if (band_number >= n_model_bands) die("specified model band has not been created");
 	int imggrid_i = band_number*n_extended_src_redshifts + zsrc_i;
 
-	ImagePixelData *image_pixel_data;
-	if (n_data_bands > band_number) image_pixel_data = imgpixel_data_list[band_number]; // temporary until I sort out the band stuff
-	else image_pixel_data = NULL;
+	ImageData *image_data;
+	if (n_data_bands > band_number) image_data = imgdata_list[band_number]; // temporary until I sort out the band stuff
+	else image_data = NULL;
 
 	double xmin,xmax,ymin,ymax;
 	int npx, npy;
@@ -13111,9 +14129,9 @@ bool QLens::create_lensgrid_cartesian(const int band_number, const int zsrc_i, c
 		ymax += 1e-10;
 		//image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,0);
 		bool raytrace = true;
-		if ((use_mask) and (image_pixel_data != NULL)) raytrace = false;
+		if ((use_mask) and (image_data != NULL)) raytrace = false;
 		image_pixel_grids[imggrid_i] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y,raytrace,band_number,zsrc_i,imggrid_i);
-		if ((use_mask) and (image_pixel_data != NULL)) image_pixel_grids[imggrid_i]->set_fit_window((*image_pixel_data),true,assigned_mask[imggrid_i],include_fgmask_in_inversion); 
+		if ((use_mask) and (image_data != NULL)) image_pixel_grids[imggrid_i]->set_fit_window((*image_data),true,assigned_mask[imggrid_i],include_fgmask_in_inversion); 
 		if (band_number < n_psf) psf_list[band_number]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 		npx = n_image_pixels_x;
 		npy = n_image_pixels_y;
@@ -13149,7 +14167,7 @@ bool QLens::create_lensgrid_from_imggrid_delaunay(const int zsrc_i, const int pi
 		pixptr_j = image_pixel_grids[zsrc_i]->masked_pixels_j;
 	}
 	double avg_sb = -1e30;
-	if (image_pixel_data) avg_sb = image_pixel_data->find_avg_sb(10*background_pixel_noise);
+	if (image_data) avg_sb = image_data->find_avg_sb(10*background_pixel_noise);
 
 	int i,j,k,l,n,npix=0;
 	bool include;
@@ -13170,15 +14188,15 @@ bool QLens::create_lensgrid_from_imggrid_delaunay(const int zsrc_i, const int pi
 		nsubpix = INTSQR(nysubpix); // why not just store the square and avoid having to always take the square?
 		if ((use_lenspixel_clustering) or (delaunay_mode==5)) {
 			include = true;
-			sb = image_pixel_data->surface_brightness[i][j];
+			sb = image_data->surface_brightness[i][j];
 			if (sb > max_sb) max_sb = sb;
 			if (sb < min_sb) min_sb = sb;
 		} else {
-			if ((delaunay_high_sn_mode) and (image_pixel_data->surface_brightness[i][j] > sbfrac*avg_sb)) {
+			if ((delaunay_high_sn_mode) and (image_data->surface_brightness[i][j] > sbfrac*avg_sb)) {
 				if ((delaunay_mode==1) or (delaunay_mode==2)) include = true;
 				else if ((delaunay_mode==3) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true; // switch to mode 1 if S/N high enough
 				else if ((delaunay_mode==4) and (((i%2==0) and (j%2==1)) or ((i%2==1) and (j%2==0)))) include = true; // switch to mode 2 if S/N high enough
-				else if (image_pixel_data->surface_brightness[i][j] > 3*sbfrac*avg_sb) include = true; // if threshold is high enough, just include it
+				else if (image_data->surface_brightness[i][j] > 3*sbfrac*avg_sb) include = true; // if threshold is high enough, just include it
 			}
 			else if ((delaunay_mode==0) or (delaunay_mode==5)) include = true;
 			else if ((delaunay_mode==1) and (((i%2==0) and (j%2==0)) or ((i%2==1) and (j%2==1)))) include = true;
@@ -13372,7 +14390,7 @@ bool QLens::create_lensgrid_from_imggrid_delaunay(const int zsrc_i, const int pi
 void QLens::plot_source_pixel_grid(const int imggrid_i, const char filename[])
 {
 	if ((imggrid_i >= 0) and (n_extended_src_redshifts==0)) die("no ext src redshift created");
-	SourcePixelGrid *cartesian_srcgrid = image_pixel_grids[imggrid_i]->cartesian_srcgrid;
+	CartesianSourceGrid *cartesian_srcgrid = image_pixel_grids[imggrid_i]->cartesian_srcgrid;
 
 	if (cartesian_srcgrid==NULL) { warn("No source surface brightness map has been generated"); return; }
 	cartesian_srcgrid->xgrid.open(filename, ifstream::out);
@@ -13392,7 +14410,7 @@ void QLens::find_source_centroid(const int imggrid_i, double& xc_approx, double&
 	}
 }
 
-bool QLens::load_image_surface_brightness_grid(const int band_i, string image_pixel_filename_root, const double pixsize, const double pix_xy_ratio, const double x_offset, const double y_offset, const int hdu_indx, const bool show_fits_header)
+bool QLens::load_image_pixel_data(const int band_i, string image_pixel_filename_root, const double pixsize, const double pix_xy_ratio, const double x_offset, const double y_offset, const int hdu_indx, const bool show_fits_header)
 {
 	bool first_data_img = false;
 	if (band_i > n_data_bands) return false;
@@ -13402,7 +14420,7 @@ bool QLens::load_image_surface_brightness_grid(const int band_i, string image_pi
 	}
 	while (n_model_bands < n_data_bands) add_new_model_band();
 
-	ImagePixelData *image_pixel_data = imgpixel_data_list[band_i];
+	ImageData *image_data = imgdata_list[band_i];
 
 	bool status = true;
 	if (fits_format == true) {
@@ -13410,37 +14428,37 @@ bool QLens::load_image_surface_brightness_grid(const int band_i, string image_pi
 			double xmin,xmax,ymin,ymax;
 			xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 			ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
-			image_pixel_data->set_grid_params(xmin,xmax,ymin,ymax); // these functions are defined in the header pixelgrid.h
+			image_data->set_grid_params(xmin,xmax,ymin,ymax); // these functions are defined in the header pixelgrid.h
 			// note that if the data pixel size is found in the FITS header, it will override the dimensions set above
 		}
-		//status = image_pixel_data->load_data_fits(xmin,xmax,ymin,ymax,image_pixel_filename_root,hdu_indx,show_fits_header); // these functions are defined in the header pixelgrid.h
-		status = image_pixel_data->load_data_fits(image_pixel_filename_root,pixsize,pix_xy_ratio,x_offset,y_offset,hdu_indx,show_fits_header);
+		//status = image_data->load_data_fits(xmin,xmax,ymin,ymax,image_pixel_filename_root,hdu_indx,show_fits_header); // these functions are defined in the header pixelgrid.h
+		status = image_data->load_data_fits(image_pixel_filename_root,pixsize,pix_xy_ratio,x_offset,y_offset,hdu_indx,show_fits_header);
 		// the pixel size may have been specified in the FITS file, in which case data pixel size was just set to something > 0
 		if ((status==true) and (pixsize > 0)) {
 			double xmin,xmax,ymin,ymax;
 			int npx, npy;
-			image_pixel_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
+			image_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
 			grid_xlength = xmax-xmin;
 			grid_ylength = ymax-ymin;
 			set_gridcenter(0.5*(xmin+xmax),0.5*(ymin+ymax));
 		}
 	} else {
-		image_pixel_data->load_data(image_pixel_filename_root);
+		image_data->load_data(image_pixel_filename_root);
 		double xmin,xmax,ymin,ymax;
 		int npx, npy;
-		image_pixel_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
+		image_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
 		grid_xlength = xmax-xmin;
 		grid_ylength = ymax-ymin;
 		set_gridcenter(0.5*(xmin+xmax),0.5*(ymin+ymax));
 	}
 	if (status==false) {
 		if (first_data_img) {
-			delete image_pixel_data;
-			image_pixel_data = NULL;
+			delete image_data;
+			image_data = NULL;
 		}
 		return false;
 	}
-	image_pixel_data->get_npixels(n_image_pixels_x,n_image_pixels_y);
+	image_data->get_npixels(n_image_pixels_x,n_image_pixels_y);
 	/*
 	if ((status==true) and (image_pixel_grids != NULL)) {
 		// delete the image pixel grids so that they will be remade according to the dimensions in the image data
@@ -13474,7 +14492,110 @@ void QLens::update_imggrid_mask_values(const int mask_i)
 	}
 }
 
-const bool QLens::plot_lensed_surface_brightness(string imagefile, const int band_number, const bool output_fits, const bool plot_residual, bool plot_foreground_only, const bool omit_foreground, const bool show_all_pixels, const bool normalize_residuals, const bool offload_to_data, const bool show_extended_mask, const bool show_foreground_mask, const bool show_noise_thresh, const bool exclude_ptimgs, const bool only_ptimgs, int specific_zsrc_i, const bool show_only_first_order_corrections, const bool plot_log, const bool plot_current_sb, const bool verbose)
+void QLens::plot_sbmap(const string filename, dvector& xvals, dvector& yvals, dvector& zvals, const bool plot_fits)
+{
+	int i,j,k,nx,ny;
+	nx = xvals.size()-1; // since xvals contains the corner points, not the center points
+	ny = yvals.size()-1;
+	if (!plot_fits) {
+		string sb_filename = filename + ".dat";
+		string x_filename = filename + ".x";
+		string y_filename = filename + ".y";
+
+		ofstream pixel_image_file; open_output_file(pixel_image_file,sb_filename);
+		ofstream pixel_xvals; open_output_file(pixel_xvals,x_filename);
+		ofstream pixel_yvals; open_output_file(pixel_yvals,y_filename);
+		pixel_image_file << setiosflags(ios::scientific);
+		for (i=0; i <= nx; i++) {
+			pixel_xvals << xvals[i] << endl;
+		}
+		for (j=0; j <= ny; j++) {
+			pixel_yvals << yvals[j] << endl;
+		}	
+		k=0;
+		for (j=0; j < ny; j++) {
+			for (i=0; i < nx; i++) {
+				pixel_image_file << zvals[k++];
+				if (i < nx-1) pixel_image_file << " ";
+			}
+			pixel_image_file << endl;
+		}
+	} else {
+#ifndef USE_FITS
+		cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to write FITS files\n"; return;
+#else
+		int k,kk;
+		fitsfile *outfptr;   // FITS file pointer, defined in fitsio.h
+		int status = 0;   // CFITSIO status value MUST be initialized to zero!
+		int bitpix = -64, naxis = 2;
+		long naxes[2] = {nx,ny};
+		double *pixels;
+		double pixel_xlength = xvals[1]-xvals[0];
+		double pixel_ylength = yvals[1]-yvals[0];
+		if (fit_output_dir != ".") create_output_directory(); // in case it hasn't been created already
+		string fits_filename = "!" + fit_output_dir + "/" + filename; // ensures that it overwrites an existing file of the same name
+
+		if (!fits_create_file(&outfptr, fits_filename.c_str(), &status))
+		{
+			if (!fits_create_img(outfptr, bitpix, naxis, naxes, &status))
+			{
+				if (naxis == 0) {
+					die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
+				} else {
+					kk=0;
+					long fpixel[naxis];
+					for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
+					pixels = new double[nx];
+
+					k=0;
+					for (fpixel[1]=1, j=0; fpixel[1] <= naxes[1]; fpixel[1]++, j++)
+					{
+						for (i=0; i < nx; i++) {
+							pixels[i] = zvals[k++];
+						}
+						fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
+					}
+					delete[] pixels;
+				}
+				if (pixel_xlength==pixel_ylength) {
+					fits_write_key(outfptr, TDOUBLE, "PXSIZE", &pixel_xlength, "length of square pixels (in arcsec)", &status);
+				} else {
+					if (mpi_id==0) cout << "NOTE: pixel length not equal in x- versus y-directions; not saving pixel size in FITS file header" << endl;
+				}
+				if ((simulate_pixel_noise) and (!use_noise_map))
+					fits_write_key(outfptr, TDOUBLE, "PXNOISE", &background_pixel_noise, "pixel surface brightness noise", &status);
+				fits_write_key(outfptr, TDOUBLE, "ZSRC", &source_redshift, "redshift of source galaxy", &status);
+				if (nlens > 0) {
+					double zl = lens_list[primary_lens_number]->get_redshift();
+					fits_write_key(outfptr, TDOUBLE, "ZLENS", &zl, "redshift of primary qlens", &status);
+				}
+
+				if (data_info != "") {
+					string comment = "ql: " + data_info;
+					fits_write_comment(outfptr, comment.c_str(), &status);
+				}
+				if (param_markers != "") {
+					string param_markers_comma = param_markers;
+					// Commas are used as delimeter in FITS file so spaces won't get lost when reading it in
+					for (size_t i = 0; i < param_markers_comma.size(); ++i) {
+						 if (param_markers_comma[i] == ' ') {
+							  param_markers_comma.replace(i, 1, ",");
+						 }
+					}
+
+					string comment = "mk: " + param_markers_comma;
+					fits_write_comment(outfptr, comment.c_str(), &status);
+				}
+			}
+			fits_close_file(outfptr, &status);
+		} 
+
+		if (status) fits_report_error(stderr, status); // print any error message
+#endif
+	}
+}
+
+const bool QLens::output_lensed_surface_brightness(dvector& xvals, dvector& yvals, dvector& zvals, const int band_number, const bool output_fits, const bool plot_residual, bool plot_foreground_only, const bool omit_foreground, const bool show_all_pixels, const bool normalize_residuals, const bool offload_to_data, const bool show_extended_mask, const bool show_foreground_mask, const bool show_noise_thresh, const bool exclude_ptimgs, const bool only_ptimgs, int specific_zsrc_i, const bool show_only_first_order_corrections, const bool plot_log, const bool plot_current_sb, const bool verbose)
 {
 	// Note that if specific_zsrc_i is negative, it will plot images from *all* source redshifts
 	// You need to simplify the code in this function. It's too convoluted!!!
@@ -13490,17 +14611,17 @@ const bool QLens::plot_lensed_surface_brightness(string imagefile, const int ban
 	if (((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) and (n_sb==0) and (n_ptsrc==0)) { warn("No surface brightness profiles have been defined"); return false; }
 	if ((plot_foreground_only) and (omit_foreground)) { warn("cannot omit both foreground and lensed sources when plotting"); return false; }
 
-	ImagePixelData *image_pixel_data;
-	if (n_data_bands > band_number) image_pixel_data = imgpixel_data_list[band_number];
-	else image_pixel_data = NULL;
+	ImageData *image_data;
+	if (n_data_bands > band_number) image_data = imgdata_list[band_number];
+	else image_data = NULL;
 
 	bool use_data = true;
-	if (image_pixel_data==NULL) use_data = false;
+	if (image_data==NULL) use_data = false;
 	if (band_number >= n_model_bands) { warn("specified band number has not been created"); return false; }
-	if ((plot_residual==true) and (!image_pixel_data)) { warn("cannot plot residual image, pixel data image has been loaded or cannot be used"); return false; }
+	if ((plot_residual==true) and (!image_data)) { warn("cannot plot residual image, pixel data image has been loaded or cannot be used"); return false; }
 	double xmin,xmax,ymin,ymax;
 	if (use_data) {
-		image_pixel_data->get_grid_params(xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y);
+		image_data->get_grid_params(xmin,xmax,ymin,ymax,n_image_pixels_x,n_image_pixels_y);
 	} else {
 		xmin = grid_xcenter-0.5*grid_xlength; xmax = grid_xcenter+0.5*grid_xlength;
 		ymin = grid_ycenter-0.5*grid_ylength; ymax = grid_ycenter+0.5*grid_ylength;
@@ -13532,7 +14653,7 @@ const bool QLens::plot_lensed_surface_brightness(string imagefile, const int ban
 				if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source) or (source_fit_mode==Shapelet_Source)) { warn("No inversion has been performed to reconstruct source"); return false; }
 				// if it hasn't been created yet, create now
 				if (use_data) {
-					image_pixel_grids[imggrid_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_pixel_data), include_fgmask_in_inversion, band_number, zsrc_i, imggrid_i, assigned_mask[imggrid_i]);
+					image_pixel_grids[imggrid_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*image_data), include_fgmask_in_inversion, band_number, zsrc_i, imggrid_i, assigned_mask[imggrid_i]);
 					if (band_number < n_psf) psf_list[band_number]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 
 				}
@@ -13542,7 +14663,7 @@ const bool QLens::plot_lensed_surface_brightness(string imagefile, const int ban
 					if (band_number < n_psf) psf_list[band_number]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 				}
 			} else {
-				if ((image_pixel_data != NULL) and ((image_pixel_grids[imggrid_i]->x_N != image_pixel_data->npixels_x) or (image_pixel_grids[imggrid_i]->y_N != image_pixel_data->npixels_y))) {
+				if ((image_data != NULL) and ((image_pixel_grids[imggrid_i]->x_N != image_data->npixels_x) or (image_pixel_grids[imggrid_i]->y_N != image_data->npixels_y))) {
 					use_data = false;
 					warn("img_npixels does not match number of pixels in data image");
 					if (plot_residual==true) { warn("cannot plot residual image, pixel data image has been loaded or cannot be used"); return false; }
@@ -13710,13 +14831,13 @@ const bool QLens::plot_lensed_surface_brightness(string imagefile, const int ban
 	}
 
 	double chisq_from_residuals;
-	if (output_fits==false) {
+	//if (output_fits==false) {
 		if (mpi_id==0)  {
-			chisq_from_residuals = image_pixel_grid->plot_surface_brightness(imagefile,plot_residual,normalize_residuals,show_noise_thresh,plot_log,(show_foreground_mask) or (include_fgmask_in_inversion));
+			chisq_from_residuals = image_pixel_grid->output_surface_brightness(xvals,yvals,zvals,plot_residual,normalize_residuals,show_noise_thresh,plot_log,(show_foreground_mask) or (include_fgmask_in_inversion));
 		}
-	} else {
-		if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
-	}
+	//} else {
+		//if (mpi_id==0) image_pixel_grid->output_fits_file(imagefile,plot_residual);
+	//}
 
 	if ((show_all_pixels) or (show_extended_mask)) include_fgmask_in_inversion = include_fgmask_in_inversion_orig;
 
@@ -13725,7 +14846,7 @@ const bool QLens::plot_lensed_surface_brightness(string imagefile, const int ban
 		for (zsrc_i=zsrc_i_0, imggrid_i=primary_imggrid_i; zsrc_i < zsrc_i_f; zsrc_i++, imggrid_i++) {
 			if ((changed_mask) or ((n_extended_src_redshifts > 1) and (zsrc_i==0) and (specific_zsrc_i < 0))) // explanation for the latter condition: if all the lensed images were combined in one plot, then masks were combined image_pixel_grid[0], so we should restore the original mask
 			{
-				if (!image_pixel_grids[imggrid_i]->set_fit_window((*image_pixel_data),true,assigned_mask[imggrid_i],false,include_fgmask_in_inversion)) {
+				if (!image_pixel_grids[imggrid_i]->set_fit_window((*image_data),true,assigned_mask[imggrid_i],false,include_fgmask_in_inversion)) {
 					warn("could not reset mask for imggrid index %i",imggrid_i);
 					//delete image_pixel_grids; // so when you invert, it will load a new image grid based on the data
 					//image_pixel_grids = NULL;
@@ -13751,35 +14872,35 @@ const bool QLens::plot_lensed_surface_brightness(string imagefile, const int ban
 		if ((plot_residual) and (use_data)) {
 			for (i=0; i < n_image_pixels_x; i++) {
 				for (j=0; j < n_image_pixels_y; j++) {
-					image_pixel_grid->surface_brightness[i][j] = image_pixel_data->surface_brightness[i][j] - image_pixel_grid->surface_brightness[i][j];
+					image_pixel_grid->surface_brightness[i][j] = image_data->surface_brightness[i][j] - image_pixel_grid->surface_brightness[i][j];
 				}
 			}
 		}
 		if (n_data_bands==0) {
 			add_image_pixel_data();
 		}
-		image_pixel_data = imgpixel_data_list[band_number]; // temporary until I sort out the band stuff
-		image_pixel_data->load_from_image_grid(image_pixel_grid);
+		image_data = imgdata_list[band_number]; // temporary until I sort out the band stuff
+		image_data->load_from_image_grid(image_pixel_grid);
 		if (specific_zsrc_i < 0) {
 			specific_zsrc_i = 0;
 			specific_imggrid_i = primary_imggrid_i;
 		}
-		image_pixel_grid->assign_mask_pointers((*image_pixel_data),specific_imggrid_i); // this is just to give image_pixel_grid the mask pointers from image_pixel_data
+		image_pixel_grid->assign_mask_pointers((*image_data),specific_imggrid_i); // this is just to give image_pixel_grid the mask pointers from image_data
 		if (n_data_bands==1) {
 			// in case an image_pixel_grid has already been created (e.g. when making mock data)
 			for (int i=0; i < n_extended_src_redshifts; i++) {
-				image_pixel_grids[i]->set_image_pixel_data(imgpixel_data_list[0], 0); // mask index = 0, make this better?
+				image_pixel_grids[i]->set_image_pixel_data(imgdata_list[0], 0); // mask index = 0, make this better?
 			}
 		}
 
 		// are the following lines really necessary??
 		double xmin,xmax,ymin,ymax;
 		int npx, npy;
-		image_pixel_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
+		image_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);
 		grid_xlength = xmax - xmin;
 		grid_ylength = ymax - ymin;
 		set_gridcenter(0.5*(xmin+xmax),0.5*(ymin+ymax));
-		image_pixel_data->get_npixels(n_image_pixels_x,n_image_pixels_y);
+		image_data->get_npixels(n_image_pixels_x,n_image_pixels_y);
 
 		// Make sure the grid size & center are fixed now
 		if (autocenter) autocenter = false;
@@ -13840,10 +14961,10 @@ bool QLens::find_shapelet_scaling_parameters(const int i_shapelet, const int img
 
 bool QLens::set_shapelet_imgpixel_nsplit(const int imggrid_i)
 {
-	if (imgpixel_data_list == NULL) { warn("No image data have been loaded"); return false; }
+	if (imgdata_list == NULL) { warn("No image data have been loaded"); return false; }
 	ImagePixelGrid *image_pixel_grid = image_pixel_grids[imggrid_i];
 	if (image_pixel_grid == NULL) {
-		image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*imgpixel_data_list[0]), include_fgmask_in_inversion, 0, imggrid_i, imggrid_i, assigned_mask[imggrid_i], true);
+		image_pixel_grid = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*imgdata_list[0]), include_fgmask_in_inversion, 0, imggrid_i, imggrid_i, assigned_mask[imggrid_i], true);
 		if (n_psf > 0) psf_list[0]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 	}
 	image_pixel_grid->redo_lensing_calculations();
@@ -13886,7 +15007,7 @@ bool QLens::load_pixel_grid_from_data(const int band_number)
 		if (image_pixel_grids[imggrid_i] != NULL) {
 			delete image_pixel_grids[imggrid_i];
 		}
-		image_pixel_grids[imggrid_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*imgpixel_data_list[band_number]), include_fgmask_in_inversion, band_number, zsrc_i, imggrid_i, assigned_mask[imggrid_i]);
+		image_pixel_grids[imggrid_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*imgdata_list[band_number]), include_fgmask_in_inversion, band_number, zsrc_i, imggrid_i, assigned_mask[imggrid_i]);
 		loaded_new_grid = true;
 		if (band_number < n_psf) psf_list[band_number]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 	}
@@ -13908,7 +15029,7 @@ void QLens::plot_image_pixel_grid(const int band_number, const int zsrc_i)
 
 	int imggrid_i = band_number*n_extended_src_redshifts + zsrc_i;
 	if (image_pixel_grids[imggrid_i] == NULL) {
-		image_pixel_grids[imggrid_i] = new ImagePixelGrid(this, source_fit_mode,ray_tracing_method, (*imgpixel_data_list[band_number]), include_fgmask_in_inversion, zsrc_i, imggrid_i, assigned_mask[imggrid_i]);
+		image_pixel_grids[imggrid_i] = new ImagePixelGrid(this, source_fit_mode,ray_tracing_method, (*imgdata_list[band_number]), include_fgmask_in_inversion, zsrc_i, imggrid_i, assigned_mask[imggrid_i]);
 		if (band_number < n_psf) psf_list[band_number]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 	}
 	image_pixel_grids[imggrid_i]->redo_lensing_calculations();
@@ -13933,7 +15054,7 @@ double QLens::invert_surface_brightness_map_from_data(double &chisq0, const bool
 		if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift,band_number);
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			if (image_pixel_grids[imggrid_i] == NULL) {
-				image_pixel_grids[imggrid_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*imgpixel_data_list[band_number]), include_fgmask_in_inversion, band_number, zsrc_i, imggrid_i, assigned_mask[zsrc_i], true, verbal);
+				image_pixel_grids[imggrid_i] = new ImagePixelGrid(this, source_fit_mode, ray_tracing_method, (*imgdata_list[band_number]), include_fgmask_in_inversion, band_number, zsrc_i, imggrid_i, assigned_mask[zsrc_i], true, verbal);
 				if (band_number < n_psf) psf_list[band_number]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 			}
 			imggrid_i++;
@@ -14019,7 +15140,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 		set_n_imggrids_to_include_in_inversion();
 	}
 
-	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in mask 0 : " << imgpixel_data_list[0]->n_mask_pixels[0] << endl;
+	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in mask 0 : " << imgdata_list[0]->n_mask_pixels[0] << endl;
 	double tot_wtime0, tot_wtime;
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -14037,7 +15158,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 	bool splined_fourier_integrals = false;
 	for (int i=0; i < nlens; i++) {
 		if (lens_list[i]->n_fourier_modes > 0) {
-			lens_list[i]->spline_fourier_mode_integrals(0.01*imgpixel_data_list[0]->emask_rmax,imgpixel_data_list[0]->emask_rmax);
+			lens_list[i]->spline_fourier_mode_integrals(0.01*imgdata_list[0]->emask_rmax,imgdata_list[0]->emask_rmax);
 			splined_fourier_integrals = true;
 		}
 	}
@@ -14073,11 +15194,11 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 
 	bool include_foreground_sbmask, include_foreground_sb, at_least_one_noninverted_foreground_src, at_least_one_lensed_src, at_least_one_lensed_nonshapelet_src, at_least_one_shapelet_src, at_least_one_mge_src; 
 
-	ImagePixelData *image_pixel_data;
+	ImageData *image_data;
 	
 	bool sb_outside_window, sb_outside_window_allbands = false;
 	for (int band_number = 0; band_number < n_data_bands; band_number++) {
-		image_pixel_data = imgpixel_data_list[band_number];
+		image_data = imgdata_list[band_number];
 		loglike_reg = 0;
 		logev_times_two_band = 0;
 		skip_inversion = false;
@@ -14099,8 +15220,9 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			if (sb_list[k]->sbtype==SHAPELET) at_least_one_shapelet_src = true;
 			else if (sb_list[k]->sbtype==MULTI_GAUSSIAN_EXPANSION) at_least_one_mge_src = true;
 		}
-		if ((!ignore_foreground_in_chisq) and (at_least_one_noninverted_foreground_src) or (include_fgmask_in_inversion)) { include_foreground_sbmask = true; include_foreground_sb = true; } 
-		else if ((!at_least_one_noninverted_foreground_src) and ((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
+		if (at_least_one_noninverted_foreground_src) include_foreground_sb = true;
+		if ((!ignore_foreground_in_chisq) and (include_fgmask_in_inversion)) { include_foreground_sbmask = true; } 
+		else if (((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
 		if ((source_fit_mode==Shapelet_Source) and (!at_least_one_shapelet_src) and (!at_least_one_mge_src) and ((n_ptsrc==0) or ((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)))) {
 			if (verbal) warn("cannot perform inversion because no shapelet/MGE objects and no point sources with invertible amplitudes are defined");
 			chisq0=-1e30; return -1e30;
@@ -14423,27 +15545,27 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			if (image_pixel_grids[imggrid_i]->n_pixsrc_to_include_in_Lmatrix==0) continue;
 			n_data_pixels = 0;
 			chisq0_imggrid = 0;
-			for (i=0; i < image_pixel_data->npixels_x; i++) {
-				for (j=0; j < image_pixel_data->npixels_y; j++) {
-					if (((!include_fgmask_in_inversion) and (image_pixel_grid->pixel_in_mask[i][j])) or ((include_foreground_sbmask) and (image_pixel_data->foreground_mask_data[i][j])))
+			for (i=0; i < image_data->npixels_x; i++) {
+				for (j=0; j < image_data->npixels_y; j++) {
+					if (((!include_fgmask_in_inversion) and (image_pixel_grid->pixel_in_mask[i][j])) or ((include_foreground_sbmask) and (image_data->foreground_mask_data[i][j])))
 					{
 						n_data_pixels++;
-						if (use_noise_map) cov_inverse = image_pixel_data->covinv_map[i][j];
+						if (use_noise_map) cov_inverse = image_data->covinv_map[i][j];
 						if ((image_pixel_grid->pixel_in_mask[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 							if (include_foreground_sb) {
-								chisq0_imggrid += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+								chisq0_imggrid += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 								foreground_count++;
 							} else {
-								chisq0_imggrid += SQR(image_pixel_grid->surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+								chisq0_imggrid += SQR(image_pixel_grid->surface_brightness[i][j] - image_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 							}
 							count++;
 						} else {
 							// NOTE that if a pixel is not in the foreground mask, the foreground_surface_brightness has already been set to zero for that pixel
 							if (include_foreground_sb) {
-								chisq0_imggrid += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_pixel_data->surface_brightness[i][j])*cov_inverse;
+								chisq0_imggrid += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_data->surface_brightness[i][j])*cov_inverse;
 								foreground_count++;
 							}
-							else if (image_pixel_grid->pixel_in_mask[i][j]) chisq0_imggrid += SQR(image_pixel_data->surface_brightness[i][j])*cov_inverse; // if we're not modeling foreground, then only add to chi-square if it's inside the primary mask
+							else if (image_pixel_grid->pixel_in_mask[i][j]) chisq0_imggrid += SQR(image_data->surface_brightness[i][j])*cov_inverse; // if we're not modeling foreground, then only add to chi-square if it's inside the primary mask
 						}
 					}
 				}
@@ -14472,8 +15594,8 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 						include_pixel = true;
 						i = image_pixel_grid->active_image_pixel_i[img_index];
 						j = image_pixel_grid->active_image_pixel_j[img_index];
-						if ((include_fgmask_in_inversion) and (!image_pixel_data->foreground_mask_data[i][j])) include_pixel = false;
-						if (include_pixel) logev_times_two_band -= log(image_pixel_data->covinv_map[i][j]); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
+						if ((include_fgmask_in_inversion) and (!image_data->foreground_mask_data[i][j])) include_pixel = false;
+						if (include_pixel) logev_times_two_band -= log(image_data->covinv_map[i][j]); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
 					}
 				} else {
 					logev_times_two_band -= n_data_pixels*log(cov_inverse); // if the loglike_reference_noise is equal to sqrt(noise_covariance), then this term becomes zero and it just looks like chi-square (which looks prettier)
@@ -14575,15 +15697,15 @@ void QLens::setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bo
 					source_grid_defined = true;
 				}
 			}
-	int src_icheck = -1;
-	for (int i=0; i < n_pixellated_src; i++) {
-		if ((pixellated_src_band[i]==band_number) and (pixellated_src_redshift_idx[i]==zsrc_i)) {
-			src_icheck = i;
-			break;
-		}
-	}
+			int src_icheck = -1;
+			for (int i=0; i < n_pixellated_src; i++) {
+				if ((pixellated_src_band[i]==band_number) and (pixellated_src_redshift_idx[i]==zsrc_i)) {
+					src_icheck = i;
+					break;
+				}
+			}
 
-			if (cartesian_srcgrids[src_i]->lens==NULL) die("FARG1");
+			if (cartesian_srcgrids[src_i]->qlens==NULL) die("cartesian source grid does not have pointer to qlens");
 #ifdef USE_OPENMP
 			if (source_grid_defined) {
 				if (show_wtime) {
@@ -14741,6 +15863,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 	//if (potential_perturbations) image_pixel_grids[imggrid_i]->calculate_subpixel_source_gradient();
 	if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
 	initialize_pixel_matrices(imggrid_i,potential_perturbations,verbal);
+	double xc_approx, yc_approx;
 
 	bool include_lum_weighting = ((use_lum_weighted_regularization) and (get_lumreg_from_sbweights)) ? true : false;
 	if ((regularization_method != None) and (image_pixel_grids[imggrid_i]->delaunay_srcgrid != NULL)) {
@@ -14872,9 +15995,9 @@ void QLens::add_outside_sb_prior_penalty(const int band_number, int* src_i_list,
 	psf_supersampling = false; // since emask pixels may have fewer or no splittings, we cannot use supersampling for the outside_sb_prior
 	int i,j,zsrc_i,imggrid_i;
 
-	ImagePixelData *image_pixel_data;
-	if (n_data_bands > band_number) image_pixel_data = imgpixel_data_list[band_number];
-	else image_pixel_data = NULL;
+	ImageData *image_data;
+	if (n_data_bands > band_number) image_data = imgdata_list[band_number];
+	else image_data = NULL;
 
 	if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Delaunay_Source)) {
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
@@ -14919,13 +16042,13 @@ void QLens::add_outside_sb_prior_penalty(const int band_number, int* src_i_list,
 #endif
 			PSF_convolution_pixel_vector(imggrid_i,false,verbal,false); // no supersampling, no fft convolution (saves time)
 			store_image_pixel_surface_brightness(imggrid_i);
-			//image_pixel_grids[imggrid_i]->load_data((*image_pixel_data)); // This restores pixel data values to image_pixel_grids[0] (used for the inversion)
+			//image_pixel_grids[imggrid_i]->load_data((*image_data)); // This restores pixel data values to image_pixel_grids[0] (used for the inversion)
 			clear_pixel_matrices();
 		}
 	} else if (source_fit_mode==Parameterized_Source) {
 		for (zsrc_i=0; zsrc_i < n_extended_src_redshifts; zsrc_i++) {
 			imggrid_i = band_number*n_extended_src_redshifts + zsrc_i;
-			//if (image_pixel_data->extended_mask_n_neighbors[assigned_mask[assigned_mask[imggrid_i]]] == -1) image_pixel_grids[imggrid_i]->include_all_pixels();
+			//if (image_data->extended_mask_n_neighbors[assigned_mask[assigned_mask[imggrid_i]]] == -1) image_pixel_grids[imggrid_i]->include_all_pixels();
 			image_pixel_grids[imggrid_i]->activate_extended_mask(); 
 			image_pixel_grids[imggrid_i]->find_surface_brightness(false,true);
 			vectorize_image_pixel_surface_brightness(imggrid_i);
@@ -14943,8 +16066,8 @@ void QLens::add_outside_sb_prior_penalty(const int band_number, int* src_i_list,
 		if (include_fgmask_in_inversion) mask_for_inversion = image_pixel_grids[imggrid_i]->fgmask;
 		else mask_for_inversion = image_pixel_grids[imggrid_i]->mask;
 		double max_external_sb = -1e30, max_sb = -1e30;
-		for (i=0; i < image_pixel_data->npixels_x; i++) {
-			for (j=0; j < image_pixel_data->npixels_y; j++) {
+		for (i=0; i < image_data->npixels_x; i++) {
+			for (j=0; j < image_data->npixels_y; j++) {
 				if ((mask_for_inversion) and (image_pixel_grids[imggrid_i]->maps_to_source_pixel[i][j])) {
 					//img_index = image_pixel_grids[imggrid_i]->pixel_index[i][j];
 					if (image_pixel_grids[imggrid_i]->surface_brightness[i][j] > max_sb) {
@@ -14955,7 +16078,7 @@ void QLens::add_outside_sb_prior_penalty(const int band_number, int* src_i_list,
 		}
 		 
 		// NOTE: by default, outside_sb_prior_noise_frac is a negative number so it isn't used. But it can be changed by the user (useful for low S/N sources)
-		bg_noise = (use_noise_map) ? image_pixel_data->bg_pixel_noise : background_pixel_noise;
+		bg_noise = (use_noise_map) ? image_data->bg_pixel_noise : background_pixel_noise;
 		double outside_sb_threshold = dmax(outside_sb_prior_noise_frac*bg_noise,outside_sb_prior_threshold*max_sb);
 		int isb, jsb;
 		if (n_image_pixel_grids==1) {
@@ -14963,8 +16086,8 @@ void QLens::add_outside_sb_prior_penalty(const int band_number, int* src_i_list,
 		} else {
 			if ((verbal) and (mpi_id==0)) cout << "OUTSIDE SB THRESHOLD (imggrid_i=" << imggrid_i << "): " << outside_sb_threshold << endl;
 		}
-		for (i=0; i < image_pixel_data->npixels_x; i++) {
-			for (j=0; j < image_pixel_data->npixels_y; j++) {
+		for (i=0; i < image_data->npixels_x; i++) {
+			for (j=0; j < image_data->npixels_y; j++) {
 				if ((!mask_for_inversion[i][j]) and ((image_pixel_grids[imggrid_i]->emask[i][j])) and (image_pixel_grids[imggrid_i]->maps_to_source_pixel[i][j])) {
 					//img_index = image_pixel_grids[imggrid_i]->pixel_index[i][j];
 					//cout << image_surface_brightness[img_index] << endl;
@@ -14984,7 +16107,7 @@ void QLens::add_outside_sb_prior_penalty(const int band_number, int* src_i_list,
 			logev_times_two += chisq_penalty;
 			if ((mpi_id==0) and (verbal)) cout << "*NOTE: surface brightness above the prior threshold (" << max_external_sb << " vs. " << outside_sb_threshold << ") has been found outside the selected fit region at pixel (" << image_pixel_grids[imggrid_i]->center_pts[isb][jsb][0] << "," << image_pixel_grids[imggrid_i]->center_pts[isb][jsb][1] << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 		}
-		image_pixel_grids[imggrid_i]->set_fit_window((*image_pixel_data),true,assigned_mask[imggrid_i],false,include_fgmask_in_inversion);
+		image_pixel_grids[imggrid_i]->set_fit_window((*image_data),true,assigned_mask[imggrid_i],false,include_fgmask_in_inversion);
 		psf_supersampling = supersampling_orig;
 	}
 }
@@ -15190,7 +16313,8 @@ QLens::~QLens()
 	}
 
 	delete grid;
-	delete param_settings;
+	delete param_list;
+	delete dparam_list;
 	if (fitmodel != NULL) delete fitmodel;
 
 	if (n_ptsrc_redshifts > 0) {
@@ -15235,24 +16359,33 @@ QLens::~QLens()
 			}
 			delete[] ptsrc_beta_factors;
 		}
-
 	}
-	if ((image_data != NULL) and (borrowed_image_data==false)) delete[] image_data;
-	if ((imgpixel_data_list != NULL) and (borrowed_image_data==false)) {
+
+	if ((point_image_data != NULL) and (borrowed_image_data==false)) delete[] point_image_data;
+	if ((imgdata_list != NULL) and (borrowed_image_data==false)) {
 		if (n_data_bands > 0) {
 			for (i=0; i < n_data_bands; i++) {
-				if (imgpixel_data_list[i] != NULL) delete imgpixel_data_list[i];
+				if (imgdata_list[i] != NULL) delete imgdata_list[i];
 			}
-			delete[] imgpixel_data_list;
+			delete[] imgdata_list;
 		}
 	}
 	if (group_leader != NULL) delete[] group_leader;
 	if (saved_sbweights != NULL) delete[] saved_sbweights;
+	if (cosmology_allocated_within_qlens) delete cosmo;
 }
 
 /***********************************************************************************************************************/
 
-// POLYCHORD FUNCTIONS
+// POLYCHORD/MULTINEST FUNCTIONS
+
+void QLens::transform_cube(double* params, double* Cube) {
+	double *lower_limits = param_list->prior_limits_lo;
+	double *upper_limits = param_list->prior_limits_hi;
+	for (int i=0; i < param_list->nparams; i++) {
+		params[i] = lower_limits[i] + Cube[i]*(upper_limits[i]-lower_limits[i]);
+	}
+}
 
 QLens* lensptr;
 double mcsampler_set_lensptr(QLens* lens_in)
@@ -15315,6 +16448,7 @@ void QLens::test_lens_functions()
 	load_point_image_data("alphafit.dat");
 
 	//
+	/*
 	SPLE_Lens *A = new SPLE_Lens();
 	A->initialize_parameters(4.5,1,0,0.8,30,0.7,0.3);
 	boolvector flags(7);
@@ -15326,7 +16460,7 @@ void QLens::test_lens_functions()
 	flags[5] = true;
 	flags[6] = true;
 	//flags[7] = true;
-	//param_settings->print_penalty_limits();
+	//param_list->print_penalty_limits();
 	A->set_vary_flags(flags);
 	Shear *S = new Shear();
 	S->initialize_parameters(0.02,10,0,0);
@@ -15336,8 +16470,8 @@ void QLens::test_lens_functions()
 	flag2[2] = false;
 	flag2[3] = false;
 	S->set_vary_flags(flag2);
-	add_lens(A,0.5,2);
-	add_lens(S,0.5,2);
+	add_lens(A);
+	add_lens(S);
 	use_analytic_bestfit_src = true;
 	include_flux_chisq = true;
 
@@ -15346,6 +16480,7 @@ void QLens::test_lens_functions()
 
 	bool status;
 	vector<PointSource> imgsets = get_fit_imagesets(status);
+	*/
 
 	// The following shows how to access the image data in the "imgset" object
 	/*
@@ -15358,7 +16493,7 @@ void QLens::test_lens_functions()
 		cout << endl;
 	}
 
-	vector<ImageDataSet> imgdatasets = export_to_ImageDataSet();
+	vector<PtImageDataSet> imgdatasets = export_to_ImageDataSet();
 	cout << "Image Data:" << endl;
 	for (int j=0; j < imgdatasets.size(); j++) {
 		cout << "Source " << j << ": redshift = " << imgdatasets[j].zsrc << endl;

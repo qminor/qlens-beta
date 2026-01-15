@@ -154,7 +154,7 @@ void UCMC::InputPoint(double *a0, double *ul, double *ll, int ain)
 	return;
 }
 
-void UCMC::InputPoint(double *a0, double *ul, double *ll, double *ul0, double *ll0, int ain)
+void UCMC::InputPoint(double *a0, double *ul, double *ll, double *ul0, double *ll0, int ain) // this version allows for sampling a smaller subspace of the prior to draw the initial points
 {
 	ma = ain;
 	a = matrix <double> (ma);

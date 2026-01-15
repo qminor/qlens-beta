@@ -79,7 +79,7 @@ mumps:
 qlens.o: qlens.cpp qlens.h
 	$(CC) -c qlens.cpp
 
-commands.o: commands.cpp qlens.h lensvec.h profile.h
+commands.o: commands.cpp qlens.h lensvec.h profile.h sbprofile.h params.h pixelgrid.h delaunay.h modelparams.h 
 	$(CC_NO_OPT) -c commands.cpp
 
 params.o: params.cpp params.h 
@@ -91,7 +91,7 @@ modelparams.o: modelparams.cpp modelparams.h
 lenscalc.o: lenscalc.cpp qlens.h lensvec.h
 	$(CC) -c lenscalc.cpp
 
-lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h modelparams.h
+lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h modelparams.h params.h
 	$(CC) -c lens.cpp
 
 imgsrch.o: imgsrch.cpp qlens.h lensvec.h
