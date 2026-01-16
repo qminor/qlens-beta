@@ -8512,29 +8512,13 @@ void QLens::process_commands(bool read_file)
 				}
 				else if (words[1]=="mkposts")
 				{
-					bool copy_subplot_only = false;
 					bool resampled_posts = false;
 					bool no2dposts = false;
-					bool nohists = false;
 					int nbins1d = 50, nbins2d = 40;
 					if (nwords > 2) {
 						for (int i=2; i < nwords; i++) {
-							if (words[i]=="-subonly") {
-								copy_subplot_only = true;
-								remove_word(i);
-								break;
-							}
-						}
-						for (int i=2; i < nwords; i++) {
 							if (words[i]=="-no2d") {
 								no2dposts = true;
-								remove_word(i);
-								break;
-							}
-						}
-						for (int i=2; i < nwords; i++) {
-							if (words[i]=="-nohist") {
-								nohists = true;
 								remove_word(i);
 								break;
 							}
@@ -8571,10 +8555,7 @@ void QLens::process_commands(bool read_file)
 					}
 					if (nwords==2) {
 						//run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts,nohists);
-						make_histograms(false,"",nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts,nohists,false,true);
-					} else if (nwords==3) {
-						//run_mkdist(true,words[2],nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts,nohists);
-						make_histograms(true,words[2],nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts,nohists,false,true);
+						make_histograms(nbins1d,nbins2d,resampled_posts,no2dposts,false,true);
 					} else Complain("either zero/one argument allowed for 'fit mkposts' (directory name, plus optional '-n' or '-N' args)");
 				}
 				else if ((words[1]=="run") or (words[1]=="process_chain"))

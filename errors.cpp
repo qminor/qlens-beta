@@ -3,14 +3,18 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
+#include <cstring>
 
-void die(char *s, ...)
+void die(const std::string sstring, ...)
 {
+	char s[sstring.length() + 1];
+	std::strcpy(s, sstring.c_str());
 	va_list ap;
 	char *p, *sval;
 	fprintf(stderr, "Error: ");
 
-	va_start(ap, s);
+	va_start(ap, sstring);
 	for (p = s; *p; p++) {
 		if (*p != '%') {
 			putc(*p, stderr);
@@ -35,13 +39,15 @@ void die(char *s, ...)
 
 void die(void) { exit(1); }
 
-void warn(char *s, ...)
+void warn(const std::string sstring, ...)
 {
+	char s[sstring.length() + 1];
+	std::strcpy(s, sstring.c_str());
 	va_list ap;
 	char *p, *sval;
 	fprintf(stderr, "*WARNING*: ");
 
-	va_start(ap, s);
+	va_start(ap, sstring);
 	for (p = s; *p; p++) {
 		if (*p != '%') {
 			putc(*p, stderr);
@@ -63,15 +69,17 @@ void warn(char *s, ...)
 	return;
 }
 
-void warn(bool warnings_on, char *s, ...)
+void warn(const bool warnings_on, const std::string sstring, ...)
 {
 	if (warnings_on==false) return;
+	char s[sstring.length() + 1];
+	std::strcpy(s, sstring.c_str());
 
 	va_list ap;
 	char *p, *sval;
 	fprintf(stderr, "*WARNING*: ");
 
-	va_start(ap, s);
+	va_start(ap, sstring);
 	for (p = s; *p; p++) {
 		if (*p != '%') {
 			putc(*p, stderr);

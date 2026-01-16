@@ -6290,10 +6290,9 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 	}
 	x_avg /= npts;
 	y_avg /= npts;
-	double rsq;
-	double rsqmax = 0;
-	double rsqmin = 1e30;
-	double theta_rmax;
+	double rsq,rsqmax,rsqmin,theta_rmax;
+	rsqmax = 0;
+	rsqmin = 1e30;
 	for (int k=0; k < npts; k++) {
 		rsq = SQR(critical_curve->caustic_pts[k][0]-x_avg) + SQR(critical_curve->caustic_pts[k][1]-y_avg);
 		if (rsq > rsqmax) {
@@ -11371,7 +11370,7 @@ double QLens::find_percentile(const unsigned long npoints, const double pct, con
 	return 0.0;
 }
 
-void QLens::make_histograms(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists, bool use_fisher_matrix, bool run_python_script)
+void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampled_posts, bool no2dposts, bool use_fisher_matrix, bool run_python_script)
 {
 	auto file_exists = [](const string &filename)
 	{
@@ -11411,10 +11410,6 @@ void QLens::make_histograms(bool copy_post_files, string posts_dirname, const in
 	string subplot_paramnames_filename;
 
 	if (resampled_posts) file_root += ".new";
-	if (posts_dirname == fit_output_dir) {
-		cerr << "Error: directory for storing posteriors cannot be the same as the chains directory" << endl;
-		return;
-	}
 	if (param_markers != "") {
 		show_markers = true;
 		marker_filename = file_root + ".markers";
@@ -12024,10 +12019,10 @@ void QLens::make_histograms(bool copy_post_files, string posts_dirname, const in
 		int system_returnval;
 		if (make_1d_posts)
 		{
-			string pyname = fit_output_filename + ".py";
+			string pyname = fit_output_dir + "/" + fit_output_filename + ".py";
 			ofstream pyscript(pyname.c_str());
 			pyscript << "import GetDistPlots, os" << endl;
-			pyscript << "g=GetDistPlots.GetDistPlotter('" << fit_output_dir << "/')" << endl;
+			pyscript << "g=GetDistPlots.GetDistPlotter('./')" << endl;
 			pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 			pyscript << "outdir=''" << endl;
 			pyscript << "roots=['" << fit_output_filename << "']" << endl;
@@ -12046,9 +12041,9 @@ void QLens::make_histograms(bool copy_post_files, string posts_dirname, const in
 			pyscript << "g.export(os.path.join(outdir,'" << fit_output_filename << ".pdf'))" << endl;
 			pyscript.close();
 			if (run_python_script) {
-				string pycommand = "python3 " + pyname;
+				string pycommand = "cd " + fit_output_dir + "; python3 " + fit_output_filename + ".py; cd ..";
 				if (system(pycommand.c_str()) == 0) {
-					cout << "Plot for 1D posteriors saved to '" << fit_output_filename << ".pdf'\n";
+					cout << "Plot for 1D posteriors saved to '" << fit_output_dir + "/" + fit_output_filename << ".pdf'\n";
 					//string rmcommand = "rm " + pyname;
 					//system_returnval = system(rmcommand.c_str());
 				}
@@ -12060,10 +12055,10 @@ void QLens::make_histograms(bool copy_post_files, string posts_dirname, const in
 
 		if (make_2d_posts)
 		{
-			string pyname = fit_output_filename + "_2D.py";
+			string pyname = fit_output_dir + "/" + fit_output_filename + "_2D.py";
 			ofstream pyscript2d(pyname.c_str());
 			pyscript2d << "import GetDistPlots, os" << endl;
-			pyscript2d << "g=GetDistPlots.GetDistPlotter('" << fit_output_dir << "/')" << endl;
+			pyscript2d << "g=GetDistPlots.GetDistPlotter('./')" << endl;
 			pyscript2d << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 			pyscript2d << "outdir=''" << endl;
 			pyscript2d << "roots=['" << fit_output_filename << "']" << endl;
@@ -12085,7 +12080,7 @@ void QLens::make_histograms(bool copy_post_files, string posts_dirname, const in
 			if (run_python_script) {
 				string pycommand = "python " + pyname;
 				if (system(pycommand.c_str()) == 0) {
-					cout << "Plot for 2D posteriors saved to '" << fit_output_filename << "_2D.pdf'\n";
+					cout << "Plot for 2D posteriors saved to '" << fit_output_dir + "/" + fit_output_filename << "_2D.pdf'\n";
 					//string rmcommand = "rm " + pyname;
 					//system_returnval = system(rmcommand.c_str());
 				}
@@ -12101,11 +12096,11 @@ void QLens::make_histograms(bool copy_post_files, string posts_dirname, const in
 				int n_triplots = 1;
 				if (make_subplot) n_triplots++;
 				for (int k=0; k < n_triplots; k++) {
-					if (k==0) pyname = fit_output_filename + "_tri.py";
-					else pyname = fit_output_filename + "_subtri.py";
+					if (k==0) pyname = fit_output_dir + "/" + fit_output_filename + "_tri.py";
+					else pyname = fit_output_dir + "/" + fit_output_filename + "_subtri.py";
 					ofstream pyscript(pyname.c_str());
 					pyscript << "import GetDistPlots, os" << endl;
-					pyscript << "g=GetDistPlots.GetDistPlotter('" << fit_output_dir << "/')" << endl;
+					pyscript << "g=GetDistPlots.GetDistPlotter('./')" << endl;
 					pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 					pyscript << "outdir=''" << endl;
 					pyscript << "roots=['" << fit_output_filename << "']" << endl;
@@ -12154,9 +12149,11 @@ void QLens::make_histograms(bool copy_post_files, string posts_dirname, const in
 					if (k==0) pyscript << "_tri.pdf'))" << endl;
 					else pyscript << "_subtri.pdf'))" << endl;
 					if (run_python_script) {
-						string pycommand = "python3 " + pyname;
+						string pycommand;
+						if (k==0) pycommand = "cd " + fit_output_dir + "; python3 " + fit_output_filename + "_tri.py; cd ..";
+						else if (k==1) pycommand = "cd " + fit_output_dir + "; python3 " + fit_output_filename + "_subtri.py; cd ..";
 						if (system(pycommand.c_str()) == 0) {
-							if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << fit_output_filename << "_tri.pdf'\n";
+							if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << fit_output_dir + "/" + fit_output_filename << "_tri.pdf'\n";
 							else cout << "Triangle subplot saved to '" << fit_output_filename << "_subtri.pdf'\n";
 							//string rmcommand = "rm " + pyname;
 							//system_returnval = system(rmcommand.c_str());
