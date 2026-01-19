@@ -683,7 +683,7 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			if (!current.invert_mask(mask_i)) throw std::runtime_error("could not alter mask");
 		})
-		.def("set_neighbor_pixels", [](ImageData &current, py::kwargs &kwargs) {
+		.def("unmask_neighbor_pixels", [](ImageData &current, py::kwargs &kwargs) {
 			int mask_i = 0;
 			bool interior = false;
 			bool exterior = false;
@@ -714,12 +714,12 @@ PYBIND11_MODULE(qlens, m) {
 						throw std::runtime_error("Invalid boolean value for 'exterior' argument");
 					}
 				} else {
-					throw std::runtime_error("Keyword argument not recognized for 'set_neighbor_pixels'");
+					throw std::runtime_error("Keyword argument not recognized for 'unmask_neighbor_pixels'");
 				}
 			}
 			for (int i=0; i < ntimes; i++) current.set_neighbor_pixels(interior,exterior,mask_i);
 		})
-		.def("unset_neighbor_pixels", [](ImageData &current, py::kwargs &kwargs) {
+		.def("mask_neighbor_pixels", [](ImageData &current, py::kwargs &kwargs) {
 			int mask_i = 0;
 			int ntimes = 1;
 			for (auto item : kwargs) {
@@ -736,14 +736,14 @@ PYBIND11_MODULE(qlens, m) {
 						throw std::runtime_error("Invalid integer value for 'n' argument");
 					}
 				} else {
-					throw std::runtime_error("Keyword argument not recognized for 'unset_neighbor_pixels'");
+					throw std::runtime_error("Keyword argument not recognized for 'mask_neighbor_pixels'");
 				}
 			}
 			current.invert_mask(mask_i);
 			for (int i=0; i < ntimes; i++) current.set_neighbor_pixels(false,false,mask_i);
 			current.invert_mask(mask_i);
 		})
-		.def("unset_low_sn_pixels", [](ImageData &current, py::kwargs &kwargs) {
+		.def("mask_low_sn_pixels", [](ImageData &current, py::kwargs &kwargs) {
 			int mask_i = 0;
 			double sbthresh = -1.0;
 			for (auto item : kwargs) {
@@ -760,13 +760,13 @@ PYBIND11_MODULE(qlens, m) {
 						throw std::runtime_error("Invalid value for 'threshold' argument");
 					}
 				} else {
-					throw std::runtime_error("Keyword argument not recognized for 'unset_low_sn_pixels'");
+					throw std::runtime_error("Keyword argument not recognized for 'mask_low_sn_pixels'");
 				}
 			}
 			if (sbthresh==-1.0) throw std::runtime_error("signal threshold must be specified with 'threshold=#' keyword argument");
 			if (!current.unset_low_signal_pixels(sbthresh,mask_i)) throw std::runtime_error("could not alter mask");
 		})
-		.def("assign_mask_windows", [](ImageData &current, py::kwargs &kwargs) {
+		.def("trim_mask_windows", [](ImageData &current, py::kwargs &kwargs) {
 			int mask_i = 0;
 			double noise_threshold = -1.0;
 			int npixel_threshold = 0;
@@ -790,7 +790,7 @@ PYBIND11_MODULE(qlens, m) {
 						throw std::runtime_error("Invalid integer value for 'npixel_threshold' argument");
 					}
 				} else {
-					throw std::runtime_error("Keyword argument not recognized for 'assign_mask_windows'");
+					throw std::runtime_error("Keyword argument not recognized for 'trim_mask_windows'");
 				}
 			}
 			if (noise_threshold==-1.0) throw std::runtime_error("noise threshold must be specified with 'noise_threshold=#' keyword argument");

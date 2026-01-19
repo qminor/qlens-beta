@@ -9,6 +9,15 @@ q.fit_label = 'delaunay_fit'
 sim_hst_data = imgdata.load("sim_hst_image.fits",band=0,pixsize=0.049)
 sim_hst_data.load_noise_map("demo_noisemap.fits")
 sim_hst_data.load_mask("mask.fits")
+
+#sim_hst_data.unmask_all_pixels()
+#sim_hst_data.mask_low_sn_pixels(threshold=0.01)
+#sim_hst_data.trim_mask_windows(noise_threshold=4,npixel_threshold=20)
+#sim_hst_data.unmask_neighbor_pixels()
+#dataimg = sim_hst_data.plot()
+#plot_sb(dataimg,q)
+#pause()
+
 q.sbmap_load_psf("hst_psf.fits")
 
 q.split_imgpixels = False
@@ -44,13 +53,13 @@ q.nimg_prior=True
 q.nimg_threshold=1.4
 q.outside_sb_prior=True
 q.set_source_mode("delaunay")
+q.regularization_method="gradient"
 q.optimize_regparam=True
 #pixsrc.add()
 #pixsrc.update("regparam",5.19292)
 
 #q.sbmap_invert()
 #q.fit_chisq()
-#pause()
 
 q.chisqtol = 1e-5
 
@@ -64,7 +73,7 @@ plot_sb(img,q,include_cc=True)
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
-srcplt = pixsrc[0].plot()
+srcplt = pixsrc[0].plot(interp=True)
 plot_sb(srcplt,q)
 
 pause()

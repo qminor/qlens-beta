@@ -7,7 +7,7 @@ q = QLens(cosmo)
 q.fit_label = 'alpha_multinest'
 
 q.sci_notation = False
-q.imgdata_read("../data/alphafit.dat")
+q.imgdata_read("alphafit.dat")
 #q.imgdata_display()
 
 q.shear_components=True
@@ -44,7 +44,7 @@ q.fitmodel()
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
 q.n_livepts = 300
-q.run_fit("multinest",adopt=True,resume=False)
+q.run_fit("nest",adopt=True,resume=False)
 #q.use_bestfit()
 #q.adopt_chain_bestfit()
 fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
