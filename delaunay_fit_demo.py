@@ -11,10 +11,10 @@ sim_hst_data.load_noise_map("demo_noisemap.fits")
 sim_hst_data.load_mask("mask.fits")
 
 #sim_hst_data.unmask_all_pixels()
-#sim_hst_data.mask_low_sn_pixels(threshold=0.01)
-#sim_hst_data.trim_mask_windows(noise_threshold=4,npixel_threshold=20)
+#sim_hst_data.mask_low_sn_pixels(threshold=0.01)   # note, the signal threshold for masking out a pixel is given by 'threshold' times the noise dispersion for that pixel
+#sim_hst_data.trim_mask_windows(noise_threshold=4,npixel_threshold=20)    # if npixel_threshold is omitted, it is set to zero by default
 #sim_hst_data.unmask_neighbor_pixels()
-#dataimg = sim_hst_data.plot()
+#dataimg = sim_hst_data.plot()  # keyword arguments for this plotting: nomask, fgmask, or emask (all are 'False' by default)
 #plot_sb(dataimg,q)
 #pause()
 
