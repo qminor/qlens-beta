@@ -362,7 +362,7 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 
 // There is too much inheritance going on here. Nearly all of these (except ModelParams) can be changed to simply objects that are created within the QLens
 // class; it's more transparent to do so, and more object-oriented.
-class QLens : public ModelParams, public UCMC, private Brent, private Sort, private Powell, private Simplex
+class QLens : public ModelParams, public UCMC, private Brent, private Sort, private Powell, public Simplex
 {
 	private:
 	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
@@ -1558,6 +1558,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void set_time_delay_setting(bool setting) { include_time_delays = setting; }
 	void set_inversion_nthreads(const int &nt) { inversion_nthreads = nt; }
 	void set_mumps_mpi(const bool &setting) { use_mumps_subcomm = setting; }
+	double get_imgpixel_nsplit() { return default_imgpixel_nsplit; }
+	void set_imgpixel_nsplit(const int nsplit_in);
 	void set_fitmethod(FitMethod fitmethod_in)
 	{
 		fitmethod = fitmethod_in;

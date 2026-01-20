@@ -14595,6 +14595,33 @@ void QLens::plot_sbmap(const string filename, dvector& xvals, dvector& yvals, dv
 	}
 }
 
+void QLens::set_imgpixel_nsplit(const int nsplit_in) {
+	bool changed_npix = false;
+	if (nsplit_in != default_imgpixel_nsplit) {
+		default_imgpixel_nsplit = nsplit_in;
+		changed_npix = true;
+	}
+	if (changed_npix) {
+		if (image_pixel_grids != NULL) {
+			for (int i=0; i < n_extended_src_redshifts; i++) {
+				if (image_pixel_grids[i] != NULL) {
+					image_pixel_grids[i]->delete_ray_tracing_arrays();
+					image_pixel_grids[i]->setup_ray_tracing_arrays();
+					if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+				}
+			}
+		}
+		for (int band_i=0; band_i < n_model_bands; band_i++) {
+			if ((psf_supersampling) and (psf_list[band_i]->use_input_psf_matrix)) {
+				psf_list[band_i]->generate_supersampled_PSF_matrix();
+				if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << psf_list[band_i]->supersampled_psf_npixels_x << " " << psf_list[band_i]->supersampled_psf_npixels_y << ")" << endl;
+			}
+		}
+		if (fft_convolution) cleanup_FFT_convolution_arrays();
+	}
+}
+
+
 const bool QLens::output_lensed_surface_brightness(dvector& xvals, dvector& yvals, dvector& zvals, const int band_number, const bool output_fits, const bool plot_residual, bool plot_foreground_only, const bool omit_foreground, const bool show_all_pixels, const bool normalize_residuals, const bool offload_to_data, const bool show_extended_mask, const bool show_foreground_mask, const bool show_noise_thresh, const bool exclude_ptimgs, const bool only_ptimgs, int specific_zsrc_i, const bool show_only_first_order_corrections, const bool plot_log, const bool plot_current_sb, const bool verbose)
 {
 	// Note that if specific_zsrc_i is negative, it will plot images from *all* source redshifts

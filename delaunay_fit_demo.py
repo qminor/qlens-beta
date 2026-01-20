@@ -1,5 +1,6 @@
 from qlens_helper import *
 
+pause()
 cosmo = Cosmology(omega_m=0.3,hubble=0.7)
 q = QLens(cosmo)
 (lens,src,ptsrc,pixsrc,imgdata,params,dparams) = q.objects();
@@ -31,6 +32,14 @@ q.zsrc = 2
 #Alpha = SPLE({"b": 1.3634, "alpha": 1.17163, "s": 0.0, "q": 0.963867, "theta": 81.9, "xc": 0.0102892, "yc": 0.00358392}) # true model
 Alpha = SPLE({"b": 1.35, "alpha": 1.1, "s": 0.0, "q": 0.90, "theta": 80, "xc": 0.01, "yc": 0})
 Alpha.vary([1,1,0,1,1,1,1])
+#Alpha.set_limits([     # if you are doing nested sampling, you can define limits within the lens object, *or*
+    #("b",4,6),         # you can define limits using the 'params' object instead (see below after lens.add)
+    #("q",0.2,1),
+    #("theta",20,155),
+    #("xc",0.3,1.3),
+    #("yc",0,0.6)
+#])
+
 
 #extshear = Shear({"shear1": 0.0647257, "shear2": -0.0575047}) # true model
 extshear = Shear({"shear1": 0.05, "shear2": -0.03})
@@ -38,8 +47,8 @@ extshear.vary([1,1,0,0])
 
 lens.add(Alpha,shear=extshear)
 
-#params.set_limits([
-    #("b",0.7,1.8),
+#params.set_limits([      # We can define prior limits here if we prefer (instead of defining them for each lens object above).
+    #("b",0.7,1.8),       # One advantage is that if we transform a parameter, you can define your limits in terms of the transformed parameter (e.g. log(mass)).
     #("alpha",0.6,1.6),
     #("q",0.2,1),
     #("theta",20,155),

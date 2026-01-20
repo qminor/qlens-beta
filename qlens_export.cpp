@@ -1947,6 +1947,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("shear_components", &QLens_Wrap::get_shear_components_mode, &QLens_Wrap::set_shear_components_mode)
 		.def_property("ellipticity_components", &QLens_Wrap::get_ellipticity_components_mode, &QLens_Wrap::set_ellipticity_components_mode)
 		.def_property("split_imgpixels", &QLens_Wrap::get_split_imgpixels, &QLens_Wrap::set_split_imgpixels)
+		.def_property("imgpixel_nsplit", &QLens_Wrap::get_imgpixel_nsplit, &QLens_Wrap::set_imgpixel_nsplit)
 		.def("lens_list", &QLens_Wrap::lens_display)
 		.def("src_list", &QLens_Wrap::src_display)
 		.def("pixsrc_list", &QLens_Wrap::pixsrc_display)
@@ -2190,6 +2191,22 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("sorted_critical_curve", &QLens_Wrap::sorted_critical_curve)
 		.def_readonly("nlens", &QLens_Wrap::nlens)
 		.def_readwrite("default_pixsize", &QLens_Wrap::default_data_pixel_size)
+		.def_readwrite("simulate_pixel_noise", &QLens_Wrap::simulate_pixel_noise)
+		.def_readwrite("bg_pixel_noise", &QLens_Wrap::background_pixel_noise)
+		.def_property("random_seed", &QLens_Wrap::get_random_seed, &QLens_Wrap::set_random_seed)
+		.def("set_grid_from_imgpixels", [](QLens_Wrap &current, py::kwargs& kwargs){ 
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="pixsize") {
+					try {
+						current.default_data_pixel_size = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'pixsize' argument");
+					}
+				} else throw std::runtime_error("argument to 'set_grid_from_imgpixels' not recognized");
+			}
+			current.set_grid_from_pixels();
+		})
+		.def("set_img_npixels", &QLens_Wrap::set_img_npixels)
 		.def_readwrite("psf_threshold", &QLens_Wrap::psf_threshold)
 		.def_property("zsrc", &QLens_Wrap::get_source_redshift, &QLens_Wrap::set_source_redshift)
 		.def_property("zsrc_ref", &QLens_Wrap::get_reference_source_redshift, &QLens_Wrap::set_reference_source_redshift)
