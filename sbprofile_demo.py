@@ -15,18 +15,18 @@ q.split_imgpixels = True
 q.imgpixel_nsplit = 4
 
 q.sci_notation = True
-q.shear_components=True
+q.shear_components=False
 
-q.zlens = 0.5
-q.zsrc = 2
+q.zlens = 0.222
+q.zsrc = 0.8
 
-Alpha = SPLE({"b": 1.35, "alpha": 1.1, "s": 0.0, "q": 0.70, "theta": 80, "xc": 0.01, "yc": 0})
-Alpha.vary([1,1,0,1,1,1,1])
+stars = SersicLens({"Mstar": 2e11, "R_eff": 0.43, "n": 4, "q": 0.49, "theta": 0, "xc": 0.01, "yc": 0.02},pmode=1,qlens=q) # by passing in q=qlens, it gives lens object access to both the cosmology and also q.zlens and q.zsrc_ref
+dm_halo = NFW({"mvir": 1.1e13, "q": 0.35, "theta": -15},pmode=1,c_median=True,qlens=q)
+extshear = Shear({"shear": 0.21, "theta": -18},qlens=q)
 
-extshear = Shear({"shear1": 0.05, "shear2": -0.03})
-extshear.vary([1,1,0,0])
+lens.add(stars,shear=extshear)
+lens.add(dm_halo,anchor_center=0)
 
-lens.add(Alpha,shear=extshear)
 plotcrit(q)
 
 sersic_src = Sersic({"s0": 7, "R_eff": 0.087, "n": 2.5, "q": 0.90, "theta": 80, "xc": 0.06, "yc": -0.03})

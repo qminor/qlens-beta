@@ -2667,6 +2667,11 @@ void QLens::toggle_major_axis_along_y(bool major_axis_along_y)
 	}
 }
 
+bool QLens::get_major_axis_along_y()
+{
+	return LensProfile::orient_major_axis_north;
+}
+
 void QLens::toggle_major_axis_along_y_src(bool major_axis_along_y)
 {
 	if (SB_Profile::orient_major_axis_north != major_axis_along_y) {

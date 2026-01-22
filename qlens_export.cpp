@@ -1349,11 +1349,19 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
 
 			double b,p2,s,q1,q2,xc,yc;
 			b = py::cast<double>(dict["b"]);
@@ -1377,7 +1385,7 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
 			SPLE_Lens* sple = new SPLE_Lens(zlens,zsrc_ref,b,p2,s,q1,q2,xc,yc,pmode,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(sple);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(sple); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (sple->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1401,10 +1409,19 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
+
 			double p1, p2, xc, yc;
 			if (!Shear::use_shear_component_params) {
 					p1 = py::cast<double>(dict["shear"]);
@@ -1424,7 +1441,7 @@ PYBIND11_MODULE(qlens, m) {
 				yc = 0.0;
 			}
 			Shear* shearlens = new Shear(zlens,zsrc_ref,p1,p2,xc,yc,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(shearlens);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(shearlens); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (shearlens->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1441,10 +1458,18 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
 
 			double p1,p2,p3,q1,q2,xc,yc;
 			if (pmode==0) {
@@ -1475,7 +1500,7 @@ PYBIND11_MODULE(qlens, m) {
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
 
 			dPIE_Lens* dpie = new dPIE_Lens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(dpie);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(dpie); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (dpie->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1492,14 +1517,22 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			bool use_median_c = false;
 			bool anchor_median_c = true; // keep c set to median if use_median_c is turned on
 			double c_median_factor = 1.0;
 			if (kwargs) {
 				process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+				if (zlens==-1) {
+					if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+					else zlens = default_zlens;
+				}
+				if (zsrc_ref==-1) {
+					if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+					else zsrc_ref = default_zsrc_ref;
+				}
 				for (auto item : kwargs) {
 					if (py::cast<string>(item.first)=="c_median") {
 						use_median_c = py::cast<bool>(item.second);
@@ -1538,7 +1571,7 @@ PYBIND11_MODULE(qlens, m) {
 				nfw->assign_special_anchored_parameters(nfw,c_median_factor,true);
 				if (!anchor_median_c) nfw->unassign_special_anchored_parameter();
 			}
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(nfw);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(nfw); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (nfw->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1582,10 +1615,18 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
 
 			double p1,xc,yc;
 			if (pmode==0) {
@@ -1597,7 +1638,7 @@ PYBIND11_MODULE(qlens, m) {
 			yc = py::cast<double>(dict["yc"]);
 
 			PointMass* ptmass = new PointMass(zlens,zsrc_ref,p1,xc,yc,pmode,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(ptmass);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(ptmass); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (ptmass->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1614,10 +1655,20 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
+
+			if ((pmode==1) and (cosmo_in==NULL)) throw std::runtime_error("SersicLens requires cosmology object to be passed in when initializing in pmode=1");
 
 			double p1,p2,p3,q1,q2,xc,yc;
 			if (pmode==0) {
@@ -1630,7 +1681,7 @@ PYBIND11_MODULE(qlens, m) {
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
 
 			SersicLens* sersic = new SersicLens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(sersic);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(sersic); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (sersic->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1948,6 +1999,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("ellipticity_components", &QLens_Wrap::get_ellipticity_components_mode, &QLens_Wrap::set_ellipticity_components_mode)
 		.def_property("split_imgpixels", &QLens_Wrap::get_split_imgpixels, &QLens_Wrap::set_split_imgpixels)
 		.def_property("imgpixel_nsplit", &QLens_Wrap::get_imgpixel_nsplit, &QLens_Wrap::set_imgpixel_nsplit)
+		.def_property("major_axis_along_y", &QLens_Wrap::get_major_axis_along_y, &QLens_Wrap::toggle_major_axis_along_y)
 		.def("lens_list", &QLens_Wrap::lens_display)
 		.def("src_list", &QLens_Wrap::src_display)
 		.def("pixsrc_list", &QLens_Wrap::pixsrc_display)
