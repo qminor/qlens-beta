@@ -11485,7 +11485,7 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 	bool exclude_derived_params = false;
 	bool latex_table_format = false;
 	bool make_1d_posts = true;
-	bool make_2d_posts = true;
+	bool make_2d_posts = (no2dposts) ? false : true;
 	int n_markers_allowed = 10000;
 	bool use_bestfit_markers = false;
 	char param_transform_filename[100] = "";

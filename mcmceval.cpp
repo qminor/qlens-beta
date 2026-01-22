@@ -2388,6 +2388,7 @@ void McmcEval::MkHistTest(double al, double ah, const int N, const char *name, i
 
 bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN, const int yN, const char *name, const int iin, const int jin, const char flag)
 {
+	//cout << "hist2d: xl=" << xl << ", xh=" << xh << ", yl=" << yl << " yh=" << yh << " (for histogram called " << name << ")" << endl;
 	double stepx = (xh - xl)/xN;
 	double stepy = (yh - yl)/yN;
 	double xlow, xhi, ylow, yhi;
@@ -2475,7 +2476,9 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 		yfN += yN + 2;
 	if (xfN*yfN > 10000000)
 	{
-		cout << "selected range WAY smaller than actual range (really, WAAAAAAAAAY smaller)" << endl;
+		cout << "selected range WAY smaller than actual range (really, WAAAAAAAAAY smaller; xfN=" << xfN << " yfN=" << yfN << ")" << endl;
+		cout << "tried yl=" << yl << " versus ylow=" << ylow << endl;
+		cout << "tried yh=" << yh << " versus yhi=" << yhi << endl;
 		//cout << "press enter and you may lock me up and freeze everything, then you'll not be happy" << endl;
 		//getchar();
 	}
@@ -3082,7 +3085,7 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 		smoothz = matrix <double> (smoothSize+1, smoothSize+1, 0.0);
 		smoothy = matrix <double> (smoothSize+1);
 		smoothx = matrix <double> (smoothSize+1);
-		smoothstepx = (xh - xl)/smoothSize;
+		 smoothstepx = (xh - xl)/smoothSize;
 		smoothstepy = (yh - yl)/smoothSize;
 		for (i = 0; i <= smoothSize; i++)
 		{
@@ -3626,6 +3629,9 @@ void McmcEval::Sort(double *arr, const int n)
 
 void McmcEval::Sort(double *arr, double *brr, const int n)
 {
+	//cout << "SORTING " << n << " items" << endl;
+	//for (int i=0; i < n; i++) cout << arr[i] << " " << brr[i] << endl;
+	//cout << endl;
 	const int M=7,NSTACK=50;
 	int i,ir,j,k,jstack=-1,l=0;
 	double a,b,temp;
@@ -3680,7 +3686,7 @@ void McmcEval::Sort(double *arr, double *brr, const int n)
 			brr[l+1]=brr[j];
 			brr[j]=b;
 			jstack += 2;
-			if (jstack >= NSTACK) cout << "NSTACK too small in sort2." << endl;
+			if (jstack >= NSTACK) cout << "NSTACK too small in sort2 (jstack=" << jstack << ",NSTACK=" << NSTACK << ")" << endl;
 			if (ir-i+1 >= j-l) {
 				istack[jstack]=ir;
 				istack[jstack-1]=i;
