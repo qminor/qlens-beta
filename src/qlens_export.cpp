@@ -633,10 +633,11 @@ PYBIND11_MODULE(qlens, m) {
 			nx = xvals.size()-1;
 			ny = yvals.size()-1;
 
+			string plottype = "data"; 
 			py::array_t<double> xvec(nx+1,xvals.array());
 			py::array_t<double> yvec(ny+1,yvals.array());
 			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
-			return std::make_tuple(xvec,yvec,zmat);
+			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		.def("mask_all_pixels", [](ImageData &current, py::kwargs &kwargs) {
 			int mask_i = 0;
@@ -1096,6 +1097,160 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			return status;
 		})
+		.def("mkpixsrc", [](SourceList &current, py::kwargs& kwargs){
+			int zsrc_i = 0;
+			int band_i = 0;
+			int npix = -1;
+			bool make_delaunay_from_sbprofile = false;
+			bool use_mask = true;
+			bool verbal_mode = true;
+			QLens* qlensptr = current.qlens;
+			bool at_least_one_lensed_src = false;
+
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="npix") {
+					try {
+						npix = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'npix' argument");
+					}
+				} else throw std::runtime_error("argument to 'mkpixsrc' not recognized");
+			}
+
+			for (int k=0; k < current.n_sb; k++) {
+				if ((current.srclistptr[k]->is_lensed) and (qlensptr->sbprofile_redshift_idx[k]==zsrc_i)) { at_least_one_lensed_src = true; break; }
+			}
+			if (!at_least_one_lensed_src) throw std::runtime_error("at least one analytic lensed source is required for 'sbmap mksrc'");
+
+			if ((qlensptr->source_fit_mode==Delaunay_Source) and (!make_delaunay_from_sbprofile)) throw std::runtime_error("to make Delaunay source grid from source profiles, use '-delaunay' argument");
+			int src_i = -1;
+			do {
+				for (int i=0; i < qlensptr->n_pixellated_src; i++) {
+					if ((qlensptr->pixellated_src_band[i]==band_i) and (qlensptr->pixellated_src_redshift_idx[i]==zsrc_i)) {
+						src_i = i;
+						break;
+					}
+				}
+				if (src_i < 0) {
+					if (qlensptr->mpi_id==0) cout << "Generating pixellated source at corresponding redshift (zsrc=" << qlensptr->extended_src_redshifts[zsrc_i] << ")" << endl;
+					qlensptr->add_pixellated_source(qlensptr->extended_src_redshifts[zsrc_i],band_i);
+				}
+			} while (src_i < 0);
+			int imggrid_i = band_i*qlensptr->n_extended_src_redshifts + zsrc_i;
+
+			if ((qlensptr->source_fit_mode==Delaunay_Source) and (qlensptr->delaunay_srcgrids==NULL)) throw std::runtime_error("No pixellated source objects have been added to the model");
+			if (npix > 0) {
+				qlensptr->srcgrid_npixels_x = npix;
+				qlensptr->srcgrid_npixels_y = npix;
+				qlensptr->auto_srcgrid_npixels = false;
+			}
+			if (make_delaunay_from_sbprofile) {
+				qlensptr->create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
+				if (qlensptr->auto_sourcegrid) qlensptr->find_optimal_sourcegrid_for_analytic_source();
+			} else {
+				qlensptr->create_sourcegrid_cartesian(band_i,zsrc_i,verbal_mode,use_mask);
+				qlensptr->cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source(imggrid_i);
+				if ((qlensptr->source_fit_mode==Delaunay_Source) and (qlensptr->delaunay_srcgrids[src_i] != NULL)) {
+					qlensptr->cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid(qlensptr->delaunay_srcgrids[src_i],true);
+				}
+			}
+
+			/*
+			dvector xvals,yvals,zvals;
+			if (set_title) plot_title = temp_title;
+			if (mpi_id==0) {
+				if (!make_delaunay_from_sbprofile) {
+					dvector maglogvals,nimgvals; // not used here, but still part of the output from cartesian srcgrid
+					cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+					plot_sbmap("src_pixel",xvals,yvals,zvals);
+				}
+				else {
+					delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,delaunay_grid_scale,set_npix,interpolate);
+					plot_sbmap("src_pixel",xvals,yvals,zvals);
+				}
+			}
+			*/
+		})
+		.def("mkplotsrc", [](SourceList &current, py::kwargs& kwargs){
+			int zsrc_i = 0;
+			int band_i = 0;
+			int npix = -1;
+			bool make_delaunay_from_sbprofile = false;
+			bool use_mask = true;
+			bool verbal_mode = true;
+			QLens* qlensptr = current.qlens;
+			bool at_least_one_lensed_src = false;
+
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="npix") {
+					try {
+						npix = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'npix' argument");
+					}
+				} else throw std::runtime_error("argument to 'mkplotsrc' not recognized");
+			}
+
+			for (int k=0; k < current.n_sb; k++) {
+				if ((current.srclistptr[k]->is_lensed) and (qlensptr->sbprofile_redshift_idx[k]==zsrc_i)) { at_least_one_lensed_src = true; break; }
+			}
+			if (!at_least_one_lensed_src) throw std::runtime_error("at least one analytic lensed source is required for 'sbmap mksrc'");
+
+			if ((qlensptr->source_fit_mode==Delaunay_Source) and (!make_delaunay_from_sbprofile)) throw std::runtime_error("to make Delaunay source grid from source profiles, use '-delaunay' argument");
+			int src_i = -1;
+			do {
+				for (int i=0; i < qlensptr->n_pixellated_src; i++) {
+					if ((qlensptr->pixellated_src_band[i]==band_i) and (qlensptr->pixellated_src_redshift_idx[i]==zsrc_i)) {
+						src_i = i;
+						break;
+					}
+				}
+				if (src_i < 0) {
+					if (qlensptr->mpi_id==0) cout << "Generating pixellated source at corresponding redshift (zsrc=" << qlensptr->extended_src_redshifts[zsrc_i] << ")" << endl;
+					qlensptr->add_pixellated_source(qlensptr->extended_src_redshifts[zsrc_i],band_i);
+				}
+			} while (src_i < 0);
+			int imggrid_i = band_i*qlensptr->n_extended_src_redshifts + zsrc_i;
+
+			if ((qlensptr->source_fit_mode==Delaunay_Source) and (qlensptr->delaunay_srcgrids==NULL)) throw std::runtime_error("No pixellated source objects have been added to the model");
+			if (npix > 0) {
+				qlensptr->srcgrid_npixels_x = npix;
+				qlensptr->srcgrid_npixels_y = npix;
+				qlensptr->auto_srcgrid_npixels = false;
+			}
+			if (make_delaunay_from_sbprofile) {
+				qlensptr->create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
+				if (qlensptr->auto_sourcegrid) qlensptr->find_optimal_sourcegrid_for_analytic_source();
+			} else {
+				qlensptr->create_sourcegrid_cartesian(band_i,zsrc_i,verbal_mode,use_mask);
+				qlensptr->cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source(imggrid_i);
+				if ((qlensptr->source_fit_mode==Delaunay_Source) and (qlensptr->delaunay_srcgrids[src_i] != NULL)) {
+					qlensptr->cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid(qlensptr->delaunay_srcgrids[src_i],true);
+				}
+			}
+
+			dvector xvals,yvals,zvals;
+			//if (set_title) plot_title = temp_title;
+			if (!make_delaunay_from_sbprofile) {
+				dvector maglogvals,nimgvals; // not used here, but still part of the output from cartesian srcgrid
+				qlensptr->cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+			//else {
+				//delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,delaunay_grid_scale,set_npix,interpolate);
+			}
+			int nx,ny;
+			nx = xvals.size()-1;
+			ny = yvals.size()-1;
+
+			string plottype = "srcplane"; 
+			py::array_t<double> xvec(nx+1,xvals.array());
+			py::array_t<double> yvec(ny+1,yvals.array());
+			double *zptr;
+			//if (show_mag) zptr = zvals.array();
+			//else
+			zptr = zvals.array();
+			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zptr,py::none());
+			return std::make_tuple(plottype,xvec,yvec,zmat);
+		})
 		.def("clear", [](SourceList &current){
 			current.clear();
 		})
@@ -1349,11 +1504,19 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
 
 			double b,p2,s,q1,q2,xc,yc;
 			b = py::cast<double>(dict["b"]);
@@ -1377,7 +1540,7 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
 			SPLE_Lens* sple = new SPLE_Lens(zlens,zsrc_ref,b,p2,s,q1,q2,xc,yc,pmode,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(sple);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(sple); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (sple->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1401,10 +1564,19 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
+
 			double p1, p2, xc, yc;
 			if (!Shear::use_shear_component_params) {
 					p1 = py::cast<double>(dict["shear"]);
@@ -1424,7 +1596,7 @@ PYBIND11_MODULE(qlens, m) {
 				yc = 0.0;
 			}
 			Shear* shearlens = new Shear(zlens,zsrc_ref,p1,p2,xc,yc,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(shearlens);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(shearlens); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (shearlens->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1441,10 +1613,18 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
 
 			double p1,p2,p3,q1,q2,xc,yc;
 			if (pmode==0) {
@@ -1475,7 +1655,7 @@ PYBIND11_MODULE(qlens, m) {
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
 
 			dPIE_Lens* dpie = new dPIE_Lens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(dpie);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(dpie); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (dpie->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1492,14 +1672,22 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			bool use_median_c = false;
 			bool anchor_median_c = true; // keep c set to median if use_median_c is turned on
 			double c_median_factor = 1.0;
 			if (kwargs) {
 				process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+				if (zlens==-1) {
+					if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+					else zlens = default_zlens;
+				}
+				if (zsrc_ref==-1) {
+					if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+					else zsrc_ref = default_zsrc_ref;
+				}
 				for (auto item : kwargs) {
 					if (py::cast<string>(item.first)=="c_median") {
 						use_median_c = py::cast<bool>(item.second);
@@ -1538,7 +1726,7 @@ PYBIND11_MODULE(qlens, m) {
 				nfw->assign_special_anchored_parameters(nfw,c_median_factor,true);
 				if (!anchor_median_c) nfw->unassign_special_anchored_parameter();
 			}
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(nfw);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(nfw); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (nfw->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1582,10 +1770,18 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
 
 			double p1,xc,yc;
 			if (pmode==0) {
@@ -1597,7 +1793,7 @@ PYBIND11_MODULE(qlens, m) {
 			yc = py::cast<double>(dict["yc"]);
 
 			PointMass* ptmass = new PointMass(zlens,zsrc_ref,p1,xc,yc,pmode,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(ptmass);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(ptmass); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (ptmass->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1614,10 +1810,20 @@ PYBIND11_MODULE(qlens, m) {
 			int pmode=0;
 			Cosmology* cosmo_in = NULL;
 			QLens_Wrap* qlens_ptr = NULL;
-			double zlens = default_zlens;
-			double zsrc_ref = default_zsrc_ref;
+			double zlens = -1;
+			double zsrc_ref = -1;
 			boolvector vary_list;
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			if (zlens==-1) {
+				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+				else zlens = default_zlens;
+			}
+			if (zsrc_ref==-1) {
+				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+				else zsrc_ref = default_zsrc_ref;
+			}
+
+			if ((pmode==1) and (cosmo_in==NULL)) throw std::runtime_error("SersicLens requires cosmology object to be passed in when initializing in pmode=1");
 
 			double p1,p2,p3,q1,q2,xc,yc;
 			if (pmode==0) {
@@ -1630,7 +1836,7 @@ PYBIND11_MODULE(qlens, m) {
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
 
 			SersicLens* sersic = new SersicLens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
-			if (qlens_ptr != NULL) qlens_ptr->add_lens(sersic);
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(sersic); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (sersic->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
@@ -1766,7 +1972,6 @@ PYBIND11_MODULE(qlens, m) {
 		;
 
 
-
 	py::class_<Sersic, SB_Profile, std::unique_ptr<Sersic, py::nodelete>>(m, "Sersic")
 		.def(py::init<>([](){return new Sersic();}))
 		.def(py::init<const Sersic*>())
@@ -1849,12 +2054,59 @@ PYBIND11_MODULE(qlens, m) {
 			nx = xvals.size()-1;
 			ny = yvals.size()-1;
 
+			string plottype = "srcplane"; 
 			py::array_t<double> xvec(nx+1,xvals.array());
 			py::array_t<double> yvec(ny+1,yvals.array());
 			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
-			return std::make_tuple(xvec,yvec,zmat);
+			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		;
+
+	py::class_<CartesianSourceGrid, ModelParams, std::unique_ptr<CartesianSourceGrid, py::nodelete>>(m, "CartesianSrcGrid")
+		//.def(py::init<>([](QLens* qlens_in){return new CartesianSourceGrid(qlens_in);}))
+		//.def(py::init<const CartesianSourceGrid*>())
+		.def("plot", [](CartesianSourceGrid &current, py::kwargs& kwargs){
+			bool show_mag = false;
+			bool plot_fits = false;
+			string fits_filename = "";
+
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="show_mag") {
+					try {
+						show_mag = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'show_mag' argument");
+					}
+				} else if (py::cast<string>(item.first)=="output_fits") {
+					try {
+						fits_filename = py::cast<string>(item.second);
+						if (fits_filename != "") plot_fits = true;
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'output_fits' argument");
+					}
+				} else throw std::runtime_error("argument to 'plot' not recognized");
+			}
+
+			dvector xvals,yvals,zvals;
+			dvector maglogvals,nimgvals;
+			current.output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+			if (plot_fits) current.get_qlensptr()->plot_sbmap(fits_filename,xvals,yvals,zvals,plot_fits);
+
+			int nx,ny;
+			nx = xvals.size()-1;
+			ny = yvals.size()-1;
+
+			string plottype = "srcplane"; 
+			py::array_t<double> xvec(nx+1,xvals.array());
+			py::array_t<double> yvec(ny+1,yvals.array());
+			double *zptr;
+			if (show_mag) zptr = zvals.array();
+			else zptr = zvals.array();
+			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zptr,py::none());
+			return std::make_tuple(plottype,xvec,yvec,zmat);
+		})
+		;
+
 
 	py::class_<QLens_Wrap>(m, "QLens")
 		.def(py::init<>([](py::kwargs &kwargs){
@@ -1947,6 +2199,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("shear_components", &QLens_Wrap::get_shear_components_mode, &QLens_Wrap::set_shear_components_mode)
 		.def_property("ellipticity_components", &QLens_Wrap::get_ellipticity_components_mode, &QLens_Wrap::set_ellipticity_components_mode)
 		.def_property("split_imgpixels", &QLens_Wrap::get_split_imgpixels, &QLens_Wrap::set_split_imgpixels)
+		.def_property("imgpixel_nsplit", &QLens_Wrap::get_imgpixel_nsplit, &QLens_Wrap::set_imgpixel_nsplit)
+		.def_property("major_axis_along_y", &QLens_Wrap::get_major_axis_along_y, &QLens_Wrap::toggle_major_axis_along_y)
 		.def("lens_list", &QLens_Wrap::lens_display)
 		.def("src_list", &QLens_Wrap::src_display)
 		.def("pixsrc_list", &QLens_Wrap::pixsrc_display)
@@ -2179,10 +2433,11 @@ PYBIND11_MODULE(qlens, m) {
 			nx = xvals.size()-1;
 			ny = yvals.size()-1;
 
+			string plottype = "imgplane"; 
 			py::array_t<double> xvec(nx+1,xvals.array());
 			py::array_t<double> yvec(ny+1,yvals.array());
 			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
-			return std::make_tuple(xvec,yvec,zmat);
+			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		.def_property("optimize_regparam", &QLens_Wrap::get_optimize_regparam, &QLens_Wrap::set_optimize_regparam)
 		.def("set_sourcepts_auto",&QLens_Wrap::set_analytic_sourcepts, py::arg("verbal") = true)
@@ -2190,6 +2445,22 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("sorted_critical_curve", &QLens_Wrap::sorted_critical_curve)
 		.def_readonly("nlens", &QLens_Wrap::nlens)
 		.def_readwrite("default_pixsize", &QLens_Wrap::default_data_pixel_size)
+		.def_readwrite("simulate_pixel_noise", &QLens_Wrap::simulate_pixel_noise)
+		.def_readwrite("bg_pixel_noise", &QLens_Wrap::background_pixel_noise)
+		.def_property("random_seed", &QLens_Wrap::get_random_seed, &QLens_Wrap::set_random_seed)
+		.def("set_grid_from_imgpixels", [](QLens_Wrap &current, py::kwargs& kwargs){ 
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="pixsize") {
+					try {
+						current.default_data_pixel_size = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'pixsize' argument");
+					}
+				} else throw std::runtime_error("argument to 'set_grid_from_imgpixels' not recognized");
+			}
+			current.set_grid_from_pixels();
+		})
+		.def("set_img_npixels", &QLens_Wrap::set_img_npixels)
 		.def_readwrite("psf_threshold", &QLens_Wrap::psf_threshold)
 		.def_property("zsrc", &QLens_Wrap::get_source_redshift, &QLens_Wrap::set_source_redshift)
 		.def_property("zsrc_ref", &QLens_Wrap::get_reference_source_redshift, &QLens_Wrap::set_reference_source_redshift)

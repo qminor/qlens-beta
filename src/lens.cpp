@@ -2667,6 +2667,11 @@ void QLens::toggle_major_axis_along_y(bool major_axis_along_y)
 	}
 }
 
+bool QLens::get_major_axis_along_y()
+{
+	return LensProfile::orient_major_axis_north;
+}
+
 void QLens::toggle_major_axis_along_y_src(bool major_axis_along_y)
 {
 	if (SB_Profile::orient_major_axis_north != major_axis_along_y) {
@@ -3259,12 +3264,12 @@ void QLens::print_pixellated_source_list(bool show_vary_params)
 			if (pixellated_src_redshift_idx[i]==-1) zs = -1;
 			else zs = extended_src_redshifts[pixellated_src_redshift_idx[i]];
 			cout << i << ". ";
-			if (source_fit_mode==Delaunay_Source) cout << "delaunay(band=";
-			else if (source_fit_mode==Cartesian_Source) cout << "cartesian(band=";
+			if (srcgrids[i]==delaunay_srcgrids[i]) cout << "delaunay(band=";
+			else if (srcgrids[i]==cartesian_srcgrids[i]) cout << "cartesian(band=";
 			else cout << "(band=";
 			cout << pixellated_src_band[i];
 			if (zs > 0) cout << ",zsrc=" << zs;
-			if (source_fit_mode==Delaunay_Source) {
+			if ((source_fit_mode==Delaunay_Source) or (srcgrids[i]==delaunay_srcgrids[i])) {
 				if (delaunay_srcgrids[i] == NULL) cout << "), Delaunay grid not created yet" << endl;
 				else {
 					if (delaunay_srcgrids[i]->n_gridpts > 0) cout << ",npix=" << delaunay_srcgrids[i]->n_gridpts;
@@ -3273,7 +3278,7 @@ void QLens::print_pixellated_source_list(bool show_vary_params)
 					if (show_vary_params)
 						delaunay_srcgrids[i]->print_vary_parameters();
 				}
-			} else if (source_fit_mode==Cartesian_Source) {
+			} else if ((source_fit_mode==Cartesian_Source) or (srcgrids[i]==cartesian_srcgrids[i])) {
 				if (cartesian_srcgrids[i] == NULL) cout << ", Cartesian grid not created yet" << endl;
 				else {
 					cout << "): ";
@@ -11480,7 +11485,7 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 	bool exclude_derived_params = false;
 	bool latex_table_format = false;
 	bool make_1d_posts = true;
-	bool make_2d_posts = true;
+	bool make_2d_posts = (no2dposts) ? false : true;
 	int n_markers_allowed = 10000;
 	bool use_bestfit_markers = false;
 	char param_transform_filename[100] = "";
@@ -14594,6 +14599,33 @@ void QLens::plot_sbmap(const string filename, dvector& xvals, dvector& yvals, dv
 #endif
 	}
 }
+
+void QLens::set_imgpixel_nsplit(const int nsplit_in) {
+	bool changed_npix = false;
+	if (nsplit_in != default_imgpixel_nsplit) {
+		default_imgpixel_nsplit = nsplit_in;
+		changed_npix = true;
+	}
+	if (changed_npix) {
+		if (image_pixel_grids != NULL) {
+			for (int i=0; i < n_extended_src_redshifts; i++) {
+				if (image_pixel_grids[i] != NULL) {
+					image_pixel_grids[i]->delete_ray_tracing_arrays();
+					image_pixel_grids[i]->setup_ray_tracing_arrays();
+					if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+				}
+			}
+		}
+		for (int band_i=0; band_i < n_model_bands; band_i++) {
+			if ((psf_supersampling) and (psf_list[band_i]->use_input_psf_matrix)) {
+				psf_list[band_i]->generate_supersampled_PSF_matrix();
+				if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << psf_list[band_i]->supersampled_psf_npixels_x << " " << psf_list[band_i]->supersampled_psf_npixels_y << ")" << endl;
+			}
+		}
+		if (fft_convolution) cleanup_FFT_convolution_arrays();
+	}
+}
+
 
 const bool QLens::output_lensed_surface_brightness(dvector& xvals, dvector& yvals, dvector& zvals, const int band_number, const bool output_fits, const bool plot_residual, bool plot_foreground_only, const bool omit_foreground, const bool show_all_pixels, const bool normalize_residuals, const bool offload_to_data, const bool show_extended_mask, const bool show_foreground_mask, const bool show_noise_thresh, const bool exclude_ptimgs, const bool only_ptimgs, int specific_zsrc_i, const bool show_only_first_order_corrections, const bool plot_log, const bool plot_current_sb, const bool verbose)
 {

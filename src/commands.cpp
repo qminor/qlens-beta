@@ -10551,6 +10551,8 @@ void QLens::process_commands(bool read_file)
 				bool interpolate = false;
 				bool old_auto_srcgrid_npixels = auto_srcgrid_npixels;
 				bool scale_to_srcgrid = false;
+				bool omit_cc = false;
+				bool old_cc_setting = show_cc;
 				int zsrc_i = 0;
 				double old_srcgrid_scale;
 				//bool changed_srcgrid = false;
@@ -10604,6 +10606,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-p3000") set_npix = 3000;
 						else if (args[i]=="-p4000") set_npix = 4000;
 						else if (args[i]=="-nomask") use_mask = false;
+						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
 						else if (args[i]=="-srcgrid") scale_to_srcgrid = true;
 						else if (args[i]=="-x1.5") { zoom_in = true; zoomfactor = 1.5; }
 						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
@@ -10682,11 +10685,14 @@ void QLens::process_commands(bool read_file)
 						dvector xvals,yvals,zvals;
 						if (set_title) plot_title = temp_title;
 						if (mpi_id==0) {
-							if (!make_delaunay_from_sbprofile) cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel");
+							if (!make_delaunay_from_sbprofile) {
+								dvector maglogvals,nimgvals; // not used here, but still part of the output from cartesian srcgrid
+								cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+								plot_sbmap("src_pixel",xvals,yvals,zvals);
+							}
 							else {
 								delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,delaunay_grid_scale,set_npix,interpolate);
 								plot_sbmap("src_pixel",xvals,yvals,zvals);
-
 							}
 						}
 						if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
@@ -10702,6 +10708,7 @@ void QLens::process_commands(bool read_file)
 				//if (changed_srcgrid) auto_sourcegrid = old_auto_srcgrid;
 				if ((zoom_in) and (!make_delaunay_from_sbprofile)) cartesian_srcgrids[src_i]->srcgrid_size_scale = old_srcgrid_scale;
 				auto_srcgrid_npixels = old_auto_srcgrid_npixels;
+				if (omit_cc) show_cc = old_cc_setting;
 			}
 			//else if (words[1]=="plotsrcgrid")
 			//{
@@ -11367,7 +11374,9 @@ void QLens::process_commands(bool read_file)
 								if (!replot) {
 									if ((source_fit_mode==Cartesian_Source) and (src_i >= 0)) {
 										if (cartesian_srcgrids[src_i] != NULL) {
-											cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel");
+											dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
+											cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+											plot_sbmap("src_pixel",xvals,yvals,zvals);
 											plotted_src = true;
 										}
 									} else if ((source_fit_mode==Delaunay_Source) and (src_i >= 0)) {
@@ -11427,13 +11436,26 @@ void QLens::process_commands(bool read_file)
 						if ((terminal==TEXT) or (plot_fits)) {
 							if (!replot) {
 								output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
-								if ((plotted_src) and (mpi_id==0) and (src_i >= 0)) cartesian_srcgrids[src_i]->plot_surface_brightness(words[2]);
+								if ((plotted_src) and (mpi_id==0) and (src_i >= 0)) {
+									if (cartesian_srcgrids[src_i] != NULL) {
+										dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
+										cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+										plot_sbmap(words[2],xvals,yvals,zvals);
+									}
+								}
 								plot_sbmap(words[3],xvals,yvals,zvals,plot_fits);
 							}
 						}
 						else if ((replot) or (output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
 							if (!replot) plot_sbmap("img_pixel",xvals,yvals,zvals,plot_fits);
-							if ((!replot) and (plotted_src) and (mpi_id==0) and (src_i >= 0)) { cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel"); }
+							if ((!replot) and (plotted_src) and (mpi_id==0) and (src_i >= 0)) { 
+								if (cartesian_srcgrids[src_i] != NULL) {
+									dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
+									cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+									plot_sbmap("src_pixel",xvals,yvals,zvals);
+								}
+							}
+
 							if (show_cc) {
 								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring,cbstring);
 								else if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural",words[3],range2,contstring,cbstring);
@@ -11543,17 +11565,15 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 
-				if ((source_fit_mode!=Cartesian_Source) and (source_fit_mode!=Delaunay_Source)) Complain("'sbmap plotsrc' is for pixellated sources (cartesian/delaunay); for sbprofile/shapelet mode, use 'sbmap mkplotsrc'");
+				//if ((source_fit_mode!=Cartesian_Source) and (source_fit_mode!=Delaunay_Source)) Complain("'sbmap plotsrc' is for pixellated sources (cartesian/delaunay); for sbprofile/shapelet mode, use 'sbmap mkplotsrc'");
 				if (source_fit_mode==Delaunay_Source) delaunay = true;
 				if (srcgrids == NULL) Complain("No pixellated source objects have been created");
 
 				int src_i = -1;
-				if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source)) {
-					for (int i=0; i < n_pixellated_src; i++) {
-						if ((pixellated_src_band[i]==band_i) and (pixellated_src_redshift_idx[i]==zsrc_i)) {
-							src_i = i;
-							break;
-						}
+				for (int i=0; i < n_pixellated_src; i++) {
+					if ((pixellated_src_band[i]==band_i) and (pixellated_src_redshift_idx[i]==zsrc_i)) {
+						src_i = i;
+						break;
 					}
 				}
 				if (src_i < 0) Complain("specified pixellated source number does not exist");
@@ -11578,7 +11598,7 @@ void QLens::process_commands(bool read_file)
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if (range1 == "") {
 					double xmin,xmax,ymin,ymax;
-					if (source_fit_mode==Cartesian_Source) {
+					if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Parameterized_Source)) {
 						cartesian_srcgrids[src_i]->get_grid_dimensions(xmin,xmax,ymin,ymax);
 					} else {
 						double xwidth_adj = delaunay_grid_scale*(delaunay_srcgrids[src_i]->srcgrid_xmax-delaunay_srcgrids[src_i]->srcgrid_xmin);
@@ -11608,7 +11628,13 @@ void QLens::process_commands(bool read_file)
 					if (plot_fits) Complain("file name for FITS file must be specified");
 					if (set_title) plot_title = temp_title;
 					if (mpi_id==0) {
-						if (source_fit_mode==Cartesian_Source) cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel");
+						if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Parameterized_Source)) {
+							if (cartesian_srcgrids[src_i] != NULL) {
+								dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
+								cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+								plot_sbmap("src_pixel",xvals,yvals,zvals);
+							} else Complain("Cartesian grid has not been created");
+						}
 						else if (source_fit_mode==Delaunay_Source) {
 							if (delaunay_srcgrids[src_i] != NULL) {
 								delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,set_npix,interpolate,plot_mag);
@@ -11635,7 +11661,11 @@ void QLens::process_commands(bool read_file)
 					}
 				} else if (nwords == 3) {
 					if (plot_fits) {
-						if (source_fit_mode==Cartesian_Source) cartesian_srcgrids[src_i]->output_fits_file(words[2]);
+						if (source_fit_mode==Cartesian_Source) {
+							dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
+							cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+							plot_sbmap(words[2],xvals,yvals,zvals,plot_fits);
+						}
 						else if (source_fit_mode==Delaunay_Source) {
 							delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,set_npix,interpolate,plot_mag);
 							delaunay_srcgrids[src_i]->plot_voronoi_grid(words[2]);
@@ -11644,9 +11674,21 @@ void QLens::process_commands(bool read_file)
 					} else {
 						if (set_title) plot_title = temp_title;
 						if ((terminal==TEXT) or (plot_fits)) {
-							if (mpi_id==0) cartesian_srcgrids[src_i]->plot_surface_brightness(words[2]);
+							if (mpi_id==0) {
+								if (cartesian_srcgrids[src_i] != NULL) {
+									dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
+									cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+									plot_sbmap("src_pixel",xvals,yvals,zvals);
+								} else Complain("Cartesian grid has not been created");
+							}
 						} else {
-							if (source_fit_mode==Cartesian_Source) cartesian_srcgrids[src_i]->plot_surface_brightness("src_pixel");
+							if (source_fit_mode==Cartesian_Source) {
+								if (cartesian_srcgrids[src_i] != NULL) {
+									dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
+									cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+									plot_sbmap("src_pixel",xvals,yvals,zvals);
+								} else Complain("Cartesian grid has not been created");
+							}
 							else if (source_fit_mode==Delaunay_Source) {
 								if (delaunay_srcgrids[src_i] != NULL) {
 									delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,set_npix,interpolate,plot_mag);
