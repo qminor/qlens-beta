@@ -1643,10 +1643,8 @@ class LensList
 
 class SourceList
 {
-	protected:
-	QLens* qlens;
-
 	public:
+	QLens* qlens;
 	int n_sb;
 	SB_Profile** srclistptr;
 	SourceList(QLens* qlens_in) { srclistptr = NULL; qlens = qlens_in; n_sb = 0; }

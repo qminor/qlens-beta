@@ -126,9 +126,10 @@ class CartesianSourcePixel
 	void fill_n_image_vector();
 
 	void fill_n_image_vector_recursive(int& column_j);
-	void plot_surface_brightness(string root);
-	void output_fits_file(string fits_filename);
+	//void plot_surface_brightness(string root);
+	//void output_fits_file(string fits_filename);
 	void get_grid_dimensions(double &xmin, double &xmax, double &ymin, double &ymax);
+	void output_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y, dvector& sbvals, dvector& maglogvals, dvector& nimgvals, int& indx);
 	void plot_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y, std::ofstream& sb_outfile, std::ofstream& mag_outfile, std::ofstream& nimg_outfile);
 	void store_surface_brightness_grid_data(string root);
 	void write_surface_brightness_to_file(std::ofstream &sb_outfile);
@@ -205,8 +206,9 @@ class CartesianSourceGrid : public CartesianSourcePixel, public ModelParams
 
 	double find_avg_n_images(const double sb_threshold_frac);
 
-	void plot_surface_brightness(string root);
-	void output_fits_file(string fits_filename);
+	void output_surface_brightness(dvector& xvals, dvector& yvals, dvector& sbvals, dvector& maglogvals, dvector& nimgvals);
+	//void plot_surface_brightness(string root);
+	//void output_fits_file(string fits_filename);
 	void get_grid_dimensions(double &xmin, double &xmax, double &ymin, double &ymax);
 	void store_surface_brightness_grid_data(string root);
 
@@ -672,7 +674,7 @@ class ImagePixelGrid : private Sort
 
 	double output_surface_brightness(dvector& xvals, dvector& yvals, dvector& zvals, bool plot_residual = false, bool normalize_sb = false, bool show_noise_thresh = false, bool plot_log = false, bool show_foreground_mask = false);
 	void plot_sourcepts(string outfile_root, const bool show_subpixels = false);
-	void output_fits_file(string fits_filename, bool plot_residual = false);
+	//void output_fits_file(string fits_filename, bool plot_residual = false);
 
 	void add_pixel_noise();
 	void set_image_pixel_data(ImageData* imgdata, const int mask_index);

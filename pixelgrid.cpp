@@ -971,15 +971,8 @@ void CartesianSourceGrid::get_grid_dimensions(double &xmin, double &xmax, double
 	ymax = cell[u_N-1][w_N-1]->corner_pt[3][1];
 }
 
-void CartesianSourceGrid::plot_surface_brightness(string root)
+void CartesianSourceGrid::output_surface_brightness(dvector& xvals, dvector& yvals, dvector& sbvals, dvector& maglogvals, dvector& nimgvals)
 {
-	string img_filename = root + ".dat";
-	string x_filename = root + ".x";
-	string y_filename = root + ".y";
-	string info_filename = root + ".info";
-	string mag_filename = root + ".maglog";
-	string n_image_filename = root + ".nimg";
-
 	double x, y, cell_xlength, cell_ylength, xmin, ymin;
 	int i, j, k, n_plot_xcells, n_plot_ycells, pixels_per_cell_x, pixels_per_cell_y;
 	cell_xlength = cell[0][0]->corner_pt[2][0] - cell[0][0]->corner_pt[0][0];
@@ -999,43 +992,40 @@ void CartesianSourceGrid::plot_surface_brightness(string root)
 	xmin = cell[0][0]->corner_pt[0][0];
 	ymin = cell[0][0]->corner_pt[0][1];
 
-	ofstream pixel_xvals; qlens->open_output_file(pixel_xvals,x_filename);
-	for (i=0, x=xmin; i <= n_plot_xcells; i++, x += cell_xlength) pixel_xvals << x << endl;
+	xvals.input(n_plot_xcells+1);
+	yvals.input(n_plot_ycells+1);
+	for (i=0, x=xmin; i <= n_plot_xcells; i++, x += cell_xlength) xvals[i] = x;
+	for (i=0, y=ymin; i <= n_plot_ycells; i++, y += cell_ylength) yvals[i] = y;
 
-	ofstream pixel_yvals; qlens->open_output_file(pixel_yvals,y_filename);
-	for (i=0, y=ymin; i <= n_plot_ycells; i++, y += cell_ylength) pixel_yvals << y << endl;
+	sbvals.input(n_plot_xcells*n_plot_ycells);
+	maglogvals.input(n_plot_xcells*n_plot_ycells);
+	nimgvals.input(n_plot_xcells*n_plot_ycells);
 
-	qlens->open_output_file(pixel_surface_brightness_file,img_filename.c_str());
-	qlens->open_output_file(pixel_magnification_file,mag_filename.c_str());
-	if (qlens->n_image_prior) qlens->open_output_file(pixel_n_image_file,n_image_filename.c_str());
 	int line_number;
+	int l=0;
 	for (j=0; j < w_N; j++) {
 		for (line_number=0; line_number < pixels_per_cell_y; line_number++) {
 			for (i=0; i < u_N; i++) {
 				if (cell[i][j]->cell != NULL) {
-					cell[i][j]->plot_cell_surface_brightness(line_number,pixels_per_cell_x,pixels_per_cell_y,pixel_surface_brightness_file,pixel_magnification_file,pixel_n_image_file);
+					cell[i][j]->output_cell_surface_brightness(line_number,pixels_per_cell_x,pixels_per_cell_y,sbvals,maglogvals,nimgvals,l);
 				} else {
 					for (k=0; k < pixels_per_cell_x; k++) {
-						pixel_surface_brightness_file << cell[i][j]->surface_brightness << " ";
-						pixel_magnification_file << log(cell[i][j]->total_magnification)/log(10) << " ";
-						if (qlens->n_image_prior) pixel_n_image_file << cell[i][j]->n_images << " ";
+						sbvals[l] = cell[i][j]->surface_brightness;
+						maglogvals[l] = log(cell[i][j]->total_magnification)/log(10);
+						if (qlens->n_image_prior) nimgvals[l] = cell[i][j]->n_images;
+						else nimgvals[l] = 0;
+						//pixel_surface_brightness_file << cell[i][j]->surface_brightness << " ";
+						//pixel_magnification_file << log(cell[i][j]->total_magnification)/log(10) << " ";
+						//if (qlens->n_image_prior) pixel_n_image_file << cell[i][j]->n_images << " ";
+						l++;
 					}
 				}
 			}
-			pixel_surface_brightness_file << endl;
-			pixel_magnification_file << endl;
-			if (qlens->n_image_prior) pixel_n_image_file << endl;
 		}
 	}
-	pixel_surface_brightness_file.close();
-	pixel_magnification_file.close();
-	pixel_n_image_file.close();
-
-	ofstream pixel_info; qlens->open_output_file(pixel_info,info_filename);
-	pixel_info << npixels_x << " " << npixels_y << " " << levels << endl;
-	pixel_info << srcgrid_xmin << " " << srcgrid_xmax << " " << srcgrid_ymin << " " << srcgrid_ymax << endl;
 }
 
+/*
 void CartesianSourceGrid::output_fits_file(string fits_filename)
 {
 #ifndef USE_FITS
@@ -1085,6 +1075,32 @@ void CartesianSourceGrid::output_fits_file(string fits_filename)
 	if (status) fits_report_error(stderr, status); // print any error message
 #endif
 }
+*/
+
+void CartesianSourcePixel::output_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y, dvector& sbvals, dvector& maglogvals, dvector& nimgvals, int& indx)
+{
+	int cell_row, subplot_pixels_per_cell_x, subplot_pixels_per_cell_y, subline_number=line_number;
+	subplot_pixels_per_cell_x = pixels_per_cell_x/u_N;
+	subplot_pixels_per_cell_y = pixels_per_cell_y/w_N;
+	cell_row = line_number / subplot_pixels_per_cell_y;
+	subline_number -= cell_row*subplot_pixels_per_cell_y;
+
+	int i,j;
+	for (i=0; i < u_N; i++) {
+		if (cell[i][cell_row]->cell != NULL) {
+			cell[i][cell_row]->output_cell_surface_brightness(subline_number,subplot_pixels_per_cell_x,subplot_pixels_per_cell_y,sbvals,maglogvals,nimgvals,indx);
+		} else {
+			for (j=0; j < subplot_pixels_per_cell_x; j++) {
+				sbvals[indx] = cell[i][cell_row]->surface_brightness;
+				maglogvals[indx] = log(cell[i][cell_row]->total_magnification)/log(10);
+				if (lens->n_image_prior) nimgvals[indx] = cell[i][cell_row]->n_images;
+				indx++;
+			}
+		}
+	}
+}
+
+
 
 void CartesianSourcePixel::plot_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y, ofstream& sb_outfile, ofstream& mag_outfile, ofstream &nimg_outfile)
 {
@@ -12576,6 +12592,7 @@ void ImagePixelGrid::plot_sourcepts(string outfile_root, const bool show_subpixe
 	}
 }
 
+/*
 void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 {
 #ifndef USE_FITS
@@ -12650,6 +12667,7 @@ void ImagePixelGrid::output_fits_file(string fits_filename, bool plot_residual)
 	if (status) fits_report_error(stderr, status); // print any error message
 #endif
 }
+*/
 
 void ImagePixelGrid::assign_mask_pointers(ImageData& pixel_data, const int mask_index)
 {

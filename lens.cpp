@@ -3264,12 +3264,12 @@ void QLens::print_pixellated_source_list(bool show_vary_params)
 			if (pixellated_src_redshift_idx[i]==-1) zs = -1;
 			else zs = extended_src_redshifts[pixellated_src_redshift_idx[i]];
 			cout << i << ". ";
-			if (source_fit_mode==Delaunay_Source) cout << "delaunay(band=";
-			else if (source_fit_mode==Cartesian_Source) cout << "cartesian(band=";
+			if (srcgrids[i]==delaunay_srcgrids[i]) cout << "delaunay(band=";
+			else if (srcgrids[i]==cartesian_srcgrids[i]) cout << "cartesian(band=";
 			else cout << "(band=";
 			cout << pixellated_src_band[i];
 			if (zs > 0) cout << ",zsrc=" << zs;
-			if (source_fit_mode==Delaunay_Source) {
+			if ((source_fit_mode==Delaunay_Source) or (srcgrids[i]==delaunay_srcgrids[i])) {
 				if (delaunay_srcgrids[i] == NULL) cout << "), Delaunay grid not created yet" << endl;
 				else {
 					if (delaunay_srcgrids[i]->n_gridpts > 0) cout << ",npix=" << delaunay_srcgrids[i]->n_gridpts;
@@ -3278,7 +3278,7 @@ void QLens::print_pixellated_source_list(bool show_vary_params)
 					if (show_vary_params)
 						delaunay_srcgrids[i]->print_vary_parameters();
 				}
-			} else if (source_fit_mode==Cartesian_Source) {
+			} else if ((source_fit_mode==Cartesian_Source) or (srcgrids[i]==cartesian_srcgrids[i])) {
 				if (cartesian_srcgrids[i] == NULL) cout << ", Cartesian grid not created yet" << endl;
 				else {
 					cout << "): ";

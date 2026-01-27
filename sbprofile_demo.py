@@ -29,9 +29,14 @@ lens.add(dm_halo,anchor_center=0)
 
 plotcrit(q)
 
-sersic_src = Sersic({"s0": 7, "R_eff": 0.087, "n": 2.5, "q": 0.90, "theta": 80, "xc": 0.06, "yc": -0.03})
+sersic_src = Sersic({"s0": 7, "R_eff": 0.087, "n": 1.5, "q": 0.70, "theta": 80, "xc": 0.06, "yc": -0.03})
 
 src.add(sersic_src)
+
+# Plot the analytic source
+srcplt = src.mkplotsrc(npix=200)  # this actually generates a cartesian source grid from the analytic source (as in 'src.mkpixsrc'), but then returns a plot of it immediately
+plot_sb(srcplt,q)
+pause()
 
 q.nimg_prior=True
 q.nimg_threshold=1.4
@@ -45,7 +50,7 @@ dparams.add("xi",q.zsrc)
 dparams.print()
 
 img = q.plotimg()
-plot_sb(img,q,include_cc=True)
+plot_sb(img,q)
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
