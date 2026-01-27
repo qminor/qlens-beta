@@ -78,7 +78,7 @@ q.sbmap_invert()
 #imgdata[0].unmask_all_pixels()
 
 img = q.plotimg(nres=True)
-plot_sb(img,q,include_cc=True)
+plot_sb(img,q)
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
@@ -93,7 +93,7 @@ q.run_fit("simplex",adopt=True,show_errors=False)
 q.sbmap_invert()
 
 img = q.plotimg(nres=True)
-plot_sb(img,q,include_cc=True)
+plot_sb(img,q)
 
 srcplt = pixsrc[0].plot()
 plot_sb(srcplt,q)
