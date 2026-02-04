@@ -1104,8 +1104,6 @@ PYBIND11_MODULE(qlens, m) {
 			bool make_delaunay_from_sbprofile = false;
 			bool use_mask = true;
 			bool verbal_mode = true;
-			QLens* qlensptr = current.qlens;
-			bool at_least_one_lensed_src = false;
 
 			for (auto item : kwargs) {
 				if (py::cast<string>(item.first)=="npix") {
@@ -1114,72 +1112,43 @@ PYBIND11_MODULE(qlens, m) {
 					} catch (...) {
 						throw std::runtime_error("Invalid integer value for 'npix' argument");
 					}
+				} else if (py::cast<string>(item.first)=="use_mask") {
+					try {
+						use_mask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'use_mask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="delaunay") {
+					try {
+						make_delaunay_from_sbprofile = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'delaunay' argument");
+					}
+				} else if (py::cast<string>(item.first)=="band") {
+					try {
+						band_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'band' argument");
+					}
+				} else if (py::cast<string>(item.first)=="zsrc_i") {
+					try {
+						zsrc_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'zsrc_i' argument");
+					}
 				} else throw std::runtime_error("argument to 'mkpixsrc' not recognized");
 			}
 
-			for (int k=0; k < current.n_sb; k++) {
-				if ((current.srclistptr[k]->is_lensed) and (qlensptr->sbprofile_redshift_idx[k]==zsrc_i)) { at_least_one_lensed_src = true; break; }
-			}
-			if (!at_least_one_lensed_src) throw std::runtime_error("at least one analytic lensed source is required for 'sbmap mksrc'");
-
-			if ((qlensptr->source_fit_mode==Delaunay_Source) and (!make_delaunay_from_sbprofile)) throw std::runtime_error("to make Delaunay source grid from source profiles, use '-delaunay' argument");
-			int src_i = -1;
-			do {
-				for (int i=0; i < qlensptr->n_pixellated_src; i++) {
-					if ((qlensptr->pixellated_src_band[i]==band_i) and (qlensptr->pixellated_src_redshift_idx[i]==zsrc_i)) {
-						src_i = i;
-						break;
-					}
-				}
-				if (src_i < 0) {
-					if (qlensptr->mpi_id==0) cout << "Generating pixellated source at corresponding redshift (zsrc=" << qlensptr->extended_src_redshifts[zsrc_i] << ")" << endl;
-					qlensptr->add_pixellated_source(qlensptr->extended_src_redshifts[zsrc_i],band_i);
-				}
-			} while (src_i < 0);
-			int imggrid_i = band_i*qlensptr->n_extended_src_redshifts + zsrc_i;
-
-			if ((qlensptr->source_fit_mode==Delaunay_Source) and (qlensptr->delaunay_srcgrids==NULL)) throw std::runtime_error("No pixellated source objects have been added to the model");
-			if (npix > 0) {
-				qlensptr->srcgrid_npixels_x = npix;
-				qlensptr->srcgrid_npixels_y = npix;
-				qlensptr->auto_srcgrid_npixels = false;
-			}
-			if (make_delaunay_from_sbprofile) {
-				qlensptr->create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
-				if (qlensptr->auto_sourcegrid) qlensptr->find_optimal_sourcegrid_for_analytic_source();
-			} else {
-				qlensptr->create_sourcegrid_cartesian(band_i,zsrc_i,verbal_mode,use_mask);
-				qlensptr->cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source(imggrid_i);
-				if ((qlensptr->source_fit_mode==Delaunay_Source) and (qlensptr->delaunay_srcgrids[src_i] != NULL)) {
-					qlensptr->cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid(qlensptr->delaunay_srcgrids[src_i],true);
-				}
-			}
-
-			/*
-			dvector xvals,yvals,zvals;
-			if (set_title) plot_title = temp_title;
-			if (mpi_id==0) {
-				if (!make_delaunay_from_sbprofile) {
-					dvector maglogvals,nimgvals; // not used here, but still part of the output from cartesian srcgrid
-					cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
-					plot_sbmap("src_pixel",xvals,yvals,zvals);
-				}
-				else {
-					delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,delaunay_grid_scale,set_npix,interpolate);
-					plot_sbmap("src_pixel",xvals,yvals,zvals);
-				}
-			}
-			*/
+			if ((current.qlens->source_fit_mode==Delaunay_Source) and (!make_delaunay_from_sbprofile)) throw std::runtime_error("to make Delaunay source grid from source profiles, use '-delaunay' argument");
+			int src_i = current.qlens->make_pixellated_source_from_sbprofiles(band_i,zsrc_i,npix,make_delaunay_from_sbprofile,use_mask,verbal_mode);
+			if (src_i < 0) throw std::runtime_error("at least one analytic lensed source is required for 'sbmap mksrc'");
 		})
 		.def("mkplotsrc", [](SourceList &current, py::kwargs& kwargs){
 			int zsrc_i = 0;
 			int band_i = 0;
 			int npix = -1;
-			bool make_delaunay_from_sbprofile = false;
 			bool use_mask = true;
 			bool verbal_mode = true;
-			QLens* qlensptr = current.qlens;
-			bool at_least_one_lensed_src = false;
 
 			for (auto item : kwargs) {
 				if (py::cast<string>(item.first)=="npix") {
@@ -1188,55 +1157,33 @@ PYBIND11_MODULE(qlens, m) {
 					} catch (...) {
 						throw std::runtime_error("Invalid integer value for 'npix' argument");
 					}
-				} else throw std::runtime_error("argument to 'mkplotsrc' not recognized");
-			}
-
-			for (int k=0; k < current.n_sb; k++) {
-				if ((current.srclistptr[k]->is_lensed) and (qlensptr->sbprofile_redshift_idx[k]==zsrc_i)) { at_least_one_lensed_src = true; break; }
-			}
-			if (!at_least_one_lensed_src) throw std::runtime_error("at least one analytic lensed source is required for 'sbmap mksrc'");
-
-			if ((qlensptr->source_fit_mode==Delaunay_Source) and (!make_delaunay_from_sbprofile)) throw std::runtime_error("to make Delaunay source grid from source profiles, use '-delaunay' argument");
-			int src_i = -1;
-			do {
-				for (int i=0; i < qlensptr->n_pixellated_src; i++) {
-					if ((qlensptr->pixellated_src_band[i]==band_i) and (qlensptr->pixellated_src_redshift_idx[i]==zsrc_i)) {
-						src_i = i;
-						break;
+				} else if (py::cast<string>(item.first)=="use_mask") {
+					try {
+						use_mask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'use_mask' argument");
 					}
-				}
-				if (src_i < 0) {
-					if (qlensptr->mpi_id==0) cout << "Generating pixellated source at corresponding redshift (zsrc=" << qlensptr->extended_src_redshifts[zsrc_i] << ")" << endl;
-					qlensptr->add_pixellated_source(qlensptr->extended_src_redshifts[zsrc_i],band_i);
-				}
-			} while (src_i < 0);
-			int imggrid_i = band_i*qlensptr->n_extended_src_redshifts + zsrc_i;
+				} else if (py::cast<string>(item.first)=="band") {
+					try {
+						band_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'band' argument");
+					}
+				} else if (py::cast<string>(item.first)=="zsrc_i") {
+					try {
+						zsrc_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'zsrc_i' argument");
+					}
+				} else throw std::runtime_error("argument to 'mkpixsrc' not recognized");
+			}
 
-			if ((qlensptr->source_fit_mode==Delaunay_Source) and (qlensptr->delaunay_srcgrids==NULL)) throw std::runtime_error("No pixellated source objects have been added to the model");
-			if (npix > 0) {
-				qlensptr->srcgrid_npixels_x = npix;
-				qlensptr->srcgrid_npixels_y = npix;
-				qlensptr->auto_srcgrid_npixels = false;
-			}
-			if (make_delaunay_from_sbprofile) {
-				qlensptr->create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
-				if (qlensptr->auto_sourcegrid) qlensptr->find_optimal_sourcegrid_for_analytic_source();
-			} else {
-				qlensptr->create_sourcegrid_cartesian(band_i,zsrc_i,verbal_mode,use_mask);
-				qlensptr->cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source(imggrid_i);
-				if ((qlensptr->source_fit_mode==Delaunay_Source) and (qlensptr->delaunay_srcgrids[src_i] != NULL)) {
-					qlensptr->cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid(qlensptr->delaunay_srcgrids[src_i],true);
-				}
-			}
+			int src_i = current.qlens->make_pixellated_source_from_sbprofiles(band_i,zsrc_i,npix,false,use_mask,verbal_mode);
+			if (src_i < 0) throw std::runtime_error("at least one analytic lensed source is required for 'sbmap mksrc'");
 
 			dvector xvals,yvals,zvals;
-			//if (set_title) plot_title = temp_title;
-			if (!make_delaunay_from_sbprofile) {
-				dvector maglogvals,nimgvals; // not used here, but still part of the output from cartesian srcgrid
-				qlensptr->cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
-			//else {
-				//delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,delaunay_grid_scale,set_npix,interpolate);
-			}
+			dvector maglogvals,nimgvals; // not used here, but still part of the output from cartesian srcgrid
+			current.qlens->cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
 			int nx,ny;
 			nx = xvals.size()-1;
 			ny = yvals.size()-1;

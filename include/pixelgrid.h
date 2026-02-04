@@ -220,9 +220,9 @@ class CartesianSourceGrid : public CartesianSourcePixel, public ModelParams
 	// for plotting the grid to a file:
 	std::ifstream sb_infile;
 	std::ofstream xgrid;
-	std::ofstream pixel_surface_brightness_file;
-	std::ofstream pixel_magnification_file;
-	std::ofstream pixel_n_image_file;
+	//std::ofstream pixel_surface_brightness_file;
+	//std::ofstream pixel_magnification_file;
+	//std::ofstream pixel_n_image_file;
 };
 
 class DelaunayGrid : private Sort

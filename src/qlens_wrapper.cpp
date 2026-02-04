@@ -410,8 +410,6 @@ public:
 		return filename_;
 	}
 
-
-
 	void lens_display() {
 		print_lens_list(false);
 	}
@@ -475,7 +473,6 @@ public:
 			}
 		}
 	}
-
 
 	void update_lens(py::args args, py::kwargs kwargs, int loc=-1) {
 		/* FEATURE IDEA: from https://pybind11.readthedocs.io/en/stable/advanced/functions.html#accepting-args-and-kwargs
