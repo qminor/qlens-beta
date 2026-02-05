@@ -39,6 +39,10 @@
 #endif
 #endif
 
+#if __cplusplus >= 201703L // C++17 standard or later
+#include <filesystem>
+#endif
+
 #include <cmath>
 #include <iostream>
 #include <fstream>
@@ -7354,6 +7358,23 @@ bool ImageData::load_noise_map_fits(string fits_filename, const int hdu_indx, co
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
 #else
+
+	string filename = fits_filename;
+#if __cplusplus >= 201703L // C++17 standard or later
+		if (!filesystem::exists(filename)) {
+			filename = "../data/" + fits_filename; // try the data folder
+			if (!filesystem::exists(filename)) {
+				if (qlens->fit_output_dir != ".") {
+					filename = qlens->fit_output_dir + "/" + fits_filename;  // finally, try the chains folder
+					if (!filesystem::exists(filename)) return false;
+				} else return false;
+			}
+		}
+#endif
+	if ((qlens->mpi_id==0) and (filename != fits_filename)) {
+		cout << "Loading file '" << filename << "'" << endl;
+	}
+
 	bool image_load_status = false;
 	int i,j,kk;
 	fitsfile *fptr;   // FITS file pointer, defined in fitsio.h
@@ -7374,7 +7395,7 @@ bool ImageData::load_noise_map_fits(string fits_filename, const int hdu_indx, co
 	bg_pixel_noise = 1e30;
 	char card[FLEN_CARD];   // Standard string lengths defined in fitsio.h
 	int hdutype;
-	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
+	if (!fits_open_file(&fptr, filename.c_str(), READONLY, &status))
 	{
 		if (fits_movabs_hdu(fptr, hdu_indx, &hdutype, &status)) // move to HDU given by hdu_indx
 			return false;
@@ -7433,7 +7454,7 @@ bool ImageData::load_noise_map_fits(string fits_filename, const int hdu_indx, co
 	if (qlens != NULL) qlens->background_pixel_noise = bg_pixel_noise; // store the background noise separately
 
 	if (status) fits_report_error(stderr, status); // print any error message
-	if (image_load_status) noise_map_fits_filename = fits_filename;
+	if (image_load_status) noise_map_fits_filename = filename;
 	return image_load_status;
 #endif
 }
@@ -10919,6 +10940,22 @@ bool PSF::load_psf_fits(string fits_filename, const int hdu_indx, const bool sup
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
 #else
+	string filename = fits_filename;
+#if __cplusplus >= 201703L // C++17 standard or later
+		if (!filesystem::exists(filename)) {
+			filename = "../data/" + fits_filename; // try the data folder
+			if (!filesystem::exists(filename)) {
+				if (qlens->fit_output_dir != ".") {
+					filename = qlens->fit_output_dir + "/" + fits_filename;  // finally, try the chains folder
+					if (!filesystem::exists(filename)) return false;
+				} else return false;
+			}
+		}
+#endif
+	if ((qlens->mpi_id==0) and (filename != fits_filename)) {
+		cout << "Loading file '" << filename << "'" << endl;
+	}
+
 	use_input_psf_matrix = true;
 	bool image_load_status = false;
 	int i,j,kk;
@@ -10945,7 +10982,7 @@ bool PSF::load_psf_fits(string fits_filename, const int hdu_indx, const bool sup
 
 	char card[FLEN_CARD];   // Standard string lengths defined in fitsio.h
 	int hdutype;
-	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
+	if (!fits_open_file(&fptr, filename.c_str(), READONLY, &status))
 	{
 		if (fits_movabs_hdu(fptr, hdu_indx, &hdutype, &status)) // move to HDU given by hdu_indx
 			 return false;
@@ -11087,7 +11124,7 @@ bool PSF::load_psf_fits(string fits_filename, const int hdu_indx, const bool sup
 	delete[] input_psf_matrix;
 
 	if (status) fits_report_error(stderr, status); // print any error message
-	if (image_load_status) psf_filename = fits_filename;
+	if (image_load_status) psf_filename = filename;
 
 	setup_parameters(false); // since now we're using a pixel map instead of analytic PSF
 	return image_load_status;

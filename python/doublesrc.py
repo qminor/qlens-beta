@@ -3,11 +3,11 @@ from qlens_helper import *
 q = QLens()
 
 q.imgdata_read("doublesrc.dat")
-q.add_lens(Alpha({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3}))
-q.lens[0].setvary([1,0,0,1,1,1,1])
+q.add_lens(SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3}))
+q.lens[0].vary([1,0,0,1,1,1,1])
 q.add_lens(Shear({"shear": 0.02, "theta": 10, "xc": 0.7, "yc": 0.3}))
 q.lens[1].anchor_center(0)
-q.lens[1].setvary([1,1])
+q.lens[1].vary([1,1])
 
 q.analytic_bestfit_src = True
 q.central_image = False

@@ -14457,8 +14457,24 @@ void QLens::find_source_centroid(const int imggrid_i, double& xc_approx, double&
 	}
 }
 
-bool QLens::load_image_pixel_data(const int band_i, string image_pixel_filename_root, const double pixsize, const double pix_xy_ratio, const double x_offset, const double y_offset, const int hdu_indx, const bool show_fits_header)
+bool QLens::load_image_pixel_data(const int band_i, string image_pixel_filename, const double pixsize, const double pix_xy_ratio, const double x_offset, const double y_offset, const int hdu_indx, const bool show_fits_header)
 {
+	string filename = image_pixel_filename;
+#if __cplusplus >= 201703L // C++17 standard or later
+		if (!filesystem::exists(filename)) {
+			filename = "../data/" + image_pixel_filename; // try the data folder
+			if (!filesystem::exists(filename)) {
+				if (fit_output_dir != ".") {
+					filename = fit_output_dir + "/" + image_pixel_filename;  // finally, try the chains folder
+					if (!filesystem::exists(filename)) return false;
+				} else return false;
+			}
+		}
+#endif
+	if ((mpi_id==0) and (filename != image_pixel_filename)) {
+		cout << "Loading file '" << filename << "'" << endl;
+	}
+
 	bool first_data_img = false;
 	if (band_i > n_data_bands) return false;
 	if (band_i==n_data_bands) {
@@ -14478,8 +14494,8 @@ bool QLens::load_image_pixel_data(const int band_i, string image_pixel_filename_
 			image_data->set_grid_params(xmin,xmax,ymin,ymax); // these functions are defined in the header pixelgrid.h
 			// note that if the data pixel size is found in the FITS header, it will override the dimensions set above
 		}
-		//status = image_data->load_data_fits(xmin,xmax,ymin,ymax,image_pixel_filename_root,hdu_indx,show_fits_header); // these functions are defined in the header pixelgrid.h
-		status = image_data->load_data_fits(image_pixel_filename_root,pixsize,pix_xy_ratio,x_offset,y_offset,hdu_indx,show_fits_header);
+		//status = image_data->load_data_fits(xmin,xmax,ymin,ymax,filename,hdu_indx,show_fits_header); // these functions are defined in the header pixelgrid.h
+		status = image_data->load_data_fits(filename,pixsize,pix_xy_ratio,x_offset,y_offset,hdu_indx,show_fits_header);
 		// the pixel size may have been specified in the FITS file, in which case data pixel size was just set to something > 0
 		if ((status==true) and (pixsize > 0)) {
 			double xmin,xmax,ymin,ymax;
@@ -14490,7 +14506,7 @@ bool QLens::load_image_pixel_data(const int band_i, string image_pixel_filename_
 			set_gridcenter(0.5*(xmin+xmax),0.5*(ymin+ymax));
 		}
 	} else {
-		image_data->load_data(image_pixel_filename_root);
+		image_data->load_data(filename);
 		double xmin,xmax,ymin,ymax;
 		int npx, npy;
 		image_data->get_grid_params(xmin,xmax,ymin,ymax,npx,npy);

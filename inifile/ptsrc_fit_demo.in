@@ -1,0 +1,85 @@
+fit label ptsrc_fit2      # This labels the files that will be produced by the lens fitting
+fit source_mode shapelet
+fit method simplex          # downhill simplex method (plus optional simulated annealing)
+data_pixel_size 0.049
+sbmap loadimg sim_ptsrc2.fits
+bg_pixel_noise 0.1
+#sbmap load_noisemap demo_noisemap.fits
+sbmap generate_uniform_noisemap   # This generates a noise map where each pixel has noise dispersion equal to 'bg_pixel_noise'
+#sbmap load_noisemap <file>       # if there's a noise map, load it here
+
+sbmap loadpsf hst_psf.fits
+sbmap spline_psf
+#sbmap loadmask mask.fits     # Loads a pixel mask
+
+#fit regularization curvature    # the generic options are "norm", "gradient", "curvature", "exp_kernel", "matern_kernel"
+imgpixel_nsplit 5     # if supersampling, gives splitting factor
+split_imgpixels on
+ptimg_nsplit 5
+#inversion_method dense
+
+sbmap set_all_pixels             # The following commands are for creating your own mask
+sbmap unset_low_sn_pixels 0.08  # This "masks out" pixels that have surface brightness smaller than 0.015
+sbmap trim_mask_windows 4.0      # Removes mask "windows" (regions of contiguous pixels within mask) that don't have SB greater than 4*noise
+sbmap set_neighbor_pixels 2        # Includes neighbor pixels for every pixel in mask (i.e. expands mask by one pixel length in all directions)
+
+#optimize_regparam on     # Optimize regularization parameter instead of varying as a free parameter
+#regparam_minlog -5
+#vary_regparam on        # Alternatively, one can vary the regularization parameter as a free parameter (this might be faster if the
+                         # (matrix inversions are slow)
+#regparam 20             # initial guess for regularization (if vary_regparam is on)
+
+shear_components on      # Uses gamma_1, gamma_2 as external shear parameters instead of (gamma,theta)
+
+zlens 0.5
+zsrc 2
+
+# For reference, the following is the "true" model used to make the simulated data being fit here:
+#fit lens alpha 1.3634 1.17163 0 0.963867 81.9 0.0102892 0.00358392 shear=0.0647257 -0.0575047
+#fit lens sple 1.35 1.0 0 0.8 90 0 0 shear=0.05 0.02            # input model
+fit lens sple 1.42 0.96 0 0.78 -21 -0.03 0.05 shear=-0.05 0.02            # input model
+1 1 0 1 1 1 1 1 1
+
+fit source sersic 20 0.05 1 1 0 -0.076 0.039
+#fit source sersic 20 0.10 1.5 1 0 0.014 0.05
+1 1 1 0 0 1 1
+
+#fit ptsrc add 0.02 0.0   # if there is no point image data file, then point sources have to be added this way
+#1 1 0 0
+
+imgdata read sim_ptsrc2_imgdata.dat   # this will automatically create a ptsrc object at the correct redshift for this file
+ptsrc update 0 xsrc=0.014 ysrc=0.05
+
+invert_imgflux on
+time_delays on
+chisq_time_delays on
+fit transform s0_src log
+analytic_bestfit_src on
+hubble 0.8
+vary_hubble on
+chisqtol 1e-4
+pause
+
+outside_sb_prior off        # Imposes a penalty if surface brightness is produced outside the pixel mask (type 'help sbmap_settings' for info)
+nimg_prior off              # This imposes a penalty chi-square if too few images are produced (defined by the threshold below)
+#nimg_threshold 1.4        	# Specify the minimum number of images you expect to get produced for nimg_prior; should be at least above 1
+#pause
+									# to avoid solutions where the source looks exactly like the images and no multiple imaging occurs
+
+# To see how terrible the initial guess looks...
+sbmap invert
+sbmap plotimg -nres3
+
+pause
+
+fit run -adopt -noerrs
+sbmap invert
+
+# Let's see how the final solution looks...
+sbmap plotimg
+sbmap plotimg -nres3 # plot (normalized) residuals
+
+sbmap plotsrc # plot the pixellated source
+sbmap plotsrc -interp # plot the pixellated source
+
+

@@ -1,0 +1,125 @@
+# Welcome to the pixellated source lens modeling tutorial. The tutorial will stop at certain points and prompt you to type "c" to continue.
+# Read through the comments beginning with "#" for descriptions on each command.
+# Keep in mind that documentation for many of these commands can be directly accessed in QLens by typing "help (command)" at any time
+
+# This labels the files that will be produced by the lens fitting. The file outputs will all start with "delaunay_fit" 
+fit label delaunay_fit
+pause
+
+# Now we specify that we are going to fit using Delaunay triangulation (rather than analytic or point sources). The Delaunay grid is an irregular grid that is fit adaptively to the model.
+fit source_mode delaunay
+pause
+
+# This is the method we will use to optimize the lens model. Downhill simplex is one of the fastest methods, especially for Delaunay grids
+fit method simplex     
+pause
+
+# Now we set the size of each pixel. This information can be found in the header of the .fits image file you are using     
+data_pixel_size 0.035
+pause
+
+# Load the image as a surface brightness map. Specify the full name of the .fits file.
+sbmap loadimg OBS_testCAM-i.fits
+pause
+
+# Now we begin working with the noise map. In this case, we will load one in
+sbmap load_noisemap testCAM-i_sigma_map.fits
+
+#Alternatively, you can run the command below to generate a uniform one
+#bg_pixel_noise 0.00941285         
+#sbmap generate_uniform_noisemap  
+#This noisemap's dispersion is set by the "bg_pixel_noise xxx" command
+pause
+
+# Let's check out the psf. First, we set a threshold.
+# This truncates the PSF when it falls below threshold*peak_height, to save computation time. The peak_height is the maximum pixel value in the psf .fits file.
+psf_threshold 1e-3
+pause
+
+#Load in the psf file after setting the threshold, and save the new truncated psf            
+sbmap loadpsf psf.fits
+sbmap savepsf psf_trunc.fits
+pause
+
+# Finally, load in your mask file
+sbmap loadmask mask.fits     
+pause
+
+# Let's decide on our regularization. The generic options are "norm", "gradient", "curvature", "exp_kernel", "matern_kernel"
+fit regularization curvature    
+pause
+
+# For now, let's not do any pixel splitting.
+split_imgpixels off
+pause
+
+# If you installed a version of QLens that can handle sparse matrices, you can change this line. For now, we will do
+# the basic dense matrix math
+inversion_method dense
+pause
+
+# Optimize regularization parameter instead of varying as a free parameter.
+# Set a minimum value
+optimize_regparam on     
+regparam_minlog -5
+pause
+
+# For this tutorial, we will use a magnitude and an angle for the shear as opposed to breaking it into components
+# (gamma,theta) as opposed to (Gamma_1, gamma_2) 
+shear_components off     # Uses gamma_1, gamma_2 as external shear parameters instead of (gamma,theta)
+pause
+
+
+# And here is our first guess for the model. In order, these values are:
+# b: mass parameter, alpha: power law slope, s: core radius, q: axis ratio, 
+# theta: axis tilt, xc: x-coord of center, yc: y-coord of center,
+# and the optional shear components
+# The second line specifies which of the values we want to vary as a free parameter.
+# We vary all parameters except for alpha and the core radius in this example
+fit lens sple 1.05 1 0 0.77 38 0 0 shear=0.030 -35            # input model
+1 0 0 1 1 1 1 1 1
+pause
+
+# For reference, the following is the "true" model used to make the simulated data being fit here:
+#True answer: b=1.1 alpha=1 s=0 q=0.8 theta=35 xc=0 yc=0 gamma=0.032 theta_shear=-40
+pause
+
+# For now, we don't impose a penalty if surface brightness is produced outside the pixel mask.
+outside_sb_prior off
+pause
+    
+# This imposes a penalty chi-square if too few images are produced (defined by the threshold below)
+# Specify the minimum number of images you expect to get produced for nimg_prior; should be at least above 1
+nimg_prior on              
+nimg_threshold 1.4        	
+pause
+		
+# Finally, let's run the fit. This could take a few (or many) minutes.	
+# Make sure to include the -adopt modifier to automatically use the best fit at the end of the optimization
+fit run -adopt -noerrs
+pause
+
+# Run this to generate the source image.
+sbmap invert
+
+
+
+# Let's see how the final solution looks...
+sbmap plotimg
+
+# Plot (normalized) residuals
+sbmap plotimg -nres3
+pause
+
+# And the source...
+sbmap plotsrc # plot the pixellated source
+sbmap plotsrc -interp # plot the pixellated source
+pause
+
+# To output to coolest make sure that shear_components are turned off
+shear_components off
+
+# And then output to a file name of your choice
+output_coolest tutorial
+
+
