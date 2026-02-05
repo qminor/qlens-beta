@@ -7609,6 +7609,25 @@ bool ImageData::load_mask_fits(const int mask_k, const string fits_filename, con
 #ifndef USE_FITS
 	cout << "FITS capability disabled; QLens must be compiled with the CFITSIO library to read FITS files\n"; return false;
 #else
+
+	string filename = fits_filename;
+#if __cplusplus >= 201703L // C++17 standard or later
+		if (!filesystem::exists(filename)) {
+			filename = "../data/" + fits_filename; // try the data folder
+			if (!filesystem::exists(filename)) {
+				if (qlens->fit_output_dir != ".") {
+					filename = qlens->fit_output_dir + "/" + fits_filename;  // finally, try the chains folder
+					if (!filesystem::exists(filename)) return false;
+				} else return false;
+			}
+		}
+#endif
+	if ((qlens->mpi_id==0) and (filename != fits_filename)) {
+		cout << "Loading file '" << filename << "'" << endl;
+	}
+
+
+
 	if (n_masks==0) { warn("no mask arrays have been initialized, indicating image data has not been loaded"); return false; }
 	if (mask_k > n_masks) die("cannot add mask whose index is greater than the number of masks; to add a new mask, set index = n_masks");
 	bool image_load_status = false;
@@ -7624,7 +7643,7 @@ bool ImageData::load_mask_fits(const int mask_k, const string fits_filename, con
 	int offset_x=0;
 	int offset_y=0;
 
-	if (!fits_open_file(&fptr, fits_filename.c_str(), READONLY, &status))
+	if (!fits_open_file(&fptr, filename.c_str(), READONLY, &status))
 	{
 		if (!fits_get_img_param(fptr, 2, &bitpix, &naxis, naxes, &status) )
 		{
