@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.13.0)
 
-project(qlen VERSION 1.0.0 LANGUAGES C CXX Fortran)
+project(qlens VERSION 1.0.0 LANGUAGES C CXX Fortran)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(USE_MKL "Use MKL?" ON)
 cmake_policy(SET CMP0057 NEW)
@@ -61,10 +61,11 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 endif (CMAKE_CXX_COMPILER_ID STREQUAL "Intel")
 
 set(QLENS_COMPILE_FLAGS
-    "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-write-strings -std=c++11"
+    "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS} -Wno-write-strings -std=c++17"
 )
 
-set(QLENS_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
+#set(QLENS_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread")
+set(QLENS_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
 
 #set(QLENS_COMPILE_DEFINITIONS 
     #"USE_FITPACK"
@@ -89,6 +90,7 @@ set(QLENS_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/pixelgrid.cpp
     ${PROJECT_SOURCE_DIR}/src/cg.cpp 
     ${PROJECT_SOURCE_DIR}/src/mcmchdr.cpp 
+    ${PROJECT_SOURCE_DIR}/src/lenscalc.cpp 
     ${PROJECT_SOURCE_DIR}/src/errors.cpp 
     ${PROJECT_SOURCE_DIR}/src/brent.cpp 
     ${PROJECT_SOURCE_DIR}/src/sort.cpp 
@@ -102,6 +104,8 @@ set(QLENS_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/simplex.cpp 
     ${PROJECT_SOURCE_DIR}/src/powell.cpp 
     ${PROJECT_SOURCE_DIR}/src/mcmceval.cpp
+    ${PROJECT_SOURCE_DIR}/src/params.cpp
+    ${PROJECT_SOURCE_DIR}/src/modelparams.cpp
     #${PROJECT_SOURCE_DIR}/cmake/dummy.f
 )
 
@@ -127,6 +131,7 @@ set(COSMOCALC_SOURCES
     ${PROJECT_SOURCE_DIR}/src/romberg.cpp 
     ${PROJECT_SOURCE_DIR}/src/cosmo.cpp 
     ${PROJECT_SOURCE_DIR}/src/brent.cpp
+    ${PROJECT_SOURCE_DIR}/src/modelparams.cpp
 )
 
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
@@ -366,65 +371,66 @@ endif(LAPACK_FOUND)
     #message(STATUS "${Red}BLACS not found${ColourReset}")
 #endif(NOT BLACS_LIBRARY STREQUAL "BLACS_LIBRARY-NOTFOUND")
 
-#message("")
-#message("*** Polychord ***")
-#unset(Polychord_FOUND CACHE)
-#unset(Polychord_INCLUDE_DIRS CACHE)
-#unset(Polychord_INCLUDE_DIR CACHE)
-#unset(Polychord_LIBRARIES CACHE)
-#unset(Polychord_LIBRARY CACHE)
-#set(Polychord_HINT_DIR ${Polychord_HINT_DIR} ${PROJECT_SOURCE_DIR}/contrib/polychord/1.17.1)
+message("")
+message("*** Polychord ***")
+unset(Polychord_FOUND CACHE)
+unset(Polychord_INCLUDE_DIRS CACHE)
+unset(Polychord_INCLUDE_DIR CACHE)
+unset(Polychord_LIBRARIES CACHE)
+unset(Polychord_LIBRARY CACHE)
+set(Polychord_HINT_DIR ${Polychord_HINT_DIR} ${PROJECT_SOURCE_DIR}/contrib/polychord/1.17.1)
 
-#set(Polychord_HINT_DIR ${Polychord_HINT_DIR} ${PROJECT_SOURCE_DIR}/contrib/PolyChordLite)
-#find_package(Polychord)
-#if(Polychord_FOUND)
-    #message (STATUS "Polychord_FOUND = ${Polychord_FOUND}")
-    #message (STATUS "Polychord_INCLUDE_DIRS = ${Polychord_INCLUDE_DIRS}")
-    #message (STATUS "Polychord_LIBRARIES = ${Polychord_LIBRARIES}")
-    #set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "
-    #set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${Polychord_INCLUDE_DIRS})
-    #set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${Polychord_LIBRARIES})
-#else(Polychord_FOUND)
-    #message(STATUS "${Red}Polychord not found${ColourReset}")
-#endif(Polychord_FOUND)
+set(Polychord_HINT_DIR ${Polychord_HINT_DIR} ${PROJECT_SOURCE_DIR}/contrib/PolyChordLite)
+find_package(Polychord)
+if(Polychord_FOUND)
+    message (STATUS "Polychord_FOUND = ${Polychord_FOUND}")
+    message (STATUS "Polychord_INCLUDE_DIRS = ${Polychord_INCLUDE_DIRS}")
+    message (STATUS "Polychord_LIBRARIES = ${Polychord_LIBRARIES}")
+    set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_POLYCHORD")
+    set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${Polychord_INCLUDE_DIRS})
+    set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${Polychord_LIBRARIES})
+else(Polychord_FOUND)
+    message(STATUS "${Red}Polychord not found${ColourReset}")
+endif(Polychord_FOUND)
 
-#message("")
-#message("*** MultiNest ***")
-#set(MULTINEST_HINT ${MULTINEST_HINT} ${PROJECT_SOURCE_DIR}/contrib/MultiNest/MultiNest_v3.12_CMake/multinest)
-#unset(_MULTINEST_INCLUDE_DIRS CACHE)
-#unset(MULTINEST_FOUND CACHE)
-#unset(MULTINEST_INCLUDE_DIRS CACHE)
-#unset(MULTINEST_LIBRARIES CACHE)
-#unset(MULTINEST_MODULE_DIRS CACHE)
-#unset(MULTINEST_INCLUDES CACHE)
-#unset(MULTINEST_ROOT_DIR CACHE)
-#find_package(MULTINEST)
-#if(MULTINEST_FOUND)
-    #message(STATUS "MULTINEST_INCLUDE_DIRS = ${MULTINEST_INCLUDE_DIRS}" )
-    #message(STATUS "MULTINEST_LIBRARIES = ${MULTINEST_LIBRARIES}" )
-    #message(STATUS "MULTINEST_MODULES = ${MULTINEST_MODULE_DIRS}" )
-    #if(LAPACK_FOUND OR LAPACK95_FOUND)
-        #message(STATUS "BLA_VENDOR = ${BLA_VENDOR}")
-        #message(STATUS "LAPACK_LINKER_FLAGS = ${LAPACK_LINKER_FLAGS}")
-    #endif(LAPACK_FOUND OR LAPACK95_FOUND)
-    #message(STATUS "LAPACK_FOUND = ${LAPACK_FOUND}")
-    #if(LAPACK_FOUND)
-        #message(STATUS "LAPACK_LIBRARIES = ${LAPACK_LIBRARIES}")
-    #endif(LAPACK_FOUND)
-    #message(STATUS "LAPACK95_FOUND = ${LAPACK95_FOUND}")
-    #if(LAPACK95_FOUND)
-        #message(STATUS "LAPACK_95LIBRARIES = ${LAPACK_95LIBRARIES}")
-    #endif(LAPACK95_FOUND)
-    #set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MULTINEST")
-    #set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${MULTINEST_INCLUDE_DIRS})
-    #set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${MULTINEST_LIBRARIES})
-#else(MULTINEST_FOUND)
-    #message(STATUS "${Red}MultiNest not found${ColourReset}")
-#endif(MULTINEST_FOUND)
-#message("")
-#
-##include(cmake/polychord.cmake)
-#include(cmake/multinest.cmake)
+message("")
+message("*** MultiNest ***")
+set(MULTINEST_HINT ${MULTINEST_HINT} ${PROJECT_SOURCE_DIR}/contrib/MultiNest/MultiNest_v3.12_CMake/multinest)
+unset(_MULTINEST_INCLUDE_DIRS CACHE)
+unset(MULTINEST_FOUND CACHE)
+unset(MULTINEST_INCLUDE_DIRS CACHE)
+unset(MULTINEST_LIBRARIES CACHE)
+unset(MULTINEST_MODULE_DIRS CACHE)
+unset(MULTINEST_INCLUDES CACHE)
+unset(MULTINEST_ROOT_DIR CACHE)
+find_package(MULTINEST)
+if(MULTINEST_FOUND)
+    message(STATUS "MULTINEST_INCLUDE_DIRS = ${MULTINEST_INCLUDE_DIRS}" )
+    message(STATUS "MULTINEST_LIBRARIES = ${MULTINEST_LIBRARIES}" )
+    message(STATUS "MULTINEST_MODULES = ${MULTINEST_MODULE_DIRS}" )
+    if(LAPACK_FOUND OR LAPACK95_FOUND)
+        message(STATUS "BLA_VENDOR = ${BLA_VENDOR}")
+        message(STATUS "LAPACK_LINKER_FLAGS = ${LAPACK_LINKER_FLAGS}")
+    endif(LAPACK_FOUND OR LAPACK95_FOUND)
+    message(STATUS "LAPACK_FOUND = ${LAPACK_FOUND}")
+    if(LAPACK_FOUND)
+        message(STATUS "LAPACK_LIBRARIES = ${LAPACK_LIBRARIES}")
+    endif(LAPACK_FOUND)
+    message(STATUS "LAPACK95_FOUND = ${LAPACK95_FOUND}")
+    if(LAPACK95_FOUND)
+        message(STATUS "LAPACK_95LIBRARIES = ${LAPACK_95LIBRARIES}")
+    endif(LAPACK95_FOUND)
+    set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MULTINEST")
+    set(QLENS_INCLUDE_DIRS ${QLENS_INCLUDE_DIRS} ${MULTINEST_INCLUDE_DIRS})
+    set(QLENS_LIBRARIES ${QLENS_LIBRARIES} ${MULTINEST_LIBRARIES})
+else(MULTINEST_FOUND)
+    message(STATUS "${Red}MultiNest not found${ColourReset}")
+endif(MULTINEST_FOUND)
+message("")
+
+include(cmake/polychord.cmake)
+include(cmake/multinest.cmake)
+#set(QLENS_COMPILE_DEFINITIONS ${QLENS_COMPILE_DEFINITIONS} "USE_MULTINEST")
 #include(cmake/scalapack.cmake)
 #include(cmake/mumps.cmake)
 include(cmake/pybind11.cmake)
@@ -441,12 +447,12 @@ add_custom_target(qlens-all)
 add_dependencies(qlens-all qlens mkdist cosmocalc python)
 
 add_custom_target(deps)
-#add_dependencies(deps pybind11 multinest polychord)
-add_dependencies(deps pybind11)
+add_dependencies(deps pybind11 multinest polychord)
+#add_dependencies(deps pybind11 multinest)
 
 add_custom_target(deps-distclean)
-#add_dependencies(deps-distclean pybind11-distclean multinest-distclean polychord-distclean)
-add_dependencies(deps-distclean pybind11-distclean)
+add_dependencies(deps-distclean pybind11-distclean multinest-distclean polychord-distclean)
+#add_dependencies(deps-distclean multinest-distclean pybind11-distclean)
 
 if(MUMPS_OK)
     add_dependencies(deps mumps)
