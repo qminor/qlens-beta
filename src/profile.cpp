@@ -5,6 +5,7 @@
 #include "errors.h"
 #include "cosmo.h"
 #include "qlens.h"
+#include "params.h"
 #include <cmath>
 #include <iostream>
 #include <fstream>
@@ -23,12 +24,14 @@ int LensProfile::default_ellipticity_mode = 1;
 bool LensProfile::integration_warnings = true;
 int LensProfile::default_fejer_nlevels = 12;
 int LensProfile::fourier_spline_npoints = 336;
+int LensProfile::Gauss_NN = 60;
+double LensProfile::integral_tolerance = 1e-3;
 
-LensProfile::LensProfile(const char *splinefile, const double zqlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double& acc, const double &qx_in, const double &f_in, QLens* qlens_in)
+LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-	setup_cosmology(qlens_in,zqlens_in,zsrc_in);
-	set_integration_parameters(nn,acc);
+	set_redshifts(zlens_in,zsrc_in);
+	setup_cosmology(cosmo_in);
 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
 	qx_parameter = qx_in;
@@ -43,7 +46,6 @@ void LensProfile::setup_lens_properties(const int parameter_mode, const int subc
 {
 	lenstype = KSPLINE;
 	model_name = "kspline";
-	special_parameter_command = "";
 	setup_base_lens_properties(7,2,true); // number of parameters = 7, is_elliptical_lens = true
 }
 
@@ -79,17 +81,28 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 	include_limits = false;
 	rmin_einstein_radius = 1e-5;
 	rmax_einstein_radius = 1e4;
+	set_integration_parameters();
 }
 
-void LensProfile::setup_cosmology(QLens* qlens_in, const double zlens_in, const double zsrc_in)
+void LensProfile::set_redshifts(const double zlens_in, const double zsrc_in)
 {
-	qlens = qlens_in;
-	zlens = zlens_in;
-	zlens_current = zlens_in;
-	zsrc_ref = zsrc_in;
-	sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
-	kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
-	//update_meta_parameters(); // a few lens models have parameters that are defined by the cosmology (e.g. masses), so update these
+	if (zlens==0) {
+		// only set zlens, etc. if they haven't been set before. After zlens is set, it should only be changed by doing update_parameters(...)
+		zlens = zlens_in;
+		zlens_current = zlens_in;
+		zsrc_ref = zsrc_in;
+	}
+}
+
+void LensProfile::setup_cosmology(Cosmology* cosmo_in)
+{
+	if (cosmo != cosmo_in) {
+		if (cosmo_in != NULL) {
+			cosmo = cosmo_in;
+			sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+			kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+		}
+	}
 }
 
 LensProfile::LensProfile(const LensProfile* lens_in)
@@ -105,6 +118,7 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 
 void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *always* get called by any derived class when copying another lens object
 {
+	cosmo = lens_in->cosmo;
 	qlens = lens_in->qlens;
 	lenstype = lens_in->lenstype;
 	model_name = lens_in->model_name;
@@ -123,7 +137,6 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	lensprofile_nparams = lens_in->lensprofile_nparams;
 	parameter_mode = lens_in->parameter_mode;
 	lens_subclass = lens_in->lens_subclass;
-	special_parameter_command = lens_in->special_parameter_command;
 	subclass_label = lens_in->subclass_label;
 	ellipticity_mode = lens_in->ellipticity_mode;
 	ellipticity_gradient = lens_in->ellipticity_gradient;
@@ -232,8 +245,6 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	if (include_limits) {
 		lower_limits.input(lens_in->lower_limits);
 		upper_limits.input(lens_in->upper_limits);
-		lower_limits_initial.input(lens_in->lower_limits_initial);
-		upper_limits_initial.input(lens_in->upper_limits_initial);
 	}
 
 	param = new double*[n_params];
@@ -243,6 +254,8 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 
 void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 {
+	zlens = sb_in->zsrc;
+	zlens_current = zlens;
 	q = sb_in->q;
 	epsilon1 = sb_in->epsilon1;
 	epsilon2 = sb_in->epsilon2;
@@ -335,7 +348,6 @@ void LensProfile::copy_integration_tables(const LensProfile* lens_in)
 	// It's a total waste of time to make copies of the integration tables. You should change it so the integration tables are static, or perhaps move them out of LensProfile, so it doesn't have to copy them for each lens every time a fit is run.
 	if (ellipticity_mode == -1) return; // non-elliptical lenses do not require doing numerical integrations
 	if (lens_in->points==NULL) die("Integration tables were not initialized for current lens");
-	integral_tolerance = lens_in->integral_tolerance;
 	numberOfPoints = lens_in->numberOfPoints;
 	weights = new double[numberOfPoints];
 	points = new double[numberOfPoints];
@@ -477,8 +489,6 @@ void LensProfile::set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, cons
 			upper_limits.input(n_vary_params);
 			lower_limits[0] = mass_param_lower;
 			upper_limits[0] = mass_param_upper;
-			lower_limits_initial.input(lower_limits);
-			upper_limits_initial.input(upper_limits);
 		}
 	}
 
@@ -512,9 +522,6 @@ bool LensProfile::set_vary_flags(boolvector &vary_flags)
 	if (vary_flags.size() == n_params) new_vary_flags[n_params-1] = vary_flags[n_params-1];
 	else new_vary_flags[n_params-1] = false; // if no vary flag is given for redshift, then assume it's not being varied
 	if (vary_parameters(new_vary_flags)==false) return false;
-	
-	if (qlens != NULL)
-		return qlens->register_lens_vary_parameters(lens_number); // The problem here is that returning 'false' might mean different errors. Hmmm
 	return true;
 }
 
@@ -534,6 +541,9 @@ bool LensProfile::register_vary_flags()
 
 bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 {
+	int pi, pf;
+	if (qlens) qlens->get_lens_parameter_numbers(lens_number,pi,pf); // these are the old parameter numbers
+
 	if (vary_params_in.size() != n_params) {
 		if ((vary_params_in.size() == n_params-2) and (center_anchored)) {
 			vary_params[n_params-2] = false;
@@ -576,9 +586,11 @@ bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 		}
 	}
 	if (k != n_vary_params) die("k != n_vary_params");
-	lower_limits_initial.input(lower_limits);
-	upper_limits_initial.input(upper_limits);
 
+	if (qlens) {
+		if (pf > pi) qlens->param_list->remove_params(pi,pf);
+		return qlens->register_lens_vary_parameters(lens_number);
+	}
 	return true;
 }
 
@@ -590,20 +602,7 @@ void LensProfile::set_limits(const dvector& lower, const dvector& upper)
 	if (upper.size() != n_vary_params) die("number of parameters with upper limits does not match number of variable parameters",upper.size(),n_vary_params);
 	lower_limits = lower;
 	upper_limits = upper;
-	lower_limits_initial = lower;
-	upper_limits_initial = upper;
-}
-
-void LensProfile::set_limits(const dvector& lower, const dvector& upper, const dvector& lower_init, const dvector& upper_init)
-{
-	include_limits = true;
-	
-	if (lower.size() != n_vary_params) die("number of parameters with lower limits does not match number of variable parameters (%i vs %i)",lower.size(),n_vary_params);
-	if (upper.size() != n_vary_params) die("number of parameters with upper limits does not match number of variable parameters",upper.size(),n_vary_params);
-	lower_limits = lower;
-	upper_limits = upper;
-	lower_limits_initial = lower_init;
-	upper_limits_initial = upper_init;
+	if (qlens != NULL) qlens->register_lens_prior_limits(lens_number);
 }
 
 bool LensProfile::set_limits_specific_parameter(const string name_in, const double& lower, const double& upper)
@@ -623,10 +622,22 @@ bool LensProfile::set_limits_specific_parameter(const string name_in, const doub
 		if (!include_limits) include_limits = true;
 		lower_limits[param_i] = lower;
 		upper_limits[param_i] = upper;
-		lower_limits_initial[param_i] = lower;
-		upper_limits_initial[param_i] = upper;
 	}
+	if (qlens != NULL) qlens->register_lens_prior_limits(lens_number);
 	return (param_i != -1);
+}
+
+void LensProfile::update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index)
+{
+	// in this case, the limits are being updated from the fitparams list, so there is no need to call register_lens_prior_limits
+	if (!include_limits) include_limits = true;
+	for (int i=0; i < n_vary_params; i++) {
+		if (limits_changed[index]) {
+			lower_limits[i] = lower[index];
+			upper_limits[i] = upper[index];
+		}
+		index++;
+	}
 }
 
 void LensProfile::get_parameters(double* params)
@@ -644,6 +655,19 @@ double LensProfile::get_parameter(const int i)
 	else return *(param[i]);
 }
 
+bool LensProfile::lookup_parameter_number(const string name_in, int& paramnum)
+{
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if (paramnames[i]==name_in) {
+			found_match = true;
+			paramnum = i;
+			break;
+		}
+	}
+	return found_match;
+}
+
 bool LensProfile::get_specific_parameter(const string name_in, double& value)
 {
 	bool found_match = false;
@@ -651,6 +675,21 @@ bool LensProfile::get_specific_parameter(const string name_in, double& value)
 		if (paramnames[i]==name_in) {
 			found_match = true;
 			value = *(param)[i];
+			break;
+		}
+	}
+	return found_match;
+}
+
+bool LensProfile::get_specific_limit(const string name_in, double& lower, double& upper)
+{
+	if (include_limits==false) return false;
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if (paramnames[i]==name_in) {
+			found_match = true;
+			lower = lower_limits[i];
+			upper = upper_limits[i];
 			break;
 		}
 	}
@@ -677,7 +716,10 @@ void LensProfile::update_parameters(const double* params)
 	update_meta_parameters();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
-	if (qlens != NULL) qlens->update_anchored_parameters_and_redshift_data();
+	if (qlens != NULL) {
+		qlens->update_anchored_parameters_and_redshift_data();
+		qlens->update_lens_fitparams(lens_number);
+	}
 }
 
 bool LensProfile::update_specific_parameter(const string name_in, const double& value)
@@ -692,8 +734,14 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 			break;
 		}
 	}
-	if (found_match) update_parameters(newparams);
+	if (found_match) {
+		update_parameters(newparams);
+	}
 	delete[] newparams;
+	if (qlens != NULL) {
+		qlens->update_anchored_parameters_and_redshift_data();
+		qlens->update_lens_fitparams(lens_number);
+	}
 	return found_match;
 }
 
@@ -710,6 +758,10 @@ bool LensProfile::update_specific_parameter(const int paramnum, const double& va
 	}
 	update_parameters(newparams);
 	delete[] newparams;
+	if (qlens != NULL) {
+		qlens->update_anchored_parameters_and_redshift_data();
+		qlens->update_lens_fitparams(lens_number);
+	}
 	return true;
 }
 
@@ -722,7 +774,7 @@ void LensProfile::update_ellipticity_parameter(const double eparam)
 	set_model_specific_integration_pointers();
 }
 
-// You need to have a function at the model level, called here that reports a "false" status if parameter values are crazy!
+// Perhaps should have a function at the model level, called here that reports a "false" status if parameter values are crazy!
 void LensProfile::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {
@@ -740,6 +792,7 @@ void LensProfile::update_fit_parameters(const double* fitparams, int &index, boo
 		set_integration_pointers();
 		set_model_specific_integration_pointers();
 	}
+	// NOTE: to save time, we do not update the qlens->param_list here, since this function is only run during model fitting
 }
 
 void LensProfile::update_anchored_parameters()
@@ -768,7 +821,7 @@ void LensProfile::update_anchor_center()
 	}
 }
 
-void LensProfile::get_fit_parameters(dvector& fitparams, int &index)
+void LensProfile::get_fit_parameters(double *fitparams, int &index)
 {
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]==true) {
@@ -881,14 +934,22 @@ void LensProfile::get_fit_parameter_names(vector<string>& paramnames_vary, vecto
 	}
 }
 
-bool LensProfile::get_limits(dvector& lower, dvector& upper, dvector& lower0, dvector& upper0, int &index)
+bool LensProfile::get_limits(dvector& lower, dvector& upper)
+{
+	if ((include_limits==false) or (lower_limits.size() != n_vary_params) or (lower.size() != n_vary_params)) return false;
+	for (int i=0; i < n_vary_params; i++) {
+		lower[i] = lower_limits[i];
+		upper[i] = upper_limits[i];
+	}
+	return true;
+}
+
+bool LensProfile::get_limits(dvector& lower, dvector& upper, int &index)
 {
 	if ((include_limits==false) or (lower_limits.size() != n_vary_params)) return false;
 	for (int i=0; i < n_vary_params; i++) {
 		lower[index] = lower_limits[i];
 		upper[index] = upper_limits[i];
-		lower0[index] = lower_limits_initial[i];
-		upper0[index] = upper_limits_initial[i];
 		index++;
 	}
 	return true;
@@ -1195,11 +1256,11 @@ bool LensProfile::output_cosmology_info(const int lens_number)
 	mass_converged = calculate_total_scaled_mass(mtot);
 	if (mass_converged) {
 		rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
-		sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
+		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
 		mtot *= sigma_cr;
 		if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 		cout << "total mass: " << mtot << " M_sol" << endl;
-		//double kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
+		//double kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 		if (rhalf_converged) cout << "half-mass radius: " << rhalf/kpc_to_arcsec << " kpc (" << rhalf << " arcsec)" << endl;
 		cout << endl;
 	}
@@ -1380,7 +1441,7 @@ double LensProfile::calculate_scaled_mass_3d_from_kappa(const double r)
 			warn("Gauss-Patterson quadrature did not converge for R smaller than %g (tol=%g) (using NMAX=511 points)",convergence_beyond_radius,quadtolerance);
 		} else warn("Gauss-Patterson quadrature did not achieve desired convergence (tol=%g) for all r after NMAX=511 points",quadtolerance);
 	}
-	if (menc_converged==false) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",quadtolerance);
+	if ((integration_warnings) and (menc_converged==false)) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",quadtolerance);
 
 	return mass3d;
 }
@@ -1396,7 +1457,7 @@ double LensProfile::calculate_scaled_mass_3d_from_analytic_rho3d(const double r)
 	mptr = static_cast<double (GaussPatterson::*)(const double)> (&LensProfile::mass3d_r_integrand_analytic);
 	mass3d = 4*M_PI*AdaptiveQuad(mptr,0,r,menc_converged);
 	SetGaussPatterson(temppat,integration_warnings);
-	if (menc_converged==false) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",tolerance);
+	if ((integration_warnings) and (menc_converged==false)) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",tolerance);
 	return mass3d;
 }
 
@@ -1479,13 +1540,12 @@ void LensProfile::set_angle_from_components(const double &comp1, const double &c
 	set_angle_radians(angle);
 }
 
-void LensProfile::set_integration_parameters(const int &nn, const double &acc)
+void LensProfile::set_integration_parameters()
 {
 	if (ellipticity_mode == -1) return; // non-elliptical lenses do not require doing numerical integrations
-	SetGaussLegendre(nn);
-	integral_tolerance = acc;
-	SetGaussPatterson(acc,integration_warnings);
-	SetClenshawCurtis(default_fejer_nlevels,acc,false);
+	SetGaussLegendre(Gauss_NN);
+	SetGaussPatterson(integral_tolerance,integration_warnings);
+	SetClenshawCurtis(default_fejer_nlevels,integral_tolerance,false);
 }
 
 void LensProfile::set_integral_tolerance(const double acc) {
@@ -1536,8 +1596,7 @@ double LensProfile::kappa_rsq(const double rsq) // this function should be redef
 void LensProfile::deflection_from_elliptical_potential(const double x, const double y, lensvector& def)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double kapavg = (1-epsilon)*x*x + (1+epsilon)*y*y; // just r_ell^2 for the moment
-	kapavg = (this->*kapavgptr_rsq_spherical)(kapavg);
+	double kapavg = (this->*kapavgptr_rsq_spherical)((1-epsilon)*x*x + (1+epsilon)*y*y);
 
 	def[0] = kapavg*(1-epsilon)*x;
 	def[1] = kapavg*(1+epsilon)*y;
@@ -1653,11 +1712,11 @@ void LensProfile::set_angle_radians(const double &theta_in)
 	}
 }
 
-void LensProfile::update_cosmology_meta_parameters()
+void LensProfile::update_cosmology_meta_parameters(const bool force_update)
 {
-	if ((qlens != NULL) and ((zlens != zlens_current) or (qlens->vary_hubble_parameter) or (qlens->vary_omega_matter_parameter))) {
-		sigma_cr = qlens->sigma_crit_arcsec(zlens,zsrc_ref);
-		kpc_to_arcsec = 206.264806/qlens->angular_diameter_distance(zlens);
+	if ((cosmo != NULL) and ((force_update) or (zlens != zlens_current) or (cosmo->get_n_vary_params() > 0))) {
+		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+		kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
 		if (zlens != zlens_current) zlens_current = zlens;
 	}
 }
@@ -1721,10 +1780,13 @@ void LensProfile::update_ellipticity_meta_parameters()
 
 void LensProfile::update_center_from_pixsrc_coords()
 {
-	double sig, xcs, ycs;
-	sig = qlens->find_approx_source_size(0,xcs,ycs,false);
-	x_center = xcs + xc_prime*sig;
-	y_center = ycs + yc_prime*sig;
+	double xcs, ycs;
+	//cout << "lens " << lens_number << " finding approx source size... " << endl;
+	// generalize this later so it can be anchored to an image_pixel_grid with the appropriate zsrc_i (doesn't have to be 0)
+	qlens->find_source_centroid(0,xcs,ycs,false);
+	//cout << "lens " << lens_number << " xcs,ycs: " << xcs << " " << ycs << endl;
+	x_center = xcs + xc_prime;
+	y_center = ycs + yc_prime;
 }
 
 
@@ -1783,9 +1845,16 @@ double LensProfile::kappa(double x, double y)
 void LensProfile::deflection(double x, double y, lensvector& def)
 {
 	// switch to coordinate system centered on lens profile
+	//if (x*0.0 != 0.0) die("x is fucked going into def function");
+	//cout << "CENTER: " << x_center << " " << y_center << endl;
+	//if (x_center==1e30) die("x_center has not been set for lens %i",lens_number);
+	//if (y_center==1e30) die("y_center has not been set for lens %i",lens_number);
 	x -= x_center;
 	y -= y_center;
+	//if (x_center*0.0 != 0.0) die("center is fucked");
+	//if (x*0.0 != 0.0) die("x is fucked but not center");
 	if ((!ellipticity_gradient) and (sintheta != 0)) rotate(x,y);
+	//if (x*0.0 != 0.0) die("fucked after rotation");
 	if ((ellipticity_mode==3) and (q != 1)) {
 		deflection_from_elliptical_potential(x,y,def);
 	} else {
@@ -1925,6 +1994,22 @@ void LensProfile::deflection_and_hessian_together(const double x, const double y
 	}
 	// /************ ADD HESSIAN FROM FOURIER MODES ************/ 
 
+}
+
+void LensProfile::kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap)
+{
+	if (lenstype==SHEET) {
+		kap = kappa_rsq(0); // since R doesn't matter for a mass sheet
+		dkap = kappa_rsq_deriv(0);
+	} else {
+		// switch to coordinate system centered on lens profile
+		x -= x_center;
+		y -= y_center;
+		if ((!ellipticity_gradient) and (sintheta != 0)) rotate(x,y);
+		double ell_radius_sq = (x*x + y*y/(q*q))/(f_major_axis*f_major_axis);
+		kap = kappa_rsq(ell_radius_sq);
+		dkap = 2*ell_radius_sq*kappa_rsq_deriv(ell_radius_sq)/sqrt(x*x+y*y); // this gives dkappa_dR where R is simply radius, not elliptical radius
+	}
 }
 
 void LensProfile::add_fourier_mode(const int m_in, const double amp_in, const double amp2_in, const bool vary1, const bool vary2)
@@ -2221,6 +2306,28 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 	zfac = 1.0;
 }
 
+double LensProfile::get_xi_parameter(const double zfactor)
+{
+	double r_ein, re_sq, kappa_e, dkappa_e;
+	if (kapavgptr_rsq_spherical==NULL) {
+		return -1e30;
+	}
+	zfac = zfactor;
+	if ((einstein_radius_root(rmin_einstein_radius)*einstein_radius_root(rmax_einstein_radius)) >= 0) {
+		// multiple imaging does not occur with this lens
+		return -1e30;
+	}
+	double (Brent::*bptr)(const double);
+	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
+	r_ein = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
+
+	re_sq = r_ein*r_ein;
+	kappa_e = zfactor*kappa_rsq(re_sq);
+	dkappa_e = 2*r_ein*zfactor*kappa_rsq_deriv(re_sq); // we express xi in terms of derivative of kappa, rather than second derivative of the deflection
+	zfac = 1.0;
+	return (2*r_ein*dkappa_e/(1-kappa_e)+2);
+}
+
 double LensProfile::kappa_rsq_deriv(const double rsq)
 {
 	static const double precision = 1e-6;
@@ -2272,10 +2379,12 @@ void LensProfile::plot_kappa_profile(const int n_rvals, double* rvals, double* k
 	}
 }
 
-void LensProfile::deflection_spherical_default(double x, double y, lensvector& def)
+void LensProfile::deflection_spherical_default(const double x, const double y, lensvector& def)
 {
-	double kapavg = x*x+y*y; // r^2 right now
-	kapavg = (this->*kapavgptr_rsq_spherical)(kapavg);
+	//if (x*0.0 != 0.0) die("HARGMF %g %g",x,y);
+	//cout << "defsphere: " << x << " " << y << endl;
+	double kapavg = (this->*kapavgptr_rsq_spherical)(x*x+y*y);
+	//if (kapavg*0.0 != 0.0) die("FUCK %g %g",x,y);
 
 	def[0] = kapavg*x;
 	def[1] = kapavg*y;
@@ -4117,6 +4226,8 @@ void LensIntegral::FejerIntegrate(void (LensIntegral::*func)(const double, doubl
 
 void LensProfile::print_parameters()
 {
+	ios_base::fmtflags current_flags = cout.flags();
+	if (current_flags & ios::scientific) cout << resetiosflags(ios::scientific);
 	if (ellipticity_mode==3) cout << "pseudo-";
 	cout << model_name << "(";
 	if (lens_subclass != -1) cout << subclass_label << "=" << lens_subclass << ",";
@@ -4148,6 +4259,7 @@ void LensProfile::print_parameters()
 	if (aux_paramname != "") cout << " (" << aux_paramname << "=" << aux_param << ")";
 	if (use_concentration_prior) cout << " (c(M,z) prior defined)" << endl;
 	cout << endl;
+	if (current_flags & ios::scientific) cout << setiosflags(ios::scientific);
 }
 
 string LensProfile::mkstring_doub(const double db)
@@ -4168,11 +4280,11 @@ string LensProfile::mkstring_int(const int i)
 	return istring;
 }
 
-// Not sure if this function is even being used any more...check!!
+// This function is used by the Python wrapper
 string LensProfile::get_parameters_string()
 {
 	string paramstring = "";
-	paramstring += mkstring_int(lens_number) + ". ";
+	if (lens_number != -1) paramstring += mkstring_int(lens_number) + ". ";
 	if (ellipticity_mode==3) paramstring += "pseudo-";
 	paramstring += model_name + "(";
 	if (lens_subclass != -1) paramstring += subclass_label + "=" + mkstring_int(lens_subclass) + ",";
@@ -4180,7 +4292,7 @@ string LensProfile::get_parameters_string()
 	for (int i=0; i < n_params-1; i++) {
 		paramstring += paramnames[i] + "=";
 		if (angle_param[i]) paramstring += mkstring_doub(radians_to_degrees(*(param[i]))) + " degrees";
-		else paramstring += *(param[i]);
+		else paramstring += mkstring_doub(*(param[i]));
 		if (i != n_params-2) paramstring += ", ";
 	}
 	if (center_anchored) paramstring += " (center anchored to lens " + mkstring_doub(center_anchor_lens->lens_number) + ")";
@@ -4197,20 +4309,19 @@ string LensProfile::get_parameters_string()
 
 void LensProfile::print_vary_parameters()
 {
+	ios_base::fmtflags current_flags = cout.flags();
+	if (current_flags & ios::scientific) cout << resetiosflags(ios::scientific);
 	if (n_vary_params==0) {
 		cout << "   parameters: none\n";
 	} else {
 		vector<string> paramnames_vary;
 		get_fit_parameter_names(paramnames_vary);
 		if (include_limits) {
-			if (lower_limits_initial.size() != n_vary_params) cout << "   Warning: parameter limits not defined\n";
+			if (lower_limits.size() != n_vary_params) cout << "   Warning: parameter limits not defined\n";
 			else {
 				cout << "   parameter limits:\n";
 				for (int i=0; i < n_vary_params; i++) {
-					if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
-						cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "]\n";
-					else
-						cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "], initial range: [" << lower_limits_initial[i] << ":" << upper_limits_initial[i] << "]\n";
+					cout << "   " << paramnames_vary[i] << ": [" << lower_limits[i] << ":" << upper_limits[i] << "]\n";
 				}
 			}
 		} else {
@@ -4249,167 +4360,7 @@ void LensProfile::print_vary_parameters()
 		}
 		cout << endl;
 	}
-}
-
-inline void LensProfile::output_field_in_sci_notation(double* num, ofstream& scriptout, const bool space)
-{
-	// I thought it would be cool to print scientific notation and omit all the zero's if it's an exact mantissa.
-	// It doesn't work very well (due to binary vs. base 10 storage), so canning it for now, not a big deal
-	//int exp;
-	//double mantissa = frexp10((*num),&exp);
-	//double mantissa;
-   //exp = ((*num) == 0) ? 0 : 1 + (int)std::floor(std::log10(abs((*num))));
-   //mantissa = (*num) * std::pow(10 , -exp);
-	scriptout << setiosflags(ios::scientific);
-	scriptout << (*num);
-	scriptout << resetiosflags(ios::scientific);
-	if (space) scriptout << " ";
-}
-
-void LensProfile::print_lens_command(ofstream& scriptout, const bool use_limits)
-{
-	scriptout << setprecision(16);
-	//scriptout << setiosflags(ios::scientific);
-	scriptout << "fit lens " << model_name << " ";
-	if (ellipticity_mode != default_ellipticity_mode) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
-			scriptout << "emode=" << ellipticity_mode << " ";
-	}
-	if (parameter_mode != 0) scriptout << "pmode=" << parameter_mode << " ";
-	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
-
-	if (center_defined) {
-		for (int i=0; i < n_params-3; i++) {
-			if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
-				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
-			} else {
-				if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
-				else {
-					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
-					else scriptout << *(param[i]);
-				}
-				if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
-				scriptout << " ";
-			}
-		}
-		if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
-		else {
-			if (!lensed_center_coords) scriptout << x_center << " " << y_center << " z=" << zlens << endl;
-			else scriptout << xc_prime << " " << yc_prime << " z=" << zlens << " -lensed_center" << endl;
-		}
-	} else {
-		for (int i=0; i < n_params-1; i++) {
-			if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-			else if ((i==1) and ((lenstype==nfw) or (lenstype==TRUNCATED_nfw) or (lenstype==CORED_nfw)) and (anchor_special_parameter)) {
-				scriptout << special_anchor_factor << "*cmed "; // concentration parameter, if set to c_median
-			} else {
-				if (angle_param[i]) scriptout << radians_to_degrees(*(param[i]));
-				else {
-					if (((*(param[i]) != 0.0) and (abs(*(param[i])) < 1e-3)) or (abs(*(param[i]))) > 1e3) output_field_in_sci_notation(param[i],scriptout,false);
-					else scriptout << *(param[i]);
-				}
-				if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
-				scriptout << " ";
-			}
-		}
-		scriptout << " z=" << zlens << endl;
-	}
-	for (int i=0; i < n_params-1; i++) {
-		if (vary_params[i]) scriptout << "1 ";
-		else scriptout << "0 ";
-	}
-	if (vary_params[n_params-1]) scriptout << "varyz=1" << endl; // the last parameter is always the redshift, whose flag can be omitted if not being varied
-	else scriptout << endl;
-	if ((use_limits) and (include_limits)) {
-		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
-		else {
-			for (int i=0; i < n_vary_params; i++) {
-				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i])) {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
-					}
-				} else {
-					if ((((lower_limits[i] != 0.0) and (abs(lower_limits[i]) < 1e-3)) or (abs(lower_limits[i])) > 1e3) or (((upper_limits[i] != 0.0) and (abs(upper_limits[i]) < 1e-3)) or (abs(upper_limits[i])) > 1e3)) {
-						output_field_in_sci_notation(&lower_limits[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits[i],scriptout,true);
-						output_field_in_sci_notation(&lower_limits_initial[i],scriptout,true);
-						output_field_in_sci_notation(&upper_limits_initial[i],scriptout,false);
-						scriptout << endl;
-					} else {
-						scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
-					}
-
-				}
-			}
-		}
-	}
-}
-
-void LensProfile::output_lens_command_nofit(string& command)
-{
-	command += "lens " + model_name + " ";
-	if (ellipticity_mode != default_ellipticity_mode) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
-		{
-			stringstream emodestr;
-			string emodestring;
-			emodestr << ellipticity_mode;
-			emodestr >> emodestring;
-			command += "emode=" + emodestring + " ";
-		}
-	}
-	if (special_parameter_command != "") command += special_parameter_command += " ";
-
-	string xcstring = "";
-	string ycstring = "";
-	if (center_defined) {
-		for (int i=0; i < n_params-3; i++) {
-				stringstream paramstr;
-				paramstr << setprecision(16);
-				string paramstring;
-			if (angle_param[i]) {
-				paramstr << radians_to_degrees(*(param[i]));
-			}
-			else {
-				paramstr << *(param[i]);
-			}
-			paramstr >> paramstring;
-			command += paramstring + " ";
-		}
-		stringstream xcstr;
-		stringstream ycstr;
-		xcstr << setprecision(16);
-		xcstr << x_center;
-		xcstr >> xcstring;
-		ycstr << setprecision(16);
-		ycstr << y_center;
-		ycstr >> ycstring;
-	} else {
-		for (int i=0; i < n_params-1; i++) {
-				stringstream paramstr;
-				paramstr << setprecision(16);
-				string paramstring;
-			if (angle_param[i]) {
-				paramstr << radians_to_degrees(*(param[i]));
-			}
-			else {
-				paramstr << *(param[i]);
-			}
-			paramstr >> paramstring;
-			command += paramstring + " ";
-		}
-	}
-	stringstream zlstr;
-	string zlstring;
-	zlstr << setprecision(16);
-	zlstr << zlens;
-	zlstr >> zlstring;
-	command += xcstring + " " + ycstring + " z=" + zlstring;
+	if (current_flags & ios::scientific) cout << setiosflags(ios::scientific);
 }
 
 
