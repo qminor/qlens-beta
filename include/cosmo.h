@@ -16,11 +16,8 @@
 #include "romberg.h"
 #include "brent.h"
 #include "mathexpr.h"
-<<<<<<< HEAD:cosmo.h
 
 class QLens;
-=======
->>>>>>> origin/development:include/cosmo.h
 
 struct CosmologyParams
 {

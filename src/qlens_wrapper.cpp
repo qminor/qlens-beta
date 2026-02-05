@@ -7,11 +7,8 @@
 
 namespace py = pybind11;
 
-<<<<<<< HEAD:qlens_wrapper.cpp
 using namespace std;
 
-=======
->>>>>>> origin/development:src/qlens_wrapper.cpp
 class QLens_Wrap: public QLens {
 public:
 #ifdef USE_MPI
@@ -21,7 +18,6 @@ public:
 	MPI_Group *onegroup;
 #endif
 
-<<<<<<< HEAD:qlens_wrapper.cpp
 	int mpi_id, mpi_np;
 	int ngroups;
 	QLens_Wrap(const double zlens, const double zsrc, const double zsrc_ref, Cosmology* cosmo_in = NULL) : QLens(cosmo_in)
@@ -31,97 +27,6 @@ public:
 		 reference_source_redshift = zsrc_ref;
 		mpi_id=0;
 		mpi_np=1;
-=======
-    QLens_Wrap() : QLens()
-	 {
-		int mpi_id=0, mpi_np=1;
-
-#ifdef USE_MPI
-		MPI_Init(NULL, NULL);
-		MPI_Comm_size(MPI_COMM_WORLD, &mpi_np);
-		MPI_Comm_rank(MPI_COMM_WORLD, &mpi_id);
-#endif
-		int ngroups = mpi_np; // later, allow option to have mpi groups with multiple processes per group
-
-		int n_omp_threads;
-#ifdef USE_OPENMP
-		#pragma omp parallel
-		{
-			#pragma omp master
-			n_omp_threads = omp_get_num_threads();
-		}
-#else
-		n_omp_threads = 1;
-#endif
-		Grid::allocate_multithreaded_variables(n_omp_threads);
-		SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
-		QLens::allocate_multithreaded_variables(n_omp_threads);
-
-#ifdef USE_MPI
-		subgroup_comm = new MPI_Comm[ngroups];
-		subgroup = new MPI_Group[ngroups];
-
-		int subgroup_size[ngroups];
-		int *subgroup_rank[ngroups];
-		int subgroup_id, subgroup_id_sum;
-
-		int n,i,j,group_number;
-		MPI_Group world_group;
-
-		MPI_Comm_group(MPI_COMM_WORLD, &world_group);
-
-		for (n=0; n < ngroups; n++) {
-			subgroup_size[n] = 0;
-			for (i=n; i < mpi_np; i += ngroups) subgroup_size[n]++;
-			subgroup_rank[n] = new int[subgroup_size[n]];
-			for (j=0, i=n; i < mpi_np; j++, i += ngroups) {
-				subgroup_rank[n][j] = i;
-				//if (mpi_id==0) cout << "subgroup " << n << " process " << j << ": rank " << subgroup_rank[n][j] << endl;
-			}
-
-			MPI_Group_incl(world_group, subgroup_size[n], subgroup_rank[n], &subgroup[n]);
-			MPI_Comm_create(MPI_COMM_WORLD, subgroup[n], &subgroup_comm[n]);
-
-			if (mpi_id % ngroups == n) {
-				MPI_Comm_rank(subgroup_comm[n],&subgroup_id);
-				group_number = n;
-			}
-		}
-
-		onegroup_comm = new MPI_Comm[mpi_np];
-		onegroup = new MPI_Group[mpi_np];
-		int onegroup_size[mpi_np];
-		int *onegroup_rank[mpi_np];
-		int onegroup_id, onegroup_id_sum;
-
-		for (n=0; n < mpi_np; n++) {
-			onegroup_size[n] = 1;
-			onegroup_rank[n] = new int[1];
-			onegroup_rank[n][0] = n;
-
-			MPI_Group_incl(world_group, onegroup_size[n], onegroup_rank[n], &onegroup[n]);
-			MPI_Comm_create(MPI_COMM_WORLD, onegroup[n], &onegroup_comm[n]);
-		}
-#endif
-
-//#ifdef USE_OPENMP
-		//if (disptime) set_show_wtime(true); // useful for optimizing the number of threads and MPI processes to minimize the wall time per likelihood evaluation
-//#endif
-#ifdef USE_MPI
-		int mpi_group_leaders[ngroups];
-		for (int i=0; i < ngroups; i++) mpi_group_leaders[i] = subgroup_rank[i][0];
-		set_mpi_params(mpi_id,mpi_np,ngroups,group_number,subgroup_id,subgroup_size[group_number],mpi_group_leaders,&subgroup[group_number],&subgroup_comm[group_number],&onegroup[mpi_id],&onegroup_comm[mpi_id]);
-		if (ngroups==mpi_np) {
-			Set_MCMC_MPI(mpi_np,mpi_id);
-		} else {
-			Set_MCMC_MPI(mpi_np,mpi_id,ngroups,group_number,mpi_group_leaders);
-		}
-		for (n=0; n < ngroups; n++) delete[] subgroup_rank[n];
-#else
-		set_mpi_params(0,1); // no MPI, so we have one process and id=0
-#endif
-	 }
->>>>>>> origin/development:src/qlens_wrapper.cpp
 
 #ifdef USE_MPI
 		MPI_Init(NULL, NULL);
@@ -225,7 +130,6 @@ public:
 		}
 	}
 
-<<<<<<< HEAD:qlens_wrapper.cpp
 	void batch_add_lenses_tuple(py::list list) {
 		double zl, zs;
 		LensProfile* curr;
@@ -618,17 +522,6 @@ public:
 		else if (regularization_method == Squared_Exponential_Kernel) method = "sqexp_kernel";
 		return method;
 	}
-=======
-            1. Accept *args, **kwargs from python user
-            2. If an argument matches with lens parameter
-        */
-        // TODO: Verify with Quinn on where in commands.cpp gets the updated and then adapt here.
-        if (loc == -1) throw runtime_error("Please specify the lens to update.");
-        // if (kwargs) {
-            
-        // }
-    }
->>>>>>> origin/development:src/qlens_wrapper.cpp
 
 	double LogLikeListFunc(py::list param_list)
 	{
@@ -636,20 +529,12 @@ public:
 		vector<double> param_vec = py::cast<vector<double>>(param_list);
 		return LogLikeVecFunc(param_vec);
 	}
-<<<<<<< HEAD:qlens_wrapper.cpp
 	~QLens_Wrap()
 	 {
 		Grid::deallocate_multithreaded_variables();
 		ImagePixelGrid::deallocate_multithreaded_variables();
 		DelaunayGrid::deallocate_multithreaded_variables();
 		CartesianSourceGrid::deallocate_multithreaded_variables();
-=======
-
-    ~QLens_Wrap()
-	 {
-		Grid::deallocate_multithreaded_variables();
-		SourcePixelGrid::deallocate_multithreaded_variables();
->>>>>>> origin/development:src/qlens_wrapper.cpp
 		QLens::deallocate_multithreaded_variables();
 
 #ifdef USE_MPI
@@ -660,10 +545,5 @@ public:
 		//delete[] onegroup;
 #endif
 	 }
-<<<<<<< HEAD:qlens_wrapper.cpp
-=======
-        
-private:
->>>>>>> origin/development:src/qlens_wrapper.cpp
 };
 

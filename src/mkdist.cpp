@@ -394,11 +394,7 @@ int main(int argc, char *argv[])
 	paramnames_file.close();
 
 	string *latex_param_names = new string[nparams];
-<<<<<<< HEAD:mkdist.cpp
 	if ((latex_table_format) or (make_1d_posts) or (make_2d_posts)) {
-=======
-	if ((make_1d_posts) or (make_2d_posts)) {
->>>>>>> origin/development:src/mkdist.cpp
 		string latex_paramnames_filename = file_root + ".latex_paramnames";
 		ifstream latex_paramnames_file(latex_paramnames_filename.c_str());
 		string dummy;
@@ -410,7 +406,6 @@ int main(int argc, char *argv[])
 			if (!(instream >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
 			if (!(instream >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
 			while (instream >> dummy) latex_param_names[i] += " " + dummy;
-<<<<<<< HEAD:mkdist.cpp
 		}
 		latex_paramnames_file.close();
 	}
@@ -433,11 +428,6 @@ int main(int argc, char *argv[])
 	} else warn("parameter range file '%s' not found",paramranges_filename.c_str());
 
 	if ((make_1d_posts) or (make_2d_posts)) {
-=======
-		}
-		latex_paramnames_file.close();
-
->>>>>>> origin/development:src/mkdist.cpp
 		if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
 
 		if (mpi_id==0) {
@@ -785,7 +775,6 @@ int main(int argc, char *argv[])
 						//cout << param_names[i] << ": " << halfpct[i] << " " << lowcl[i] << " " << hicl[i] << endl;
 						cout << param_names[i] << ": " << halfpct[i] << " " << lowpct << " " << hipct << endl;
 					} else {
-<<<<<<< HEAD:mkdist.cpp
 						if (!latex_table_format) {
 							cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
 						} else {
@@ -854,9 +843,6 @@ int main(int argc, char *argv[])
 							if (show_prior_ranges) cout << "... & ";
 						}
 						cout << logev << " & " << endl;
-=======
-						cout << param_names[i] << ": " << halfpct[i] << " -" << (halfpct[i]-lowcl[i]) << " / +" << (hicl[i] - halfpct[i]) << endl;
->>>>>>> origin/development:src/mkdist.cpp
 					}
 				}
 				cout << endl;

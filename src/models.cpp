@@ -20,7 +20,6 @@ const double SPLE_Lens::def_tolerance = 1e-16;
 
 /*************************** Softened power law model (alpha) *****************************/
 
-<<<<<<< HEAD:models.cpp
 //SPLE_Lens::SPLE_Lens(const double zlens_in, const double zsrc_in, const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees,
 		//const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 //{
@@ -34,13 +33,6 @@ SPLE_Lens::SPLE_Lens(const double zlens_in, const double zsrc_in, const double &
 	setup_lens_properties(parameter_mode_in);
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-SPLE_Lens::SPLE_Lens(const double zlens_in, const double zsrc_in, const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees,
-		const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
-{
-	setup_lens_properties(parameter_mode_in);
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(bb,slope,ss,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -48,10 +40,6 @@ void SPLE_Lens::setup_lens_properties(const int parameter_mode_in, const int sub
 {
 	lenstype = sple_LENS;
 	model_name = "sple";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(8,3,true,parameter_mode_in); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -434,20 +422,11 @@ bool SPLE_Lens::output_cosmology_info(const int lens_number)
 
 /********************************** dPIE_Lens **********************************/
 
-<<<<<<< HEAD:models.cpp
 dPIE_Lens::dPIE_Lens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-dPIE_Lens::dPIE_Lens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
-{
-	setup_lens_properties(parameter_mode_in);
-
-	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -475,10 +454,6 @@ void dPIE_Lens::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = dpie_LENS;
 	model_name = "dpie";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -552,11 +527,7 @@ void dPIE_Lens::update_meta_parameters()
 {
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
-<<<<<<< HEAD:models.cpp
 	if (cosmo != NULL) {
-=======
-	if (qlens != NULL) {
->>>>>>> origin/development:src/models.cpp
 		if (parameter_mode==1) set_abs_params_from_sigma0();
 		else if (parameter_mode==2) set_abs_params_from_mtot();
 	}
@@ -809,12 +780,8 @@ double dPIE_Lens::rho3d_r_integrand_analytic(const double r)
 NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(p1_in,p2_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -840,10 +807,6 @@ void NFW::setup_lens_properties(const int parameter_mode, const int subclass)
 {
 	lenstype = nfw;
 	model_name = "nfw";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(7,2,true,parameter_mode); // number of parameters = 6, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -912,11 +875,7 @@ void NFW::get_parameters_pmode(const int pmode, double* params)
 		rs_kpc = rs / kpc_to_arcsec;
 		ds = ks * sigma_cr_kpc / rs_kpc;
 		// Using a root-finder to solve for c, then m200 can be solved for
-<<<<<<< HEAD:models.cpp
 		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
-=======
-		qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
->>>>>>> origin/development:src/models.cpp
 	}
 
 	if (pmode==2) {
@@ -943,11 +902,7 @@ void NFW::update_meta_parameters()
 {
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
-<<<<<<< HEAD:models.cpp
 	if (cosmo != NULL) {
-=======
-	if (qlens != NULL) {
->>>>>>> origin/development:src/models.cpp
 		if (parameter_mode==2) set_ks_c200_from_m200_rs();
 		else if (parameter_mode==1) set_ks_rs_from_m200_c200();
 		else {
@@ -955,13 +910,8 @@ void NFW::update_meta_parameters()
 			double ds, r200;
 			if (parameter_mode != 2) rs_kpc = rs / kpc_to_arcsec;
 			ds = ks * sigma_cr_kpc / rs_kpc;
-<<<<<<< HEAD:models.cpp
 			//cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 			//c200 = r200/rs_kpc;
-=======
-			qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
-			c200 = r200/rs_kpc;
->>>>>>> origin/development:src/models.cpp
 		}
 	}
 	rmin_einstein_radius = 1e-6*rs; // for determining the Einstein radius (sets lower bound of root finder)
@@ -972,28 +922,17 @@ void NFW::assign_special_anchored_parameters(LensProfile *host_in, const double 
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
-<<<<<<< HEAD:models.cpp
 	//c200 = factor*cosmo->median_concentration_bullock(m200,zlens);
 	if (just_created) special_anchor_factor = factor;
 	c200 = special_anchor_factor*cosmo->median_concentration_dutton(m200,zlens);
-=======
-	//c200 = factor*qlens->median_concentration_bullock(m200,zlens);
-	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*qlens->median_concentration_dutton(m200,zlens);
->>>>>>> origin/development:src/models.cpp
 	update_meta_parameters();
 }
 
 void NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-<<<<<<< HEAD:models.cpp
 		//c200 = cosmo->median_concentration_bullock(m200,zlens);
 		c200 = special_anchor_factor * cosmo->median_concentration_dutton(m200,zlens);
-=======
-		//c200 = qlens->median_concentration_bullock(m200,zlens);
-		c200 = special_anchor_factor * qlens->median_concentration_dutton(m200,zlens);
->>>>>>> origin/development:src/models.cpp
 		update_meta_parameters();
 	}
 }
@@ -1030,11 +969,7 @@ void NFW::set_model_specific_integration_pointers()
 void NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
-<<<<<<< HEAD:models.cpp
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
-=======
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
->>>>>>> origin/development:src/models.cpp
 	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
@@ -1043,19 +978,11 @@ void NFW::set_ks_c200_from_m200_rs()
 void NFW::set_ks_rs_from_m200_c200()
 {
 	double rvir_kpc;
-<<<<<<< HEAD:models.cpp
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
 	//cout << "NFW: dcrit=" << cosmo->critical_density(zlens) << " lenfac=" << kpc_to_arcsec << " rs_kpc=" << rs_kpc << " rs=" << rs << " ks=" << ks << " c200=" << c200 << " m200=" << m200 << endl;
-=======
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
-	rs_kpc = rvir_kpc / c200;
-	rs = rs_kpc * kpc_to_arcsec;
-	ks = m200 / (M_4PI*rs*rs*sigma_cr*(log(1+c200) - c200/(1+c200)));
-	//cout << "NFW: dcrit=" << qlens->critical_density(zlens) << " lenfac=" << kpc_to_arcsec << " rs_kpc=" << rs_kpc << " rs=" << rs << " ks=" << ks << " c200=" << c200 << " m200=" << m200 << endl;
->>>>>>> origin/development:src/models.cpp
 }
 
 double NFW::kappa_rsq(const double rsq)
@@ -1118,15 +1045,11 @@ double NFW::calculate_scaled_mass_3d(const double r)
 
 double NFW::concentration_prior()
 {
-<<<<<<< HEAD:models.cpp
 	double ds, r200;
 	ds = ks * sigma_cr / rs;
 	cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
 	c200 = r200/rs_kpc;
 	double log_medc = log(cosmo->median_concentration_dutton(m200,zlens));
-=======
-	double log_medc = log(qlens->median_concentration_dutton(m200,zlens));
->>>>>>> origin/development:src/models.cpp
 	const double sig_logc = 0.110; // mass-concentration scatter of 0.110 dex (Dutton et al 2014)
 	//return (exp(-SQR((log(c200)-log_medc)/(ln10*sig_logc))/2)/(sig_logc*M_SQRT_2PI));
 	return (SQR((log(c200)-log_medc)/(ln10*sig_logc))/2 + (sig_logc*M_SQRT_2PI)); // returning -log(prior)
@@ -1149,11 +1072,7 @@ bool NFW::output_cosmology_info(const int lens_number)
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
 	} else {
-<<<<<<< HEAD:models.cpp
 		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
-=======
-		qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
->>>>>>> origin/development:src/models.cpp
 		c200 = r200/rs_kpc;
 	}
 
@@ -1166,11 +1085,7 @@ bool NFW::output_cosmology_info(const int lens_number)
 		cout << "M_200 = " << m200 << " M_sun\n";
 	}
 	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec)" << endl;
-<<<<<<< HEAD:models.cpp
 	//cosmo->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
-=======
-	//qlens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
->>>>>>> origin/development:src/models.cpp
 	//c200 = r200/rs_kpc;
 	//cout << "M_200(z=5) = " << m200 << " M_sun\n";
 	//cout << "r_200(z=5) = " << r200 << " kpc\n";
@@ -1191,12 +1106,8 @@ Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const 
 			//c200 = r200/rs_kpc;
 {
 	setup_lens_properties(parameter_mode_in,truncation_mode_in);
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -1239,10 +1150,6 @@ void Truncated_NFW::setup_lens_properties(const int parameter_mode, const int su
 	string tstring;
 	tstr << subclass;
 	tstr >> tstring;
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "tmode=" + tstring;
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(8,3,true,parameter_mode,subclass); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -1381,11 +1288,7 @@ void Truncated_NFW::update_meta_parameters()
 {
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
-<<<<<<< HEAD:models.cpp
 	if (cosmo != NULL) {
-=======
-	if (qlens != NULL) {
->>>>>>> origin/development:src/models.cpp
 		if ((parameter_mode==3) or (parameter_mode==4)) set_ks_c200_from_m200_rs();
 		else if ((parameter_mode==1) or (parameter_mode==2)) set_ks_rs_from_m200_c200();
 	}
@@ -1397,28 +1300,17 @@ void Truncated_NFW::assign_special_anchored_parameters(LensProfile *host_in, con
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another qlens at all
-<<<<<<< HEAD:models.cpp
 	//c200 = factor*cosmo->median_concentration_bullock(m200,zlens);
 	if (just_created) special_anchor_factor = factor;
 	c200 = special_anchor_factor*cosmo->median_concentration_dutton(m200,zlens);
-=======
-	//c200 = factor*qlens->median_concentration_bullock(m200,zlens);
-	if (just_created) special_anchor_factor = factor;
-	c200 = special_anchor_factor*qlens->median_concentration_dutton(m200,zlens);
->>>>>>> origin/development:src/models.cpp
 	update_meta_parameters();
 }
 
 void Truncated_NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-<<<<<<< HEAD:models.cpp
 		//c200 = cosmo->median_concentration_bullock(m200,zlens);
 		c200 = special_anchor_factor * cosmo->median_concentration_dutton(m200,zlens);
-=======
-		//c200 = qlens->median_concentration_bullock(m200,zlens);
-		c200 = special_anchor_factor * qlens->median_concentration_dutton(m200,zlens);
->>>>>>> origin/development:src/models.cpp
 		update_meta_parameters();
 	}
 }
@@ -1468,11 +1360,7 @@ void Truncated_NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
-<<<<<<< HEAD:models.cpp
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
-=======
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
->>>>>>> origin/development:src/models.cpp
 	rs = rs_kpc * kpc_to_arcsec;
 	if (parameter_mode==4) rt_kpc = tau_s * rs_kpc;
 	rt = rt_kpc * kpc_to_arcsec;
@@ -1484,11 +1372,7 @@ void Truncated_NFW::set_ks_rs_from_m200_c200()
 {
 	double rvir_kpc, rs_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
-<<<<<<< HEAD:models.cpp
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
-=======
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
->>>>>>> origin/development:src/models.cpp
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	if (parameter_mode==2) rt_kpc = tau200 * rvir_kpc;
@@ -1571,11 +1455,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 		if (parameter_mode == 2) rt_kpc = tau200 * r200;
 		if (parameter_mode == 4) rt_kpc = tau_s * rs_kpc;
 	} else {
-<<<<<<< HEAD:models.cpp
 		cosmo->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
-=======
-		qlens->get_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,m200,r200);
->>>>>>> origin/development:src/models.cpp
 		c200 = r200/rs_kpc;
 	}
 
@@ -1590,11 +1470,7 @@ bool Truncated_NFW::output_cosmology_info(const int lens_number)
 	}
 	cout << "r_200 = " << r200 << " kpc  (" << (r200*kpc_to_arcsec) << " arcsec) (NOTE: ignores truncation)" << endl;
 
-<<<<<<< HEAD:models.cpp
 	//cosmo->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
-=======
-	//qlens->get_halo_parameters_from_rs_ds(5,rs_kpc,ds,m200,r200);
->>>>>>> origin/development:src/models.cpp
 	//zlens = 5;
 	//update_cosmology_meta_parameters();
 	//c200 = r200/rs_kpc;
@@ -1614,12 +1490,8 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 		const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(p1_in,p2_in,p3_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -1653,10 +1525,6 @@ void Cored_NFW::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = CORED_nfw;
 	model_name = "cnfw";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -1761,11 +1629,7 @@ void Cored_NFW::update_meta_parameters()
 {
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters();
-<<<<<<< HEAD:models.cpp
 	if (cosmo != NULL) {
-=======
-	if (qlens != NULL) {
->>>>>>> origin/development:src/models.cpp
 		if (parameter_mode==3) {
 			set_ks_rs_from_m200_c200_rckpc();
 		} else if (parameter_mode==2) {
@@ -1788,22 +1652,14 @@ void Cored_NFW::assign_special_anchored_parameters(LensProfile *host_in, const d
 	anchor_special_parameter = true;
 	special_anchor_lens = this; // not actually used anyway, since we're not anchoring to another lens at all
 	if (just_created) special_anchor_factor = factor;
-<<<<<<< HEAD:models.cpp
 	c200 = special_anchor_factor*cosmo->median_concentration_bullock(m200,zlens);
-=======
-	c200 = special_anchor_factor*qlens->median_concentration_bullock(m200,zlens);
->>>>>>> origin/development:src/models.cpp
 	update_meta_parameters();
 }
 
 void Cored_NFW::update_special_anchored_params()
 {
 	if (anchor_special_parameter) {
-<<<<<<< HEAD:models.cpp
 		c200 = cosmo->median_concentration_bullock(m200,zlens);
-=======
-		c200 = qlens->median_concentration_bullock(m200,zlens);
->>>>>>> origin/development:src/models.cpp
 		update_meta_parameters();
 	}
 }
@@ -1848,11 +1704,7 @@ void Cored_NFW::set_model_specific_integration_pointers()
 void Cored_NFW::set_ks_rs_from_m200_c200_beta()
 {
 	double rvir_kpc;
-<<<<<<< HEAD:models.cpp
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
-=======
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
->>>>>>> origin/development:src/models.cpp
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	double rcterm;
@@ -1864,11 +1716,7 @@ void Cored_NFW::set_ks_rs_from_m200_c200_beta()
 void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
 {
 	double rvir_kpc;
-<<<<<<< HEAD:models.cpp
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
-=======
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
->>>>>>> origin/development:src/models.cpp
 	rs_kpc = rvir_kpc / c200;
 	rs = rs_kpc * kpc_to_arcsec;
 	rc = rc_kpc * kpc_to_arcsec;
@@ -1882,11 +1730,7 @@ void Cored_NFW::set_ks_rs_from_m200_c200_rckpc()
 void Cored_NFW::set_ks_c200_from_m200_rs()
 {
 	double rvir_kpc;
-<<<<<<< HEAD:models.cpp
 	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(zlens)),0.333333333333);
-=======
-	rvir_kpc = pow(m200/(200.0*M_4PI/3.0*1e-9*qlens->critical_density(zlens)),0.333333333333);
->>>>>>> origin/development:src/models.cpp
 	rs = rs_kpc * kpc_to_arcsec;
 	c200 = rvir_kpc / rs_kpc;
 	double rcterm;
@@ -2067,11 +1911,7 @@ bool Cored_NFW::output_cosmology_info(const int lens_number)
 	if (parameter_mode > 0) {
 		r200 = c200 * rs_kpc;
 	} else {
-<<<<<<< HEAD:models.cpp
 		cosmo->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
-=======
-		qlens->get_cored_halo_parameters_from_rs_ds(zlens,rs_kpc,ds,beta,m200,r200);
->>>>>>> origin/development:src/models.cpp
 		c200 = r200/rs_kpc;
 	}
 
@@ -2096,12 +1936,8 @@ Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &
 		const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(ks_in,rs_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -2119,10 +1955,6 @@ void Hernquist::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = HERNQUIST;
 	model_name = "hern";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(7,2,true); // number of parameters = 6, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -2221,12 +2053,8 @@ ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_i
 		const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(k0_in,R_d_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -2244,10 +2072,6 @@ void ExpDisk::setup_lens_properties(const int parameter_mode, const int subclass
 {
 	lenstype = EXPDISK;
 	model_name = "expdisk";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(7,2,true); // number of parameters = 6, is_elliptical_lens = true
 }
 
@@ -2329,12 +2153,8 @@ bool ExpDisk::calculate_total_scaled_mass(double& total_mass)
 Shear::Shear(const double zlens_in, const double zsrc_in, const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(shear_p1_in,shear_p2_in,xc_in,yc_in);
 }
 
@@ -2356,10 +2176,6 @@ void Shear::setup_lens_properties(const int parameter_mode, const int subclass)
 {
 	lenstype = SHEAR;
 	model_name = "shear";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(5,-1,false); // number of parameters = 4, is_elliptical_lens = false
 }
 
@@ -2528,12 +2344,8 @@ Multipole::Multipole(const double zlens_in, const double zsrc_in, const double &
 {
 	sine_term = sine;
 	setup_lens_properties(0,m_in);
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(A_m_in,n_in,m_in,theta_degrees,xc_in,yc_in,kap,sine);
 }
 
@@ -2558,16 +2370,6 @@ void Multipole::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = MULTIPOLE;
 	kappa_multipole = false; // default; specifies it is a multipole in the potential
-<<<<<<< HEAD:models.cpp
-=======
-	string sine_command = "cos";
-	subclass_label = "m";
-	stringstream mstr;
-	string mstring;
-	mstr << subclass;
-	mstr >> mstring;
-	special_parameter_command = sine_command + " m=" + mstring;
->>>>>>> origin/development:src/models.cpp
 	model_name = "mpole";
 	m = subclass; // m will be used when assigning the amplitude parameter name (A_m or B_m)
 	setup_base_lens_properties(6,-1,false,0,m); // number of parameters = 5, is_elliptical_lens = false
@@ -2901,12 +2703,8 @@ void Multipole::get_einstein_radius(double& re_major_axis, double& re_average, c
 PointMass::PointMass(const double zlens_in, const double zsrc_in, const double &p_in, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(p_in,xc_in,yc_in);
 }
 
@@ -2927,10 +2725,6 @@ void PointMass::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = PTMASS;
 	model_name = "ptmass";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(4,-1,false,parameter_mode); // number of parameters = 3, is_elliptical_lens = false
 }
 
@@ -3091,12 +2885,8 @@ double PointMass::kappa_avg_r(const double r)
 CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties(parameter_mode_in);
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(mass_param_in,gamma_in,n_in,a_in,s_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -3129,10 +2919,6 @@ void CoreCusp::setup_lens_properties(const int parameter_mode, const int subclas
 {
 	lenstype = CORECUSP;
 	model_name = "corecusp";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = ((parameter_mode==1) ? "re_param" : "");
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(10,5,true,parameter_mode); // number of parameters = 9, is_elliptical_lens = true
 	analytic_3d_density = true;
 }
@@ -3405,11 +3191,7 @@ bool CoreCusp::output_cosmology_info(const int lens_number)
 	double rs_kpc, ds, m200, r200, r200_arcsec;
 	rs_kpc = a / kpc_to_arcsec;
 	ds = k0 * sigma_cr_kpc / rs_kpc;
-<<<<<<< HEAD:models.cpp
 	r200_const = 200.0*cosmo->critical_density(zlens)*1e-9/CUBE(kpc_to_arcsec)*4*M_PI/3.0;
-=======
-	r200_const = 200.0*qlens->critical_density(zlens)*1e-9/CUBE(kpc_to_arcsec)*4*M_PI/3.0;
->>>>>>> origin/development:src/models.cpp
 	double (Brent::*r200root)(const double);
 	r200root = static_cast<double (Brent::*)(const double)> (&CoreCusp::r200_root_eq);
 	r200_arcsec = BrentsMethod(r200root, 0.1, 10000, 1e-4);
@@ -3442,12 +3224,8 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(p1_in,Re_in,n_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -3470,10 +3248,6 @@ void SersicLens::setup_lens_properties(const int parameter_mode, const int subcl
 {
 	lenstype = SERSIC_LENS;
 	model_name = "sersic";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(8,3,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
@@ -3630,238 +3404,6 @@ bool SersicLens::output_cosmology_info(const int lens_number)
 		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
 		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
 	}
-<<<<<<< HEAD:models.cpp
-=======
-
-	if (parameter_mode==0) {
-		cout << "Total stellar mass = " << mstar << endl;
-	} else {
-		cout << "kappa(r=0) = " << kappa0 << endl;
-	}
-	double Reff_kpc = re/kpc_to_arcsec;
-	cout << "R_eff = " << Reff_kpc << " kpc" << endl;
-	cout << endl;
-	return true;
-}
-
-/***************************** Double Sersic profile *****************************/
-
-DoubleSersicLens::DoubleSersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, const int parameter_mode_in, QLens* cosmo_in)
-{
-	setup_lens_properties(parameter_mode_in);
-
-	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
-	initialize_parameters(p1_in,delta_k_in,Reff1_in,n1_in,Reff2_in,n2_in,q_in,theta_degrees,xc_in,yc_in);
-}
-
-void DoubleSersicLens::initialize_parameters(const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
-{
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
-
-	if (parameter_mode==0) {
-		kappa0 = p1_in;
-	} else {
-		mstar = p1_in;
-	}
-	delta_k = delta_k_in;
-	n1 = n1_in;
-	Reff1 = Reff1_in;
-	n2 = n2_in;
-	Reff2 = Reff2_in;
-
-	update_meta_parameters_and_pointers();
-}
-
-void DoubleSersicLens::setup_lens_properties(const int parameter_mode, const int subclass)
-{
-	lenstype = DOUBLE_SERSIC_LENS;
-	model_name = "dsersic";
-	special_parameter_command = "";
-	setup_base_lens_properties(11,6,true,parameter_mode); // number of parameters = 10 (not including redshift), is_elliptical_lens = true
-}
-
-DoubleSersicLens::DoubleSersicLens(const DoubleSersicLens* lens_in)
-{
-	copy_base_lensdata(lens_in);
-	if (parameter_mode==0) {
-		kappa0 = lens_in->kappa0;
-	} else {
-		mstar = lens_in->mstar;
-	}
-	delta_k = lens_in->delta_k;
-	n1 = lens_in->n1;
-	Reff1 = lens_in->Reff1;
-	n2 = lens_in->n2;
-	Reff2 = lens_in->Reff2;
-
-	update_meta_parameters_and_pointers();
-}
-
-DoubleSersicLens::DoubleSersicLens(DoubleSersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
-{
-	setup_lens_properties(parameter_mode_in);
-	copy_source_data_to_lens(sb_in);
-	delta_k = sb_in->delta_s;
-	n1 = sb_in->n1;
-	n2 = sb_in->n2;
-	Reff1 = sb_in->Reff1;
-	Reff2 = sb_in->Reff2;
-	b1 = sb_in->b1;
-	b2 = sb_in->b2;
-	kappa0 = 3; // arbitrary
-	mstar = 1e12; // arbitrary
-	set_spawned_mass_and_anchor_parameters((SB_Profile*) sb_in, vary_mass_parameter, include_limits_in, mass_param_lower,mass_param_upper);
-
-	/*
-	if (vary_mass_parameter) {
-		vary_params[0] = true;
-		n_vary_params = 1;
-		include_limits = include_limits_in;
-		if (include_limits) {
-			lower_limits.input(n_vary_params);
-			upper_limits.input(n_vary_params);
-			lower_limits[0] = mass_param_lower;
-			upper_limits[0] = mass_param_upper;
-			lower_limits_initial.input(lower_limits);
-			upper_limits_initial.input(upper_limits);
-		}
-	}
-
-	set_integration_pointers();
-	set_model_specific_integration_pointers();
-	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
-
-	for (int i=1; i < n_params-1; i++) {
-		// anchoring every parameter except the mass parameter (since stellar mass-to-light ratio is not known), and the redshift (since that's not a parameter in SB_Profile yet)
-		anchor_parameter_to_source[i] = true;
-		parameter_anchor_source[i] = (SB_Profile*) sb_in;
-		parameter_anchor_paramnum[i] = i;
-		parameter_anchor_ratio[i] = 1.0;
-		(*param[i]) = *(parameter_anchor_source[i]->param[i]);
-		at_least_one_param_anchored = true;
-	}
-	update_anchored_parameters();
-	*/	
-}
-
-void DoubleSersicLens::assign_paramnames()
-{
-	if (parameter_mode==0) {
-		paramnames[0] = "kappa0"; latex_paramnames[0] = "\\kappa"; latex_param_subscripts[0] = "0";
-	} else {
-		paramnames[0] = "mstar"; latex_paramnames[0] = "M"; latex_param_subscripts[0] = "*";
-	}
-	paramnames[1] = "delta_k"; latex_paramnames[1] = "\\Delta"; latex_param_subscripts[1] = "\\kappa";
-	paramnames[2] = "Reff1"; latex_paramnames[2] = "R"; latex_param_subscripts[2] = "eff,1";
-	paramnames[3] = "n1"; latex_paramnames[3] = "n"; latex_param_subscripts[3] = "1";
-	paramnames[4] = "Reff2"; latex_paramnames[4] = "R"; latex_param_subscripts[4] = "eff,2";
-	paramnames[5] = "n2"; latex_paramnames[5] = "n"; latex_param_subscripts[5] = "2";
-
-	set_geometric_paramnames(lensprofile_nparams);
-}
-
-void DoubleSersicLens::assign_param_pointers()
-{
-	if (parameter_mode==0) {
-		param[0] = &kappa0;
-	} else {
-		param[0] = &mstar;
-	}
-	param[1] = &delta_k;
-	param[2] = &Reff1;
-	param[3] = &n1;
-	param[4] = &Reff2;
-	param[5] = &n2;
-	set_geometric_param_pointers(lensprofile_nparams);
-}
-
-void DoubleSersicLens::update_meta_parameters()
-{
-	update_cosmology_meta_parameters();
-	update_ellipticity_meta_parameters();
-	b1 = 2*n1 - 0.33333333333333 + 4.0/(405*n1) + 46.0/(25515*n1*n1) + 131.0/(1148175*n1*n1*n1);
-	b2 = 2*n2 - 0.33333333333333 + 4.0/(405*n2) + 46.0/(25515*n2*n2) + 131.0/(1148175*n2*n2*n2);
-	if (parameter_mode==0) {
-		mstar = M_PI*sigma_cr*kappa0*((1+delta_k)*Reff1*Reff1*n1*Gamma(2*n1)*pow(b1,-2*n1) + (1-delta_k)*Reff2*Reff2*n2*Gamma(2*n2)*pow(b2,-2*n2));
-	} else {
-		kappa0 = mstar / (M_PI*sigma_cr*((1+delta_k)*Reff1*Reff1*n1*Gamma(2*n1)*pow(b1,-2*n1) + (1-delta_k)*Reff2*Reff2*n2*Gamma(2*n2)*pow(b2,-2*n2)));
-	}
-	kappa0_1 = kappa0*(1+delta_k)/2;
-	kappa0_2 = kappa0*(1-delta_k)/2;
-	update_ellipticity_meta_parameters();
-}
-
-void DoubleSersicLens::set_auto_stepsizes()
-{
-	int index = 0;
-	if (parameter_mode==0) {
-		stepsizes[index++] = 0.2*kappa0;
-	} else {
-		stepsizes[index++] = 0.2*mstar;
-	}
-	stepsizes[index++] = 0.1; // arbitrary
-	stepsizes[index++] = 0.2*Reff1; // arbitrary
-	stepsizes[index++] = 0.2; // arbitrary
-	stepsizes[index++] = 0.2*Reff2; // arbitrary
-	stepsizes[index++] = 0.2; // arbitrary
-	set_geometric_param_auto_stepsizes(index);
-}
-
-void DoubleSersicLens::set_auto_ranges()
-{
-	set_auto_penalty_limits[0] = false; penalty_lower_limits[0] = -1e30; penalty_upper_limits[0] = 1e30;
-	set_auto_penalty_limits[1] = false; penalty_lower_limits[1] = -1e30; penalty_upper_limits[1] = 1e30;
-	set_auto_penalty_limits[2] = true; penalty_lower_limits[2] = 0; penalty_upper_limits[2] = 1e30;
-	set_auto_penalty_limits[3] = true; penalty_lower_limits[3] = 0; penalty_upper_limits[3] = 1e30;
-	set_auto_penalty_limits[4] = true; penalty_lower_limits[4] = 0; penalty_upper_limits[4] = 1e30;
-	set_auto_penalty_limits[5] = true; penalty_lower_limits[5] = 0; penalty_upper_limits[5] = 1e30;
-	set_geometric_param_auto_ranges(lensprofile_nparams);
-}
-
-double DoubleSersicLens::kappa_rsq(const double rsq)
-{
-	return (kappa0_1*exp(-b1*pow(rsq/(Reff1*Reff1),0.5/n1)) + kappa0_2*exp(-b2*pow(rsq/(Reff2*Reff2),0.5/n2)));
-}
-
-double DoubleSersicLens::kappa_rsq_deriv(const double rsq)
-{
-	return -(kappa0_1*exp(-b1*pow(rsq/(Reff1*Reff1),0.5/n1))*b1*pow(Reff1,-1.0/n1)*pow(rsq,0.5/n1-1)/(2*n1) + kappa0_2*exp(-b2*pow(rsq/(Reff2*Reff2),0.5/n2))*b2*pow(Reff2,-1.0/n2)*pow(rsq,0.5/n2-1)/(2*n2));
-}
-
-bool DoubleSersicLens::output_cosmology_info(const int lens_number)
-{
-	if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
-	double sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
-	if (zlens != qlens->lens_redshift) {
-		cout << resetiosflags(ios::scientific);
-		cout << "sigma_crit(z=" << zlens << "): ";
-		if (qlens->use_scientific_notation) cout << setiosflags(ios::scientific);
-		cout << sigma_cr_kpc << " Msun/kpc^2 (" << sigma_cr << " Msun/arcsec^2)" << endl;
-	}
-
-	if (parameter_mode==0) {
-		cout << "Total stellar mass = " << mstar << endl;
-	} else {
-		cout << "kappa(r=0) = " << kappa0 << endl;
-	}
-	cout << "kappa1(r=0) = " << kappa0_1 << endl;
-	cout << "kappa2(r=0) = " << kappa0_2 << endl;
-	double mstar1 = M_PI*sigma_cr*kappa0*(1+delta_k)*Reff1*Reff1*n1*Gamma(2*n1)*pow(b1,-2*n1);
-	double mstar2 = M_PI*sigma_cr*kappa0*(1-delta_k)*Reff2*Reff2*n2*Gamma(2*n2)*pow(b2,-2*n2);
-	cout << "mstar1 = " << mstar1 << endl;
-	cout << "mstar2 = " << mstar2 << endl;
-
-	double Reff1_kpc = Reff1/kpc_to_arcsec;
-	double Reff2_kpc = Reff2/kpc_to_arcsec;
-	cout << "R_eff1 = " << Reff1_kpc << " kpc" << endl;
-	cout << "R_eff2 = " << Reff2_kpc << " kpc" << endl;
-	cout << endl;
-	return true;
-}
-
-/***************************** Cored Sersic profile *****************************/
->>>>>>> origin/development:src/models.cpp
 
 	if (parameter_mode==0) {
 		cout << "Total stellar mass = " << mstar << endl;
@@ -3881,7 +3423,6 @@ DoubleSersicLens::DoubleSersicLens(const double zlens_in, const double zsrc_in, 
 	setup_lens_properties(parameter_mode_in);
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
 	initialize_parameters(p1_in,delta_k_in,Reff1_in,n1_in,Reff2_in,n2_in,q_in,theta_degrees,xc_in,yc_in);
@@ -4100,9 +3641,6 @@ Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(p1_in,Re_in,n_in,rc_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -4126,10 +3664,6 @@ void Cored_SersicLens::setup_lens_properties(const int parameter_mode, const int
 {
 	lenstype = CORED_SERSIC_LENS;
 	model_name = "csersic";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(9,4,true,parameter_mode); // number of parameters = 7, is_elliptical_lens = true
 }
 
@@ -4310,12 +3844,8 @@ bool Cored_SersicLens::output_cosmology_info(const int lens_number)
 MassSheet::MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(kext_in,xc_in,yc_in);
 }
 
@@ -4331,10 +3861,6 @@ void MassSheet::setup_lens_properties(const int parameter_mode, const int subcla
 {
 	lenstype = SHEET;
 	model_name = "sheet";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(4,-1,false); // number of parameters = 3, is_elliptical_lens = false
 }
 
@@ -4461,12 +3987,8 @@ void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensm
 Deflection::Deflection(const double zlens_in, const double zsrc_in, const double &defx_in, const double &defy_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
-<<<<<<< HEAD:models.cpp
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(defx_in,defy_in);
 }
 
@@ -4482,10 +4004,6 @@ void Deflection::setup_lens_properties(const int parameter_mode, const int subcl
 {
 	lenstype = DEFLECTION;
 	model_name = "deflection";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(3,-1,false); // number of parameters = 2, is_elliptical_lens = false
 	center_defined = false;
 }
@@ -4576,10 +4094,6 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 {
 	lenstype = TABULATED;
 	model_name = "tab(" + lens_in->get_model_name() + ")";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
 
 	kscale = kscale_in;
@@ -4714,15 +4228,9 @@ Tabulated_Model::Tabulated_Model(const Tabulated_Model* lens_in)
 Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, const string& tab_filename, Cosmology* cosmo_in)
 {
 	lenstype = TABULATED;
-<<<<<<< HEAD:models.cpp
 	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	special_parameter_command = "";
-	setup_base_lens_properties(6,-1,false); // number of parameters = 3, is_elliptical_lens = false
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 
 	kscale = kscale_in;
 	rscale = rscale_in;
@@ -5157,63 +4665,6 @@ void Tabulated_Model::potential_derivatives(double x, double y, lensvector& def,
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
-<<<<<<< HEAD:models.cpp
-=======
-void Tabulated_Model::print_lens_command(ofstream& scriptout, const bool use_limits)
-{
-	scriptout << setprecision(16);
-	if (loaded_from_file) {
-		scriptout << "fit lens tab " << original_lens_command << " ";
-	}
-	else {
-		scriptout << original_lens_command << endl;
-		scriptout << "fit lens tab lens=" << lens_number << " ";
-	}
-	if (ellipticity_mode != default_ellipticity_mode) {
-		if ((lenstype != SHEAR) and (lenstype != PTMASS) and (lenstype != MULTIPOLE) and (lenstype != SHEET) and (lenstype != TABULATED))   // these models are not elliptical so emode is irrelevant
-			scriptout << "emode=" << ellipticity_mode << " ";
-	}
-	if (special_parameter_command != "") scriptout << special_parameter_command << " ";
-
-	for (int i=0; i < n_params-2; i++) {
-		if ((anchor_parameter_to_lens[i]) and (parameter_anchor_ratio[i]==1.0)) scriptout << "anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i] << " ";
-		else {
-			if (i==0) {
-				if (loaded_from_file) scriptout << kscale;
-				else scriptout << original_kscale;
-			}
-			else if (i==1) {
-				if (loaded_from_file) scriptout << rscale;
-				else scriptout << original_rscale;
-			}
-			else if (i==2) scriptout << radians_to_degrees(*(param[i]));
-			else scriptout << *(param[i]);
-			if (anchor_parameter_to_lens[i]) scriptout << "/anchor=" << parameter_anchor_lens[i]->lens_number << "," << parameter_anchor_paramnum[i];
-			scriptout << " ";
-		}
-	}
-	if (center_anchored) scriptout << " anchor_center=" << center_anchor_lens->lens_number << endl;
-	else scriptout << x_center << " " << y_center << endl;
-	for (int i=0; i < n_params; i++) {
-		if (vary_params[i]) scriptout << "1 ";
-		else scriptout << "0 ";
-	}
-	scriptout << endl;
-	if ((use_limits) and (include_limits)) {
-		if (lower_limits_initial.size() != n_vary_params) scriptout << "# Warning: parameter limits not defined\n";
-		else {
-			for (int i=0; i < n_vary_params; i++) {
-				if ((lower_limits_initial[i]==lower_limits[i]) and (upper_limits_initial[i]==upper_limits[i]))
-					scriptout << lower_limits[i] << " " << upper_limits[i] << endl;
-				else
-					scriptout << lower_limits[i] << " " << upper_limits[i] << " " << lower_limits_initial[i] << " " << upper_limits_initial[i] << endl;
-			}
-		}
-	}
-	scriptout << "lens update " << lens_number << " " << kscale << " " << rscale << " " << radians_to_degrees(theta) << " " << x_center << " " << y_center << endl;
-}
-
->>>>>>> origin/development:src/models.cpp
 Tabulated_Model::~Tabulated_Model() {
 	if (grid_logrvals != NULL) {
 		delete[] grid_logrvals;
@@ -5243,15 +4694,9 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 {
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";
-<<<<<<< HEAD:models.cpp
 	setup_base_lens_properties(7,-1,false); // number of parameters = 3, is_elliptical_lens = false
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	special_parameter_command = "";
-	setup_base_lens_properties(7,-1,false); // number of parameters = 3, is_elliptical_lens = false
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	ellipticity_mode = -1;
 	original_emode = lens_in->ellipticity_mode;
 	// I wanted to allow q or e to be a parameter, but at present only q is allowed...fix this later
@@ -5421,15 +4866,9 @@ QTabulated_Model::QTabulated_Model(const QTabulated_Model* lens_in)
 QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double &xc, const double &yc, ifstream& tabfile, Cosmology* cosmo_in)
 {
 	lenstype = QTABULATED;
-<<<<<<< HEAD:models.cpp
 	setup_base_lens_properties(7,-1,false); // number of parameters = 5, is_elliptical_lens = false
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-	special_parameter_command = "";
-	setup_base_lens_properties(7,-1,false); // number of parameters = 5, is_elliptical_lens = false
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 
 	kscale = kscale_in;
 	rscale = rscale_in;
@@ -5952,18 +5391,11 @@ QTabulated_Model::~QTabulated_Model() {
 	}
 }
 
-<<<<<<< HEAD:models.cpp
 TopHatLens::TopHatLens(const double zlens_in, const double zsrc_in, const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
-=======
-TopHatLens::TopHatLens(const double zlens_in, const double zsrc_in, const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc, QLens* cosmo_in)
-{
-	setup_lens_properties();
-	setup_cosmology(cosmo_in,zlens_in,zsrc_in);
->>>>>>> origin/development:src/models.cpp
 	initialize_parameters(kap0_in,rad_in,q_in,theta_degrees,xc_in,yc_in);
 }
 
@@ -5971,10 +5403,6 @@ void TopHatLens::setup_lens_properties(const int parameter_mode, const int subcl
 {
 	lenstype = TOPHAT_LENS;
 	model_name = "tophat";
-<<<<<<< HEAD:models.cpp
-=======
-	special_parameter_command = "";
->>>>>>> origin/development:src/models.cpp
 	setup_base_lens_properties(7,2,true);
 	analytic_3d_density = false;
 }
@@ -6146,11 +5574,7 @@ double TopHatLens::potential_analytic(const double x, const double y)
 
 /***************************** Test Model (for testing purposes only) *****************************/
 
-<<<<<<< HEAD:models.cpp
 TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
-=======
-TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int &nn, const double &acc)
->>>>>>> origin/development:src/models.cpp
 {
 	setup_lens_properties();
 	//setup_base_lens_properties(X,false); // number of parameters = X, is_elliptical_lens = false

@@ -4,87 +4,50 @@ cosmo = Cosmology(omega_m=0.3,hubble=0.7)
 q = QLens(cosmo)
 (lens,src,ptsrc,pixsrc,imgdata,params,dparams) = q.objects();
 
-q.fit_label = 'alphanest'
+q.fit_label = 'alpha_multinest'
 
 q.sci_notation = False
-<<<<<<< HEAD:alphafit.py
-q.imgdata_read("alphafit.dat") # this function will become obsolete once the ptimgdata class is wrapped
-q.imgdata_display() # this function will become obsolete once the ptimgdata class is wrapped
-
-sple = SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3})
-sple.vary([1,0,0,1,1,1,1])
-extshear = Shear({"shear": 0.02, "theta": 10})
-extshear.vary([1,1,0,0])
-lens.add(sple,shear=extshear)
-=======
-q.imgdata_read("../data/alphafit.dat")
+q.imgdata_read("alphafit.dat")
 #q.imgdata_display()
-q.add_lens(Alpha({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3}))
-q.lens[0].setvary([1,0,0,1,1,1,1])
-q.lens[0].set_prior_limits("b",4,6)
-q.lens[0].set_prior_limits("q",0.2,1)
-q.lens[0].set_prior_limits("theta",20,155)
-q.lens[0].set_prior_limits("xc",0.3,1.3)
-q.lens[0].set_prior_limits("yc",0,0.6)
 
-q.add_lens(Shear({"shear": 0.02, "theta": 10, "xc": 0.7, "yc": 0.3}))
-q.lens[1].anchor_center(0)
-q.lens[1].setvary([1,1])
-q.lens[1].set_prior_limits("shear",0.01,0.2)
-q.lens[1].set_prior_limits("theta_shear",1,100)
->>>>>>> origin/development:python/alphafit_multinest.py
+q.shear_components=True
+q.ellipticity_components=False
+
+Alpha = SPLE({"b": 1.35, "gamma": 2, "s": 0.0, "q": 0.8, "theta": 80, "xc": 0.05, "yc": 0.03},pmode=1)
+Alpha.vary([1,0,0,1,1,1,1])
+Alpha.set_limits([
+    ("b",4,6),
+    ("q",0.2,1),
+    ("theta",20,155),
+    ("xc",0.3,1.3),
+    ("yc",0,0.6)
+])
+
+extshear = Shear({"shear1": 0.03, "shear2": -0.05})
+extshear.vary([1,1,0,0])
+extshear.set_limits([
+    ("shear1",-0.2,0.2),
+    ("shear2",-0.2,0.2)
+])
+
+lens.add(Alpha,shear=extshear)
 
 q.central_image = False
 q.imgplane_chisq = False
 q.analytic_bestfit_src = True
 q.flux_chisq = True
 q.chisqtol = 1e-6
-<<<<<<< HEAD:alphafit.py
-pause()
-q.analytic_bestfit_src = True
-=======
->>>>>>> origin/development:python/alphafit_multinest.py
 #q.set_sourcepts_auto()
 q.nrepeat = 2
 #print("Fit model:")
 q.fitmodel()
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
-<<<<<<< HEAD:alphafit.py
-# The following two lines must be run before evaluating the likelihood
-#q.setup_fitparams(True) # This sets up the fit parameters
-#print(q.fitparams())  # This will return a python list giving the fit parameters 
-#q.init_fitmodel() # This makes a copy of the model (lenses, sources, etc.) that can be varied during a fit (this is called the "fitmodel" object)
-#logl = q.LogLike(params.values())
-#print("initial params:")
-#params
-#print("initial loglike: ",logl)
-#pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
-
-q.run_fit("simplex",adopt=False)
-
-# Note, when qlens runs an optimization, it destroys the "fitmodel" object at the end. So you'd have to do another q.init_fitmodel() if you want to
-# evaluate the likelihood again with LogLike(...)
-#q.init_fitmodel()
-#logl = q.LogLike(params.values())
-#print("loglike: ",logl)
-#print("final params:")
-#params
-#print(q.fitparams())
-
-q.adopt_model(params.values()) # this will adopt the best-fit model, since fitparams() returns the fit parameters at the end of the optimization
-# note that if you're doing your own optimization, you might have the best-fit parameters stored in a separate
-# python list (or numpy array?) of your own; in this case, replace q.fitparams() in the above line with your own list
-
-
-#q.use_bestfit()
-fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
-=======
 q.n_livepts = 300
-q.run_fit("nest")
-q.use_bestfit()
-#fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
->>>>>>> origin/development:python/alphafit_multinest.py
+q.run_fit("nest",adopt=True,resume=False)
+#q.use_bestfit()
+#q.adopt_chain_bestfit()
+fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
                 # (srcfig, imgfig) = fit_plotimg(q,showplot=False) and modify the figures
 
-#plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing
+plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing

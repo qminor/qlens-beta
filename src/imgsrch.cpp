@@ -1787,11 +1787,7 @@ void QLens::output_images_single_source(const double &x_source, const double &y_
 	//cout << Grid::cc_neighbor_splittings << endl;
 	//double *Grid::grid_zfactors;
 	//double **Grid::grid_betafactors;
-<<<<<<< HEAD:imgsrch.cpp
 	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << specific_ptsrc_zfactors[0][0] << endl;
-=======
-	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << ptsrc_zfactors[0][0] << endl;
->>>>>>> origin/development:src/imgsrch.cpp
 
 	// parameters for creating the recursive grid
 	//cout << Grid::rmin << endl;
@@ -1932,56 +1928,26 @@ vector<PointSource> QLens::get_fit_imagesets(bool &status, int min_dataset, int 
 	if (n_ptsrc==0) status = false;
 	if (max_dataset < 0) max_dataset = n_ptsrc - 1;
 	if ((min_dataset < 0) or (min_dataset > max_dataset)) status = false;
-<<<<<<< HEAD:imgsrch.cpp
 	vector<PointSource> image_sets;
-=======
-	vector<ImageSet> image_sets;
->>>>>>> origin/development:src/imgsrch.cpp
 	image_sets.clear();
 	if (!status) return image_sets;
 	image_sets.resize(n_ptsrc);
 
-<<<<<<< HEAD:imgsrch.cpp
 	if (analytic_source_flux) set_analytic_srcflux(false);
 	if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
-=======
-	double* srcflux = new double[n_sourcepts_fit];
-	lensvector *srcpts = new lensvector[n_sourcepts_fit];
-	if (include_flux_chisq) {
-		output_model_source_flux(srcflux);
-	} else {
-		for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-	}
-
-	if (!analytic_source_flux) srcflux[0] = source_flux;
-	if (use_analytic_bestfit_src) {
-		find_analytic_srcpos(srcpts);
-	} else {
-		for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
-	}
->>>>>>> origin/development:src/imgsrch.cpp
 
 	int redshift_idx;
 	for (int i=min_dataset; i <= max_dataset; i++) {
-<<<<<<< HEAD:imgsrch.cpp
 		redshift_idx = ptsrc_redshift_idx[i];
 		if ((i == min_dataset) or (redshift_idx != ptsrc_redshift_idx[i-1])) {
 			create_grid(false,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 		}
-=======
-		if ((i == min_dataset) or (ptsrc_zfactors[i] != ptsrc_zfactors[i-1]))
-			create_grid(false,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
->>>>>>> origin/development:src/imgsrch.cpp
 
 		source[0] = ptsrc_list[i]->pos[0];
 		source[1] = ptsrc_list[i]->pos[1];
 
 		find_images();
-<<<<<<< HEAD:imgsrch.cpp
 		image_sets[i].copy_imageset(source,ptsrc_redshifts[redshift_idx],images_found,Grid::nfound,ptsrc_list[i]->srcflux);
-=======
-		image_sets[i].copy_imageset(source,ptsrc_redshifts[i],images_found,Grid::nfound,srcflux[i]);
->>>>>>> origin/development:src/imgsrch.cpp
 	}
 	reset_grid();
 	return image_sets;
@@ -2059,7 +2025,6 @@ bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool colo
 					imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].td << " " << images_found[i].parity << endl;
 				else
 					imagedat << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
-<<<<<<< HEAD:imgsrch.cpp
 				if (color_multiplicities) {
 					if (Grid::nfound==5) {
 						quads << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
@@ -2076,35 +2041,18 @@ bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool colo
 				}
 			}
 			if (color_multiplicities) {
-=======
->>>>>>> origin/development:src/imgsrch.cpp
 				if (Grid::nfound==5) {
-					quads << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					srcquads << source[0] << " " << source[1] << endl;
 				}
 				else if (Grid::nfound==3) {
-					// this will count doubles and cusps
-					doubles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					srcdoubles << source[0] << " " << source[1] << endl;
 				}
 				else if (Grid::nfound==1) {
-					singles << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					srcsingles << source[0] << " " << source[1] << endl;
 				} else {
-					weird << images_found[i].pos[0] << " " << images_found[i].pos[1] << " " << images_found[i].mag << " " << images_found[i].parity << endl;
+					srcweird << source[0] << " " << source[1] << endl;
 				}
 			}
-<<<<<<< HEAD:imgsrch.cpp
-=======
-			if (Grid::nfound==5) {
-				srcquads << source[0] << " " << source[1] << endl;
-			}
-			else if (Grid::nfound==3) {
-				srcdoubles << source[0] << " " << source[1] << endl;
-			}
-			else if (Grid::nfound==1) {
-				srcsingles << source[0] << " " << source[1] << endl;
-			} else {
-				srcweird << source[0] << " " << source[1] << endl;
-			}
->>>>>>> origin/development:src/imgsrch.cpp
 
 			imagedat << endl;
 		}

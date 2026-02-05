@@ -5,7 +5,6 @@
 #include "errors.h"
 #include "mathexpr.h"
 #include "pixelgrid.h"
-//#include "delaunay.h"
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -102,10 +101,6 @@ void QLens::process_commands(bool read_file)
 						"imgdata -- commands for loading point image data ('help imgdata' for list of subcommands)\n"
 						"wldata -- commands for loading weak lensing data ('help wldata' for list of subcommands)\n"
 						"sbmap -- commands for surface brightness pixel maps ('help sbmap' for list of subcommands)\n"
-<<<<<<< HEAD:commands.cpp
-=======
-						"source -- add a source from the list of surface brightness models ('help source' for list)\n"
->>>>>>> origin/development:src/commands.cpp
 						"cosmology -- display cosmological information, including physical properties of lenses\n"
 						"lensinfo -- display kappa, deflection, magnification, shear, and potential at a specific point\n"
 						"mass_r -- display both projected (2D) mass and 3D mass enclosed within a given radius\n"
@@ -194,11 +189,7 @@ void QLens::process_commands(bool read_file)
 						"img_npixels -- set number of pixels for images produced by 'sbmap plotimg'\n"
 						"src_npixels -- set # of source grid pixels for plotting or inverting lensed pixel images\n"
 						"srcgrid -- set source grid size and location for inverting or plotting lensed pixel images\n"
-<<<<<<< HEAD:commands.cpp
 						"interpolation_method -- set method for interpolating over source pixels\n"
-=======
-						"raytrace_method -- set method for ray tracing image pixels to source pixels\n"
->>>>>>> origin/development:src/commands.cpp
 						"simulate_pixel_noise -- add simulated pixel noise to images produced by 'sbmap plotimg'\n"
 						"psf_width -- width of Gaussian point spread function (PSF) along x- and y-axes\n"
 						"psf_threshold -- threshold below which PSF is approximated as zero (sets pixel width of PSF)\n"
@@ -206,11 +197,7 @@ void QLens::process_commands(bool read_file)
 						"sb_ellipticity_components -- for sbprofiles, use components e=1-q instead of (q,theta)\n"
 						"\n"
 						"\033[4mSource pixel reconstruction settings\033[0m\n"
-<<<<<<< HEAD:commands.cpp
 						"inversion_method -- set method for lensing matrix inversion\n"
-=======
-						"inversion_method -- set method for image matrix inversion (mumps, umfpack, or cg)\n"
->>>>>>> origin/development:src/commands.cpp
 						"srcgrid_type -- source grid type (cartesian, adaptive_cartesian, adaptive)\n"
 						"auto_src_npixels -- automatically determine # of source pixels from lens model/data (on/off)\n"
 						"auto_srcgrid -- automatically choose source grid size/location from lens model/data (on/off)\n"
@@ -234,10 +221,6 @@ void QLens::process_commands(bool read_file)
 						"split_imgpixels -- if set to 'on', split image pixels and ray trace the subpixels, then average them\n"
 						"imgpixel_nsplit -- specify number of splittings of each pixel (if 'split_imgpixels' is on)\n"
 						"emask_nsplit -- specify number of pixel splittings for the extended mask (if 'split_imgpixels' is on)\n"
-<<<<<<< HEAD:commands.cpp
-=======
-						"subhalo_prior -- restrict subhalo position to lie within pixel mask (dpie/corecusp only)\n"
->>>>>>> origin/development:src/commands.cpp
 						"activate_unmapped_srcpixels -- when inverting, include srcpixels that don't map to any imgpixels\n"
 						"exclude_srcpixels_outside_mask -- when inverting, exclude srcpixels that map beyond pixel mask\n"
 						"remove_unmapped_subpixels -- when inverting, exclude *sub*pixels that don't map to any imgpixels\n"
@@ -245,10 +228,6 @@ void QLens::process_commands(bool read_file)
 						"parallel_mumps -- run MUMPS matrix inversion using parallel analysis mode (if on)\n"
 						"show_mumps_info -- show MUMPS information output after a lensing matrix inversion\n"
 						"srcpixel_mag_threshold -- split srcpixels if magnification > threshold (srcgrid_type=adaptive_cartesian)\n"
-<<<<<<< HEAD:commands.cpp
-=======
-						"vary_srcpixel_mag_threshold -- vary srcpixel_mag_threshold as a free parameter (if on)\n"
->>>>>>> origin/development:src/commands.cpp
 						"\n";
 				} else if (words[1]=="fit_settings") {
 					cout <<
@@ -1024,15 +1003,10 @@ void QLens::process_commands(bool read_file)
 							"automatically chosen for the stepsizes by default, but can be customized. Type 'fit stepsizes' to\n"
 							"see the currest list of fit parameters. For example, 'fit stepsizes 5 0.3' sets the initial stepsize\n"
 							"for parameter 5 to 0.3. You can also scale all the stepsizes by a certain factor, e.g. 'fit\n"
-<<<<<<< HEAD:commands.cpp
 							"stepsize scale 5' multiplies all stepsizes by 5. If you have an MCMC/nested sampling chain, then the\n"
 							"argument 'from_chain' will use the 95\% credible intervals in each parameter (divided by two; this\n"
 							"corresponds to the 2*sigma values for a Gaussian posterior) to set the stepsizes, times the scale\n"
 							"factor [factor]. To reset all stepsizes to their automatic values, type 'fit stepsize reset'.\n";
-=======
-							"stepsize scale 5' multiplies all stepsizes by 5. To reset all stepsizes to their automatic values,\n"
-							"type 'fit stepsize reset'.\n";
->>>>>>> origin/development:src/commands.cpp
 					else if (words[2]=="params")
 						cout << "fit params [-nosci]\n"
 							"fit params update <param_num/name> <param_val>\n"
@@ -1050,12 +1024,8 @@ void QLens::process_commands(bool read_file)
 					else if (words[2]=="priors")
 						cout << "fit priors [-nosci]\n"
 							"fit priors <param_num/name> <prior_type> [prior_params]\n"
-<<<<<<< HEAD:commands.cpp
 							"fit priors <param_num/name> limits <lower_limit> <upper_limit>\n\n"
 							"fit priors limits [param_num/name]\n\n"
-=======
-							"fit priors <param_num/name> range <lower_limit> <upper_limit>\n\n"
->>>>>>> origin/development:src/commands.cpp
 							"Define prior probability distributions in each fit parameter, which are used by the T-Walk and nested\n"
 							"sampling routines. Type 'fit priors' to see current list of fit parameters and corresponding priors/limits\n"
 							"(to not use scientific notation, add '-nosci' argument; this works even if 'sci_notation' is turned off).\n"
@@ -1117,11 +1087,7 @@ void QLens::process_commands(bool read_file)
 							"The available derived parameter types are:  ('*' means if lens_number is omitted, all lenses are included)\n\n"
 							"raw_chisq -- The chi-square value (not including priors; no arguments required)\n"
 							"kappa_r  -- *The kappa at radius <r>, averaged over all angles (where <r> in arcseconds)\n"
-<<<<<<< HEAD:commands.cpp
 							"dlogkappa -- *The log-derivative of kappa at radius <r>, averaged over all angles (where <r> is in arcseconds)\n"
-=======
-							"dkappa_r -- *The derivative of kappa at radius <r>, averaged over all angles (where <r> is in arcseconds)\n"
->>>>>>> origin/development:src/commands.cpp
 							"lambda_r  -- 1-<kappa(r)> where <kappa(r)> is averaged over all angles (where <r> in arcseconds)\n"
 							"mass2d_r -- The projected mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
@@ -1326,21 +1292,14 @@ void QLens::process_commands(bool read_file)
 							"sbmap trim_mask_windows [...]\n"
 							"sbmap set_neighbor_pixels [...]\n"
 							"sbmap set_posrg_pixels [...]\n"
-<<<<<<< HEAD:commands.cpp
 							"sbmap activate_partner_imgpixels\n"
-=======
->>>>>>> origin/development:src/commands.cpp
 							"sbmap find_noise [...]\n\n"
 							"Commands for loading, simulating, plotting and inverting surface brightness pixel maps. For\n"
 							"help on individual subcommands, type 'help sbmap <command>'. If 'sbmap' is typed with no\n"
 							"arguments, shows the dimensions of current image/source surface brightness maps, if loaded.\n";
 					} else {
 						if (words[2]=="loadimg")
-<<<<<<< HEAD:commands.cpp
 							cout << "sbmap loadimg <image_filename> [-showhead] [-hdu=#]\n\n"
-=======
-							cout << "sbmap loadimg <image_filename> [-showhead]\n\n"
->>>>>>> origin/development:src/commands.cpp
 								"Load an image surface brightness map from file <image_file>. If 'fits_format' is off, then\n"
 								"loads a text file with name '<image_filename>.dat' where pixel values are arranged in matrix\n"
 								"form. The x-values are loaded in from file '<image_filename>.x' and likewise for y-values.\n"
@@ -1349,7 +1308,6 @@ void QLens::process_commands(bool read_file)
 								"has been specified, than the grid dimensions specified by the 'grid' command are used to\n"
 								"set the pixel size. After loading the pixel image, the number of image pixels for plotting\n"
 								"(set by 'img_npixels') is automatically set to be identical to those of the data image.\n"
-<<<<<<< HEAD:commands.cpp
 								"To jump to a different header data unit (HDU), use '-hdu=#' where # is the HDU index.\n"
 								"To show the FITS header for the given HDU index, add the argument '-showhead'.\n";
 						else if (words[2]=="load_noisemap")
@@ -1363,9 +1321,6 @@ void QLens::process_commands(bool read_file)
 								"the 'psf_threshold' setting, such that pixels whose brightness falls below the given threshold\n"
 								"are excluded. To jump to a different FITS header data unit (HDU), use '-hdu=#' where # is the\n"
 								"HDU index. To show the FITS header for the given HDU index, add the argument '-showhead'.\n";
-=======
-								"To show the FITS header, add the argument '-showhead'.\n";
->>>>>>> origin/development:src/commands.cpp
 						else if (words[2]=="loadsrc")
 							cout << "sbmap loadsrc <source_filename>\n\n"
 								"Load a source surface brightness pixel map that was previously saved in qlens (using 'sbmap\n"
@@ -1394,10 +1349,6 @@ void QLens::process_commands(bool read_file)
 								"  [-emask/fgmask] plot image (or residuals) using extended/foreground mask\n"
 								"  [-pnoise] add pixel noise to the plot (if not using noise map, can specify 'pnoise=...')\n"
 								"  [-noptsrc] do not include the point source(s) when plotting the lensed images\n"
-<<<<<<< HEAD:commands.cpp
-=======
-								"  [-nosrcplot] omit the source plane plot (equivalent having 'show_srcplane' off)\n"
->>>>>>> origin/development:src/commands.cpp
 								"  [-nocc] omit critical curves and caustics (equivalent having 'show_cc' off)\n"
 								"  [-replot] plots image that was previously found and plotted by the 'sbmap plotimg' command.\n"
 								"     This allows one to tweak plot parameters (range, show_cc etc.) without having to calculate\n"
@@ -1424,11 +1375,7 @@ void QLens::process_commands(bool read_file)
 								"srcgrid_type=adaptive_cartesian); this file is read when loading the source later using 'sbmap\n"
 								"loadsrc'. The x-values are plotted as '<output_file>.x', and likewise for the y-values.\n";
 						else if (words[2]=="plotsrc")
-<<<<<<< HEAD:commands.cpp
 							cout << "sbmap plotsrc [output_file] [-interp] [-nocaust] [-x2/4/8] [-fits]\n\n"
-=======
-							cout << "sbmap plotsrc [output_file] [-interp] [-nocaust] [-x2/4/8]\n\n"
->>>>>>> origin/development:src/commands.cpp
 								"Plot the pixellated source surface brightness distribution (which has been generated either\n"
 								"using the mksrc, loadsrc, or invert commands). If using a Delaunay grid, the Delaunay source\n"
 								"points are also plotted in addition to the corresponding Voronoi pixels; if '-interp' is\n"
@@ -1512,11 +1459,7 @@ void QLens::process_commands(bool read_file)
 							cout << "sbmap set_posrg_pixels\n\n"
 								"Activate all pixels that have a positive radial gradient. This typically captures the inner part of\n"
 								"the lensed arcs in an image. (Note: the gradient is given by the difference in surface brightness\n"
-<<<<<<< HEAD:commands.cpp
 								"between pixel and its next neighbor along x/y; its dot product with r_hat gives the radial gradient).\n"
-=======
-								"between pixel and its next neighbor along x/y; the dot product of r_hat gives the radial gradient).\n"
->>>>>>> origin/development:src/commands.cpp
 								"To mask all of the lensed arcs, one can follow up with 'trim mask_windows ...' to clean up the mask,\n"
 								"and then use 'sbmap set_neighbor_pixels -ext' until all of the lensed arcs are included in the mask.\n\n";
 						else if (words[2]=="find_noise")
@@ -1532,11 +1475,7 @@ void QLens::process_commands(bool read_file)
 					if (nwords==2)
 						cout << "source <sourcemodel> <source_parameter##> ... [emode=#]\n"
 							"source update <lens_number> ...\n"
-<<<<<<< HEAD:commands.cpp
 							"source vary ...\n"
-=======
-							"source changevary ...\n"
->>>>>>> origin/development:src/commands.cpp
 							"source clear\n\n"
 							"Creates a source object from specified source surface brightness profile model and parameters.\n"
 							"If other sources are present, the new source will be superimposed with the others. If no arguments\n"
@@ -1550,10 +1489,7 @@ void QLens::process_commands(bool read_file)
 							"sersic -- Sersic profile S = S0 * exp(-b*(R/R_eff)^(1/n))\n"
 							"csersic -- Cored Sersic profile S = S0 * exp(-b*(sqrt(R^+rc^2))/R_eff)^(1/n))\n"
 							"dsersic -- Double Sersic profile\n"
-<<<<<<< HEAD:commands.cpp
 							"mge -- Multi-Gaussian expansion (where amplitudes of each component are inferred by linear inversion)\n"
-=======
->>>>>>> origin/development:src/commands.cpp
 							"shapelet -- shapelets of specified order n (whose amplitudes can be inferred by inversion)\n"
 							"sbmpole -- multipole term\n"
 							"tophat -- ellipsoidal 'top hat' profile\n"
@@ -1584,17 +1520,11 @@ void QLens::process_commands(bool read_file)
 						cout << "source sersic <s0> <R_eff> <n> <q> [theta] [x-center] [y-center]    (pmode=0)\n"
 							"source sersic <s_eff> <R_eff> <n> <q> [theta] [x-center] [y-center] (pmode=1)\n\n"
 							"The sersic profile is defined by S = S0 * exp(-b*(R/R_eff)^(1/n)), where b is a factor automatically\n"
-<<<<<<< HEAD:commands.cpp
 							"determined from the value for n (enforces the half-light radius Re) and s0 is the surface brightness\n"
 							"at r=0. If pmode=1 is chosen, the the overall normalization is set by s_eff, the surface brightness at\n"
 							"the effective radius, instead of s0. For the elliptical model, we make the replacement\n"
 							"R --> sqrt(q*x^2 + (y^2/q)), analogous to the elliptical radius defined in the lens models. (Note that\n"
 							"if n=0.5, this is equivalent to a Gaussian with sigma=R_eff/(1.1774*sqrt(q)).)\n"
-=======
-							"determined from the value for n (enforces the half-light radius Re). For the elliptical model, we make\n"
-							"the replacement R --> sqrt(q*x^2 + (y^2/q)), analogous to the elliptical radius defined in the lens\n"
-							"models. (Note that if n=0.5, this is equivalent to a Gaussian with sigma=R_eff/(1.1774*sqrt(q)).)\n"
->>>>>>> origin/development:src/commands.cpp
 							"Note, in the above, [theta] is the angle of rotation (counterclockwise, in degrees) about the center\n"
 							"(defaults=0). Note that for theta=0, the major axis of the source is along the " << LENS_AXIS_DIR << " (the\n"
 							"direction of the major axis (x/y) for theta=0 is toggled by setting major_axis_along_y on/off).\n";
@@ -2068,7 +1998,6 @@ void QLens::process_commands(bool read_file)
 					cout << "data_pixel_size <##>\n\n"
 						"Set the pixel size for files in FITS format. If no size is specified, the pixel grid will\n"
 						"assume the same dimensions that are set by the 'grid' command.\n";
-<<<<<<< HEAD:commands.cpp
 				else if (words[1]=="interpolation_method")
 					cout << "interpolation_method <method>   *** NOTE: deprecated (use 'interpolation_method' instead) *** \n\n"
 						"Set method for interpolating over source pixels after ray-tracing image pixels to the source plane.\n"
@@ -2079,12 +2008,6 @@ void QLens::process_commands(bool read_file)
 					cout << "raytrace_method <method>   *** NOTE: deprecated (use 'interpolation_method' instead) *** \n\n"
 						"Set method for ray tracing image pixels to source pixels (for either cartesian or delaunay grids).\n"
 						"Available methods are:\n\n"
-=======
-				else if (words[1]=="raytrace_method")
-					cout << "raytrace_method <method>\n\n"
-						"Set method for ray tracing image pixels to source pixels (for either cartesian or delaunay grids).\n"
-						"Available methods are:\n\n"
->>>>>>> origin/development:src/commands.cpp
 						"interpolate_3pt -- interpolate surface brightness using linear interpolation in the three nearest\n"
 						"                 source pixels.\n"
 						"interpolate_nn -- interpolate surface brightness using natural neighbors interpolation (for Delaunay\n"
@@ -2258,11 +2181,7 @@ void QLens::process_commands(bool read_file)
 					cout << endl;
 					cout << "raytrace_method: " << ((ray_tracing_method==Area_Overlap) ? "overlap (pixel overlap area)\n" : ((ray_tracing_method==Interpolate) and (!natural_neighbor_interpolation)) ? "interpolate_3pt (linear 3-point interpolation)\n" : ((ray_tracing_method==Interpolate) and (natural_neighbor_interpolation)) ? "interpolate_nn (natural neighbors interpolation)\n" : "unknown\n");
 					cout << "simulate_pixel_noise = " << display_switch(simulate_pixel_noise) << endl;
-<<<<<<< HEAD:commands.cpp
 					//cout << "psf_width: (" << psf_list[0]->psf_width_x << "," << psf_list[0]->psf_width_y << ")\n";
-=======
-					cout << "psf_width: (" << psf_width_x << "," << psf_width_y << ")\n";
->>>>>>> origin/development:src/commands.cpp
 					cout << "psf_threshold = " << psf_threshold << endl;
 					//cout << "psf_mpi: " << display_switch(psf_convolution_mpi) << endl;
 					cout << endl;
@@ -2273,7 +2192,6 @@ void QLens::process_commands(bool read_file)
 					cout << "auto_srcgrid: " << display_switch(auto_sourcegrid) << endl;
 					cout << "auto_shapelet_scale: " << display_switch(auto_shapelet_scaling) << endl;
 					cout << "noise_threshold = " << noise_threshold << endl;
-<<<<<<< HEAD:commands.cpp
 					if (default_data_pixel_size < 0) cout << "data_pixel_size: not specified\n";
 					else cout << "data_pixel_size: " << default_data_pixel_size << endl;
 					cout << "bg_pixel_noise = " << background_pixel_noise << endl;
@@ -2281,26 +2199,6 @@ void QLens::process_commands(bool read_file)
 					cout << "lum_weighted_regularization: " << display_switch(use_lum_weighted_regularization) << endl;
 					cout << "dist_weighted_regularization: " << display_switch(use_distance_weighted_regularization) << endl;
 					cout << "mag_weighted_regularization: " << display_switch(use_mag_weighted_regularization) << endl;
-=======
-					if (data_pixel_size < 0) cout << "data_pixel_size: not specified\n";
-					else cout << "data_pixel_size: " << data_pixel_size << endl;
-					cout << "bg_pixel_noise = " << background_pixel_noise << endl;
-					cout << "inversion_nthreads = " << inversion_nthreads << endl;
-					cout << "pixel_fraction = " << pixel_fraction << endl;
-					cout << "vary_pixel_fraction: " << display_switch(vary_pixel_fraction) << endl;
-					cout << "srcpt_xshift = " << srcpt_xshift << endl;
-					cout << "vary_srcpt_xshift: " << display_switch(vary_srcpt_xshift) << endl;
-					cout << "srcpt_yshift = " << srcpt_xshift << endl;
-					cout << "vary_srcpt_yshift: " << display_switch(vary_srcpt_yshift) << endl;
-					cout << "srcgrid_scale = " << srcgrid_size_scale << endl;
-					cout << "vary_srcgrid_scale: " << display_switch(vary_srcgrid_size_scale) << endl;
-					cout << "regparam = " << regularization_parameter << endl;
-					cout << "vary_regparam: " << display_switch(vary_regularization_parameter) << endl;
-					cout << "lum_weighted_regularization: " << display_switch(use_lum_weighted_regularization) << endl;
-					cout << "dist_weighted_regularization: " << display_switch(use_distance_weighted_regularization) << endl;
-					cout << "regparam_lsc = " << regparam_lsc << endl;
-					cout << "vary_regparam_lsc: " << display_switch(vary_regparam_lsc) << endl;
->>>>>>> origin/development:src/commands.cpp
 					//cout << "regparam_lhi = " << regparam_lhi << endl;
 					//cout << "vary_regparam_lhi: " << display_switch(vary_regparam_lhi) << endl;
 					cout << "outside_sb_prior: " << display_switch(outside_sb_prior) << endl;
@@ -2333,10 +2231,6 @@ void QLens::process_commands(bool read_file)
 					cout << "chisq_imgplane_threshold = " << chisq_imgplane_substitute_threshold << endl;
 					cout << "nimg_penalty: " << display_switch(n_images_penalty) << endl;
 					cout << "chisqtol = " << chisq_tolerance << endl;
-<<<<<<< HEAD:commands.cpp
-=======
-					cout << "srcflux = " << source_flux << endl;
->>>>>>> origin/development:src/commands.cpp
 					cout << "analytic_srcflux: " << display_switch(analytic_source_flux) << endl;
 					cout << "syserr_pos = " << syserr_pos << endl;
 					cout << "wl_shearfac = " << wl_shear_factor << endl;
@@ -2512,11 +2406,7 @@ void QLens::process_commands(bool read_file)
 					if (use_scientific_notation) cout << setiosflags(ios::scientific);
 				}
 			} else if ((nwords==2) and ((words[1]=="-use_data_pxsize") or (words[1]=="-imgpixel"))) {
-<<<<<<< HEAD:commands.cpp
 				if ((n_data_bands > 0) and (default_data_pixel_size <= 0)) Complain("must have loaded image data or else data_pixel_size > 0 to create grid based on image pixels");
-=======
-				if (data_pixel_size <= 0) Complain("must have data_pixel_size > 0 to create grid based on image pixels");
->>>>>>> origin/development:src/commands.cpp
 				set_grid_from_pixels();
 			} else if ((nwords==2) and (pos = words[1].find("-pxsize=")) != string::npos) {
 				double psize;
@@ -2525,11 +2415,7 @@ void QLens::process_commands(bool read_file)
 				sizestr << sizestring;
 				if (!(sizestr >> psize)) Complain("incorrect format for pixel noise");
 				if (psize < 0) Complain("pixel size value cannot be negative");
-<<<<<<< HEAD:commands.cpp
 				default_data_pixel_size = psize;
-=======
-				data_pixel_size = psize;
->>>>>>> origin/development:src/commands.cpp
 				set_grid_from_pixels();
 			} else if (nwords == 3) {
 				double xlh, ylh;
@@ -2562,28 +2448,17 @@ void QLens::process_commands(bool read_file)
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Number of image pixels = (" << n_image_pixels_x << "," << n_image_pixels_y << ")\n";
 			} else if ((nwords == 2) and (words[1]=="-data")) {
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands > 0) {
 					n_image_pixels_x = imgdata_list[0]->npixels_x;
 					n_image_pixels_y = imgdata_list[0]->npixels_y;
 					set_img_npixels(imgdata_list[0]->npixels_x,imgdata_list[0]->npixels_y);
-=======
-				if (image_pixel_data) {
-					n_image_pixels_x = image_pixel_data->npixels_x;
-					n_image_pixels_y = image_pixel_data->npixels_y;
->>>>>>> origin/development:src/commands.cpp
 					if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
 				} else Complain("image pixel data has not been loaded");
 			} else if (nwords == 3) {
 				int npx, npy;
 				if (!(ws[1] >> npx)) Complain("invalid number of pixels");
 				if (!(ws[2] >> npy)) Complain("invalid number of pixels");
-<<<<<<< HEAD:commands.cpp
 				set_img_npixels(npx,npy);
-=======
-				n_image_pixels_x = npx;
-				n_image_pixels_y = npy;
->>>>>>> origin/development:src/commands.cpp
 				if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of image pixels has changed, will need to redo FFT setup
 			} else Complain("two arguments required to set 'img_npixels' (npixels_x, npixels_y), or else use '-data' argument");
 		}
@@ -2606,7 +2481,6 @@ void QLens::process_commands(bool read_file)
 		{
 			int n_clusters;
 			if (nwords == 2) {
-<<<<<<< HEAD:commands.cpp
 				if (words[1]=="all") n_src_clusters = ALL_DATAPIXELS;
 				else if (words[1]=="half") n_src_clusters = HALF_DATAPIXELS;
 				else {
@@ -2636,14 +2510,6 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("must specify either zero or one argument (fraction of source clusters)");
 		}
-=======
-				if (!(ws[1] >> n_clusters)) Complain("invalid number of source clusters for Delaunay grid");
-				n_src_clusters = n_clusters;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Number of source clusters for Delaunay grid = " << n_src_clusters << endl;
-			} else Complain("must specify either zero or one argument (number of source clusters)");
-		}
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="n_cluster_it")
 		{
 			int n_clusters;
@@ -3080,13 +2946,6 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < npar; i++) vary_flags[i] = true;
 						lens_list[lensnum]->vary_parameters(vary_flags);
 					}
-				} else if ((nwords==2) and (set_vary_all)) {
-					for (int lensnum=0; lensnum < nlens; lensnum++) {
-						int npar = lens_list[lensnum]->n_params;
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = true;
-						set_lens_vary_parameters(lensnum,vary_flags);
-					}
 				} else {
 					if (nwords != 3) Complain("one argument required for 'lens vary' (lens number)");
 					int lensnum;
@@ -3108,20 +2967,12 @@ void QLens::process_commands(bool read_file)
 						int npar = lens_list[lensnum]->n_params;
 						boolvector vary_flags(npar);
 						for (int i=0; i < npar; i++) vary_flags[i] = false;
-<<<<<<< HEAD:commands.cpp
 						lens_list[lensnum]->vary_parameters(vary_flags);
-=======
-						set_lens_vary_parameters(lensnum,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 					} else if (set_vary_all) {
 						int npar = lens_list[lensnum]->n_params;
 						boolvector vary_flags(npar);
 						for (int i=0; i < npar; i++) vary_flags[i] = true;
-<<<<<<< HEAD:commands.cpp
 						lens_list[lensnum]->vary_parameters(vary_flags);
-=======
-						set_lens_vary_parameters(lensnum,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 					}
 				}
 				update_specific_parameters = true; // this will ensure it skips trying to create a lens model
@@ -3253,11 +3104,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sple");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 7; // this does not include redshift
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3316,11 +3164,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -3370,11 +3214,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model dpie");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3439,11 +3280,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -3564,11 +3401,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
 						}
@@ -3638,11 +3471,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model nfw");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3708,11 +3538,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -3808,11 +3634,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model tnfw");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -3875,11 +3698,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -3939,11 +3758,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						//if (p3 >= p2) Complain("core radius (p3) must be smaller than scale radius (p2) for model cnfw");
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4006,11 +3822,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -4045,11 +3857,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model expdisk");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4108,11 +3917,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -4147,11 +3952,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model tophat");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4210,11 +4012,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -4256,11 +4054,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[index] >> yc)) Complain("invalid y-center parameter for model kspline");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4319,11 +4114,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -4358,11 +4149,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model hern");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4421,11 +4209,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -4494,11 +4278,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[10] >> yc)) Complain("invalid y-center parameter for model corecusp");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 9;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4561,11 +4342,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -4645,11 +4422,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (auto_set_primary_lens) set_primary_lens();
 						}
 					}
@@ -4691,11 +4464,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sersic");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4754,11 +4524,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -4806,11 +4572,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[11] >> yc)) Complain("invalid y-center parameter for model dsersic");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 10;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4869,11 +4632,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -4918,11 +4677,8 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[9] >> yc)) Complain("invalid y-center parameter for model csersic");
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						default_nparams = 8;
 						param_vals.input(default_nparams+1); // add one for redshift
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
@@ -4983,11 +4739,7 @@ void QLens::process_commands(bool read_file)
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (lensed_center_coords) lens_list[nlens-1]->set_lensed_center(true);
 							else if (transform_to_pixsrc_frame) lens_list[nlens-1]->setup_transform_center_coords_to_pixsrc_frame(xc,yc);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (is_perturber) lens_list[nlens-1]->set_perturber(true);
 							if (auto_set_primary_lens) set_primary_lens();
 							if ((egrad) and (!enter_egrad_params_and_varyflags)) lens_list[nlens-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -5061,11 +4813,7 @@ void QLens::process_commands(bool read_file)
 							add_mass_sheet_lens(zl_in, reference_source_redshift, kappa, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						}
 					}
 					else Complain("sheet requires at least 1 parameter, kappa");
@@ -5111,14 +4859,8 @@ void QLens::process_commands(bool read_file)
 							lens_list[lens_number]->update_parameters(param_vals.array());
 						} else {
 							create_and_add_lens(DEFLECTION, emode, zl_in, reference_source_redshift, 0, 0, defx, defy, 0, 0, 0, 0);
-<<<<<<< HEAD:commands.cpp
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
-							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						}
 					}
 					else Complain("deflection requires at least two parameters, defx and defy");
@@ -5187,11 +4929,7 @@ void QLens::process_commands(bool read_file)
 							add_shear_lens(zl_in, reference_source_redshift, shear_p1, shear_p2, xc, yc);
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						}
 					}
 					else {
@@ -5296,11 +5034,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (tabulate_existing_lens) remove_lens(lnum);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
@@ -5405,11 +5139,7 @@ void QLens::process_commands(bool read_file)
 							}
 							if (anchor_lens_center) lens_list[nlens-1]->anchor_center_to_lens(anchornum);
 							for (int i=0; i < parameter_anchor_i; i++) lens_list[nlens-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,lens_list[parameter_anchors[i].anchor_object_number]);
-<<<<<<< HEAD:commands.cpp
 							if (vary_parameters) lens_list[nlens-1]->vary_parameters(vary_flags);
-=======
-							if (vary_parameters) set_lens_vary_parameters(nlens-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 							if (qtabulate_existing_lens) remove_lens(lnum);
 							if (auto_set_primary_lens) set_primary_lens();
 						}
@@ -5480,7 +5210,6 @@ void QLens::process_commands(bool read_file)
 										enter_limits = false;
 									}
 									if (!enter_limits) {
-<<<<<<< HEAD:commands.cpp
 										i++;
 									}
 								}
@@ -5495,40 +5224,6 @@ void QLens::process_commands(bool read_file)
 									}
 									i++;
 								}
-=======
-										lower_initial[i] = lower[i];
-										upper_initial[i] = upper[i];
-										i++;
-									}
-								}
-								if (enter_limits) {
-									if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
-									if (read_command(false)==false) { remove_lens(nlens-1); Complain("parameter limits could not be read"); }
-									if (nwords >= 2) {
-										if (!(ws[0] >> lower[i])) { remove_lens(nlens-1); Complain("invalid lower limit"); }
-										if (!(ws[1] >> upper[i])) { remove_lens(nlens-1); Complain("invalid upper limit"); }
-										if (nwords == 2) {
-											lower_initial[i] = lower[i];
-											upper_initial[i] = upper[i];
-										} else if (nwords == 3) {
-											double width;
-											if (!(ws[2] >> width)) { remove_lens(nlens-1); Complain("invalid initial parameter width"); }
-											lower_initial[i] = param_vals[j] - width;
-											upper_initial[i] = param_vals[j] + width;
-										} else if (nwords == 4) {
-											if (!(ws[2] >> lower_initial[i])) { remove_lens(nlens-1); Complain("invalid initial lower limit"); }
-											if (!(ws[3] >> upper_initial[i])) { remove_lens(nlens-1); Complain("invalid initial upper limit"); }
-										} else {
-											remove_lens(nlens-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
-										}
-									} else {
-										remove_lens(nlens-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
-									}
-									if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
-									if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
-									i++;
-								}
->>>>>>> origin/development:src/commands.cpp
 							}
 						}
 						lens_list[nlens-1]->set_limits(lower,upper);
@@ -5615,12 +5310,9 @@ void QLens::process_commands(bool read_file)
 			bool zoom = false;
 			double c0val = 0;
 			double rtval = 0;
-<<<<<<< HEAD:commands.cpp
 			int nmax = -1; // for shapelets and MGE's
 			double sig_i = 0.02; // for MGE's
 			double sig_f = 3; // for MGE's
-=======
->>>>>>> origin/development:src/commands.cpp
 
 			const int nmax_anchor = 100;
 			ParamAnchor parameter_anchors[nmax_anchor]; // number of anchors per source can't exceed 100 (which will never happen!)
@@ -5633,10 +5325,6 @@ void QLens::process_commands(bool read_file)
 					remove_word(i);
 				}
 			}
-<<<<<<< HEAD:commands.cpp
-=======
-
->>>>>>> origin/development:src/commands.cpp
 
 			if (words[0]=="fit") {
 				//if ((source_fit_mode != Parameterized_Source) and (source_fit_mode != Shapelet_Source)) Complain("cannot vary parameters for source object unless 'fit source_mode' is set to 'sbprofile' or 'shapelet'");
@@ -5683,7 +5371,6 @@ void QLens::process_commands(bool read_file)
 					ws = new_ws;
 				} else Complain("must specify a source number to update, followed by parameters");
 			} else {
-<<<<<<< HEAD:commands.cpp
 				for (int j=nwords-1; j >= 2; j--) {
 					if (words[j].find("n=")==0) {
 						if (update_parameters) Complain("n=# argument cannot be specified when updating " << words[1]);
@@ -5709,8 +5396,6 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 
-=======
->>>>>>> origin/development:src/commands.cpp
 				for (int i=2; i < nwords; i++) {
 					int pos;
 					if ((pos = words[i].find("emode=")) != string::npos) {
@@ -5936,13 +5621,8 @@ void QLens::process_commands(bool read_file)
 						if (invalid_params==true) Complain("Invalid vary flag (must specify 0 or 1)");
 					}
 					int j = 0;
-<<<<<<< HEAD:commands.cpp
 					// NOTE: when the vary flags are handled this way, it doesn't actually add these to the general parameter list like sb_list[src_number]->vary_parameters(...) does.
 					// Should probably just get the vary flags for that source object, tack on the new Fourier vary flags and then use sb_list[src_number]->vary_parameters(...) instead.
-=======
-					// NOTE: when the vary flags are handled this way, it doesn't actually add these to the general parameter list like set_sb_vary_parameters(...) does.
-					// Should probably just get the vary flags for that source object, tack on the new Fourier vary flags and then use set_sb_vary_parameters instead.
->>>>>>> origin/development:src/commands.cpp
 					for (int i=0; i < fourier_nmodes; i++) {
 						sb_list[src_number]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],vary_flags[j],vary_flags[j+1]); // yes, both j++'s should be on this line!
 						j += 2;
@@ -6031,13 +5711,6 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < npar; i++) vary_flags[i] = true;
 						sb_list[srcnum]->vary_parameters(vary_flags);
 					}
-				} else if ((nwords==2) and (set_vary_all)) {
-					for (int srcnum=0; srcnum < n_sb; srcnum++) {
-						int npar = sb_list[srcnum]->n_params;
-						boolvector vary_flags(npar);
-						for (int i=0; i < npar; i++) vary_flags[i] = true;
-						set_sb_vary_parameters(srcnum,vary_flags);
-					}
 				} else {
 					if (nwords != 3) Complain("one argument required for 'source vary' (src number)");
 					int srcnum;
@@ -6057,20 +5730,12 @@ void QLens::process_commands(bool read_file)
 						int npar = sb_list[srcnum]->n_params;
 						boolvector vary_flags(npar);
 						for (int i=0; i < npar; i++) vary_flags[i] = false;
-<<<<<<< HEAD:commands.cpp
 						sb_list[srcnum]->vary_parameters(vary_flags);
-=======
-						set_sb_vary_parameters(srcnum,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 					} else if (set_vary_all) {
 						int npar = sb_list[srcnum]->n_params;
 						boolvector vary_flags(npar);
 						for (int i=0; i < npar; i++) vary_flags[i] = true;
-<<<<<<< HEAD:commands.cpp
 						sb_list[srcnum]->vary_parameters(vary_flags);
-=======
-						set_sb_vary_parameters(srcnum,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 					}
 				}
 				update_specific_parameters = true;
@@ -6091,7 +5756,6 @@ void QLens::process_commands(bool read_file)
 				}	
 			}
 
-<<<<<<< HEAD:commands.cpp
 			int band = 0;
 			for (int i=1; i < nwords; i++) {
 				int pos;
@@ -6108,10 +5772,6 @@ void QLens::process_commands(bool read_file)
 			}	
 
 			if (update_specific_parameters) ; // the updating has already been done, so just continue to the next command
-=======
-
-			if (update_specific_parameters) ;
->>>>>>> origin/development:src/commands.cpp
 			else if (nwords==1) {
 				if (mpi_id==0) print_source_list(vary_parameters);
 				vary_parameters = false; // this makes it skip to the next command so it doesn't try to prompt for parameter limits
@@ -6216,7 +5876,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
-<<<<<<< HEAD:commands.cpp
 							} else if (words[6].find("anchor_lens_center=")==0) {
 								string anchorstr = words[6].substr(19);
 								stringstream anchorstream;
@@ -6231,8 +5890,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
 								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
 								anchor_center_to_ptsrc = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 							}
 
 						} else if (nwords == 8) {
@@ -6261,11 +5918,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-<<<<<<< HEAD:commands.cpp
 						create_and_add_source_object(GAUSSIAN, is_lensed, band, zs_in, emode, sbmax, sig, 0, 0, q, theta, xc, yc);
-=======
-						add_source_object(GAUSSIAN, is_lensed, zs_in, emode, sbmax, sig, 0, 0, q, theta, xc, yc);
->>>>>>> origin/development:src/commands.cpp
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6273,11 +5926,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-<<<<<<< HEAD:commands.cpp
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
-=======
->>>>>>> origin/development:src/commands.cpp
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6287,11 +5937,7 @@ void QLens::process_commands(bool read_file)
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-<<<<<<< HEAD:commands.cpp
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -6341,7 +5987,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
-<<<<<<< HEAD:commands.cpp
 							} else if (words[pi].find("anchor_lens_center=")==0) {
 								string anchorstr = words[pi].substr(19);
 								stringstream anchorstream;
@@ -6356,8 +6001,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
 								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
 								anchor_center_to_ptsrc = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 							} else Complain("must specify both xc and yc, or 'anchor_center=#' if anchoring, for model Shapelet");
 						} else if (nwords == (pi+2)) {
 							if (!(ws[pi++] >> xc)) Complain("invalid x-center parameter for model shapelet");
@@ -6388,15 +6031,10 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 						if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amplitudes may have changed, will redo FFT setup here
 					} else {
-<<<<<<< HEAD:commands.cpp
 						create_and_add_shapelet_source(is_lensed, band, zs_in, amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
-=======
-						add_shapelet_source(is_lensed, zs_in, amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
-						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
->>>>>>> origin/development:src/commands.cpp
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) {
 							if (sb_list[n_sb-1]->vary_parameters(vary_flags)==false) Complain("could not vary parameters for model shapelet");
@@ -6509,7 +6147,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
-<<<<<<< HEAD:commands.cpp
 							} else if (words[7].find("anchor_lens_center=")==0) {
 								string anchorstr = words[7].substr(19);
 								stringstream anchorstream;
@@ -6524,8 +6161,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
 								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
 								anchor_center_to_ptsrc = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 							}
 						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model sersic");
@@ -6554,11 +6189,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-<<<<<<< HEAD:commands.cpp
 						create_and_add_source_object(SERSIC, is_lensed, band, zs_in, emode, s0, reff, 0, n, q, theta, xc, yc, 0, 0, pmode);
-=======
-						add_source_object(SERSIC, is_lensed, zs_in, emode, s0, reff, 0, n, q, theta, xc, yc);
->>>>>>> origin/development:src/commands.cpp
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6566,11 +6197,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-<<<<<<< HEAD:commands.cpp
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
-=======
->>>>>>> origin/development:src/commands.cpp
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6580,11 +6208,7 @@ void QLens::process_commands(bool read_file)
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-<<<<<<< HEAD:commands.cpp
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -6615,7 +6239,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
-<<<<<<< HEAD:commands.cpp
 							} else if (words[10].find("anchor_lens_center=")==0) {
 								string anchorstr = words[10].substr(19);
 								stringstream anchorstream;
@@ -6630,8 +6253,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
 								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
 								anchor_center_to_ptsrc = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 							}
 						} else if (nwords == 12) {
 							if (!(ws[10] >> xc)) Complain("invalid x-center parameter for model Csersic");
@@ -6660,11 +6281,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-<<<<<<< HEAD:commands.cpp
 						create_and_add_source_object(CORE_SERSIC, is_lensed, band, zs_in, emode, s0, reff, rc, n, q, theta, xc, yc, gamma, alpha);
-=======
-						add_source_object(CORE_SERSIC, is_lensed, zs_in, emode, s0, reff, rc, n, q, theta, xc, yc, gamma, alpha);
->>>>>>> origin/development:src/commands.cpp
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6672,11 +6289,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-<<<<<<< HEAD:commands.cpp
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
-=======
->>>>>>> origin/development:src/commands.cpp
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6686,11 +6300,7 @@ void QLens::process_commands(bool read_file)
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-<<<<<<< HEAD:commands.cpp
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -6719,7 +6329,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
-<<<<<<< HEAD:commands.cpp
 							} else if (words[8].find("anchor_lens_center=")==0) {
 								string anchorstr = words[8].substr(19);
 								stringstream anchorstream;
@@ -6734,8 +6343,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
 								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
 								anchor_center_to_ptsrc = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 							}
 						} else if (nwords == 10) {
 							if (!(ws[8] >> xc)) Complain("invalid x-center parameter for model csersic");
@@ -6764,11 +6371,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-<<<<<<< HEAD:commands.cpp
 						create_and_add_source_object(CORED_SERSIC, is_lensed, band, zs_in, emode, s0, reff, rc, n, q, theta, xc, yc);
-=======
-						add_source_object(CORED_SERSIC, is_lensed, zs_in, emode, s0, reff, rc, n, q, theta, xc, yc);
->>>>>>> origin/development:src/commands.cpp
 
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
@@ -6777,11 +6380,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-<<<<<<< HEAD:commands.cpp
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
-=======
->>>>>>> origin/development:src/commands.cpp
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6791,11 +6391,7 @@ void QLens::process_commands(bool read_file)
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-<<<<<<< HEAD:commands.cpp
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -6826,7 +6422,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
-<<<<<<< HEAD:commands.cpp
 							} else if (words[10].find("anchor_lens_center=")==0) {
 								string anchorstr = words[10].substr(19);
 								stringstream anchorstream;
@@ -6841,8 +6436,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
 								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
 								anchor_center_to_ptsrc = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 							}
 						} else if (nwords == 12) {
 							if (!(ws[10] >> xc)) Complain("invalid x-center parameter for model dsersic");
@@ -6871,11 +6464,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-<<<<<<< HEAD:commands.cpp
 						create_and_add_source_object(DOUBLE_SERSIC, is_lensed, band, zs_in, emode, s0, reff1, reff2, ds, q, theta, xc, yc, n1, n2); // super-awkward to use the "add_source_object" function for this....
-=======
-						add_source_object(DOUBLE_SERSIC, is_lensed, zs_in, emode, s0, reff1, reff2, ds, q, theta, xc, yc, n1, n2); // super-awkward to use the "add_source_object" function for this....
->>>>>>> origin/development:src/commands.cpp
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6883,11 +6472,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-<<<<<<< HEAD:commands.cpp
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
-=======
->>>>>>> origin/development:src/commands.cpp
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -6897,11 +6483,7 @@ void QLens::process_commands(bool read_file)
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-<<<<<<< HEAD:commands.cpp
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -6929,7 +6511,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
-<<<<<<< HEAD:commands.cpp
 							} else if (words[7].find("anchor_lens_center=")==0) {
 								string anchorstr = words[7].substr(19);
 								stringstream anchorstream;
@@ -6944,8 +6525,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
 								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
 								anchor_center_to_ptsrc = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 							}
 						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model sple");
@@ -6974,11 +6553,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-<<<<<<< HEAD:commands.cpp
 						create_and_add_source_object(sple, is_lensed, band, zs_in, emode, bs, s, 0, alpha, q, theta, xc, yc);
-=======
-						add_source_object(sple, is_lensed, zs_in, emode, bs, s, 0, alpha, q, theta, xc, yc);
->>>>>>> origin/development:src/commands.cpp
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -6986,11 +6561,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-<<<<<<< HEAD:commands.cpp
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
-=======
->>>>>>> origin/development:src/commands.cpp
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -7000,11 +6572,7 @@ void QLens::process_commands(bool read_file)
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-<<<<<<< HEAD:commands.cpp
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -7032,7 +6600,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
-<<<<<<< HEAD:commands.cpp
 							} else if (words[7].find("anchor_lens_center=")==0) {
 								string anchorstr = words[7].substr(19);
 								stringstream anchorstream;
@@ -7047,8 +6614,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
 								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
 								anchor_center_to_ptsrc = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 							}
 						} else if (nwords == 9) {
 							if (!(ws[7] >> xc)) Complain("invalid x-center parameter for model dpie");
@@ -7077,11 +6642,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-<<<<<<< HEAD:commands.cpp
 						create_and_add_source_object(dpie, is_lensed, band, zs_in, emode, bs, a, s, 0, q, theta, xc, yc);
-=======
-						add_source_object(dpie, is_lensed, zs_in, emode, bs, a, s, 0, q, theta, xc, yc);
->>>>>>> origin/development:src/commands.cpp
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -7089,11 +6650,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-<<<<<<< HEAD:commands.cpp
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
-=======
->>>>>>> origin/development:src/commands.cpp
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -7103,11 +6661,7 @@ void QLens::process_commands(bool read_file)
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-<<<<<<< HEAD:commands.cpp
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -7134,7 +6688,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid source number for source to anchor to");
 								if (anchornum >= n_sb) Complain("source anchor number does not exist");
 								anchor_source_center = true;
-<<<<<<< HEAD:commands.cpp
 							} else if (words[6].find("anchor_lens_center=")==0) {
 								string anchorstr = words[6].substr(19);
 								stringstream anchorstream;
@@ -7149,8 +6702,6 @@ void QLens::process_commands(bool read_file)
 								if (!(anchorstream >> anchornum)) Complain("invalid ptsrc number for ptsrc to anchor to");
 								if (anchornum >= n_ptsrc) Complain("ptsrc anchor number does not exist");
 								anchor_center_to_ptsrc = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 							}
 						} else if (nwords == 8) {
 							if (!(ws[6] >> xc)) Complain("invalid x-center parameter for model nfw");
@@ -7179,11 +6730,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-<<<<<<< HEAD:commands.cpp
 						create_and_add_source_object(nfw_SOURCE, is_lensed, band, zs_in, emode, s0, rs, 0, 0, q, theta, xc, yc);
-=======
-						add_source_object(nfw_SOURCE, is_lensed, zs_in, emode, s0, rs, 0, 0, q, theta, xc, yc);
->>>>>>> origin/development:src/commands.cpp
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -7191,11 +6738,8 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
-<<<<<<< HEAD:commands.cpp
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
-=======
->>>>>>> origin/development:src/commands.cpp
 						for (int i=0; i < fourier_nmodes; i++) {
 							sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 						}
@@ -7205,11 +6749,7 @@ void QLens::process_commands(bool read_file)
 						if (include_truncation_radius) sb_list[n_sb-1]->add_truncation_radius(rtval,false);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-<<<<<<< HEAD:commands.cpp
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -7283,15 +6823,9 @@ void QLens::process_commands(bool read_file)
 					if (update_parameters) {
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
-<<<<<<< HEAD:commands.cpp
 						create_and_add_multipole_source(is_lensed, band, zs_in, m, a_m, r0, theta, xc, yc, sine_term);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						add_multipole_source(is_lensed, zs_in, m, a_m, r0, theta, xc, yc, sine_term);
-						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 					}
 				}
@@ -7333,11 +6867,7 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 					} else {
 						if ((egrad) and (!read_egrad_params(vary_parameters,egrad_mode,efunc_params,nparams_to_vary,vary_flags,default_nparams,xc,yc,parameter_anchors,parameter_anchor_i,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals,enter_egrad_params_and_varyflags,enter_knots))) Complain("could not read ellipticity gradient parameters");
-<<<<<<< HEAD:commands.cpp
 						create_and_add_source_object(TOPHAT, is_lensed, band, zs_in, emode, sb, rad, 0, 0, q, theta, xc, yc);
-=======
-						add_source_object(TOPHAT, is_lensed, zs_in, emode, sb, rad, 0, 0, q, theta, xc, yc);
->>>>>>> origin/development:src/commands.cpp
 						if (egrad) {
 							if (sb_list[n_sb-1]->enable_ellipticity_gradient(efunc_params,egrad_mode,n_bspline_coefs,egrad_knots,ximin,ximax,xiref,linear_xivals)==false) {
 								remove_source_object(n_sb-1);
@@ -7351,11 +6881,7 @@ void QLens::process_commands(bool read_file)
 						if (fgrad) sb_list[n_sb-1]->enable_fourier_gradient(fgrad_params,fgrad_knots);
 						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
-<<<<<<< HEAD:commands.cpp
 						if (vary_parameters) sb_list[n_sb-1]->vary_parameters(vary_flags);
-=======
-						if (vary_parameters) set_sb_vary_parameters(n_sb-1,vary_flags);
->>>>>>> origin/development:src/commands.cpp
 						if (zoom) sb_list[n_sb-1]->set_zoom_subgridding(true);
 						if (lensed_center_coords) sb_list[n_sb-1]->set_lensed_center(true);
 						if ((egrad) and (!enter_egrad_params_and_varyflags)) sb_list[n_sb-1]->find_egrad_paramnums(egrad_qi,egrad_qf,egrad_theta_i,egrad_theta_f,fgrad_amp_i,fgrad_amp_f);
@@ -7383,11 +6909,7 @@ void QLens::process_commands(bool read_file)
 							}
 						} else if (nwords == 6) Complain("must specify qx and f parameters together");
 					}
-<<<<<<< HEAD:commands.cpp
 					create_and_add_splined_source_object(words[2].c_str(), is_lensed, band, zs_in, emode, q, theta, qx, f, xc, yc);
-=======
-					add_source_object(words[2].c_str(), is_lensed, zs_in, emode, q, theta, qx, f, xc, yc);
->>>>>>> origin/development:src/commands.cpp
 					for (int i=0; i < fourier_nmodes; i++) {
 						sb_list[n_sb-1]->add_fourier_mode(fourier_mvals[i],fourier_Amvals[i],fourier_Bmvals[i],false,false);
 					}
@@ -7427,7 +6949,6 @@ void QLens::process_commands(bool read_file)
 									enter_limits = false;
 								}
 								if (!enter_limits) {
-<<<<<<< HEAD:commands.cpp
 									i++;
 								}
 							}
@@ -8453,88 +7974,9 @@ void QLens::process_commands(bool read_file)
 								}
 							}
 							psf_list[psfnum]->set_limits(lower,upper);
-=======
-									lower_initial[i] = lower[i];
-									upper_initial[i] = upper[i];
-									i++;
-								}
-							}
-							if (enter_limits) {
-								if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramnames[i] << ":\n";
-								if (read_command(false)==false) { remove_source_object(n_sb-1); Complain("parameter limits could not be read"); }
-								if (nwords >= 2) {
-									if (!(ws[0] >> lower[i])) { remove_source_object(n_sb-1); Complain("invalid lower limit"); }
-									if (!(ws[1] >> upper[i])) { remove_source_object(n_sb-1); Complain("invalid upper limit"); }
-									if (nwords == 2) {
-										lower_initial[i] = lower[i];
-										upper_initial[i] = upper[i];
-									} else if (nwords == 3) {
-										double width;
-										if (!(ws[2] >> width)) { remove_source_object(n_sb-1); Complain("invalid initial parameter width"); }
-										lower_initial[i] = param_vals[j] - width;
-										upper_initial[i] = param_vals[j] + width;
-									} else if (nwords == 4) {
-										if (!(ws[2] >> lower_initial[i])) { remove_source_object(n_sb-1); Complain("invalid initial lower limit"); }
-										if (!(ws[3] >> upper_initial[i])) { remove_source_object(n_sb-1); Complain("invalid initial upper limit"); }
-									} else {
-										remove_source_object(n_sb-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
-									}
-								} else {
-									remove_source_object(n_sb-1); Complain("must specify two/four arguments: lower limit, upper limit, and (optional) initial lower limit, initial upper limit");
-								}
-								if (lower_initial[i] < lower[i]) lower_initial[i] = lower[i];
-								if (upper_initial[i] > upper[i]) upper_initial[i] = upper[i];
-								i++;
-							}
->>>>>>> origin/development:src/commands.cpp
 						}
 					}
 				}
-			}
-			if ((update_parameters) and (sb_list[src_number]->ellipticity_gradient) and (sb_list[src_number]->contours_overlap)) warn("surface brightness contours overlap for chosen ellipticity gradient parameters");
-		}
-		else if (words[0]=="pixsrc")
-		{
-			//vector<string> args;
-			//if (extract_word_starts_with('-',2,nwords-1,args)==true)
-			//{
-				//for (int i=0; i < args.size(); i++) {
-					//if (args[i]=="-kpc") use_kpc = true;
-					//else Complain("argument '" << args[i] << "' not recognized");
-				//}
-			//}
-			double zsrc = source_redshift;
-			for (int i=1; i < nwords; i++) {
-				int pos;
-				if ((pos = words[i].find("z=")) != string::npos) {
-					string znumstring = words[i].substr(pos+2);
-					stringstream znumstr;
-					znumstr << znumstring;
-					if (!(znumstr >> zsrc)) Complain("incorrect format for source redshift");
-					if (zsrc < 0) Complain("source redshift cannot be negative");
-					remove_word(i);
-					break;
-				}
-			}	
-
-			if (nwords==1) { if (mpi_id==0) print_pixellated_source_list(); }
-			else {
-				if (words[1]=="clear") {
-					if (nwords==2) {
-						while (n_pixellated_src > 0) {
-							remove_pixellated_source(n_pixellated_src-1);
-						}
-					}
-					else if (nwords==3) {
-						int pixsrc_number;
-						if (!(ws[2] >> pixsrc_number)) Complain("invalid pixsrc number");
-						remove_pixellated_source(pixsrc_number);
-					} else Complain("only one argument allowed for 'pixsrc clear' (number of pixellated source to remove)");
-				}
-				else if (words[1]=="add") {
-					add_pixellated_source(zsrc);
-				}
-				else Complain("unrecognized argument to 'pixsrc'");
 			}
 		}
 		else if (words[0]=="fit")
@@ -8594,10 +8036,7 @@ void QLens::process_commands(bool read_file)
 							else if (regularization_method==Gradient) cout << "Regularization method: gradient" << endl;
 							else if (regularization_method==SmoothGradient) cout << "Regularization method: sgradient" << endl;
 							else if (regularization_method==Curvature) cout << "Regularization method: curvature" << endl;
-<<<<<<< HEAD:commands.cpp
 							else if (regularization_method==SmoothCurvature) cout << "Regularization method: scurvature" << endl;
-=======
->>>>>>> origin/development:src/commands.cpp
 							else if (regularization_method==Matern_Kernel) cout << "Regularization method: Matern kernel" << endl;
 							else if (regularization_method==Exponential_Kernel) cout << "Regularization method: exponential kernel" << endl;
 							else if (regularization_method==Squared_Exponential_Kernel) cout << "Regularization method: squared exponential kernel" << endl;
@@ -8617,10 +8056,7 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="gradient") regularization_method = Gradient;
 						else if (setword=="sgradient") regularization_method = SmoothGradient;
 						else if (setword=="curvature") regularization_method = Curvature;
-<<<<<<< HEAD:commands.cpp
 						else if (setword=="scurvature") regularization_method = SmoothCurvature;
-=======
->>>>>>> origin/development:src/commands.cpp
 						else if (setword=="matern_kernel") regularization_method = Matern_Kernel;
 						else if (setword=="exp_kernel") regularization_method = Exponential_Kernel;
 						else if (setword=="sqexp_kernel") regularization_method = Squared_Exponential_Kernel;
@@ -8630,178 +8066,6 @@ void QLens::process_commands(bool read_file)
 						}
 					} else Complain("invalid number of arguments; can only specify regularization method");
 				}
-<<<<<<< HEAD:commands.cpp
-=======
-				else if (words[1]=="sourcept")
-				{
-					bool add_to_image = false;
-					bool lensed = true;
-					bool make_imgdata = false;
-					vector<string> args;
-					if (extract_word_starts_with('-',2,nwords-1,args)==true)
-					{
-						int pos;
-						for (int i=0; i < args.size(); i++) {
-							if (args[i]=="-add") add_to_image = true;
-							else if (args[i]=="-add_unlensed") { add_to_image = true; lensed = false; }
-							else if (args[i]=="-mkimgdata") { make_imgdata = true; }
-							else Complain("argument '" << args[i] << "' not recognized");
-						}
-					}
-
-					if (((!add_to_image) or (make_imgdata)) and (n_sourcepts_fit==0)) Complain("No image data has been loaded");
-					if (make_imgdata) add_image_data_from_unlensed_sourcepts(false);
-					else if (nwords==2) {
-						print_sourcept_list();
-					}
-					else if ((nwords==3) and (words[2]=="auto")) {
-						if (nlens==0) Complain("No lens model has been defined; cannot determine optimal source point");
-						set_analytic_sourcepts();
-					}
-					else if ((nwords==3) and (words[2]=="clear")) {
-						clear_sourcepts();
-					}
-					else if (nwords==4)
-					{
-						double xs, ys;
-						if (!(ws[2] >> xs)) Complain("Invalid x-coordinate for initial source point");
-						if (!(ws[3] >> ys)) Complain("Invalid y-coordinate for initial source point");
-						if (add_to_image) {
-							lensvector srcpt; srcpt[0] = xs; srcpt[1] = ys;
-							double zsrc = (lensed) ? source_redshift : lens_redshift;
-							int srcpt_i = n_sourcepts_fit;
-							if (!add_fit_sourcept(srcpt,zsrc)) Complain("could not add source point");
-							if (!use_analytic_bestfit_src) {
-								set_sourcept_vary_parameters(srcpt_i,true,true);
-							}
-						} else {
-							if (n_sourcepts_fit > 1) Complain("with more than one source point, coordinates must be entered on separate lines after 'fit sourcept'");
-							sourcepts_fit[0][0] = xs;
-							sourcepts_fit[0][1] = ys;
-						}
-						if ((add_to_image) and (fitmethod != POWELL) and (fitmethod != SIMPLEX))
-						{
-							if (mpi_id==0) cout << "Limits for x-coordinate of source point:\n";
-							if (read_command(false)==false) return;
-							double xmin,xmax,ymin,ymax;
-							if (nwords != 2) Complain("Must specify two arguments for source point x-coordinate limits: xmin, xmax");
-							if (!(ws[0] >> xmin)) Complain("Invalid lower limit for x-coordinate of source point");
-							if (!(ws[1] >> xmax)) Complain("Invalid upper limit for x-coordinate of source point");
-							if (xmin > xmax) Complain("lower limit cannot be greater than upper limit");
-							if (mpi_id==0) cout << "Limits for y-coordinate of source point:\n";
-							if (read_command(false)==false) return;
-							if (nwords != 2) Complain("Must specify two arguments for source point y-coordinate limits: ymin, ymax");
-							if (!(ws[0] >> ymin)) Complain("Invalid lower limit for y-coordinate of source point");
-							if (!(ws[1] >> ymax)) Complain("Invalid upper limit for y-coordinate of source point");
-							if (ymin > ymax) Complain("lower limit cannot be greater than upper limit");
-							sourcepts_lower_limit[0][0] = xmin;
-							sourcepts_upper_limit[0][0] = xmax;
-							sourcepts_lower_limit[0][1] = ymin;
-							sourcepts_upper_limit[0][1] = ymax;
-						}
-						if (use_analytic_bestfit_src) {
-							if (mpi_id==0) warn(warnings,"with 'analytic_bestfit_src' turned on, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
-						}
-					} else if (nwords==3) {
-						int imin = 0, imax = n_sourcepts_fit;
-						if (words[2] != "update") {
-							int srcpt_num;
-							if (!(ws[2] >> srcpt_num)) Complain("Invalid index number for source point");
-							if ((srcpt_num >= n_sourcepts_fit) or (srcpt_num < 0)) Complain("Source point number " << srcpt_num << " does not exist");
-							imin=srcpt_num;
-							imax=srcpt_num+1;
-						}
-						double xs, ys;
-						for (int i=imin; i < imax; i++) {
-							if ((verbal_mode) and (mpi_id==0)) cout << "Source point " << i << ":\n";
-							if (read_command(false)==false) return;
-							if (nwords != 2) Complain("Must specify two coordinates for initial source point");
-							if (!(ws[0] >> xs)) Complain("Invalid x-coordinate for initial source point");
-							if (!(ws[1] >> ys)) Complain("Invalid y-coordinate for initial source point");
-							/*
-							if ((fitmethod != POWELL) and (fitmethod != SIMPLEX))
-							{
-								if (mpi_id==0) cout << "Limits for x-coordinate of source point " << i << ":\n";
-								if (read_command(false)==false) return;
-								double xmin,xmax,ymin,ymax;
-								if (nwords != 2) Complain("Must specify two arguments for source point x-coordinate limits: xmin, xmax");
-								if (!(ws[0] >> xmin)) Complain("Invalid lower limit for x-coordinate of source point");
-								if (!(ws[1] >> xmax)) Complain("Invalid upper limit for x-coordinate of source point");
-								if (mpi_id==0) cout << "Limits for y-coordinate of source point " << i << ":\n";
-								if (read_command(false)==false) return;
-								if (nwords != 2) Complain("Must specify two arguments for source point y-coordinate limits: ymin, ymax");
-								if (!(ws[0] >> ymin)) Complain("Invalid lower limit for y-coordinate of source point");
-								if (!(ws[1] >> ymax)) Complain("Invalid upper limit for y-coordinate of source point");
-								sourcepts_lower_limit[i][0] = xmin;
-								sourcepts_upper_limit[i][0] = xmax;
-								sourcepts_lower_limit[i][1] = ymin;
-								sourcepts_upper_limit[i][1] = ymax;
-							}
-							*/
-							sourcepts_fit[i][0] = xs;
-							sourcepts_fit[i][1] = ys;
-						}
-						if (use_analytic_bestfit_src) {
-							if (mpi_id==0) warn(warnings,"with 'analytic_bestfit_src' turned on, the source position(s) are not varied as free parameters since\nthe best-fit values are solved for analytically (to disable this, turn 'analytic_bestfit_src' off).\n");
-						}
-					} else Complain("Must specify either zero or two arguments (sourcept_x, sourcept_y)");
-				}
-				else if (words[1]=="vary_sourcept")
-				{
-					bool changed_settings = false;
-					if (n_sourcepts_fit==0) Complain("No image data has been loaded");
-					if (nwords==4) {
-						bool vary_xs, vary_ys;
-						if (!(ws[2] >> vary_xs)) Complain("Invalid vary flag for source point");
-						if (!(ws[3] >> vary_ys)) Complain("Invalid vary flag for source point");
-						set_sourcept_vary_parameters(0,vary_xs,vary_ys);
-						changed_settings = true;
-					} else if (nwords==2) { 
-						bool vary_xs, vary_ys;
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if ((verbal_mode) and (mpi_id==0)) cout << "Source " << i << ":\n";
-							if (read_command(false)==false) return;
-							if (nwords != 2) Complain("Must specify two vary flags for source point");
-							if (!(ws[0] >> vary_xs)) Complain("Invalid vary flag for source point");
-							if (!(ws[1] >> vary_ys)) Complain("Invalid vary flag for source point");
-							set_sourcept_vary_parameters(i,vary_xs,vary_ys);
-						}
-						update_parameter_list();
-						changed_settings = true;
-					} else Complain("Invalid number of arguments for source vary flags");
-					if (changed_settings) {
-						if ((fitmethod != POWELL) and (fitmethod != SIMPLEX))
-						{
-							// The following code is repeated elsewhere in this file, and that is ugly. I HATE UGLINESS. Eliminate redundancies later!!
-							for (int i=0; i < n_sourcepts_fit; i++) {
-								if (vary_sourcepts_x[i]) {
-									if (mpi_id==0) cout << "Limits for x-coordinate of source point:\n";
-									if (read_command(false)==false) return;
-									double xmin,xmax;
-									if (nwords != 2) Complain("Must specify two arguments for source point x-coordinate limits: xmin, xmax");
-									if (!(ws[0] >> xmin)) Complain("Invalid lower limit for x-coordinate of source point");
-									if (!(ws[1] >> xmax)) Complain("Invalid upper limit for x-coordinate of source point");
-									if (xmin > xmax) Complain("lower limit cannot be greater than upper limit");
-									sourcepts_lower_limit[i][0] = xmin;
-									sourcepts_upper_limit[i][0] = xmax;
-								}
-								if (vary_sourcepts_y[i]) {
-									double ymin,ymax;
-									if (mpi_id==0) cout << "Limits for y-coordinate of source point:\n";
-									if (read_command(false)==false) return;
-									if (nwords != 2) Complain("Must specify two arguments for source point y-coordinate limits: ymin, ymax");
-									if (!(ws[0] >> ymin)) Complain("Invalid lower limit for y-coordinate of source point");
-									if (!(ws[1] >> ymax)) Complain("Invalid upper limit for y-coordinate of source point");
-									if (ymin > ymax) Complain("lower limit cannot be greater than upper limit");
-									sourcepts_lower_limit[i][1] = ymin;
-									sourcepts_upper_limit[i][1] = ymax;
-								}
-							}
-						}
-
-					}
-				}
->>>>>>> origin/development:src/commands.cpp
 				else if (words[1]=="source_mode")
 				{
 					if (nwords==2) {
@@ -8821,7 +8085,6 @@ void QLens::process_commands(bool read_file)
 						else if (setword=="sbprofile") source_fit_mode = Parameterized_Source;
 						else if (setword=="shapelet") source_fit_mode = Shapelet_Source;
 						else Complain("invalid argument; must specify valid source mode (ptsource, cartesian, delaunay, sbprofile, shapelet)");
-<<<<<<< HEAD:commands.cpp
 						if (image_pixel_grids != NULL) {
 							for (int i=0; i < n_extended_src_redshifts; i++) {
 								if (image_pixel_grids[i] != NULL) image_pixel_grids[i]->source_fit_mode = source_fit_mode;
@@ -8836,8 +8099,6 @@ void QLens::process_commands(bool read_file)
 							update_pixsrc_active_parameters(i);
 						}
 
-=======
->>>>>>> origin/development:src/commands.cpp
 						if ((ray_tracing_method == Interpolate) and (natural_neighbor_interpolation) and (source_fit_mode == Cartesian_Source)) {
 							natural_neighbor_interpolation = false;
 							if (mpi_id==0) cout << "NOTE: Natural neighbor interpolation is not available for Cartesian source; switching to 3-point interpolation" << endl;
@@ -8865,45 +8126,17 @@ void QLens::process_commands(bool read_file)
 						show_all = false;
 					} else if (nwords > 3) Complain("invalid number of arguments; can only specify sourcept number");
 
-<<<<<<< HEAD:commands.cpp
 					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
 					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
-=======
-					double* srcflux = new double[n_sourcepts_fit];
-					lensvector *srcpts = new lensvector[n_sourcepts_fit];
-					if (include_flux_chisq) {
-						output_model_source_flux(srcflux);
-						if (!analytic_source_flux) srcflux[0] = source_flux;
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-					}
-					if (use_analytic_bestfit_src) {
-						find_analytic_srcpos(srcpts);
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if (srcpt_xshift != 0) srcpts[i][0] += srcpt_xshift;
-							if (srcpt_yshift != 0) srcpts[i][1] += srcpt_yshift;
-						}
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
-					}
->>>>>>> origin/development:src/commands.cpp
 
 					if (mpi_id==0) cout << endl;
 					if (show_all) {
 						bool different_zsrc = false;
-<<<<<<< HEAD:commands.cpp
 						for (int i=0; i < n_ptsrc; i++) if (ptsrc_redshifts[ptsrc_redshift_idx[i]] != source_redshift) different_zsrc = true;
 						for (int i=0; i < n_ptsrc; i++) {
 							if (different_zsrc) {
 								if ((i == 0) or (ptsrc_redshifts[ptsrc_redshift_idx[i]] != ptsrc_redshifts[ptsrc_redshift_idx[i-1]])) {
 									create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
-=======
-						for (int i=0; i < n_sourcepts_fit; i++) if (ptsrc_redshifts[i] != source_redshift) different_zsrc = true;
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if (different_zsrc) {
-								if ((i == 0) or (ptsrc_redshifts[i] != ptsrc_redshifts[i-1])) {
-									create_grid(false,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
->>>>>>> origin/development:src/commands.cpp
 								}
 							}
 							if (mpi_id==0) cout << "# Source " << i << ":" << endl;
@@ -8914,19 +8147,11 @@ void QLens::process_commands(bool read_file)
 							//create_grid(false);
 						}
 					} else {
-<<<<<<< HEAD:commands.cpp
 						if (ptsrc_redshifts[ptsrc_redshift_idx[dataset]] != source_redshift) {
 							reset_grid();
 							create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[dataset]]);
 						}
 						output_images_single_source(ptsrc_list[dataset]->pos[0], ptsrc_list[dataset]->pos[1], true, ptsrc_list[dataset]->srcflux, true);
-=======
-						if (ptsrc_redshifts[dataset] != source_redshift) {
-							reset_grid();
-							create_grid(false,ptsrc_zfactors[dataset],ptsrc_beta_factors[dataset]);
-						}
-						output_images_single_source(srcpts[dataset][0], srcpts[dataset][1], true, srcflux[dataset], true);
->>>>>>> origin/development:src/commands.cpp
 						if (ptsrc_redshifts[dataset] != source_redshift) {
 							reset_grid();
 							//create_grid(false);
@@ -8945,27 +8170,14 @@ void QLens::process_commands(bool read_file)
 				else if (words[1]=="data_imginfo")
 				{
 					if (nlens==0) Complain("No lens model has been specified");
-<<<<<<< HEAD:commands.cpp
 					if (n_ptsrc==0) Complain("No data source points have been specified");
-=======
-					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
->>>>>>> origin/development:src/commands.cpp
 					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves");
 					if (nwords != 2) Complain("command 'fit imginfo' does not require any arguments");
 
-<<<<<<< HEAD:commands.cpp
 					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
 					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 					for (int i=0; i < n_ptsrc; i++) {
 						plot_srcpts_from_image_data(i,NULL,ptsrc_list[i]->pos[0],ptsrc_list[i]->pos[1],ptsrc_list[i]->srcflux);
-=======
-					if (!analytic_source_flux) srcflux[0] = source_flux;
-					if (use_analytic_bestfit_src) {
-						find_analytic_srcpos(srcpts);
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
->>>>>>> origin/development:src/commands.cpp
 					}
 				}
 				else if (words[1]=="plotsrc")
@@ -9016,27 +8228,14 @@ void QLens::process_commands(bool read_file)
 						create_grid(false,reference_zfactors,default_zsrc_beta_factors); // even though we're not finding images, still need to plot caustics
 					} else {
 						reset_grid();
-<<<<<<< HEAD:commands.cpp
 						create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[dataset]]); // even though we're not finding images, still need to plot caustics
-=======
-						create_grid(false,ptsrc_zfactors[dataset],default_zsrc_beta_factors); // even though we're not finding images, still need to plot caustics
->>>>>>> origin/development:src/commands.cpp
 					}
 					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves and caustics");
 					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotsrc' requires either zero or one argument (source_filename)");
 
-<<<<<<< HEAD:commands.cpp
 					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
 					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 
-=======
-					if (!analytic_source_flux) srcflux[0] = source_flux;
-					if (use_analytic_bestfit_src) {
-						find_analytic_srcpos(srcpts);
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
-					}
->>>>>>> origin/development:src/commands.cpp
 					if (mpi_id==0) cout << endl;
 					string srcname="srcs.dat";
 					bool output_to_text_files = false;
@@ -9057,13 +8256,8 @@ void QLens::process_commands(bool read_file)
 						}
 						if (plot_srcpts_from_image_data(dataset,&srcfile,ptsrc_list[dataset]->pos[0],ptsrc_list[dataset]->pos[1],ptsrc_list[dataset]->srcflux)==true) {
 							if (mpi_id==0) {
-<<<<<<< HEAD:commands.cpp
 								srcfit << "\"fit srcpt " << dataset << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[dataset]] << ")\"" << endl;
 								srcfit << ptsrc_list[dataset]->pos[0] << "\t" << ptsrc_list[dataset]->pos[1] << endl << endl << endl;
-=======
-								srcfit << "\"fit srcpt " << dataset << " (z_{s}=" << ptsrc_redshifts[dataset] << ")\"" << endl;
-								srcfit << srcpts[dataset][0] << "\t" << srcpts[dataset][1] << endl << endl << endl;
->>>>>>> origin/development:src/commands.cpp
 								srcfile << endl << endl;
 							}
 						}
@@ -9076,13 +8270,8 @@ void QLens::process_commands(bool read_file)
 							}
 							if (plot_srcpts_from_image_data(i,&srcfile,ptsrc_list[i]->pos[0],ptsrc_list[i]->pos[1],ptsrc_list[i]->srcflux)==true) {
 								if (mpi_id==0) {
-<<<<<<< HEAD:commands.cpp
 									srcfit << "\"fit srcpt " << i << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[i]] << ")\"" << endl;
 									srcfit << ptsrc_list[i]->pos[0] << "\t" << ptsrc_list[i]->pos[1] << endl << endl << endl;
-=======
-									srcfit << "\"fit srcpt " << i << " (z_{s}=" << ptsrc_redshifts[i] << ")\"" << endl;
-									srcfit << srcpts[i][0] << "\t" << srcpts[i][1] << endl << endl << endl;
->>>>>>> origin/development:src/commands.cpp
 									srcfile << endl << endl;
 								}
 							}
@@ -9090,11 +8279,7 @@ void QLens::process_commands(bool read_file)
 					}
 					if (nwords==3) {
 						if (terminal != TEXT) {
-<<<<<<< HEAD:commands.cpp
 							if ((show_multiple) and (n_ptsrc > 1)) run_plotter_file("srcptfits",words[2],"");
-=======
-							if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("srcptfits",words[2],"");
->>>>>>> origin/development:src/commands.cpp
 							else run_plotter_file("srcptfit",words[2],"");
 						}
 					} else {
@@ -9110,12 +8295,7 @@ void QLens::process_commands(bool read_file)
 					// add up the total number of images, specify how many images are above the stated magnification threshold, etc.
 					// also, you should put this entire thing in a function -- also true for many commands in this file! Critical before public release.
 					if (nlens==0) Complain("No lens model has been specified");
-<<<<<<< HEAD:commands.cpp
 					if (n_ptsrc==0) Complain("No data source points have been specified");
-=======
-					if (n_sourcepts_fit==0) Complain("No data source points have been specified");
-					if (sourcepts_fit.empty()) Complain("No initial source point has been specified");
->>>>>>> origin/development:src/commands.cpp
 					bool omit_source = false;
 					bool omit_cc = false;
 					bool old_cc_setting = show_cc;
@@ -9197,45 +8377,17 @@ void QLens::process_commands(bool read_file)
 						reset_grid();
 						int zgroup = -1;
 						for (int k=0; k < ptsrc_redshift_groups.size()-1; k++) { if ((dataset >= ptsrc_redshift_groups[k]) and (dataset < ptsrc_redshift_groups[k+1])) zgroup = k; }
-<<<<<<< HEAD:commands.cpp
 						create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[dataset]],zgroup);
-=======
-						create_grid(false,ptsrc_zfactors[dataset],ptsrc_beta_factors[dataset],zgroup);
->>>>>>> origin/development:src/commands.cpp
 						if (show_grid) plot_recursive_grid("xgrid.dat");
 						// Plot critical curves corresponding to the particular source redshift being plotted
 						if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves");
 					} else {
 						reset_grid();
-<<<<<<< HEAD:commands.cpp
 						create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[min_dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[min_dataset]]);
 					}
 					if ((nwords != 4) and (nwords != 2)) Complain("command 'fit plotimg' requires either zero or two arguments (source_filename, image_filename)");
 					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
 					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
-=======
-						create_grid(false,ptsrc_zfactors[min_dataset],ptsrc_beta_factors[min_dataset]);
-					}
-					if ((nwords != 4) and (nwords != 2)) Complain("command 'fit plotimg' requires either zero or two arguments (source_filename, image_filename)");
-					double* srcflux = new double[n_sourcepts_fit];
-					lensvector *srcpts = new lensvector[n_sourcepts_fit];
-					if (include_flux_chisq) {
-						output_model_source_flux(srcflux);
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcflux[i] = -1; // -1 tells it to not print fluxes
-					}
-
-					if (!analytic_source_flux) srcflux[0] = source_flux;
-					if (use_analytic_bestfit_src) {
-						find_analytic_srcpos(srcpts);
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if (srcpt_xshift != 0) srcpts[i][0] += srcpt_xshift;
-							if (srcpt_yshift != 0) srcpts[i][1] += srcpt_yshift;
-						}
-					} else {
-						for (int i=0; i < n_sourcepts_fit; i++) srcpts[i] = sourcepts_fit[i];
-					}
->>>>>>> origin/development:src/commands.cpp
 					if (mpi_id==0) cout << endl;
 					string imgname="imgs.dat", srcname="srcs.dat";
 					bool output_to_text_files = false;
@@ -9261,13 +8413,8 @@ void QLens::process_commands(bool read_file)
 						}
 						if (plot_images_single_source(ptsrc_list[dataset]->pos[0], ptsrc_list[dataset]->pos[1], verbal_mode, imgfile, srcfile, ptsrc_list[dataset]->srcflux, true)==true) {
 							if (mpi_id==0) {
-<<<<<<< HEAD:commands.cpp
 								imgout << "\"dataset " << dataset << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[dataset]] << ")\"" << endl;
 								point_image_data[dataset].write_to_file(imgout);
-=======
-								imgout << "\"dataset " << dataset << " (z_{s}=" << ptsrc_redshifts[dataset] << ")\"" << endl;
-								image_data[dataset].write_to_file(imgout);
->>>>>>> origin/development:src/commands.cpp
 								imgout << endl << endl;
 								imgfile << endl << endl;
 								srcfile << endl << endl;
@@ -9276,13 +8423,8 @@ void QLens::process_commands(bool read_file)
 					} else {
 						reset_grid();
 						for (int i=min_dataset; i <= max_dataset; i++) {
-<<<<<<< HEAD:commands.cpp
 							if ((i == min_dataset) or (ptsrc_zfactors[ptsrc_redshift_idx[i]] != ptsrc_zfactors[ptsrc_redshift_idx[i-1]]))
 								create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
-=======
-							if ((i == min_dataset) or (ptsrc_zfactors[i] != ptsrc_zfactors[i-1]))
-								create_grid(false,ptsrc_zfactors[i],ptsrc_beta_factors[i]);
->>>>>>> origin/development:src/commands.cpp
 							if (mpi_id==0) {
 								if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
 								imgfile << "\"image set " << i << "\"" << endl;
@@ -9290,13 +8432,8 @@ void QLens::process_commands(bool read_file)
 							}
 							if (plot_images_single_source(ptsrc_list[i]->pos[0], ptsrc_list[i]->pos[1], verbal_mode, imgfile, srcfile, ptsrc_list[i]->srcflux, true)==true) {
 								if (mpi_id==0) {
-<<<<<<< HEAD:commands.cpp
 									imgout << "\"dataset " << i << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[i]] << ")\"" << endl;
 									point_image_data[i].write_to_file(imgout);
-=======
-									imgout << "\"dataset " << i << " (z_{s}=" << ptsrc_redshifts[i] << ")\"" << endl;
-									image_data[i].write_to_file(imgout);
->>>>>>> origin/development:src/commands.cpp
 									imgout << endl << endl;
 									imgfile << endl << endl;
 									srcfile << endl << endl;
@@ -9308,22 +8445,14 @@ void QLens::process_commands(bool read_file)
 					if (nwords==4) {
 						if (terminal != TEXT) {
 							if (show_cc) {
-<<<<<<< HEAD:commands.cpp
 								if ((show_multiple) and (n_ptsrc > 1)) run_plotter_file("imgfits",words[3],range1);
-=======
-								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("imgfits",words[3],range1);
->>>>>>> origin/development:src/commands.cpp
 								else run_plotter_file("imgfit",words[3],range1);
 							}
 							else {
 								run_plotter_file("imgfit_nocc",words[3],range1);
 							}
 							if (plot_srcplane) {
-<<<<<<< HEAD:commands.cpp
 								if ((show_multiple) and (n_ptsrc > 1)) run_plotter_file("srcfits",words[2],range2);
-=======
-								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter_file("srcfits",words[2],range2);
->>>>>>> origin/development:src/commands.cpp
 								else run_plotter_file("srcfit",words[2],range2);
 							}
 						}
@@ -9332,11 +8461,7 @@ void QLens::process_commands(bool read_file)
 							if ((show_multiple) and (n_ptsrc > 1)) run_plotter("imgfits",range1);
 							else run_plotter("imgfit",range1);
 							if (plot_srcplane) {
-<<<<<<< HEAD:commands.cpp
 								if ((show_multiple) and (n_ptsrc > 1)) run_plotter("srcfits",range2);
-=======
-								if ((show_multiple) and (n_sourcepts_fit > 1)) run_plotter("srcfits",range2);
->>>>>>> origin/development:src/commands.cpp
 								else run_plotter("srcfit",range2);
 							}
 						}
@@ -9347,11 +8472,6 @@ void QLens::process_commands(bool read_file)
 					show_imgsrch_grid = false;
 					reset_grid();
 					create_grid(false,reference_zfactors,default_zsrc_beta_factors);
-<<<<<<< HEAD:commands.cpp
-=======
-					delete[] srcflux;
-					delete[] srcpts;
->>>>>>> origin/development:src/commands.cpp
 					if (omit_source) plot_srcplane = old_plot_srcplane;
 					if (omit_cc) show_cc = old_cc_setting;
 					if (set_title) plot_title = "";
@@ -9445,11 +8565,7 @@ void QLens::process_commands(bool read_file)
 					if (nparams==0) Complain("cannot run fit; no parameters are being varied");
 					bool resume = false;
 					bool skip_run = false;
-<<<<<<< HEAD:commands.cpp
 					bool show_errors = calculate_parameter_errors;
-=======
-					bool no_errors = false;
->>>>>>> origin/development:src/commands.cpp
 					bool adopt_bestfit = false;
 					bool varying_lensparams = true;
 					bool make_imgdata = false; // if turned on, will convert unlensed source points being fit into a system of lensed images, with position uncertainties taken from the fit
@@ -9464,28 +8580,16 @@ void QLens::process_commands(bool read_file)
 								if (args[i]=="-resume") resume = true;
 								else if (args[i]=="-adopt") adopt_bestfit = true;
 								else if (args[i]=="-process") skip_run = true;
-<<<<<<< HEAD:commands.cpp
 								else if (args[i]=="-noerrs") show_errors = false;
-=======
-								else if (args[i]=="-noerrs") no_errors = true;
->>>>>>> origin/development:src/commands.cpp
 								else if (args[i]=="-mkimgdata") { make_imgdata = true; adopt_bestfit = true; }
 								else Complain("argument '" << args[i] << "' not recognized");
 							}
 						}
 					}
-<<<<<<< HEAD:commands.cpp
 					if ((make_imgdata) and (!show_errors)) Complain("parameter uncertainties required to generate image data from best-fit points");
 					if ((skip_run) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot process chains unless Polychord or Multinest is being used");
 					if ((resume) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot resume unless Polychord or Multinest is being used");
 					if ((make_imgdata) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) Complain("cannot make imgdata unless Powell or Simplex is being used");
-=======
-					if ((make_imgdata) and ((!calculate_parameter_errors) or (no_errors))) Complain("parameter uncertainties required to generate image data from best-fit points");
-					if ((skip_run) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot process chains unless Polychord or Multinest is being used");
-					if ((resume) and ((fitmethod != MULTINEST) and (fitmethod != POLYCHORD))) Complain("cannot resume unless Polychord or Multinest is being used");
-					if ((make_imgdata) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) Complain("cannot make imgdata unless Powell or Simplex is being used");
-					if ((make_imgdata) and (no_errors)) Complain("Errors must be turned on to make image data from fit");
->>>>>>> origin/development:src/commands.cpp
 					bool old_error_setting;
 					if (fitmethod==POWELL) chi_square_fit_powell(show_errors);
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex(show_errors);
@@ -9494,20 +8598,12 @@ void QLens::process_commands(bool read_file)
 					else if (fitmethod==MULTINEST) multinest(resume,skip_run);
 					else if (fitmethod==TWALK) chi_square_twalk();
 					else Complain("unsupported fit method");
-<<<<<<< HEAD:commands.cpp
-=======
-					if ((no_errors) and ((fitmethod==POWELL) or (fitmethod==SIMPLEX))) calculate_parameter_errors = old_error_setting;
->>>>>>> origin/development:src/commands.cpp
 					if ((adopt_bestfit) and (adopt_model(bestfitparams)==false)) Complain("could not adopt best-fit model");
 					if (make_imgdata) {
 						int param_num, npar=0;
 						get_n_fit_parameters(npar);
 						param_num = lensmodel_fit_parameters + srcmodel_fit_parameters;
-<<<<<<< HEAD:commands.cpp
 						add_ptimage_data_from_unlensed_sourcepts(true,param_num,2);
-=======
-						add_image_data_from_unlensed_sourcepts(true,param_num,2);
->>>>>>> origin/development:src/commands.cpp
 						if (nlens > 0) set_analytic_sourcepts(); // just to have a starting guess for the source point
 					}
 				}
@@ -9570,11 +8666,7 @@ void QLens::process_commands(bool read_file)
 					else {
 						if (nwords != 3) Complain("a single filename must be specified after 'fit label'");
 						if (!(ws[2] >> label)) Complain("Invalid fit label");
-<<<<<<< HEAD:commands.cpp
 						set_fit_label(label); // this function is located in the header qlens.h
-=======
-						set_fit_label(label);
->>>>>>> origin/development:src/commands.cpp
 					}
 				}
 				else if (words[1]=="params")
@@ -9591,31 +8683,19 @@ void QLens::process_commands(bool read_file)
 							cout << resetiosflags(ios::scientific);
 							cout.unsetf(ios_base::floatfield);
 						}
-<<<<<<< HEAD:commands.cpp
 						if (param_list->print_parameter_values()==false) Complain("no fit parameters have been specified");
-=======
-						if (output_parameter_values()==false) Complain("could not output parameter values");
->>>>>>> origin/development:src/commands.cpp
 						if ((no_sci_notation) and (use_scientific_notation)) setiosflags(ios::scientific);
 					} else if (words[2]=="rename") {
 						if (nwords != 5) Complain("two arguments required for 'fit params rename' (param#, param_name)");
 						int param_num;
 						if (!(ws[3] >> param_num)) {
-<<<<<<< HEAD:commands.cpp
 							if ((param_num = param_list->lookup_param_number(words[3])) == -1)
-=======
-							if ((param_num = param_settings->lookup_param_number(words[3])) == -1)
->>>>>>> origin/development:src/commands.cpp
 							Complain("Invalid parameter number/name");
 						}
 						int nparams;
 						get_n_fit_parameters(nparams);
 						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit params')");
-<<<<<<< HEAD:commands.cpp
 						if (!param_list->set_override_parameter_name(param_num,words[4])) Complain("parameter name not unique; parameter could not be renamed");
-=======
-						if (!param_settings->set_override_parameter_name(param_num,words[4])) Complain("parameter name not unique; parameter could not be renamed");
->>>>>>> origin/development:src/commands.cpp
 					} else if (words[2]=="update") {
 						int pos, n_updates = 0;
 						double pval;
@@ -9639,38 +8719,23 @@ void QLens::process_commands(bool read_file)
 							int paramnum_list[n_updates];
 							if (nwords != 3) Complain("parameters must be updated using '<param_name>=<val>' arguments or else using '<param_num> <val>'");
 							for (int i=0; i < n_updates; i++) {
-<<<<<<< HEAD:commands.cpp
 								if ((paramnum_list[i] = param_list->lookup_param_number(update_param_list[i])) == -1) Complain("Invalid parameter name '" << update_param_list[i] << "'");
 							}
 							for (int i=0; i < n_updates; i++)
 								if (param_list->update_param_value(paramnum_list[i],update_param_vals[i])==false) Complain("could not update parameter " << paramnum_list[i]);
-=======
-								if ((paramnum_list[i] = param_settings->lookup_param_number(update_param_list[i])) == -1) Complain("Invalid parameter name '" << update_param_list[i] << "'");
-							}
-							for (int i=0; i < n_updates; i++)
-								if (update_parameter_value(paramnum_list[i],update_param_vals[i])==false) Complain("could not update parameter " << paramnum_list);
->>>>>>> origin/development:src/commands.cpp
 						} else {
 							if (nwords != 5) Complain("two arguments required for 'fit params update' (param#, value)");
 							int param_num;
 							double paramval;
 							if (!(ws[3] >> param_num)) {
-<<<<<<< HEAD:commands.cpp
 								if ((param_num = param_list->lookup_param_number(words[3])) == -1)
-=======
-								if ((param_num = param_settings->lookup_param_number(words[3])) == -1)
->>>>>>> origin/development:src/commands.cpp
 								Complain("Invalid parameter number/name");
 							}
 							int nparams;
 							get_n_fit_parameters(nparams);
 							if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit params')");
 							if (!(ws[4] >> paramval)) Complain("invalid parameter value");
-<<<<<<< HEAD:commands.cpp
 							if (param_list->update_param_value(param_num,paramval)==false) Complain("could not update parameter value");
-=======
-							if (update_parameter_value(param_num,paramval)==false) Complain("could not update parameter value");
->>>>>>> origin/development:src/commands.cpp
 						}
 					} else if (words[2]=="update_all") {
 						int n_updates = nwords-3;
@@ -9680,11 +8745,7 @@ void QLens::process_commands(bool read_file)
 						if (n_updates > nparams) Complain("cannot have more arguments than fit parameters");
 						for (int i=0; i < n_updates; i++) {
 							if (!(ws[i+3] >> paramval)) Complain("invalid value for parameter " << i);
-<<<<<<< HEAD:commands.cpp
 							if (param_list->update_param_value(i,paramval)==false) Complain("could not update parameter value for parameter" << i);
-=======
-							if (update_parameter_value(i,paramval)==false) Complain("could not update parameter value for parameter" << i);
->>>>>>> origin/development:src/commands.cpp
 						}
 					} else Complain("argument not recognized for 'fit params'");
 				}
@@ -9705,22 +8766,14 @@ void QLens::process_commands(bool read_file)
 							cout << resetiosflags(ios::scientific);
 							cout.unsetf(ios_base::floatfield);
 						}
-<<<<<<< HEAD:commands.cpp
 						if (mpi_id==0) param_list->print_priors_and_limits();
 						if ((no_sci_notation) and (use_scientific_notation)) setiosflags(ios::scientific);
 					}
 					else if (((nwords==3) or (nwords==4)) and (words[2]=="limits")) {
-=======
-						output_parameter_prior_ranges();
-						if ((no_sci_notation) and (use_scientific_notation)) setiosflags(ios::scientific);
-					}
-					else if ((nwords==3) and (words[2]=="limits")) {
->>>>>>> origin/development:src/commands.cpp
 						int nparams;
 						get_n_fit_parameters(nparams);
 						if (nparams==0) Complain("no fit parameters have been defined");
 						double lo, hi;
-<<<<<<< HEAD:commands.cpp
 						if (nwords==3) {
 							for (int i=0; i < nparams; i++) {
 								string paramname = param_list->lookup_param_name(i);
@@ -9747,18 +8800,6 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[1] >> hi)) Complain("Invalid upper prior limit");
 								param_list->set_prior_limit(param_num,lo,hi);
 							}
-=======
-						for (int i=0; i < nparams; i++) {
-							string paramname = param_settings->lookup_param_name(i);
-							if ((mpi_id==0) and (verbal_mode)) cout << "limits for parameter " << paramname << ":\n";
-							if (read_command(false)==false) Complain("parameter limits could not be read"); 
-							if ((nwords==1) and (words[0]=="skip")) continue;
-							else if (nwords >= 2) {
-								if (!(ws[0] >> lo)) Complain("Invalid lower prior limit");
-								if (!(ws[1] >> hi)) Complain("Invalid upper prior limit");
-								param_settings->set_override_prior_limit(i,lo,hi);
-							} else Complain("require lower and upper limits (or 'skip') for parameter '" << paramname << "'");
->>>>>>> origin/development:src/commands.cpp
 						}
 					}
 					else if (nwords >= 4) {
@@ -9768,26 +8809,15 @@ void QLens::process_commands(bool read_file)
 							Complain("Invalid parameter number/name");
 						}
 						if (param_num >= nparams) Complain("Parameter number does not exist (see parameter list with 'fit priors')");
-<<<<<<< HEAD:commands.cpp
 						if (words[3]=="limits") {
-=======
-						if (words[3]=="range") {
->>>>>>> origin/development:src/commands.cpp
 							if (nwords != 6) Complain("require lower and upper limits after 'fit priors <param#> range'");
 							double lo, hi;
 							if (!(ws[4] >> lo)) Complain("Invalid lower prior limit");
 							if (!(ws[5] >> hi)) Complain("Invalid upper prior limit");
-<<<<<<< HEAD:commands.cpp
 							param_list->set_prior_limit(param_num,lo,hi);
 						}
 						else if (words[3]=="uniform") param_list->priors[param_num]->set_uniform();
 						else if (words[3]=="log") param_list->priors[param_num]->set_log();
-=======
-							param_settings->set_override_prior_limit(param_num,lo,hi);
-						}
-						else if (words[3]=="uniform") param_settings->priors[param_num]->set_uniform();
-						else if (words[3]=="log") param_settings->priors[param_num]->set_log();
->>>>>>> origin/development:src/commands.cpp
 						else if (words[3]=="gaussian") {
 							if (nwords != 6) Complain("'fit priors gaussian' requires two additional arguments (mean,sigma)");
 							double sig, pos;
@@ -9868,29 +8898,16 @@ void QLens::process_commands(bool read_file)
 							if (nwords != 5) Complain("'fit transform ratio' requires one additional argument (paramnum)");
 							int ratio_pnum;
 							if (!(ws[4] >> ratio_pnum)) {
-<<<<<<< HEAD:commands.cpp
 								if ((ratio_pnum = param_list->lookup_param_number(words[4])) == -1)
-=======
-								if ((ratio_pnum = param_settings->lookup_param_number(words[4])) == -1)
->>>>>>> origin/development:src/commands.cpp
 								Complain("Invalid parameter number/name for ratio transformation");
 							}
 							if ((ratio_pnum >= nparams) or (ratio_pnum < 0)) Complain("Parameter number specified for ratio transformation does not exist");
 							if (ratio_pnum==param_num) Complain("Parameter number in denominator for ratio transformation must be different from parameter number in numerator");
-<<<<<<< HEAD:commands.cpp
 							param_list->set_param_transform(param_num,"ratio",transform_params,ratio_pnum);
 						}
 						else Complain("transformation type not recognized");
 						param_list->transforms[param_num]->set_include_jacobian(include_jac);
 						if ((rename) and (!param_list->set_override_parameter_name(param_num,new_name))) Complain("parameter name not unique; parameter could not be renamed");
-=======
-							param_settings->transforms[param_num]->set_ratio(ratio_pnum);
-						}
-						else Complain("transformation type not recognized");
-						param_settings->transforms[param_num]->set_include_jacobian(include_jac);
-						param_settings->transform_stepsizes();
-						if ((rename) and (!param_settings->set_override_parameter_name(param_num,new_name))) Complain("parameter name not unique; parameter could not be renamed");
->>>>>>> origin/development:src/commands.cpp
 					}
 					else Complain("command 'fit transform' requires either zero or two arguments (param_number,transformation_type)");
 				}
@@ -10004,7 +9021,6 @@ void QLens::process_commands(bool read_file)
 									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 									if (lensnum >= nlens) Complain("specified lens number does not exist");
 								} else lensnum = -1;
-<<<<<<< HEAD:commands.cpp
 								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="lambda_r") {
 								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add lambda_r' (param_arg)");
@@ -10012,15 +9028,6 @@ void QLens::process_commands(bool read_file)
 								dparam_list->add_dparam(words[3],dparam_arg,-1,-1,use_kpc);
 							} else if (words[3]=="dlogkappa") {
 								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add dlogkappa' (param_arg)");
-=======
-								add_derived_param(KappaR,dparam_arg,lensnum,-1,use_kpc);
-							} else if (words[3]=="lambda_r") {
-								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add lambda_r' (param_arg)");
-								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
-								add_derived_param(LambdaR,dparam_arg,-1,-1,use_kpc);
-							} else if (words[3]=="dkappa_r") {
-								if (nwords < 5) Complain("at least one additional argument required for 'fit dparams add dkappa_r' (param_arg)");
->>>>>>> origin/development:src/commands.cpp
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								if (nwords==6) {
 									if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
@@ -10058,7 +9065,6 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
-<<<<<<< HEAD:commands.cpp
 								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="xi") {
 								if ((nwords != 4) and (nwords != 5) and (nwords != 6)) Complain("derived parameter xi requires zero, one or two arguments (optional zsrc and lens number)");
@@ -10078,12 +9084,6 @@ void QLens::process_commands(bool read_file)
 							} else if (words[3]=="kappa_re") {
 								if (nwords != 4) Complain("derived parameter mass_re doesn't allow any arguments");
 								dparam_list->add_dparam(words[3],-1e30,-1,-1,false);
-=======
-								add_derived_param(Einstein_Mass,dparam_arg,lensnum,-1,use_kpc);
-							} else if (words[3]=="kappa_re") {
-								if (nwords != 4) Complain("derived parameter mass_re doesn't allow any arguments");
-								add_derived_param(Kappa_Re,-1e30,-1,-1,false);
->>>>>>> origin/development:src/commands.cpp
 							} else if (words[3]=="lensparam") {
 								int paramnum,pmode;
 								if (nwords != 7) Complain("derived parameter lensparam requires three arguments (paramnum,lens_number,pmode)");
@@ -10190,8 +9190,6 @@ void QLens::process_commands(bool read_file)
 					}
 					if (mpi_id==0) output_bestfit_model();
 				} else if (words[1]=="load_bestfit") {
-					// This is becoming obsolete, since loading parameters from chain is simpler ("fit adopt_chain_bestfit").
-					// We should extend that method to optimizations, and then eliminate "load_bestfit" altogether
 					if (nwords <= 3) {
 						bool custom_filename = false;
 						string filename_str;
@@ -10295,7 +9293,6 @@ void QLens::process_commands(bool read_file)
 					ofstream imgout;
 					open_output_file(imgout,"imgdat.dat");
 					if (show_all) {
-<<<<<<< HEAD:commands.cpp
 						for (int i=0; i < n_ptsrc; i++) {
 							imgout << "\"Dataset " << i << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[i]] << ")\"" << endl;
 							point_image_data[i].write_to_file(imgout);
@@ -10304,16 +9301,6 @@ void QLens::process_commands(bool read_file)
 					} else {
 						imgout << "\"Dataset " << dataset << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[dataset]] << ")\"" << endl;
 						point_image_data[dataset].write_to_file(imgout);
-=======
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							imgout << "\"Dataset " << i << " (z_{s}=" << ptsrc_redshifts[i] << ")\"" << endl;
-							image_data[i].write_to_file(imgout);
-							imgout << endl << endl;
-						}
-					} else {
-						imgout << "\"Dataset " << dataset << " (z_{s}=" << ptsrc_redshifts[dataset] << ")\"" << endl;
-						image_data[dataset].write_to_file(imgout);
->>>>>>> origin/development:src/commands.cpp
 						imgout << endl << endl;
 					}
 					if (!show_sbmap)
@@ -10333,30 +9320,6 @@ void QLens::process_commands(bool read_file)
 						}
 						run_plotter_range("imgpixel_imgdat",range);
 					}
-<<<<<<< HEAD:commands.cpp
-=======
-				/*
-				} else if (words[1]=="add_from_centroid") {
-					if (nwords != 6) Complain("four arguments are required for 'imgdata add_from_centroid' (xmin,xmax,ymin,ymax)");
-					double xmin,xmax,ymin,ymax;
-					if (!(ws[2] >> xmin)) Complain("invalid minimum x-coordinate");
-					if (!(ws[3] >> xmax)) Complain("invalid maximum x-coordinate");
-					if (!(ws[4] >> ymin)) Complain("invalid minimum y-coordinate");
-					if (!(ws[5] >> ymax)) Complain("invalid maximum y-coordinate");
-					if (image_pixel_data==NULL) Complain("cannot add centroid image; image pixel data has not been loaded");
-					if (image_data==NULL) {
-						if (n_sourcepts_fit != 0) die("number of source points should be zero if image_data has not been allocated");
-						n_sourcepts_fit = 1;
-						lensvector zero; zero[0]=0; zero[1]=0;
-						sourcepts_fit.push_back(zero);
-						vary_sourcepts_x.push_back(true);
-						vary_sourcepts_y.push_back(true);
-						image_data = new ImageData[1];
-						update_parameter_list();
-					}
-					image_pixel_data->add_point_image_from_centroid(image_data+n_sourcepts_fit-1,xmin,xmax,ymin,ymax,sb_threshold,background_pixel_noise); // this assumes centroids are added to last dataset
-				*/
->>>>>>> origin/development:src/commands.cpp
 				} else if (words[1]=="use_in_chisq") {
 					if ((nwords < 4) or (nwords > 5)) Complain("Two or three arguments are required for 'imgdata use_in_chisq' (imageset, image_number, on/off)");
 					if (point_image_data == NULL) Complain("no image data has been loaded");
@@ -10438,51 +9401,6 @@ void QLens::process_commands(bool read_file)
 				} else Complain("invalid argument to command 'wldata'");
 			}
 		}
-<<<<<<< HEAD:commands.cpp
-=======
-		else if (words[0]=="defspline")
-		{
-			if (nwords == 1) {
-				double xmax, ymax;
-				int nsteps;
-				if (get_deflection_spline_info(xmax, ymax, nsteps)==false)
-					cout << "No deflection field spline has been created" << endl;
-				else {
-					if (mpi_id==0) {
-						if ((xmax < 1e3) and (ymax < 1e3)) cout << resetiosflags(ios::scientific);
-						cout << "Deflection splined with " << nsteps << " steps on a "
-							"(" << -xmax << "," << xmax << ") x (" << -ymax << "," << ymax << ") grid" << endl;
-						if (use_scientific_notation) cout << setiosflags(ios::scientific);
-					}
-				}
-			}
-			else if (nwords == 2) {
-				if (nlens==0) Complain("no lens models have been specified");
-				if (words[1]=="off") {
-					if (unspline_deflection()==false) Complain("deflection field spline has not been created");
-				} else {
-					int splinesteps;
-					if (!(ws[1] >> splinesteps)) Complain("invalid number of spline steps");
-					if ((splinesteps/2)==(splinesteps/2.0))
-						splinesteps++;   // Enforce odd number of steps (to avoid the origin)
-					create_deflection_spline(splinesteps);
-					if (mpi_id==0) cout << "Created " << splinesteps << "x" << splinesteps << " bicubic spline" << endl;
-				}
-			}
-			else if (nwords == 4) {
-				if (nlens==0) Complain("no lens models have been specified");
-				int splinesteps;
-				double xmax, ymax;
-				if (!(ws[1] >> splinesteps)) Complain("invalid number of spline steps");
-				if (!(ws[2] >> xmax)) Complain("invalid xmax value");
-				if (!(ws[3] >> ymax)) Complain("invalid ymax value");
-				if ((splinesteps/2)==(splinesteps/2.0))
-					splinesteps++;   // Enforce odd number of steps (to avoid the origin)
-				spline_deflection(xmax,ymax,splinesteps);
-				if (mpi_id==0) cout << "Created " << splinesteps << "x" << splinesteps << " bicubic spline" << endl;
-			} else Complain("must specify number of steps N and (xmax,ymax) (defaults to current gridsize)");
-		}
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="plotcrit")
 		{
 			if (nlens==0) Complain("must specify lens model first");
@@ -11029,7 +9947,6 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="plotimgs")
 		{
 			if (nlens==0) Complain("must specify lens model first");
-<<<<<<< HEAD:commands.cpp
 			bool show_multiplicities = false;
 			bool show_pixel_data = false;
 			bool omit_source = false;
@@ -11055,8 +9972,6 @@ void QLens::process_commands(bool read_file)
 			}
 
 
-=======
->>>>>>> origin/development:src/commands.cpp
 			string range1, range2;
 			extract_word_starts_with('[',1,3,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 			extract_word_starts_with('[',1,4,range2); // allow for ranges to be specified (if it's not, then ranges are set to "")
@@ -11087,7 +10002,6 @@ void QLens::process_commands(bool read_file)
 				}
 			} else if (nwords == 3) {
 				if (terminal == TEXT) {
-<<<<<<< HEAD:commands.cpp
 					plot_images(words[1].c_str(), words[2].c_str(), show_multiplicities, verbal_mode);
 				} else if (plot_images("sourcexy.in", "imgs.dat", show_multiplicities, verbal_mode)==true) {
 					if ((plot_srcplane) and (!omit_source)) run_plotter_file("sources",words[1],range1);
@@ -11098,20 +10012,6 @@ void QLens::process_commands(bool read_file)
 						if (show_pixel_data) run_plotter_file("imgpixel_imgpts_plural_nocc",words[2],range2,showmults);
 						else run_plotter_file("images_nocc",range2,words[2],showmults);
 					}
-=======
-					plot_images(words[1].c_str(), words[2].c_str(), verbal_mode);
-				} else if (plot_images("sourcexy.in", "imgs.dat", verbal_mode)==true) {
-					if (plot_srcplane) run_plotter_file("sources",words[1],range1);
-					if (show_cc) run_plotter_file("images",words[2],range2);
-					else run_plotter_file("images_nocc",words[2],range2);
-				}
-			} else if (nwords == 4) {
-				if (terminal == TEXT) Complain("only one filename allowed in text mode (image file)");
-				if (plot_images(words[1].c_str(), "imgs.dat", verbal_mode)==true) {
-					if (plot_srcplane) run_plotter_file("sources",words[2],range1);
-					if (show_cc) run_plotter_file("images",words[3],range2);
-					else run_plotter_file("images_nocc",words[3],range2);
->>>>>>> origin/development:src/commands.cpp
 				}
 			} else Complain("invalid number of arguments to command 'plotimgs'");
 		}
@@ -11187,10 +10087,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="sbmap")
 		{
 			int mask_i=0;
-<<<<<<< HEAD:commands.cpp
 			int band_i=0;
-=======
->>>>>>> origin/development:src/commands.cpp
 			bool specified_mask = false;
 			for (int i=1; i < nwords; i++) {
 				int pos;
@@ -11205,7 +10102,6 @@ void QLens::process_commands(bool read_file)
 					break;
 				}
 			}	
-<<<<<<< HEAD:commands.cpp
 			for (int i=1; i < nwords; i++) {
 				int pos;
 				if ((pos = words[i].find("band=")) != string::npos) {
@@ -11225,25 +10121,6 @@ void QLens::process_commands(bool read_file)
 				//else cout << "Source surface brightness map is loaded with pixel dimension (" << cartesian_srcgrid0->u_N << "," << cartesian_srcgrid0->w_N << ")\n";
 				if ((image_pixel_grids == NULL) or (image_pixel_grids[0] == NULL)) cout << "No image surface brightness map has been loaded\n";
 				else cout << "Image surface brightness map is loaded with pixel dimension (" << image_pixel_grids[0]->x_N << "," << image_pixel_grids[0]->y_N << ")\n";
-=======
-
-			if (nwords==1) {
-				// this needs to be updated to show info about all image pixel grids (at different redshifts) as well as all pixellated sources
-				//if (source_pixel_grid == NULL) cout << "No source surface brightness map has been loaded\n";
-				//else cout << "Source surface brightness map is loaded with pixel dimension (" << source_pixel_grid->u_N << "," << source_pixel_grid->w_N << ")\n";
-				if ((image_pixel_grids == NULL) or (image_pixel_grids[0] == NULL)) cout << "No image surface brightness map has been loaded\n";
-				else cout << "Image surface brightness map is loaded with pixel dimension (" << image_pixel_grids[0]->x_N << "," << image_pixel_grids[0]->y_N << ")\n";
-			}
-			else if (words[1]=="assign_masks")
-			{
-				if (nwords==2) {
-					if (mpi_id==0) print_mask_assignments();
-				} else if (nwords==3) {
-					int znum = 0;
-					if (!(ws[2] >> znum)) Complain("invalid source redshift index");
-					if (!assign_mask(znum,mask_i)) Complain("could not assign mask");
-				}
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="assign_masks")
 			{
@@ -11279,11 +10156,8 @@ void QLens::process_commands(bool read_file)
 				string filename;
 				int hdu_indx = 1;
 				bool show_header = false;
-<<<<<<< HEAD:commands.cpp
 				double pixsize = default_data_pixel_size;
 				double x_offset = 0.0, y_offset = 0.0;
-=======
->>>>>>> origin/development:src/commands.cpp
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
@@ -11297,7 +10171,6 @@ void QLens::process_commands(bool read_file)
 							if (!(hdustr >> hdu_indx)) Complain("incorrect format for HDU index");
 							if (hdu_indx <= 0) Complain("HDU index cannot be zero or negative");
 						}
-<<<<<<< HEAD:commands.cpp
 						else if ((pos = args[i].find("-pxsize=")) != string::npos) {
 							string pxstring = args[i].substr(pos+8);
 							stringstream pxstr;
@@ -11321,21 +10194,12 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 				if (band_i > n_data_bands) Complain("band index cannot be greater than current n_data_bands; to create a new band, set band_i=n_data_bands");
-=======
-						else Complain("argument '" << args[i] << "' not recognized");
-					}
-				}
->>>>>>> origin/development:src/commands.cpp
 
 				if (nwords==2) filename = "img_pixel";
 				else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for image surface brightness map");
 				} else Complain("too many arguments to 'sbmap loadimg'");
-<<<<<<< HEAD:commands.cpp
 				if (!load_image_pixel_data(band_i,filename,pixsize,1.0,x_offset,y_offset,hdu_indx,show_header)) Complain("could not load image data");
-=======
-				if (!load_image_surface_brightness_grid(filename,hdu_indx,show_header)) Complain("could not load image data");
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="saveimg")
 			{
@@ -11344,33 +10208,21 @@ void QLens::process_commands(bool read_file)
 				else if (nwords>=3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for image surface brightness map");
 					if (nwords==3) {
-<<<<<<< HEAD:commands.cpp
 						imgdata_list[band_i]->save_data_fits(filename);
-=======
-						image_pixel_data->save_data_fits(filename);
->>>>>>> origin/development:src/commands.cpp
 					} else if (nwords==7) {
 						double xmin, xmax, ymin, ymax;
 						if (!(ws[3] >> xmin)) Complain("invalid xmin argument for 'sbmap saveimg'");
 						if (!(ws[4] >> xmax)) Complain("invalid xmax argument for 'sbmap saveimg'");
 						if (!(ws[5] >> ymin)) Complain("invalid ymin argument for 'sbmap saveimg'");
 						if (!(ws[6] >> ymax)) Complain("invalid ymax argument for 'sbmap saveimg'");
-<<<<<<< HEAD:commands.cpp
 						imgdata_list[band_i]->save_data_fits(filename,true,xmin,xmax,ymin,ymax);
 					} else Complain("too many arguments to 'sbmap saveimg'");
-=======
-						image_pixel_data->save_data_fits(filename,true,xmin,xmax,ymin,ymax);
-					} else Complain("too many arguments to 'sbmap loadimg'");
->>>>>>> origin/development:src/commands.cpp
 				}
 			}
 			else if (words[1]=="loadmask")
 			{
 				bool add_mask = false;
-<<<<<<< HEAD:commands.cpp
 				bool subtract_mask = false;
-=======
->>>>>>> origin/development:src/commands.cpp
 				bool foreground_mask = false;
 				bool emask = false;
 				vector<string> args;
@@ -11378,12 +10230,8 @@ void QLens::process_commands(bool read_file)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-add") add_mask = true;
-<<<<<<< HEAD:commands.cpp
 						if (args[i]=="-subtract") subtract_mask = true;
 						else if ((args[i]=="-fg") or (args[i]=="-fgmask")) foreground_mask = true;
-=======
-						else if (args[i]=="-fg") foreground_mask = true;
->>>>>>> origin/development:src/commands.cpp
 						else if (args[i]=="-emask") emask = true;
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
@@ -11393,7 +10241,6 @@ void QLens::process_commands(bool read_file)
 				if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
 				} else Complain("too many arguments to 'sbmap loadmask'");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (imgdata_list[band_i]->load_mask_fits(mask_i,filename,foreground_mask,emask,add_mask,subtract_mask)==false) Complain("could not load mask file");
 				if (foreground_mask) {
@@ -11409,26 +10256,12 @@ void QLens::process_commands(bool read_file)
 						//cout << "Number of foreground pixels in mask: " << nfgpix << endl;
 					//}
 				//}
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (image_pixel_data->load_mask_fits(mask_i,filename,foreground_mask,emask,add_mask)==false) Complain("could not load mask file");
-				if (mpi_id==0) {
-					if (!foreground_mask) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
-					else {
-						int nfgpix = image_pixel_data->get_size_of_foreground_mask();
-						cout << "Number of foreground pixels in mask: " << nfgpix << endl;
-					}
-				}
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="savemask")
 			{
 				bool foreground_mask = false;
 				bool emask = false;
-<<<<<<< HEAD:commands.cpp
 				int reduce_npx = -1, reduce_npy = -1;
-=======
->>>>>>> origin/development:src/commands.cpp
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
@@ -11438,7 +10271,6 @@ void QLens::process_commands(bool read_file)
 						else Complain("argument '" << args[i] << "' not recognized");
 					}
 				}
-<<<<<<< HEAD:commands.cpp
 				if ((emask) and (foreground_mask)) Complain("cannot save both emask and foreground mask at the same time");
 				string filename;
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
@@ -11460,19 +10292,6 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="load_noisemap")
 			{
 				if (n_data_bands==0) Complain("image pixel data has not been loaded");
-=======
-				if ((emask) and (foreground_mask)) Complain("cannot load both emask and foreground mask at the same time");
-				string filename;
-				if (nwords==3) {
-					if (!(ws[2] >> filename)) Complain("invalid filename for mask pixel map");
-				} else Complain("too many arguments to 'sbmap savemask'");
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (image_pixel_data->save_mask_fits(filename,foreground_mask,emask,mask_i)==false) Complain("mask could not be saved");
-			}
-			else if (words[1]=="load_noisemap")
-			{
-				if (image_pixel_data==NULL) Complain("image pixel data has not been loaded");
->>>>>>> origin/development:src/commands.cpp
 				string filename;
 				int hdu_indx = 1;
 				bool show_header = false;
@@ -11498,7 +10317,6 @@ void QLens::process_commands(bool read_file)
 				} else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for noise map");
 				} else Complain("too many arguments to 'sbmap load_noisemap'");
-<<<<<<< HEAD:commands.cpp
 				if (band_i >= n_data_bands) Complain("image data for specified band has not been loaded yet");
 				if (!imgdata_list[band_i]->load_noise_map_fits(filename,hdu_indx,show_header)) Complain("could not load noise map fits file '" << filename << "'");
 				use_noise_map = true;
@@ -11528,22 +10346,14 @@ void QLens::process_commands(bool read_file)
 				if (background_pixel_noise <= 0) Complain("bg_pixel_noise should be set to a positive nonzero value to generate uniform noise map");
 				if (n_data_bands==0) Complain("must load pixel data before generating noise map");
 				imgdata_list[band_i]->set_uniform_pixel_noise(background_pixel_noise);
-=======
-				if (!image_pixel_data->load_noise_map_fits(filename,hdu_indx,show_header)) Complain("could not load noise map fits file '" << filename << "'");
->>>>>>> origin/development:src/commands.cpp
 				use_noise_map = true;
 			}
 			else if (words[1]=="unload_noisemap")
 			{
 				string filename;
 				if (nwords != 2) Complain("no arguments are required for 'sbmap unload_noisemap'");
-<<<<<<< HEAD:commands.cpp
 				if (!use_noise_map) Complain("no noise map has been generated or loaded from FITS file");
 				if (n_data_bands > 0) imgdata_list[band_i]->unload_noise_map();
-=======
-				if (!use_noise_map) Complain("no noise map has been loaded from FITS file");
-				if (image_pixel_data) image_pixel_data->unload_noise_map();
->>>>>>> origin/development:src/commands.cpp
 				use_noise_map = false;
 			}
 			else if (words[1]=="loadpsf")
@@ -11552,11 +10362,8 @@ void QLens::process_commands(bool read_file)
 				bool load_supersampled_psf = false;
 				bool cubic_spline = false;
 				bool specify_pixsize = false;
-<<<<<<< HEAD:commands.cpp
 				bool show_header = false;
 				int hdu_indx = 1;
-=======
->>>>>>> origin/development:src/commands.cpp
 				bool downsample = false;
 				int downsample_fac = 1;
 				double psize = -1;
@@ -11565,7 +10372,6 @@ void QLens::process_commands(bool read_file)
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
 				{
 					for (int i=0; i < args.size(); i++) {
-<<<<<<< HEAD:commands.cpp
 						if (args[i]=="-showhead") show_header = true;
 						else if ((pos = args[i].find("-hdu=")) != string::npos) {
 							string hdustring = args[i].substr(pos+5);
@@ -11575,9 +10381,6 @@ void QLens::process_commands(bool read_file)
 							if (hdu_indx <= 0) Complain("HDU index cannot be zero or negative");
 						}
 						else if (args[i]=="-spline") cubic_spline = true;
-=======
-						if (args[i]=="-spline") cubic_spline = true;
->>>>>>> origin/development:src/commands.cpp
 						else if (args[i]=="-supersampled") {
 							if (!psf_supersampling) Complain("psf_supersampling must be set to 'on' to load supersampled PSF");
 							else load_supersampled_psf = true;
@@ -11604,17 +10407,11 @@ void QLens::process_commands(bool read_file)
 				} else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap loadpsf'");
-<<<<<<< HEAD:commands.cpp
 				if (band_i > n_psf) Complain("band index is higher than n_psf. To create new PSF, set band_i=n_psf");
 				if (band_i==n_psf) add_psf();
 				if (!psf_list[band_i]->load_psf_fits(filename,hdu_indx,load_supersampled_psf,show_header,verbal_mode and (mpi_id==0))) Complain("could not load PSF fits file '" << filename << "'");
 				if (!load_supersampled_psf) {
 					if (psf_list[band_i]->psf_spline.is_splined()) psf_list[band_i]->psf_spline.unspline();
-=======
-				if (!load_psf_fits(filename,load_supersampled_psf,verbal_mode)) Complain("could not load PSF fits file '" << filename << "'");
-				if (!load_supersampled_psf) {
-					if (psf_spline.is_splined()) psf_spline.unspline();
->>>>>>> origin/development:src/commands.cpp
 					if (cubic_spline) {
 						double pixel_xlength, pixel_ylength;
 						if (specify_pixsize) {
@@ -11622,37 +10419,20 @@ void QLens::process_commands(bool read_file)
 							pixel_ylength = psize;
 						} else {
 							// this code snippet is ugly and gets repeated in a few places. Consolodate and maybe rewrite!
-<<<<<<< HEAD:commands.cpp
 							int primary_grid_indx = band_i*n_extended_src_redshifts;
 							if ((image_pixel_grids != NULL) and (image_pixel_grids[primary_grid_indx] != NULL)) {
 								pixel_xlength = image_pixel_grids[primary_grid_indx]->pixel_xlength;
 								pixel_ylength = image_pixel_grids[primary_grid_indx]->pixel_ylength;
-=======
-							if ((!use_old_pixelgrids) and (image_pixel_grids != NULL) and (image_pixel_grids[0] != NULL)) {
-								pixel_xlength = image_pixel_grids[0]->pixel_xlength;
-								pixel_ylength = image_pixel_grids[0]->pixel_ylength;
-							} else if ((use_old_pixelgrids) and (image_pixel_grid0 != NULL)) {
-								pixel_xlength = image_pixel_grid0->pixel_xlength;
-								pixel_ylength = image_pixel_grid0->pixel_ylength;
->>>>>>> origin/development:src/commands.cpp
 							} else {
 								pixel_xlength = grid_xlength / n_image_pixels_x;
 								pixel_ylength = grid_ylength / n_image_pixels_y;
 							}
 						}
-<<<<<<< HEAD:commands.cpp
 						if (psf_list[band_i]->spline_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("PSF matrix has not been generated; could not spline");
 					}
 					if (psf_supersampling) {
 						psf_list[band_i]->generate_supersampled_PSF_matrix(downsample,downsample_fac);
 						if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << psf_list[band_i]->supersampled_psf_npixels_x << " " << psf_list[band_i]->supersampled_psf_npixels_y << ")" << endl;
-=======
-						if (spline_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("PSF matrix has not been generated; could not spline");
-					}
-					if (psf_supersampling) {
-						generate_supersampled_PSF_matrix(downsample,downsample_fac);
-						if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
->>>>>>> origin/development:src/commands.cpp
 					}
 				}
 				if (fft_convolution) cleanup_FFT_convolution_arrays();
@@ -11677,7 +10457,6 @@ void QLens::process_commands(bool read_file)
 				} else if (nwords==3) {
 					if (!(ws[2] >> filename)) Complain("invalid filename for PSF matrix");
 				} else Complain("too many arguments to 'sbmap savepsf'");
-<<<<<<< HEAD:commands.cpp
 				if (band_i >= n_psf) Complain("specified PSF has not been created");
 				if (!psf_list[band_i]->save_psf_fits(filename,sup)) Complain("could not save PSF fits file '" << filename << "'");
 			}
@@ -11709,9 +10488,6 @@ void QLens::process_commands(bool read_file)
 				//cout << "BAND=" << band_i << endl;
 				if ((mpi_id==0) and (!psf_list[band_i]->plot_psf("psfimg",sup,xstep,ystep))) Complain("could not plot PSF fits file '" << filename << "'");
 				run_plotter("psfimg");
-=======
-				if (!save_psf_fits(filename,sup)) Complain("could not save PSF fits file '" << filename << "'");
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="unloadpsf")
 			{
@@ -11764,54 +10540,7 @@ void QLens::process_commands(bool read_file)
 				if ((mkpsf) or (generated_supersampled_psf)) {
 					if (fft_convolution) cleanup_FFT_convolution_arrays();
 				}
-				psf_filename = "";
-				if (psf_spline.is_splined()) psf_spline.unspline();
-				if (fft_convolution) cleanup_FFT_convolution_arrays();
 			}
-<<<<<<< HEAD:commands.cpp
-=======
-			else if ((words[1]=="mkpsf") or (words[1]=="spline_psf"))
-			{
-				bool mkpsf = false;
-				bool cubic_spline = false;
-				bool generated_supersampled_psf = false;
-				if (words[1]=="mkpsf") mkpsf = true;	
-				else if (words[1]=="spline_psf") cubic_spline = true;
-				double pixel_xlength, pixel_ylength;
-				if ((!use_old_pixelgrids) and (image_pixel_grids != NULL) and (image_pixel_grids[0] != NULL)) {
-					pixel_xlength = image_pixel_grids[0]->pixel_xlength;
-					pixel_ylength = image_pixel_grids[0]->pixel_ylength;
-				} else if ((use_old_pixelgrids) and (image_pixel_grid0 != NULL)) {
-					pixel_xlength = image_pixel_grid0->pixel_xlength;
-					pixel_ylength = image_pixel_grid0->pixel_ylength;
-				} else {
-					pixel_xlength = grid_xlength / n_image_pixels_x;
-					pixel_ylength = grid_ylength / n_image_pixels_y;
-				}
-				if ((mkpsf) and (nwords==3) and (words[2]=="-spline")) cubic_spline = true;
-				if (mkpsf) {
-					if (generate_PSF_matrix(pixel_xlength,pixel_ylength,false)==false) Complain("could not generate PSF matrix from analytic model");
-				}
-				if (cubic_spline) {
-					if (spline_PSF_matrix(pixel_xlength,pixel_ylength)==false) Complain("PSF matrix has not been generated; could not spline");
-				}
-				if ((mkpsf) or (cubic_spline)) {
-					if (psf_supersampling) {
-						generate_supersampled_PSF_matrix();
-						generated_supersampled_psf = true;
-						//if (generate_PSF_matrix(pixel_xlength,pixel_ylength,true)==false) Complain("could not generate supersampled PSF matrix from analytic model");
-					}
-					use_input_psf_matrix = true;
-				}
-				if (mpi_id==0) {
-					cout << "PSF matrix dimensions: " << psf_npixels_x << " " << psf_npixels_y << endl;
-					if (generated_supersampled_psf) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
-				}
-				if ((mkpsf) or (generated_supersampled_psf)) {
-					if (fft_convolution) cleanup_FFT_convolution_arrays();
-				}
-			}
->>>>>>> origin/development:src/commands.cpp
 			else if ((words[1]=="makesrc") or (words[1]=="mksrc") or (words[1]=="mkplotsrc"))
 			{
 				vector<string> args;
@@ -11822,11 +10551,8 @@ void QLens::process_commands(bool read_file)
 				bool interpolate = false;
 				bool old_auto_srcgrid_npixels = auto_srcgrid_npixels;
 				bool scale_to_srcgrid = false;
-<<<<<<< HEAD:commands.cpp
 				bool omit_cc = false;
 				bool old_cc_setting = show_cc;
-=======
->>>>>>> origin/development:src/commands.cpp
 				int zsrc_i = 0;
 				double old_srcgrid_scale;
 				//bool changed_srcgrid = false;
@@ -11880,10 +10606,7 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-p3000") set_npix = 3000;
 						else if (args[i]=="-p4000") set_npix = 4000;
 						else if (args[i]=="-nomask") use_mask = false;
-<<<<<<< HEAD:commands.cpp
 						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
-=======
->>>>>>> origin/development:src/commands.cpp
 						else if (args[i]=="-srcgrid") scale_to_srcgrid = true;
 						else if (args[i]=="-x1.5") { zoom_in = true; zoomfactor = 1.5; }
 						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
@@ -11901,7 +10624,6 @@ void QLens::process_commands(bool read_file)
 				else if (!at_least_one_lensed_src) Complain("at least one analytic lensed source is required for 'sbmap mksrc'");
 
 				if ((source_fit_mode==Delaunay_Source) and (!make_delaunay_from_sbprofile) and (!plot_source)) Complain("to make Delaunay source grid from source profiles, use '-delaunay' argument");
-<<<<<<< HEAD:commands.cpp
 				int src_i = -1;
 				do {
 					for (int i=0; i < n_pixellated_src; i++) {
@@ -11917,19 +10639,12 @@ void QLens::process_commands(bool read_file)
 				} while (src_i < 0);
 				int imggrid_i = band_i*n_extended_src_redshifts + zsrc_i;
 
-=======
->>>>>>> origin/development:src/commands.cpp
 				if (zoom_in) {
 					if (make_delaunay_from_sbprofile) {
 						delaunay_grid_scale /= zoomfactor;
 					} else {
-<<<<<<< HEAD:commands.cpp
 						old_srcgrid_scale = cartesian_srcgrids[src_i]->srcgrid_size_scale;
 						cartesian_srcgrids[src_i]->srcgrid_size_scale = 1.0/zoomfactor;
-=======
-						old_srcgrid_scale = srcgrid_size_scale;
-						srcgrid_size_scale = 1.0/zoomfactor;
->>>>>>> origin/development:src/commands.cpp
 					}
 				}
 				if (nwords==2) {
@@ -11940,7 +10655,6 @@ void QLens::process_commands(bool read_file)
 						auto_srcgrid_npixels = false;
 					}
 					if (make_delaunay_from_sbprofile) {
-<<<<<<< HEAD:commands.cpp
 						create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
 						if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
 					} else {
@@ -11948,34 +10662,12 @@ void QLens::process_commands(bool read_file)
 						cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source(imggrid_i);
 						if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids[src_i] != NULL)) {
 							cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid(delaunay_srcgrids[src_i],true);
-=======
-						int src_i = -1;
-						for (int i=0; i < n_pixellated_src; i++) {
-							if (pixellated_src_redshift_idx[i]==zsrc_i) {
-								src_i = i;
-								break;
-							}
-						}
-						if (src_i < 0) Complain("Delaunay source object corresponding to given redshift index has not been created");
-						create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
-						if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
-					}
-					else {
-						create_sourcegrid_cartesian(zsrc_i,verbal_mode);
-						source_pixel_grid->assign_surface_brightness_from_analytic_source(zsrc_i);
-						if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids[zsrc_i] != NULL)) {
-							source_pixel_grid->assign_surface_brightness_from_delaunay_grid(delaunay_srcgrids[zsrc_i],true);
->>>>>>> origin/development:src/commands.cpp
 						}
 					}
 					if (plot_source) {
 						if ((!make_delaunay_from_sbprofile) and (scale_to_srcgrid)) {
 							double xmin,xmax,ymin,ymax;
-<<<<<<< HEAD:commands.cpp
 							cartesian_srcgrids[src_i]->get_grid_dimensions(xmin,xmax,ymin,ymax);
-=======
-							source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
->>>>>>> origin/development:src/commands.cpp
 							if (mpi_id==0) cout << "Source grid dimensions: " << xmin << " " << xmax << " " << ymin << " " << ymax << endl;
 							stringstream xminstr,yminstr,xmaxstr,ymaxstr;
 							string xminstring,yminstring,xmaxstring,ymaxstring;
@@ -11990,7 +10682,6 @@ void QLens::process_commands(bool read_file)
 							range = "[" + xminstring + ":" + xmaxstring + "][" + yminstring + ":" + ymaxstring + "]";
 						}
 
-<<<<<<< HEAD:commands.cpp
 						dvector xvals,yvals,zvals;
 						if (set_title) plot_title = temp_title;
 						if (mpi_id==0) {
@@ -12002,13 +10693,6 @@ void QLens::process_commands(bool read_file)
 							else {
 								delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,delaunay_grid_scale,set_npix,interpolate);
 								plot_sbmap("src_pixel",xvals,yvals,zvals);
-=======
-						if (set_title) plot_title = temp_title;
-						if (mpi_id==0) {
-							if (!make_delaunay_from_sbprofile) source_pixel_grid->plot_surface_brightness("src_pixel");
-							else {
-								delaunay_srcgrids[zsrc_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate);
->>>>>>> origin/development:src/commands.cpp
 							}
 						}
 						if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
@@ -12022,11 +10706,7 @@ void QLens::process_commands(bool read_file)
 					}
 				} else Complain("no arguments are allowed for 'sbmap makesrc'");
 				//if (changed_srcgrid) auto_sourcegrid = old_auto_srcgrid;
-<<<<<<< HEAD:commands.cpp
 				if ((zoom_in) and (!make_delaunay_from_sbprofile)) cartesian_srcgrids[src_i]->srcgrid_size_scale = old_srcgrid_scale;
-=======
-				if ((zoom_in) and (!make_delaunay_from_sbprofile)) srcgrid_size_scale = old_srcgrid_scale;
->>>>>>> origin/development:src/commands.cpp
 				auto_srcgrid_npixels = old_auto_srcgrid_npixels;
 				if (omit_cc) show_cc = old_cc_setting;
 			}
@@ -12047,11 +10727,7 @@ void QLens::process_commands(bool read_file)
 				bool show_isofit = false;
 				bool show_extended_mask = false;
 				bool show_foreground_mask = false;
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
->>>>>>> origin/development:src/commands.cpp
 				bool set_title = false;
 				bool plot_contours = false;
 				int n_contours = 24;
@@ -12064,14 +10740,9 @@ void QLens::process_commands(bool read_file)
 						break;
 					}
 				}
-<<<<<<< HEAD:commands.cpp
 				if (band_i >= n_data_bands) Complain("specified data band has not been loaded");
 				if (mask_i >= imgdata_list[band_i]->n_masks) Complain("mask index has not been created");
 				if ((!specified_mask) and (imgdata_list[band_i]->n_masks > 1)) mask_i = -1; // this will tell the imgdata_list[band_i]->plot_surface_brightness function to include all masks
-=======
-				if (mask_i >= image_pixel_data->n_masks) Complain("mask index has not been created");
-				if ((!specified_mask) and (image_pixel_data->n_masks > 1)) mask_i = -1; // this will tell the image_pixel_data->plot_surface_brightness function to include all masks
->>>>>>> origin/development:src/commands.cpp
 
 				vector<string> args;
 				if (extract_word_starts_with('-',2,nwords-1,args)==true)
@@ -12114,32 +10785,20 @@ void QLens::process_commands(bool read_file)
 				string contstring;
 				if (plot_contours) contstring = "ncont=" + ncontstring2; else contstring = "";
 
-<<<<<<< HEAD:commands.cpp
 				dvector xvals,yvals,zvals;
 				if (nwords == 2) {
 					imgdata_list[band_i]->output_surface_brightness(xvals,yvals,zvals,show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
 					plot_sbmap("data_pixel",xvals,yvals,zvals);
-=======
-				if (nwords == 2) {
-					image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
->>>>>>> origin/development:src/commands.cpp
 					if (show_isofit) run_plotter_range("datapixel_ellfit",range,contstring);
 					else run_plotter_range("datapixel",range,contstring);
 				} else if (nwords == 3) {
 					if (terminal==TEXT) {
-<<<<<<< HEAD:commands.cpp
 						imgdata_list[band_i]->output_surface_brightness(xvals,yvals,zvals,show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
 						plot_sbmap(words[2],xvals,yvals,zvals);
 					}
 					else {
 						imgdata_list[band_i]->output_surface_brightness(xvals,yvals,zvals,show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
 						plot_sbmap("data_pixel",xvals,yvals,zvals);
-=======
-						image_pixel_data->plot_surface_brightness(words[2],show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
-					}
-					else {
-						image_pixel_data->plot_surface_brightness("data_pixel",show_mask_only,show_extended_mask,show_foreground_mask,mask_i);
->>>>>>> origin/development:src/commands.cpp
 						run_plotter_file("datapixel",words[2],range,contstring);
 					}
 				}
@@ -12148,29 +10807,18 @@ void QLens::process_commands(bool read_file)
 			else if (words[1]=="unset_all_pixels")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap unset_all_pixels'");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				imgdata_list[band_i]->set_no_mask_pixels(mask_i);
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->set_no_mask_pixels(mask_i);
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="set_posrg_pixels")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap set_posrg_pixels'");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				imgdata_list[band_i]->set_positive_radial_gradient_pixels(mask_i);
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->set_positive_radial_gradient_pixels(mask_i);
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="reset_emask")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap reset_emask'");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				imgdata_list[band_i]->reset_extended_mask(mask_i);
 			}
@@ -12180,47 +10828,22 @@ void QLens::process_commands(bool read_file)
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!imgdata_list[band_i]->set_all_mask_pixels(mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->reset_extended_mask(mask_i);
-			}
-			else if (words[1]=="set_all_pixels")
-			{
-				if (nwords > 2) Complain("no arguments allowed for command 'sbmap unset_all_pixels'");
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (!image_pixel_data->set_all_mask_pixels(mask_i)) Complain("could not alter mask");
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="invert_mask")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap invert_mask'");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!imgdata_list[band_i]->invert_mask(mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (!image_pixel_data->invert_mask(mask_i)) Complain("could not alter mask");
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="create_new_mask")
 			{
 				if (nwords > 2) Complain("no arguments allowed for command 'sbmap create_new_mask'");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!imgdata_list[band_i]->create_new_mask()) Complain("could not create new mask");
 				if (mpi_id==0) {
 					cout << "Number of masks: " << imgdata_list[band_i]->n_masks << endl;
 					cout << "Number of pixels in mask " << (imgdata_list[band_i]->n_masks-1) << ": " << imgdata_list[band_i]->n_mask_pixels[imgdata_list[band_i]->n_masks-1] << endl;
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (!image_pixel_data->create_new_mask()) Complain("could not create new mask");
-				if (mpi_id==0) {
-					cout << "Number of masks: " << image_pixel_data->n_masks << endl;
-					cout << "Number of pixels in mask " << (image_pixel_data->n_masks-1) << ": " << image_pixel_data->n_mask_pixels[image_pixel_data->n_masks-1] << endl;
->>>>>>> origin/development:src/commands.cpp
 				}
 			}
 			else if (words[1]=="set_neighbor_pixels")
@@ -12239,17 +10862,10 @@ void QLens::process_commands(bool read_file)
 				if (nwords == 3) {
 					if (!(ws[2] >> ntimes)) Complain("invalid number of neighbor pixels");
 				}
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (mask_i >= imgdata_list[band_i]->n_masks) Complain("mask index has not been created");
 				for (int i=0; i < ntimes; i++) imgdata_list[band_i]->set_neighbor_pixels(interior,exterior,mask_i);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (mask_i >= image_pixel_data->n_masks) Complain("mask index has not been created");
-				for (int i=0; i < ntimes; i++) image_pixel_data->set_neighbor_pixels(interior,exterior,mask_i);
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="unset_neighbor_pixels")
 			{
@@ -12258,21 +10874,12 @@ void QLens::process_commands(bool read_file)
 				if (nwords == 3) {
 					if (!(ws[2] >> ntimes)) Complain("invalid number of neighbor pixels");
 				}
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (mask_i >= imgdata_list[band_i]->n_masks) Complain("mask index has not been created");
 				imgdata_list[band_i]->invert_mask(mask_i);
 				for (int i=0; i < ntimes; i++) imgdata_list[band_i]->set_neighbor_pixels(false,false,mask_i);
 				imgdata_list[band_i]->invert_mask(mask_i);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (mask_i >= image_pixel_data->n_masks) Complain("mask index has not been created");
-				image_pixel_data->invert_mask(mask_i);
-				for (int i=0; i < ntimes; i++) image_pixel_data->set_neighbor_pixels(false,false,mask_i);
-				image_pixel_data->invert_mask(mask_i);
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="unset_low_sn_pixels")
 			{
@@ -12280,35 +10887,21 @@ void QLens::process_commands(bool read_file)
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				double sbthresh;
 				if (!(ws[2] >> sbthresh)) Complain("invalid surface brightness threshold");
-<<<<<<< HEAD:commands.cpp
 				if (!imgdata_list[band_i]->unset_low_signal_pixels(sbthresh,mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-				if (!image_pixel_data->unset_low_signal_pixels(sbthresh,mask_i)) Complain("could not alter mask");
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="trim_mask_windows")
 			{
 				if ((nwords < 3) or (nwords > 4)) Complain("one argument allowed for command 'sbmap trim_mask_windows' (noise threshold)");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
->>>>>>> origin/development:src/commands.cpp
 				double noise_threshold;
 				int threshold_size = 0;
 				if (!(ws[2] >> noise_threshold)) Complain("invalid noise threshold for keeping mask windows");
 				if (nwords==4) {
 					if (!(ws[3] >> threshold_size)) Complain("invalid window size threshold for keeping mask windows");
 				}
-<<<<<<< HEAD:commands.cpp
 				if (!imgdata_list[band_i]->assign_mask_windows(noise_threshold,threshold_size,mask_i)) Complain("could not alter mask");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-				if (!image_pixel_data->assign_mask_windows(noise_threshold,threshold_size,mask_i)) Complain("could not alter mask");
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="set_data_annulus")
 			{
@@ -12384,17 +10977,10 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[9] >> ystretch)) Complain("invalid annulus ystretch");
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-<<<<<<< HEAD:commands.cpp
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax)");
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!imgdata_list[band_i]->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true,fgmask,mask_i)) Complain("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (!image_pixel_data->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false,mask_i)) Complain("coult not alter mask");
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="set_emask_annulus")
 			{
@@ -12412,7 +10998,6 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[9] >> ystretch)) Complain("invalid annulus ystretch");
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-<<<<<<< HEAD:commands.cpp
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!imgdata_list[band_i]->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,mask_i)) Complain("could not alter extended mask");
@@ -12429,38 +11014,6 @@ void QLens::process_commands(bool read_file)
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				imgdata_list[band_i]->activate_partner_image_pixels(mask_i,false);
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax)");
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (!image_pixel_data->set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true,mask_i)) Complain("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
-			}
-			else if (words[1]=="set_emask_annulus")
-			{
-				double xc, yc, rmin, rmax, thetamin=0, thetamax=360, xstretch=1.0, ystretch=1.0;
-				if (nwords >= 6) {
-					if (!(ws[2] >> xc)) Complain("invalid annulus center x-coordinate");
-					if (!(ws[3] >> yc)) Complain("invalid annulus center y-coordinate");
-					if (!(ws[4] >> rmin)) Complain("invalid annulas rmin");
-					if (!(ws[5] >> rmax)) Complain("invalid annulas rmax");
-					if (nwords >= 8) {
-						if (!(ws[6] >> thetamin)) Complain("invalid annulus thetamin");
-						if (!(ws[7] >> thetamax)) Complain("invalid annulus thetamax");
-						if (nwords == 10) {
-							if (!(ws[8] >> xstretch)) Complain("invalid annulus xstretch");
-							if (!(ws[9] >> ystretch)) Complain("invalid annulus ystretch");
-						} 
-					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (!image_pixel_data->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,mask_i)) Complain("could not alter extended mask");
-				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data->get_size_of_extended_mask(mask_i) << endl;
-			}
-			else if (words[1]=="activate_partner_imgpixels")
-			{
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->activate_partner_image_pixels();
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="unset_emask_annulus")
 			{
@@ -12479,7 +11032,6 @@ void QLens::process_commands(bool read_file)
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				if (!imgdata_list[band_i]->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true,mask_i)) Complain("could not alter extended mask");
 				if (mpi_id==0) cout << "Number of pixels in extended mask: " << imgdata_list[band_i]->get_size_of_extended_mask(mask_i) << endl;
@@ -12489,16 +11041,6 @@ void QLens::process_commands(bool read_file)
 			{
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				imgdata_list[band_i]->set_foreground_mask_to_primary_mask();
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				if (!image_pixel_data->set_extended_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true,mask_i)) Complain("could not alter extended mask");
-				if (mpi_id==0) cout << "Number of pixels in extended mask: " << image_pixel_data->get_size_of_extended_mask(mask_i) << endl;
-			}
-			else if (words[1]=="set_fgmask_to_primary")
-			{
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->set_foreground_mask_to_primary_mask();
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="set_fgmask_annulus")
 			{
@@ -12517,15 +11059,9 @@ void QLens::process_commands(bool read_file)
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				imgdata_list[band_i]->set_foreground_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false);
 				if (mpi_id==0) cout << "Number of pixels in foreground mask: " << imgdata_list[band_i]->get_size_of_foreground_mask() << endl;
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->set_foreground_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false);
-				if (mpi_id==0) cout << "Number of pixels in foreground mask: " << image_pixel_data->get_size_of_foreground_mask() << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="unset_fgmask_annulus")
 			{
@@ -12544,15 +11080,9 @@ void QLens::process_commands(bool read_file)
 						} 
 					} else if (nwords != 6) Complain("must specify 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
 				} else Complain("must specify at least 4 args (xc,yc,rmin,rmax) plus optional thetamin,thetamax, and xstretch,ystretch");
-<<<<<<< HEAD:commands.cpp
 				if (n_data_bands==0) Complain("no image pixel data has been loaded");
 				imgdata_list[band_i]->set_foreground_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true);
 				if (mpi_id==0) cout << "Number of pixels in foreground mask: " << imgdata_list[band_i]->get_size_of_foreground_mask() << endl;
-=======
-				if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-				image_pixel_data->set_foreground_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,true);
-				if (mpi_id==0) cout << "Number of pixels in foreground mask: " << image_pixel_data->get_size_of_foreground_mask() << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="set_data_window")
 			{
@@ -12562,17 +11092,10 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> xmax)) Complain("invalid rectangle xmax");
 					if (!(ws[4] >> ymin)) Complain("invalid rectangle ymin");
 					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
-<<<<<<< HEAD:commands.cpp
 					if (n_data_bands==0) Complain("no image pixel data has been loaded");
 					if (!imgdata_list[band_i]->set_mask_window(xmin,xmax,ymin,ymax,mask_i)) Complain("could not alter mask");
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap set_data_window'");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-					if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-					if (!image_pixel_data->set_mask_window(xmin,xmax,ymin,ymax,mask_i)) Complain("could not alter mask");
-				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap set_data_window'");
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="unset_data_window")
 			{
@@ -12582,17 +11105,10 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> xmax)) Complain("invalid rectangle xmax");
 					if (!(ws[4] >> ymin)) Complain("invalid rectangle ymin");
 					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
-<<<<<<< HEAD:commands.cpp
 					if (n_data_bands==0) Complain("no image pixel data has been loaded");
 					if (!imgdata_list[band_i]->set_mask_window(xmin,xmax,ymin,ymax,true,mask_i)) Complain("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
 				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap unset_data_window'");
 				if (mpi_id==0) cout << "Number of pixels in mask: " << imgdata_list[band_i]->n_mask_pixels[mask_i] << endl;
-=======
-					if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-					if (!image_pixel_data->set_mask_window(xmin,xmax,ymin,ymax,true,mask_i)) Complain("could not alter mask"); // the 'true' says to deactivate the pixels, instead of activating them
-				} else Complain("must specify 4 arguments (xmin,xmax,ymin,ymax) for 'sbmap unset_data_window'");
-				if (mpi_id==0) cout << "Number of pixels in mask: " << image_pixel_data->n_mask_pixels[mask_i] << endl;
->>>>>>> origin/development:src/commands.cpp
 			}
 			else if (words[1]=="find_noise")
 			{
@@ -12602,13 +11118,8 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[3] >> xmax)) Complain("invalid rectangle xmax");
 					if (!(ws[4] >> ymin)) Complain("invalid rectangle ymin");
 					if (!(ws[5] >> ymax)) Complain("invalid rectangle ymax");
-<<<<<<< HEAD:commands.cpp
 					if (n_data_bands==0) Complain("no image pixel data has been loaded");
 					if (!imgdata_list[band_i]->estimate_pixel_noise(xmin,xmax,ymin,ymax,sig_sb,mean_sb,mask_i)) Complain("could not find pixel noise in mask");;
-=======
-					if (image_pixel_data == NULL) Complain("no image pixel data has been loaded");
-					if (!image_pixel_data->estimate_pixel_noise(xmin,xmax,ymin,ymax,sig_sb,mean_sb,mask_i)) Complain("could not find pixel noise in mask");;
->>>>>>> origin/development:src/commands.cpp
 					if (mpi_id==0) {
 						cout << "Mean surface brightness in mask: " << mean_sb << endl;
 						cout << "Dispersion of surface brightness in mask: " << sig_sb << endl;
@@ -12620,23 +11131,14 @@ void QLens::process_commands(bool read_file)
 			{
 				bool replot = false;
 				bool plot_residual = false;
-<<<<<<< HEAD:commands.cpp
 				bool normalize_sb = false;
-=======
-				bool normalize_residuals = false;
->>>>>>> origin/development:src/commands.cpp
 				bool plot_foreground_only = false;
 				bool omit_foreground = false;
 				bool show_all_pixels = false;
 				bool show_extended_mask = false;
 				bool show_foreground_mask = false;
-<<<<<<< HEAD:commands.cpp
 				bool exclude_ptimgs = false; // by default, we include point images if n_ptsrc > 0
 				//if (include_fgmask_in_inversion) show_foreground_mask = true; // no reason not to show emask if we're including it in the inversion
-=======
-				bool exclude_ptimgs = false; // by default, we include point images if n_sourcepts_fit > 0
-				if (include_extended_mask_in_inversion) show_extended_mask = true; // no reason not to show emask if we're including it in the inversion
->>>>>>> origin/development:src/commands.cpp
 				bool plot_fits = false;
 				bool omit_source_plot = true; // changed this to false because it's annoying to have the source plot come out when you really just want e.g. residuals.
 				bool offload_to_data = false;
@@ -12649,25 +11151,19 @@ void QLens::process_commands(bool read_file)
 				bool plot_contours = false;
 				bool add_specific_noise = false;
 				bool add_noise = false;
-<<<<<<< HEAD:commands.cpp
 				bool show_only_ptimgs = false;
 				bool show_current_sb = false; // if true, will plot the surface brightness that is currently stored in the image_pixel_grids
 				bool include_imgpts = false; // this is to overlay additional lensed points from "mksrcgal" or "mksrctab" command
 				bool show_only_first_order = false;
 				bool no_first_order_potential_corrections = false;
 				bool old_first_order_sb_correction = first_order_sb_correction;
-=======
->>>>>>> origin/development:src/commands.cpp
 				bool simulate_noise_setting = simulate_pixel_noise;
 				string cbstring = "";
 				double pnoise = 0;
 				int n_contours = 24;
 				string temp_title;
 				int zsrc_i = -1;
-<<<<<<< HEAD:commands.cpp
 				if (n_extended_src_redshifts==1) zsrc_i = 0;
-=======
->>>>>>> origin/development:src/commands.cpp
 				for (int i=1; i < nwords-1; i++) {
 					if (words[i]=="-t") {
 						set_title = true;
@@ -12682,11 +11178,7 @@ void QLens::process_commands(bool read_file)
 						string srcnumstring = words[i].substr(pos+4);
 						stringstream srcnumstr;
 						srcnumstr << srcnumstring;
-<<<<<<< HEAD:commands.cpp
 						if (!(srcnumstr >> zsrc_i)) Complain("incorrect format for source index");
-=======
-						if (!(srcnumstr >> zsrc_i)) Complain("incorrect format for lens redshift");
->>>>>>> origin/development:src/commands.cpp
 						if (zsrc_i < 0) Complain("source index cannot be negative");
 						if (zsrc_i >= n_extended_src_redshifts) Complain("source redshift index does not exist");
 						remove_word(i);
@@ -12700,7 +11192,6 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-replot") replot = true;
 						else if ((args[i]=="-res") or (args[i]=="-residual")) plot_residual = true;
-<<<<<<< HEAD:commands.cpp
 						else if (args[i]=="-nres") { plot_residual = true; normalize_sb = true; }
 						else if (args[i]=="-nres6") { plot_residual = true; normalize_sb = true; cbstring = "cb6"; }
 						else if (args[i]=="-nres5") { plot_residual = true; normalize_sb = true; cbstring = "cb5"; }
@@ -12710,16 +11201,6 @@ void QLens::process_commands(bool read_file)
 						//else if (args[i]=="-nresns") { plot_residual = true; normalize_sb = true; omit_source_plot = true; } // shortcut argument to plot residuals but not source
 						else if (args[i]=="-current") show_current_sb = true;
 						else if (args[i]=="-norm") normalize_sb = true;
-=======
-						else if (args[i]=="-nres") { plot_residual = true; normalize_residuals = true; }
-						else if (args[i]=="-nres6") { plot_residual = true; normalize_residuals = true; cbstring = "cb6"; }
-						else if (args[i]=="-nres5") { plot_residual = true; normalize_residuals = true; cbstring = "cb5"; }
-						else if (args[i]=="-nres4") { plot_residual = true; normalize_residuals = true; cbstring = "cb4"; }
-						else if (args[i]=="-nres3") { plot_residual = true; normalize_residuals = true; cbstring = "cb3"; }
-						//else if (args[i]=="-resns") { plot_residual = true; omit_source_plot = true; } // shortcut argument to plot residuals but not source
-						//else if (args[i]=="-nresns") { plot_residual = true; normalize_residuals = true; omit_source_plot = true; } // shortcut argument to plot residuals but not source
-						else if (args[i]=="-norm") normalize_residuals = true;
->>>>>>> origin/development:src/commands.cpp
 						else if (args[i]=="-thresh") show_noise_thresh = true;
 						else if (args[i]=="-log") plot_log = true;
 						else if (args[i]=="-fg") plot_foreground_only = true;
@@ -12730,7 +11211,6 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-fits") plot_fits = true;
 						else if ((args[i]=="-showsrc") or (args[i]=="-showsrcplot")) omit_source_plot = false;
 						else if (args[i]=="-noptsrc") exclude_ptimgs = true;
-<<<<<<< HEAD:commands.cpp
 						else if (args[i]=="-onlyptsrc") show_only_ptimgs = true;
 						else if (args[i]=="-no1storder") no_first_order_potential_corrections = true;
 						else if (args[i]=="-only1storder") show_only_first_order = true;
@@ -12738,10 +11218,6 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-mkdata") offload_to_data = true;
 						else if (args[i]=="-subcomp") subcomp = true;
 						else if (args[i]=="-imgpts") include_imgpts = true;
-=======
-						else if (args[i]=="-nocc") { omit_cc = true; show_cc = false; }
-						else if (args[i]=="-mkdata") offload_to_data = true;
->>>>>>> origin/development:src/commands.cpp
 						else if (args[i]=="-pnoise") {
 							add_noise = true;
 							simulate_pixel_noise = true;
@@ -12777,7 +11253,6 @@ void QLens::process_commands(bool read_file)
 				ncontstr2 >> ncontstring2;
 				if ((replot) and (plot_fits)) Complain("Cannot use 'replot' option when plotting to fits files");
 
-<<<<<<< HEAD:commands.cpp
 				if ((show_current_sb) and (outside_sb_prior)) Complain("cannot use '-current' option if outside_sb_prior is set to 'on'");
 
 				if ((first_order_sb_correction) and (no_first_order_potential_corrections)) {
@@ -12810,24 +11285,6 @@ void QLens::process_commands(bool read_file)
 				}
 				if ((exclude_ptimgs) and (show_only_ptimgs)) Complain("cannot both exclude point images and show only point images");
 				//if ((source_fit_mode==Cartesian_Source) and (cartesian_srcgrids == NULL)) Complain("No source surface brightness map has been loaded");
-=======
-				if (nlens==0) {
-					if ((n_sb==0) and (n_sourcepts_fit==0)) {
-						Complain("must specify lens/source model first");
-					} else {
-						bool all_unlensed = true;
-						for (int i=0; i < n_sb; i++) if (sb_list[i]->is_lensed) all_unlensed = false;
-						if (!all_unlensed) {
-							Complain("must specify lens model first, since lensed sources are present");
-						} else {
-							plot_foreground_only = true; // since there are only foreground sources
-							omit_cc = true;
-							show_cc = false;
-						}
-					}
-				}
-				if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid == NULL)) Complain("No source surface brightness map has been loaded");
->>>>>>> origin/development:src/commands.cpp
 				//if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids == NULL)) Complain("No pixellated soure objects have been created");
 				if (((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source))) omit_source_plot = true;
 				bool old_plot_srcplane = plot_srcplane;
@@ -12847,13 +11304,8 @@ void QLens::process_commands(bool read_file)
 				}
 				if ((nwords != 3) and (plot_srcplane) and (range1 == "")) { // if nwords==3, then source plane isn't being plotted
 					double xmin,xmax,ymin,ymax;
-<<<<<<< HEAD:commands.cpp
 					if ((source_fit_mode==Cartesian_Source) and (src_i >= 0)) {
 						cartesian_srcgrids[src_i]->get_grid_dimensions(xmin,xmax,ymin,ymax);
-=======
-					if (source_fit_mode==Cartesian_Source) {
-						source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
->>>>>>> origin/development:src/commands.cpp
 					} else {
 						double xwidth_adj = sourcegrid_xmax-sourcegrid_xmin;
 						double ywidth_adj = sourcegrid_ymax-sourcegrid_ymin;
@@ -12878,7 +11330,6 @@ void QLens::process_commands(bool read_file)
 					ymaxstr >> ymaxstring;
 					range1 = "[" + xminstring + ":" + xmaxstring + "][" + yminstring + ":" + ymaxstring + "]";
 				}
-<<<<<<< HEAD:commands.cpp
 				if ((range2.empty()) and (n_data_bands > 0)) {
 					stringstream xminstream, xmaxstream, yminstream, ymaxstream;
 					string xminstr, xmaxstr, yminstr, ymaxstr;
@@ -12892,25 +11343,12 @@ void QLens::process_commands(bool read_file)
 				if (n_extended_src_redshifts==0) Complain("no extended source redshifts have been created (do 'sbmap invert' to create automatically)");
 
 				int imggrid_i = band_i*n_extended_src_redshifts + zsrc_i;
-=======
-				if ((range2.empty()) and (image_pixel_data != NULL)) {
-					stringstream xminstream, xmaxstream, yminstream, ymaxstream;
-					string xminstr, xmaxstr, yminstr, ymaxstr;
-					xminstream << image_pixel_data->xvals[0]; xminstream >> xminstr;
-					yminstream << image_pixel_data->yvals[0]; yminstream >> yminstr;
-					xmaxstream << image_pixel_data->xvals[image_pixel_data->npixels_x]; xmaxstream >> xmaxstr;
-					ymaxstream << image_pixel_data->yvals[image_pixel_data->npixels_y]; ymaxstream >> ymaxstr;
-					range2 = "[" + xminstr + ":" + xmaxstr + "][" + yminstr + ":" + ymaxstr + "]";
-				}
-
->>>>>>> origin/development:src/commands.cpp
 				bool foundcc = true;
 				bool plotted_src = false;
 				double old_pnoise;
 				if (add_specific_noise) {
 					old_pnoise = background_pixel_noise;
 					background_pixel_noise = pnoise;
-<<<<<<< HEAD:commands.cpp
 					//cout << "CHECKING? " << zsrc_i << " " << imggrid_i << " " << n_image_pixel_grids << endl;
 					if ((image_pixel_grids != NULL) and (imggrid_i < n_image_pixel_grids) and (image_pixel_grids[imggrid_i] != NULL)) image_pixel_grids[imggrid_i]->setup_noise_map(this);
 				}
@@ -12921,18 +11359,12 @@ void QLens::process_commands(bool read_file)
 				}
 
 				dvector xvals, yvals, zvals;
-=======
-				}
-				if ((include_extended_mask_in_inversion) and (mpi_id==0)) cout << "NOTE: Showing extended mask by default, since include_emask_in_chisq = true" << endl;
-				if ((show_cc) and (zsrc_i >= 0)) create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i],zsrc_i);
->>>>>>> origin/development:src/commands.cpp
 				if ((!show_cc) or (plot_fits) or ((foundcc = plot_critical_curves("crit.dat"))==true)) {
 					string contstring;
 					if (plot_contours) contstring = "ncont=" + ncontstring2; else contstring = "";
 					if (set_title) plot_title = temp_title;
 					if (nwords == 2) {
 						if (plot_fits) Complain("file name for FITS file must be specified");
-<<<<<<< HEAD:commands.cpp
 						if ((replot) or (output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
 							plot_sbmap("img_pixel",xvals,yvals,zvals,plot_fits);
 							//if ((subcomp) and (show_cc)) {
@@ -12953,36 +11385,11 @@ void QLens::process_commands(bool read_file)
 											delaunay_srcgrids[src_i]->plot_voronoi_grid("src_pixel");
 											plot_sbmap("src_pixel",xvals,yvals,zvals);
 											plotted_src = true;
-=======
-						if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i)==true)) {
-							if ((subcomp) and (show_cc)) {
-								if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
-							}
-							if (!offload_to_data) {
-								if (!replot) {
-									if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid != NULL)) {
-										if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel");
-										plotted_src = true;
-									} else if ((source_fit_mode==Delaunay_Source) and (zsrc_i >= 0)) {
-										if (delaunay_srcgrids != NULL) {
-											int src_i = -1;
-											for (int i=0; i < n_pixellated_src; i++) {
-												if (pixellated_src_redshift_idx[i]==zsrc_i) {
-													src_i = i;
-													break;
-												}
-											}
-											if (delaunay_srcgrids[src_i] != NULL) {
-												delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",1,600);
-												plotted_src = true;
-											}
->>>>>>> origin/development:src/commands.cpp
 										}
 									}
 								}
 								if (show_cc) {
 									if ((plot_srcplane) and (plotted_src)) {
-<<<<<<< HEAD:commands.cpp
 										if (source_fit_mode==Delaunay_Source) {
 											if (include_imgpts) run_plotter_range("srcpixel_delaunay_srcpts_plural",range1);
 											else run_plotter_range("srcpixel_delaunay",range1);
@@ -13002,26 +11409,12 @@ void QLens::process_commands(bool read_file)
 									}
 									if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural_nocc",range2,contstring,cbstring);
 									else run_plotter_range("imgpixel_nocc",range2,contstring,cbstring);
-=======
-										if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay",range1);
-										else run_plotter_range("srcpixel",range1);
-									}
-									if (subcomp) run_plotter_range("imgpixel_comp",range2,contstring,cbstring);
-									else run_plotter_range("imgpixel",range2,contstring,cbstring);
-								} else {
-									if ((plot_srcplane) and (plotted_src)) {
-										if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay_nocc",range1);
-										else run_plotter_range("srcpixel_nocc",range1);
-									}
-									run_plotter_range("imgpixel_nocc",range2,contstring,cbstring);
->>>>>>> origin/development:src/commands.cpp
 								}
 							}
 						} else {
 							Complain("Plotting failed");
 						}
 					} else if (nwords == 3) {
-<<<<<<< HEAD:commands.cpp
 						if ((terminal==TEXT) or (plot_fits)) {
 							if (!replot) {
 								output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
@@ -13051,35 +11444,6 @@ void QLens::process_commands(bool read_file)
 									}
 								}
 								plot_sbmap(words[3],xvals,yvals,zvals,plot_fits);
-=======
-						if (terminal==TEXT) {
-							if (!replot) plot_lensed_surface_brightness(words[2],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i);
-						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i)==true)) {
-							if (show_cc) {
-								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range2,contstring,cbstring);
-								else run_plotter_file("imgpixel",words[2],range2,contstring,cbstring);
-							} else {
-								run_plotter_file("imgpixel_nocc",words[2],range2,contstring,cbstring);
-							}
-						}
-					} else if (nwords == 4) {
-						if (terminal==TEXT) {
-							if (!replot) {
-								plot_lensed_surface_brightness(words[3],plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i);
-								if ((plotted_src) and (mpi_id==0)) source_pixel_grid->plot_surface_brightness(words[2]);
-							}
-						}
-						else if ((replot) or (plot_lensed_surface_brightness("img_pixel",plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_residuals,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,zsrc_i)==true)) {
-							if ((!replot) and (plotted_src)) { if (mpi_id==0) source_pixel_grid->plot_surface_brightness("src_pixel"); }
-							if (show_cc) {
-								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring,cbstring);
-								else run_plotter_file("imgpixel",words[3],range2,contstring,cbstring);
-								if ((plot_srcplane) and (plotted_src)) run_plotter_file("srcpixel",words[2],range1,contstring,cbstring);
-							} else {
-								run_plotter_file("imgpixel_nocc",words[3],range2,contstring,cbstring);
-								if ((plot_srcplane) and (plotted_src)) run_plotter_file("srcpixel_nocc",words[2],range1);
->>>>>>> origin/development:src/commands.cpp
 							}
 						}
 						else if ((replot) or (output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
@@ -13108,10 +11472,7 @@ void QLens::process_commands(bool read_file)
 				reset_grid();
 				if (add_specific_noise) {
 					background_pixel_noise = old_pnoise;
-<<<<<<< HEAD:commands.cpp
 					if ((image_pixel_grids != NULL) and (imggrid_i < n_image_pixel_grids) and (image_pixel_grids[imggrid_i] != NULL)) image_pixel_grids[imggrid_i]->setup_noise_map(this);
-=======
->>>>>>> origin/development:src/commands.cpp
 				}
 				if ((add_noise) or (add_specific_noise)) {
 					if (!simulate_noise_setting) simulate_pixel_noise = false;
@@ -13143,12 +11504,9 @@ void QLens::process_commands(bool read_file)
 				bool plot_fits = false;
 				bool omit_caustics = false;
 				bool old_caustics_setting = show_cc;
-<<<<<<< HEAD:commands.cpp
 				bool plot_mag = false;
 				bool include_srcpts = false;
 				bool show_raytraced_pts = false; // if true, show all raytraced points (subpixels, if splitting is on) instead of source pixels
-=======
->>>>>>> origin/development:src/commands.cpp
 				string temp_title;
 				int zsrc_i = 0;
 				for (int i=1; i < nwords-1; i++) {
@@ -13178,7 +11536,6 @@ void QLens::process_commands(bool read_file)
 				{
 					for (int i=0; i < args.size(); i++) {
 						if (args[i]=="-interp") interpolate = true;
-<<<<<<< HEAD:commands.cpp
 						else if (args[i]=="-mag") plot_mag = true;
 						else if (args[i]=="-n100") set_npix = 100;
 						else if (args[i]=="-n200") set_npix = 200;
@@ -13193,31 +11550,13 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-n2000") set_npix = 2000;
 						else if (args[i]=="-n3000") set_npix = 3000;
 						else if (args[i]=="-n4000") set_npix = 4000;
-=======
-						else if (args[i]=="-100") set_npix = 100;
-						else if (args[i]=="-200") set_npix = 200;
-						else if (args[i]=="-300") set_npix = 300;
-						else if (args[i]=="-400") set_npix = 400;
-						else if (args[i]=="-500") set_npix = 500;
-						else if (args[i]=="-600") set_npix = 600;
-						else if (args[i]=="-700") set_npix = 700;
-						else if (args[i]=="-800") set_npix = 800;
-						else if (args[i]=="-900") set_npix = 900;
-						else if (args[i]=="-1000") set_npix = 1000;
-						else if (args[i]=="-2000") set_npix = 2000;
-						else if (args[i]=="-3000") set_npix = 3000;
-						else if (args[i]=="-4000") set_npix = 4000;
->>>>>>> origin/development:src/commands.cpp
 						else if (args[i]=="-fits") plot_fits = 4000;
 						else if (args[i]=="-x1.5") { zoom_in = true; zoomfactor = 1.5; }
 						else if (args[i]=="-x2") { zoom_in = true; zoomfactor = 2; }
 						else if (args[i]=="-x4") { zoom_in = true; zoomfactor = 4; }
 						else if (args[i]=="-x8") { zoom_in = true; zoomfactor = 8; }
-<<<<<<< HEAD:commands.cpp
 						else if (args[i]=="-srcpts") { include_srcpts = true; }
 						else if (args[i]=="-show_raytraced_pts") show_raytraced_pts = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 						else if ((args[i]=="-nocaust") or (args[i]=="-nocc")) { omit_caustics = true; show_cc = false; }
 						//else if (args[i]=="-nomask") use_mask = false;
 						//else if (args[i]=="-srcgrid") scale_to_srcgrid = true;
@@ -13226,7 +11565,6 @@ void QLens::process_commands(bool read_file)
 					}
 				}
 
-<<<<<<< HEAD:commands.cpp
 				//if ((source_fit_mode!=Cartesian_Source) and (source_fit_mode!=Delaunay_Source)) Complain("'sbmap plotsrc' is for pixellated sources (cartesian/delaunay); for sbprofile/shapelet mode, use 'sbmap mkplotsrc'");
 				if (source_fit_mode==Delaunay_Source) delaunay = true;
 				if (srcgrids == NULL) Complain("No pixellated source objects have been created");
@@ -13242,17 +11580,10 @@ void QLens::process_commands(bool read_file)
 				if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids[src_i]->get_n_srcpts()==0)) Complain("Delaunay grid has not been created for specified source (no inversion has been done)");
 				else if ((source_fit_mode==Cartesian_Source) and (cartesian_srcgrids[src_i]->levels==0)) Complain("Cartesian grid has not been constructed for specified source (no inversion has been done)");
 
-=======
-				if ((source_fit_mode!=Cartesian_Source) and (source_fit_mode!=Delaunay_Source)) Complain("'sbmap plotsrc' is for pixellated sources (cartesian/delaunay); for sbprofile/shapelet mode, use 'sbmap mkplotsrc'");
-				if (source_fit_mode==Delaunay_Source) delaunay = true;
-				if ((source_fit_mode==Cartesian_Source) and (source_pixel_grid == NULL)) Complain("No Cartesian source surface brightness map has been created");
-				if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids == NULL)) Complain("No pixellated source objects have been created");
->>>>>>> origin/development:src/commands.cpp
 				if (zoom_in) {
 					if (delaunay) {
 						delaunay_grid_scale /= zoomfactor;
 					} else {
-<<<<<<< HEAD:commands.cpp
 						old_srcgrid_scale = cartesian_srcgrids[src_i]->srcgrid_size_scale;
 						cartesian_srcgrids[src_i]->srcgrid_size_scale = 1.0/zoomfactor;
 					}
@@ -13263,35 +11594,12 @@ void QLens::process_commands(bool read_file)
 				}
 
 				dvector xvals, yvals, zvals;
-=======
-						old_srcgrid_scale = srcgrid_size_scale;
-						srcgrid_size_scale = 1.0/zoomfactor;
-					}
-				}
-
-				int src_i = -1;
-				if (source_fit_mode==Delaunay_Source) {
-					for (int i=0; i < n_pixellated_src; i++) {
-						if (pixellated_src_redshift_idx[i]==zsrc_i) {
-							src_i = i;
-							break;
-						}
-					}
-				}
-				if (src_i < 0) Complain("specified pixellated source number does not exist");
-
->>>>>>> origin/development:src/commands.cpp
 				string range1 = "";
 				extract_word_starts_with('[',1,nwords-1,range1); // allow for ranges to be specified (if it's not, then ranges are set to "")
 				if (range1 == "") {
 					double xmin,xmax,ymin,ymax;
-<<<<<<< HEAD:commands.cpp
 					if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Parameterized_Source)) {
 						cartesian_srcgrids[src_i]->get_grid_dimensions(xmin,xmax,ymin,ymax);
-=======
-					if (source_fit_mode==Cartesian_Source) {
-						source_pixel_grid->get_grid_dimensions(xmin,xmax,ymin,ymax);
->>>>>>> origin/development:src/commands.cpp
 					} else {
 						double xwidth_adj = delaunay_grid_scale*(delaunay_srcgrids[src_i]->srcgrid_xmax-delaunay_srcgrids[src_i]->srcgrid_xmin);
 						double ywidth_adj = delaunay_grid_scale*(delaunay_srcgrids[src_i]->srcgrid_ymax-delaunay_srcgrids[src_i]->srcgrid_ymin);
@@ -13320,7 +11628,6 @@ void QLens::process_commands(bool read_file)
 					if (plot_fits) Complain("file name for FITS file must be specified");
 					if (set_title) plot_title = temp_title;
 					if (mpi_id==0) {
-<<<<<<< HEAD:commands.cpp
 						if ((source_fit_mode==Cartesian_Source) or (source_fit_mode==Parameterized_Source)) {
 							if (cartesian_srcgrids[src_i] != NULL) {
 								dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
@@ -13350,27 +11657,10 @@ void QLens::process_commands(bool read_file)
 							if (include_srcpts) run_plotter_range("srcpixel_delaunay_srcpts_plural_nocc",range1);
 							else run_plotter_range("srcpixel_delaunay_nocc",range1);
 						}
-=======
-						if (source_fit_mode==Cartesian_Source) source_pixel_grid->plot_surface_brightness("src_pixel");
-						else if (source_fit_mode==Delaunay_Source) {
-							if (delaunay_srcgrids[src_i] != NULL) {
-								delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate);
-							} else Complain("Delaunay grid has not been created");
-
-						}
-					}
-					if ((show_cc) and (zsrc_i >= 0)) create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i],zsrc_i);
-					if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
-						if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay",range1);
-						else run_plotter_range("srcpixel",range1);
-					} else {
-						if (source_fit_mode==Delaunay_Source) run_plotter_range("srcpixel_delaunay_nocc",range1);
->>>>>>> origin/development:src/commands.cpp
 						else run_plotter_range("srcpixel_nocc",range1);
 					}
 				} else if (nwords == 3) {
 					if (plot_fits) {
-<<<<<<< HEAD:commands.cpp
 						if (source_fit_mode==Cartesian_Source) {
 							dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
 							cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
@@ -13417,49 +11707,20 @@ void QLens::process_commands(bool read_file)
 									if (include_srcpts) run_plotter_file("srcpixel_delaunay_srcpts_plural_nocc",words[2],range1);
 									else run_plotter_file("srcpixel_delaunay_nocc",words[2],range1);
 								}
-=======
-						if (source_fit_mode==Cartesian_Source) source_pixel_grid->output_fits_file(words[2]);
-						else if (source_fit_mode==Delaunay_Source) {
-							delaunay_srcgrids[src_i]->plot_surface_brightness(words[2],delaunay_grid_scale,set_npix,interpolate,plot_fits);
-						}
-					} else {
-						if (set_title) plot_title = temp_title;
-						if (terminal==TEXT) {
-							if (mpi_id==0) source_pixel_grid->plot_surface_brightness(words[2]);
-						} else {
-							if (source_fit_mode==Cartesian_Source) source_pixel_grid->plot_surface_brightness("src_pixel");
-							else if (source_fit_mode==Delaunay_Source) {
-								if (delaunay_srcgrids[src_i] != NULL) {
-									delaunay_srcgrids[src_i]->plot_surface_brightness("src_pixel",delaunay_grid_scale,set_npix,interpolate);
-								} else Complain("Delaunay grid has not been created");
-							}
-							if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
-								if (source_fit_mode==Delaunay_Source) run_plotter_file("srcpixel_delaunay",words[2],range1);
-								else run_plotter_file("srcpixel",words[2],range1);
-							} else {
-								if (source_fit_mode==Delaunay_Source) run_plotter_file("srcpixel_delaunay_nocc",words[2],range1);
->>>>>>> origin/development:src/commands.cpp
 								else run_plotter_file("srcpixel_nocc",words[2],range1);
 							}
 						}
 					}
 				} else Complain("invalid number of arguments to 'sbmap plotsrc'");
 				reset_grid();
-<<<<<<< HEAD:commands.cpp
 				if ((zoom_in) and (!delaunay)) cartesian_srcgrids[src_i]->srcgrid_size_scale = old_srcgrid_scale;
-=======
-				if ((zoom_in) and (!delaunay)) srcgrid_size_scale = old_srcgrid_scale;
->>>>>>> origin/development:src/commands.cpp
 				if (omit_caustics) show_cc = old_caustics_setting;
 				if (set_title) plot_title = "";
 			}
 			else if (words[1]=="invert")
 			{
-<<<<<<< HEAD:commands.cpp
 				if (!use_noise_map) Complain("Noise map required; either load from fits file or generate uniform noise map from bg_pixel_noise");
 				//use_noise_map = true;
-=======
->>>>>>> origin/development:src/commands.cpp
 				if (source_fit_mode==Point_Source) Complain("cannot invert pixel image if source_mode is set to 'ptsource'");
 				bool regopt = false; // false means it uses whatever the actual setting is for optimize_regparam
 				bool verbal = true;
@@ -13483,11 +11744,7 @@ void QLens::process_commands(bool read_file)
 					optimize_regparam = true;
 				}
 				if (nlens==0) {
-<<<<<<< HEAD:commands.cpp
 					if ((n_sb==0) and (n_ptsrc==0)) {
-=======
-					if ((n_sb==0) and (n_sourcepts_fit==0)) {
->>>>>>> origin/development:src/commands.cpp
 						Complain("must specify lens/source model first");
 					} else {
 						bool all_unlensed = true;
@@ -13496,13 +11753,8 @@ void QLens::process_commands(bool read_file)
 						}
 						if (!all_unlensed) Complain("background source objects have been defined, but no lens models have been defined");
 						all_unlensed = true;
-<<<<<<< HEAD:commands.cpp
 						for (int i=0; i < n_ptsrc; i++) {
 							if (ptsrc_redshifts[ptsrc_redshift_idx[i]] != lens_redshift) all_unlensed = false;
-=======
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if (ptsrc_redshifts[i] != lens_redshift) all_unlensed = false;
->>>>>>> origin/development:src/commands.cpp
 						}
 						if (!all_unlensed) Complain("background source points have been defined, but no lens models have been defined");
 					}
@@ -13523,11 +11775,7 @@ void QLens::process_commands(bool read_file)
 				if (source_fit_mode==Point_Source) Complain("cannot invert pixel image if source_mode is set to 'ptsource'");
 				if (use_saved_sbweights) Complain("cannot save sbweights if 'use_saved_sbweights' is also set to 'on'");
 				if (nlens==0) {
-<<<<<<< HEAD:commands.cpp
 					if ((n_sb==0) and (n_ptsrc==0)) {
-=======
-					if ((n_sb==0) and (n_sourcepts_fit==0)) {
->>>>>>> origin/development:src/commands.cpp
 						Complain("must specify lens/source model first");
 					} else {
 						bool all_unlensed = true;
@@ -13536,13 +11784,8 @@ void QLens::process_commands(bool read_file)
 						}
 						if (!all_unlensed) Complain("background source objects have been defined, but no lens models have been defined");
 						all_unlensed = true;
-<<<<<<< HEAD:commands.cpp
 						for (int i=0; i < n_ptsrc; i++) {
 							if (ptsrc_redshifts[ptsrc_redshift_idx[i]] != lens_redshift) all_unlensed = false;
-=======
-						for (int i=0; i < n_sourcepts_fit; i++) {
-							if (ptsrc_redshifts[i] != lens_redshift) all_unlensed = false;
->>>>>>> origin/development:src/commands.cpp
 						}
 						if (!all_unlensed) Complain("background source points have been defined, but no lens models have been defined");
 					}
@@ -13554,16 +11797,11 @@ void QLens::process_commands(bool read_file)
 			}
 			else if (words[1]=="plot_imgpixels")
 			{
-<<<<<<< HEAD:commands.cpp
 				int zsrc_i = 0;
 				if (nwords==3) {
 					if (!(ws[2] >> zsrc_i)) Complain("invalid imggrid index");
 				}
 				plot_image_pixel_grid(band_i,zsrc_i);
-=======
-				if (nlens==0) Complain("must specify lens model first");
-				plot_image_pixel_grid(0);
->>>>>>> origin/development:src/commands.cpp
 			}
 			else Complain("command not recognized");
 		}
@@ -14414,47 +12652,11 @@ void QLens::process_commands(bool read_file)
 		{
 			int iter;
 			if (nwords == 2) {
-<<<<<<< HEAD:commands.cpp
 				if (!(ws[1] >> iter)) Complain("invalid potential_corr_it setting");
 				potential_correction_iterations = iter;
-=======
-				if (!(ws[1] >> srcflux)) Complain("invalid source flux setting");
-				source_flux = srcflux;
-				if ((vary_srcflux) and ((fitmethod != POWELL) and (fitmethod != SIMPLEX))) {
-					if (mpi_id==0) cout << "Limits for source flux:\n";
-					if (read_command(false)==false) return;
-					double smin,smax;
-					if (nwords != 2) Complain("Must specify two arguments for source flux limits: smin, smax");
-					if (!(ws[0] >> smin)) Complain("Invalid lower limit for source flux");
-					if (!(ws[1] >> smax)) Complain("Invalid upper limit for source flux");
-					if (smin > smax) Complain("lower limit cannot be greater than upper limit");
-					srcflux_lower_limit = smin;
-					srcflux_upper_limit = smax;
-				}
->>>>>>> origin/development:src/commands.cpp
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "number of iterations for potential corrections = " << potential_correction_iterations << endl;
 			} else Complain("must specify either zero or one argument (number of iterations)");
-		}
-		else if (words[0]=="vary_srcflux")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary source flux: " << display_switch(vary_srcflux) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcflux' command; must specify 'on' or 'off'");
-				set_switch(vary_srcflux,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="invert_imgflux")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Include image flux in inversion: " << display_switch(include_imgfluxes_in_inversion) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'invert_imgflux' command; must specify 'on' or 'off'");
-				set_switch(include_imgfluxes_in_inversion,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="chisq_parity")
 		{
@@ -14797,7 +12999,6 @@ void QLens::process_commands(bool read_file)
 				set_switch(cc_neighbor_splittings,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-<<<<<<< HEAD:commands.cpp
 		else if (words[0]=="caustic_minmax")
 		{
 			int cc_num=-1;
@@ -14808,8 +13009,6 @@ void QLens::process_commands(bool read_file)
 			if (!find_caustic_minmax(rmin,rmax,rmax_minor_axis,cc_num)) Complain("critical curves have not been found");
 			if (mpi_id==0) cout << "Caustic rmin=" << rmin << " rmax=" << rmax << " rmax_minor_axis=" << rmax_minor_axis << endl;
 		}
-=======
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="skip_newton")
 		{
 			if (nwords==1) {
@@ -15163,26 +13362,15 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Point source PSF input threshold = " << psf_ptsrc_threshold << endl;
 			} else Complain("can only specify up to one argument for point source PSF input threshold");
 		}
-<<<<<<< HEAD:commands.cpp
 		else if (words[0]=="ptimg_nsplit")
-=======
-		else if (words[0]=="psf_ptsrc_nsplit")
->>>>>>> origin/development:src/commands.cpp
 		{
 			// NOTE: currently only pixels in the primary mask are split; pixels in extended mask are NOT split (see setup_ray_tracing_arrays() in pixelgrid.cpp)
 			if (nwords == 2) {
 				int nsp;
-<<<<<<< HEAD:commands.cpp
 				if (!(ws[1] >> nsp)) Complain("invalid number of point image PSF pixel splittings");
 				ptimg_nsplit = nsp;
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "default number of point image PSF pixel splittings = " << ptimg_nsplit << endl;
-=======
-				if (!(ws[1] >> nsp)) Complain("invalid number of point source PSF pixel splittings");
-				psf_ptsrc_nsplit = nsp;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "default number of point source PSF pixel splittings = " << psf_ptsrc_nsplit << endl;
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("must specify either zero or one argument (default number of point source PSF pixel splittings)");
 		}
 		else if (words[0]=="fft_convolution")
@@ -15223,45 +13411,6 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("must specify one argument (firstlevel source pixel fraction)");
 		}
-<<<<<<< HEAD:commands.cpp
-=======
-		else if (words[0]=="srcpt_xshift")
-		{
-			double xsh, xsh_ll, xsh_ul;
- 			if (nwords == 4) {
- 				if (!(ws[1] >> xsh_ll)) Complain("invalid source srcpt_xshift lower limit");
- 				if (!(ws[2] >> xsh)) Complain("invalid source srcpt_xshift value");
- 				if (!(ws[3] >> xsh_ul)) Complain("invalid source srcpt_xshift upper limit");
- 				if ((xsh < xsh_ll) or (xsh > xsh_ul)) Complain("initial source srcpt_xshift should lie within specified prior limits");
- 				srcpt_xshift = xsh;
- 				srcpt_xshift_lower_limit = xsh_ll;
- 				srcpt_xshift_upper_limit = xsh_ul;
- 			} else if (nwords == 2) {
-				if (!(ws[1] >> xsh)) Complain("invalid srcpt_xshift");
-				srcpt_xshift = xsh;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "srcpt_xshift = " << srcpt_xshift << endl;
-			} else Complain("must specify one argument (srcpt_xshift)");
-		}
-		else if (words[0]=="srcpt_yshift")
-		{
-			double ysh, ysh_ll, ysh_ul;
- 			if (nwords == 4) {
- 				if (!(ws[1] >> ysh_ll)) Complain("invalid source srcpt_yshift lower limit");
- 				if (!(ws[2] >> ysh)) Complain("invalid source srcpt_yshift value");
- 				if (!(ws[3] >> ysh_ul)) Complain("invalid source srcpt_yshift upper limit");
- 				if ((ysh < ysh_ll) or (ysh > ysh_ul)) Complain("initial source srcpt_yshift should lie within specified prior limits");
- 				srcpt_yshift = ysh;
- 				srcpt_yshift_lower_limit = ysh_ll;
- 				srcpt_yshift_upper_limit = ysh_ul;
- 			} else if (nwords == 2) {
-				if (!(ws[1] >> ysh)) Complain("invalid srcpt_yshift");
-				srcpt_yshift = ysh;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "srcpt_yshift = " << srcpt_yshift << endl;
-			} else Complain("must specify one argument (srcpt_yshift)");
-		}
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="srcgrid_scale")
 		{
 			double scale, scale_ll, scale_ul;
@@ -15320,49 +13469,6 @@ void QLens::process_commands(bool read_file)
 				default_data_pixel_size = ps;
 			} else Complain("invalid number of arguments to 'data_pixel_size'");
 		}
-<<<<<<< HEAD:commands.cpp
-=======
-		else if (words[0]=="vary_pixel_fraction")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary firstlevel source pixel fraction: " << display_switch(vary_pixel_fraction) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_pixel_fraction' command; must specify 'on' or 'off'");
-				set_switch(vary_pixel_fraction,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="vary_srcpt_xshift")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary source point x-shift: " << display_switch(vary_srcpt_xshift) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcpt_xshift' command; must specify 'on' or 'off'");
-				set_switch(vary_srcpt_xshift,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="vary_srcpt_yshift")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary source point y-shift: " << display_switch(vary_srcpt_yshift) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcpt_yshift' command; must specify 'on' or 'off'");
-				set_switch(vary_srcpt_yshift,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="vary_srcgrid_scale")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary source grid size scaling: " << display_switch(vary_srcgrid_size_scale) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_srcgrid_scale' command; must specify 'on' or 'off'");
-				set_switch(vary_srcgrid_size_scale,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="n_livepts")
 		{
 			int n_lp;
@@ -15386,17 +13492,12 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="multinest_constant_eff_mode")
 		{
 			if (nwords==1) {
-<<<<<<< HEAD:commands.cpp
 				if (mpi_id==0) cout << "Constant efficiency mode: " << display_switch(multinest_constant_eff_mode) << endl;
-=======
-				if (mpi_id==0) cout << "Use image plane chi-square function: " << display_switch(multinest_constant_eff_mode) << endl;
->>>>>>> origin/development:src/commands.cpp
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'multinest_constant_eff_mode' command; must specify 'on' or 'off'");
 				set_switch(multinest_constant_eff_mode,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-<<<<<<< HEAD:commands.cpp
 		else if (words[0]=="multimodal_sampling")
 		{
 			if (nwords==1) {
@@ -15406,8 +13507,6 @@ void QLens::process_commands(bool read_file)
 				set_switch(multimodal_sampling,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-=======
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="polychord_nrepeats")
 		{
 			int n_rp;
@@ -15616,7 +13715,6 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[2] >> regparam)) Complain("invalid regularization parameter value");
 				if (!(ws[3] >> regparam_upper)) Complain("invalid regularization parameter upper limit");
 				if ((regparam < regparam_lower) or (regparam > regparam_upper)) Complain("initial regularization parameter should lie within specified prior limits");
-<<<<<<< HEAD:commands.cpp
 				if (n_pixellated_src==0) {
 					if (mpi_id==0) cout << "Creating pixellated source with redshift zsrc=" << source_redshift << endl;
 					add_pixellated_source(source_redshift);
@@ -15625,11 +13723,6 @@ void QLens::process_commands(bool read_file)
 					srcgrids[i]->update_specific_parameter("regparam",regparam);
 					srcgrids[i]->set_limits_specific_parameter("regparam",regparam_lower,regparam_upper);
 				}
-=======
-				regularization_parameter = regparam;
-				regularization_parameter_lower_limit = regparam_lower;
-				regularization_parameter_upper_limit = regparam_upper;
->>>>>>> origin/development:src/commands.cpp
 			} else if (nwords == 2) {
 				if (!(ws[1] >> regparam)) Complain("invalid regularization parameter value");
 				if (n_pixellated_src==0) {
@@ -15663,7 +13756,6 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam can be varied (see 'fit regularization')");
 				if ((setword=="on") and (optimize_regparam)) Complain("regparam cannot be varied freely if 'optimize_regparam' is set to 'on'");
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-<<<<<<< HEAD:commands.cpp
 				set_switch(vary_regparam,setword);
 				if (n_pixellated_src==0) {
 					if (mpi_id==0) cout << "Creating pixellated source with redshift zsrc=" << source_redshift << endl;
@@ -15705,54 +13797,6 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "lumweight_func = " << lum_weight_function << endl;
 			} else Complain("must specify either zero or one argument (lumweight_func value)");
 		}
-=======
-				set_switch(vary_regularization_parameter,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="lum_weighted_regularization")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use luminosity-weighted regularization: " << display_switch(use_lum_weighted_regularization) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'lum_weighted_regularization' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!optimize_regparam) and (!get_lumreg_from_sbweights)) Complain("lum_weighted_regularization requires 'optimize_regparam' or 'lumreg_from_sbweights' to be set to 'on'");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				if ((setword=="on") and (use_distance_weighted_regularization)) {
-					use_distance_weighted_regularization = false;
-					if (mpi_id==0) cout << "NOTE: setting 'dist_weighted_regularization' to 'off'" << endl;
-				}
-				if ((setword=="off") and (use_lum_weighted_regularization)) {
-					if ((vary_regparam_lsc) and (!use_second_covariance_kernel)) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
-						vary_regparam_lsc = false;
-					}
-					//if (vary_regparam_lhi) {
-						//if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
-						//vary_regparam_lhi = false;
-					//}
-					if (vary_regparam_lum_index) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lum_index' to 'off'" << endl;
-						vary_regparam_lum_index = false;
-					}
-				}
-				set_switch(use_lum_weighted_regularization,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="lumweight_func")
-		{
-			int lfunc;
-			if (nwords == 2) {
-				if (!(ws[1] >> lfunc)) Complain("invalid lumweight_func value");
-				if ((lfunc < 0) or (lfunc > 2)) Complain("lumweight_func must be either 0, 1, or 2");
-				lum_weight_function = lfunc;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "lumweight_func = " << lum_weight_function << endl;
-			} else Complain("must specify either zero or one argument (lumweight_func value)");
-		}
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="dist_weighted_regularization")
 		{
 			if (nwords==1) {
@@ -15765,7 +13809,6 @@ void QLens::process_commands(bool read_file)
 					use_lum_weighted_regularization = false;
 					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off'" << endl;
 				}
-<<<<<<< HEAD:commands.cpp
 				set_switch(use_distance_weighted_regularization,setword);
 				for (int i=0; i < n_pixellated_src; i++) {
 					update_pixsrc_active_parameters(i);
@@ -15785,35 +13828,6 @@ void QLens::process_commands(bool read_file)
 				for (int i=0; i < n_pixellated_src; i++) {
 					update_pixsrc_active_parameters(i);
 				}
-=======
-				if ((setword=="off") and (use_distance_weighted_regularization)) {
-					if ((vary_regparam_lsc) and (!use_second_covariance_kernel)) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lsc' to 'off'" << endl;
-						vary_regparam_lsc = false;
-					}
-					if (vary_regparam_lum_index) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lum_index' to 'off'" << endl;
-						vary_regparam_lum_index = false;
-					}
-					if (vary_lumreg_xcenter) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_lumreg_xcenter' to 'off'" << endl;
-						vary_lumreg_xcenter = false;
-					}
-					if (vary_lumreg_ycenter) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_lumreg_ycenter' to 'off'" << endl;
-						vary_lumreg_ycenter = false;
-					}
-					if (vary_lumreg_e1) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_lumreg_e1' to 'off'" << endl;
-						vary_lumreg_e1 = false;
-					}
-					if (vary_lumreg_e2) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_lumreg_e2' to 'off'" << endl;
-						vary_lumreg_e2 = false;
-					}
-				}
-				set_switch(use_distance_weighted_regularization,setword);
->>>>>>> origin/development:src/commands.cpp
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -15825,26 +13839,11 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'dist_weighted_srcpixel_clustering' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("distance-weighted srcpixel clustering can only be used if source mode is set to 'delaunay' (see 'fit source_mode')");
 				if ((setword=="on") and (use_lum_weighted_srcpixel_clustering)) Complain("dist_weighted_srcpixel_clustering and lum_weighted_srcpixel_clustering cannot both be on"); 
-<<<<<<< HEAD:commands.cpp
 				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
 				set_switch(use_dist_weighted_srcpixel_clustering,setword);
 				for (int i=0; i < n_pixellated_src; i++) {
 					update_pixsrc_active_parameters(i);
 				}
-=======
-				if ((setword=="off") and (use_dist_weighted_srcpixel_clustering)) {
-					if (vary_alpha_clus) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_alpha_clus' to 'off'" << endl;
-						vary_alpha_clus = false;
-					}
-					if (vary_beta_clus) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_beta_clus' to 'off'" << endl;
-						vary_beta_clus = false;
-					}
-				}
-				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
-				set_switch(use_dist_weighted_srcpixel_clustering,setword);
->>>>>>> origin/development:src/commands.cpp
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if ((use_dist_weighted_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
@@ -15858,26 +13857,11 @@ void QLens::process_commands(bool read_file)
 				if ((setword=="on") and (!optimize_regparam) and (!use_saved_sbweights)) Complain("lum_weighted_srcpixel_clustering requires either 'optimize_regparam' or 'use_saved_sbweights' to be set to 'on'");
 				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("luminosity-weighted srcpixel clustering can only be used if source mode is set to 'delaunay' (see 'fit source_mode')");
 				if ((setword=="on") and (use_dist_weighted_srcpixel_clustering)) Complain("dist_weighted_srcpixel_clustering and lum_weighted_srcpixel_clustering cannot both be on"); 
-<<<<<<< HEAD:commands.cpp
 				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
 				set_switch(use_lum_weighted_srcpixel_clustering,setword);
 				for (int i=0; i < n_pixellated_src; i++) {
 					update_pixsrc_active_parameters(i);
 				}
-=======
-				if ((setword=="off") and (use_lum_weighted_srcpixel_clustering)) {
-					if (vary_alpha_clus) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_alpha_clus' to 'off'" << endl;
-						vary_alpha_clus = false;
-					}
-					if (vary_beta_clus) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_beta_clus' to 'off'" << endl;
-						vary_beta_clus = false;
-					}
-				}
-				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
-				set_switch(use_lum_weighted_srcpixel_clustering,setword);
->>>>>>> origin/development:src/commands.cpp
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if ((use_lum_weighted_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
@@ -15891,10 +13875,7 @@ void QLens::process_commands(bool read_file)
 				set_switch(get_lumreg_from_sbweights,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-<<<<<<< HEAD:commands.cpp
 		/*
-=======
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="regparam_lsc")
 		{
 			double reg_lsc, reg_lsc_upper, reg_lsc_lower;
@@ -15920,11 +13901,7 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lsc' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lsc can be varied (see 'fit regularization')");
-<<<<<<< HEAD:commands.cpp
 				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization)) Complain("either 'lum_weighted_regularization', 'dist_weighted_regularization' or 'use_two_kernels' must be set to 'on' before regparam_lsc can be varied");
-=======
-				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization) and (!use_second_covariance_kernel)) Complain("either 'lum_weighted_regularization', 'dist_weighted_regularization' or 'use_two_kernels' must be set to 'on' before regparam_lsc can be varied");
->>>>>>> origin/development:src/commands.cpp
 				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lsc can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
 				set_switch(vary_regparam_lsc,setword);
 				update_parameter_list();
@@ -15962,7 +13939,6 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-<<<<<<< HEAD:commands.cpp
 
 		else if (words[0]=="mag_weight_index")
 		{
@@ -16027,8 +14003,6 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-=======
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="lumreg_rc")
 		{
 			double lrrc, lrrc_upper, lrrc_lower;
@@ -16060,73 +14034,7 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-<<<<<<< HEAD:commands.cpp
 		*/
-=======
-		else if (words[0]=="regparam_lsc2")
-		{
-			double reg_lsc2, reg_lsc2_upper, reg_lsc2_lower;
-			if (nwords == 4) {
-				if (!(ws[1] >> reg_lsc2_lower)) Complain("invalid regparam_lsc2 lower limit");
-				if (!(ws[2] >> reg_lsc2)) Complain("invalid regparam_lsc2 value");
-				if (!(ws[3] >> reg_lsc2_upper)) Complain("invalid regparam_lsc2 upper limit");
-				if ((reg_lsc2 < reg_lsc2_lower) or (reg_lsc2 > reg_lsc2_upper)) Complain("initial regparam_lsc2 should lie within specified prior limits");
-				regparam_lsc2 = reg_lsc2;
-				regparam_lsc2_lower_limit = reg_lsc2_lower;
-				regparam_lsc2_upper_limit = reg_lsc2_upper;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> reg_lsc2)) Complain("invalid regparam_lsc2 value");
-				regparam_lsc2 = reg_lsc2;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "regparam_lsc2 = " << regparam_lsc2 << endl;
-			} else Complain("must specify either zero or one argument (regparam_lsc2 value)");
-		}
-		else if (words[0]=="vary_regparam_lsc2")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary regparam_lsc2: " << display_switch(vary_regparam_lsc2) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lsc2' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lsc2 can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization) and (!use_second_covariance_kernel)) Complain("either 'lum_weighted_regularization', 'dist_weighted_regularization' or 'use_two_kernels' must be set to 'on' before regparam_lsc2 can be varied");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lsc2 can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				set_switch(vary_regparam_lsc2,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="regparam_lum_index2")
-		{
-			double reg_index2;
-			double reg_index2_upper, reg_index2_lower;
-			if (nwords == 4) {
-				if (!(ws[1] >> reg_index2_lower)) Complain("invalid regparam_lum_index2 lower limit");
-				if (!(ws[2] >> reg_index2)) Complain("invalid regparam_lum_index2 value");
-				if (!(ws[3] >> reg_index2_upper)) Complain("invalid regparam_lum_index2 upper limit");
-				if ((reg_index2 < reg_index2_lower) or (reg_index2 > reg_index2_upper)) Complain("initial regparam_lum_index2 should lie within specified prior limits");
-				regparam_lum_index2 = reg_index2;
-				regparam_lum_index2_lower_limit = reg_index2_lower;
-				regparam_lum_index2_upper_limit = reg_index2_upper;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> reg_index2)) Complain("invalid regparam_lum_index2 value");
-				regparam_lum_index2 = reg_index2;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "regparam_lum_index2 = " << regparam_lum_index2 << endl;
-			} else Complain("must specify either zero or one argument (regparam_lum_index2 value)");
-		}
-		else if (words[0]=="vary_regparam_lum_index2")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary regparam_lum_index2: " << display_switch(vary_regparam_lum_index2) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_regparam_lum_index2' command; must specify 'on' or 'off'");
-				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before regparam_lum_index2 can be varied (see 'fit regularization')");
-				if ((setword=="on") and (!use_lum_weighted_regularization) and (!use_distance_weighted_regularization)) Complain("either lum_weighted_regularization or dist_weighted_regularization must be set to 'on' before regparam_lum_index2 can be varied");
-				if ((setword=="on") and ((source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Shapelet_Source))) Complain("regparam_lum_index2 can only be varied if source mode is set to 'cartesian', 'delaunay' or 'shapelet' (see 'fit source_mode')");
-				set_switch(vary_regparam_lum_index2,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="auto_lumreg_center")
 		{
 			if (nwords==1) {
@@ -16134,12 +14042,9 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'auto_lumreg_center' command; must specify 'on' or 'off'");
 				set_switch(auto_lumreg_center,setword);
-<<<<<<< HEAD:commands.cpp
 				for (int i=0; i < n_pixellated_src; i++) {
 					update_pixsrc_active_parameters(i);
 				}
-=======
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="lumreg_center_from_ptsource")
@@ -16189,10 +14094,7 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "lumreg_sig = " << lumreg_sig << endl;
 			} else Complain("must specify either zero or one argument (lumreg_sig value)");
 		}
-<<<<<<< HEAD:commands.cpp
 		/*	
-=======
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="lumreg_xcenter")
 		{
 			double regxc;
@@ -16385,10 +14287,7 @@ void QLens::process_commands(bool read_file)
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-<<<<<<< HEAD:commands.cpp
 		*/
-=======
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="corrlength")
 		{
 			double corrlength, corrlength_ul, corrlength_ll;
@@ -16397,7 +14296,6 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[2] >> corrlength)) Complain("invalid kernel correlation length value");
 				if (!(ws[3] >> corrlength_ul)) Complain("invalid kernel correlation length upper limit");
 				if ((corrlength < corrlength_ll) or (corrlength > corrlength_ul)) Complain("initial kernel correlation length should lie within specified prior limits");
-<<<<<<< HEAD:commands.cpp
 				if (n_pixellated_src==0) {
 					if (mpi_id==0) cout << "Creating pixellated source with redshift zsrc=" << source_redshift << endl;
 					add_pixellated_source(source_redshift);
@@ -16427,21 +14325,10 @@ void QLens::process_commands(bool read_file)
 						cout << "pixsrc " << i << ": corrlength = " << corrlength << endl;
 					}
 				}
-=======
-				kernel_correlation_length = corrlength;
-				kernel_correlation_length_lower_limit = corrlength_ll;
-				kernel_correlation_length_upper_limit = corrlength_ul;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> corrlength)) Complain("invalid kernel correlation length value");
-				kernel_correlation_length = corrlength;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "kernel correlation length = " << kernel_correlation_length << endl;
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("must specify either zero or one argument (kernel correlation length value)");
 		}
 		else if (words[0]=="vary_corrlength")
 		{
-<<<<<<< HEAD:commands.cpp
 			bool vary_corrlength;
 			if (nwords==1) {
 				if (mpi_id==0) {
@@ -16453,16 +14340,11 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 				}
-=======
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary correlation length: " << display_switch(vary_correlation_length) << endl;
->>>>>>> origin/development:src/commands.cpp
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength' command; must specify 'on' or 'off'");
 				if (setword=="on") {
 					if (regularization_method==None) Complain("regularization method must be chosen before corrlength can be varied (see 'fit regularization')");
 					if (source_fit_mode != Delaunay_Source) Complain("corrlength can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
-<<<<<<< HEAD:commands.cpp
 				}
 				set_switch(vary_corrlength,setword);
 				if (n_pixellated_src==0) {
@@ -16472,15 +14354,6 @@ void QLens::process_commands(bool read_file)
 				for (int i=0; i < n_pixellated_src; i++) {
 					if (source_fit_mode==Delaunay_Source) update_pixellated_src_varyflag(i,"corrlength",vary_corrlength);
 				}
-=======
-					//if (use_matern_scale_parameter) Complain("corrlength can only be varied if 'use_matern_scale' is set to 'off'");
-					//if (vary_matern_scale) {
-						//if (mpi_id==0) cout << "NOTE: Setting 'vary_matern_scale' to 'off'" << endl;
-						//vary_matern_scale = false;
-					//}
-				}
-				set_switch(vary_correlation_length,setword);
->>>>>>> origin/development:src/commands.cpp
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -16493,7 +14366,6 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[3] >> mat_index_ul)) Complain("invalid kernel Matern index upper limit");
 				if ((mat_index < mat_index_ll) or (mat_index > mat_index_ul)) Complain("initial kernel Matern index should lie within specified prior limits");
 				//if ((mat_index_ul > 5) and (use_matern_scale_parameter)) Complain("matern indices greater than 5 are not advisable when use_matern_scale is set to 'on'");
-<<<<<<< HEAD:commands.cpp
 				if (n_pixellated_src==0) {
 					if (mpi_id==0) cout << "Creating pixellated source with redshift zsrc=" << source_redshift << endl;
 					add_pixellated_source(source_redshift);
@@ -16526,22 +14398,10 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 				}
-=======
-				matern_index = mat_index;
-				matern_index_lower_limit = mat_index_ll;
-				matern_index_upper_limit = mat_index_ul;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> mat_index)) Complain("invalid kernel Matern index value");
-				//if ((mat_index > 5) and (use_matern_scale_parameter)) Complain("matern indices greater than 5 are not advisable when use_matern_scale is set to 'on'");
-				matern_index = mat_index;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "kernel Matern index = " << matern_index << endl;
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("must specify either zero or one argument (kernel Matern index value)");
 		}
 		else if (words[0]=="vary_matern_index")
 		{
-<<<<<<< HEAD:commands.cpp
 			bool vary_matern_index;
 			if (nwords==1) {
 				if (mpi_id==0) {
@@ -16553,16 +14413,11 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 				}
-=======
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary Matern index: " << display_switch(vary_matern_index) << endl;
->>>>>>> origin/development:src/commands.cpp
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_matern_index' command; must specify 'on' or 'off'");
 				if ((setword=="on") and (regularization_method==None)) Complain("regularization method must be chosen before matern_index can be varied (see 'fit regularization')");
 				if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("matern_index can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
 				set_switch(vary_matern_index,setword);
-<<<<<<< HEAD:commands.cpp
 				if (n_pixellated_src==0) {
 					if (mpi_id==0) cout << "Creating pixellated source with redshift zsrc=" << source_redshift << endl;
 					add_pixellated_source(source_redshift);
@@ -16570,152 +14425,6 @@ void QLens::process_commands(bool read_file)
 				for (int i=0; i < n_pixellated_src; i++) {
 					if (source_fit_mode==Delaunay_Source) update_pixellated_src_varyflag(i,"matern_index",vary_matern_index);
 				}
-=======
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		/*
-		else if (words[0]=="use_matern_scale")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use Matern scale parameter instead of correlation length: " << display_switch(use_matern_scale_parameter) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_matern_scale' command; must specify 'on' or 'off'");
-				if ((setword=="off") and (vary_matern_scale)) {
-					if (mpi_id==0) cout << "NOTE: Setting 'vary_matern_scale' to 'off'" << endl;
-					vary_matern_scale = false;
-					update_parameter_list();
-				}
-				if ((setword=="on") and (matern_index > 5)) Complain("matern indices greater than 5 are not allowed when use_matern_scale is set to 'on'");
-				if ((setword=="on") and (vary_correlation_length)) {
-					if (mpi_id==0) cout << "NOTE: Setting 'vary_correlation_length' to 'off'" << endl;
-					vary_correlation_length = false;
-					update_parameter_list();
-				}
-				set_switch(use_matern_scale_parameter,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="matern_scale")
-		{
-			double mat_scale, mat_scale_ul, mat_scale_ll;
-			if (nwords == 4) {
-				if (!(ws[1] >> mat_scale_ll)) Complain("invalid kernel Matern scale lower limit");
-				if (!(ws[2] >> mat_scale)) Complain("invalid kernel Matern scale value");
-				if (!(ws[3] >> mat_scale_ul)) Complain("invalid kernel Matern scale upper limit");
-				if ((mat_scale < mat_scale_ll) or (mat_scale > mat_scale_ul)) Complain("initial kernel Matern scale should lie within specified prior limits");
-				if ((mat_scale_ll >= mat_scale_ul)) Complain("Matern scale lower limit must be less than upper limit");
-				if ((mat_scale_ul >= 1)) Complain("Matern scale upper limit must be less than 1");
-				if ((mat_scale_ll <= 0)) Complain("Matern scale lower limit must be greater than zero");
-				matern_scale = mat_scale;
-				matern_scale_lower_limit = mat_scale_ll;
-				matern_scale_upper_limit = mat_scale_ul;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> mat_scale)) Complain("invalid kernel Matern scale value");
-				if ((mat_scale <= 0) or (mat_scale >= 1)) Complain("Matern scale must be between 0 and 1");
-				matern_scale = mat_scale;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "kernel Matern scale = " << matern_scale << endl;
-			} else Complain("must specify either zero or one argument (kernel Matern scale value)");
-		}
-		else if (words[0]=="vary_matern_scale")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary Matern scale: " << display_switch(vary_matern_scale) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_matern_scale' command; must specify 'on' or 'off'");
-				if (setword=="on") {
-					if (regularization_method==None) Complain("regularization method must be chosen before matern_scale can be varied (see 'fit regularization')");
-					if (source_fit_mode != Delaunay_Source) Complain("matern_scale can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
-					if (!use_matern_scale_parameter) Complain("matern_scale can only be varied if 'use_matern_scale' is set to 'on'");
-					if (vary_correlation_length) {
-						if (mpi_id==0) cout << "NOTE: Setting 'vary_correlation_length' to 'off'" << endl;
-						vary_correlation_length = false;
-					}
-				}
-				set_switch(vary_matern_scale,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		*/
-		else if (words[0]=="use_two_kernels")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use double-kernel covariance matrix: " << display_switch(use_second_covariance_kernel) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_two_kernels' command; must specify 'on' or 'off'");
-				//if ((setword=="on") and (!use_lum_weighted_srcpixel_clustering)) Complain("lum_weighted_srcpixel_clustering must be set to 'on' before beta_clus can be varied");
-				//if ((setword=="on") and (source_fit_mode != Delaunay_Source)) Complain("beta_clus can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
-				set_switch(use_second_covariance_kernel,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="corrlength2")
-		{
-			double corrlength, corrlength_ul, corrlength_ll;
-			if (nwords == 4) {
-				if (!(ws[1] >> corrlength_ll)) Complain("invalid kernel_2 correlation length lower limit");
-				if (!(ws[2] >> corrlength)) Complain("invalid kernel_2 correlation length value");
-				if (!(ws[3] >> corrlength_ul)) Complain("invalid kernel_2 correlation length upper limit");
-				if ((corrlength < corrlength_ll) or (corrlength > corrlength_ul)) Complain("initial kernel_2 correlation length should lie within specified prior limits");
-				kernel2_correlation_length = corrlength;
-				kernel2_correlation_length_lower_limit = corrlength_ll;
-				kernel2_correlation_length_upper_limit = corrlength_ul;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> corrlength)) Complain("invalid kernel_2 correlation length value");
-				kernel2_correlation_length = corrlength;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "kernel_2 correlation length = " << kernel2_correlation_length << endl;
-			} else Complain("must specify either zero or one argument (second kernel correlation length value)");
-		}
-		else if (words[0]=="vary_corrlength2")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary kernel_2 correlation length: " << display_switch(vary_kernel2_correlation_length) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength' command; must specify 'on' or 'off'");
-				if (setword=="on") {
-					if (regularization_method==None) Complain("regularization method must be chosen before corrlength2 can be varied (see 'fit regularization')");
-					if (source_fit_mode != Delaunay_Source) Complain("corrlength2 can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
-					//if (use_matern_scale_parameter) Complain("corrlength2 can only be varied if 'use_matern_scale' is set to 'off'");
-					//if (vary_matern_scale) {
-						//if (mpi_id==0) cout << "NOTE: Setting 'vary_matern_scale' to 'off'" << endl;
-						//vary_matern_scale = false;
-					//}
-				}
-				set_switch(vary_kernel2_correlation_length,setword);
-				update_parameter_list();
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
-		else if (words[0]=="kernel_amp_ratio")
-		{
-			double kernel_amp_ratio, kernel_amp_ratio_ul, kernel_amp_ratio_ll;
-			if (nwords == 4) {
-				if (!(ws[1] >> kernel_amp_ratio_ll)) Complain("invalid kernel correlation length lower limit");
-				if (!(ws[2] >> kernel_amp_ratio)) Complain("invalid kernel correlation length value");
-				if (!(ws[3] >> kernel_amp_ratio_ul)) Complain("invalid kernel correlation length upper limit");
-				if ((kernel_amp_ratio < kernel_amp_ratio_ll) or (kernel_amp_ratio > kernel_amp_ratio_ul)) Complain("initial kernel correlation length should lie within specified prior limits");
-				kernel2_amplitude_ratio = kernel_amp_ratio;
-				kernel2_amplitude_ratio_lower_limit = kernel_amp_ratio_ll;
-				kernel2_amplitude_ratio_upper_limit = kernel_amp_ratio_ul;
-			} else if (nwords == 2) {
-				if (!(ws[1] >> kernel_amp_ratio)) Complain("invalid kernel amplitude ratio value");
-				kernel2_amplitude_ratio = kernel_amp_ratio;
-			} else if (nwords==1) {
-				if (mpi_id==0) cout << "kernel2 amplitude ratio = " << kernel2_amplitude_ratio << endl;
-			} else Complain("must specify either zero or one argument (second kernel aplitude ratio)");
-		}
-		else if (words[0]=="vary_kernel_amp_ratio")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Vary kernel_2 amplitude ratio: " << display_switch(vary_kernel2_amplitude_ratio) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'vary_corrlength' command; must specify 'on' or 'off'");
-				if (setword=="on") {
-					if (regularization_method==None) Complain("regularization method must be chosen before kernel_amp_ratio can be varied (see 'fit regularization')");
-					if (source_fit_mode != Delaunay_Source) Complain("kernel_amp_ratio can only be varied if source mode is set to 'delaunay' (see 'fit source_mode')");
-				}
-				set_switch(vary_kernel2_amplitude_ratio,setword);
->>>>>>> origin/development:src/commands.cpp
 				update_parameter_list();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -16753,11 +14462,7 @@ void QLens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> pnoise)) Complain("invalid image pixel surface brightness noise");
 				background_pixel_noise = pnoise;
-<<<<<<< HEAD:commands.cpp
 				if ((n_data_bands > 0) and (!use_noise_map)) imgdata_list[0]->set_uniform_pixel_noise(pnoise);
-=======
-				if ((image_pixel_data != NULL) and (!use_noise_map)) image_pixel_data->set_uniform_pixel_noise(pnoise);
->>>>>>> origin/development:src/commands.cpp
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "background image pixel surface brightness dispersion = " << background_pixel_noise << endl;
 			} else Complain("must specify either zero or one argument (background image pixel surface brightness dispersion)");
@@ -16849,15 +14554,10 @@ void QLens::process_commands(bool read_file)
 		}
 		else if (words[0]=="emask_n_neighbors")
 		{
-<<<<<<< HEAD:commands.cpp
 			// This command should be made obsolete. Should just do this with 'set_neighbor_pixels' command together with an -emask option, and an option to reset emask to be same as regular mask. IMPLEMENT THIS!!
 			if (n_data_bands==0) Complain("must load image pixel data before setting emask_n_neighbors");
 			int mask_i=0;
 			int band_i=0;
-=======
-			if (image_pixel_data==NULL) Complain("must load image pixel data before setting emask_n_neighbors");
-			int mask_i=0;
->>>>>>> origin/development:src/commands.cpp
 			for (int i=1; i < nwords; i++) {
 				int pos;
 				if ((pos = words[i].find("mask=")) != string::npos) {
@@ -16869,7 +14569,6 @@ void QLens::process_commands(bool read_file)
 					remove_word(i);
 					break;
 				}
-<<<<<<< HEAD:commands.cpp
 			}
 			for (int i=1; i < nwords; i++) {
 				int pos;
@@ -16882,8 +14581,6 @@ void QLens::process_commands(bool read_file)
 					remove_word(i);
 					break;
 				}
-=======
->>>>>>> origin/development:src/commands.cpp
 			}	
 
 			double emask_n;
@@ -16896,11 +14593,7 @@ void QLens::process_commands(bool read_file)
 			}
 			if (nwords >= 2) {
 				if (words[1]=="all") {
-<<<<<<< HEAD:commands.cpp
 					imgdata_list[band_i]->extended_mask_n_neighbors[mask_i] = emask_n = -1;
-=======
-					image_pixel_data->extended_mask_n_neighbors[mask_i] = emask_n = -1;
->>>>>>> origin/development:src/commands.cpp
 				}
 				else if (words[1]=="interior") {
 					only_interior_pixels = true;
@@ -16913,7 +14606,6 @@ void QLens::process_commands(bool read_file)
 				else {
 					if (!(ws[1] >> emask_n)) Complain("invalid number of neighbor pixels for extended mask");
 					if ((emask_n != -1) and (adaptive_subgrid)) Complain("emask_n_neighbors must be set to 'all' for adaptive Cartesian grid");
-<<<<<<< HEAD:commands.cpp
 					imgdata_list[band_i]->extended_mask_n_neighbors[mask_i] = emask_n;
 				}
 				imgdata_list[band_i]->set_extended_mask(emask_n,add_to_emask,only_interior_pixels,mask_i);
@@ -16925,25 +14617,10 @@ void QLens::process_commands(bool read_file)
 					if (imgdata_list[band_i]->extended_mask_n_neighbors[mask_i]==-1) cout << "number of neighbor pixels for extended mask: emask_n_neighbors = all" << endl;
 					else cout << "number of neighbor pixels for extended mask: emask_n_neighbors = " << imgdata_list[band_i]->extended_mask_n_neighbors[mask_i] << endl;
 					int npix = imgdata_list[band_i]->get_size_of_extended_mask(mask_i);
-=======
-					image_pixel_data->extended_mask_n_neighbors[mask_i] = emask_n;
-				}
-				if (image_pixel_data != NULL) image_pixel_data->set_extended_mask(emask_n,add_to_emask,only_interior_pixels,mask_i);
-				int npix;
-				if (image_pixel_data != NULL) npix = image_pixel_data->get_size_of_extended_mask(mask_i);
-				if (mpi_id==0) cout << "number of pixels in extended mask: " << npix << endl;
-			} else if (nwords==1) {
-				if (mpi_id==0) {
-					if (image_pixel_data->extended_mask_n_neighbors[mask_i]==-1) cout << "number of neighbor pixels for extended mask: emask_n_neighbors = all" << endl;
-					else cout << "number of neighbor pixels for extended mask: emask_n_neighbors = " << image_pixel_data->extended_mask_n_neighbors[mask_i] << endl;
-					int npix;
-					if (image_pixel_data != NULL) npix = image_pixel_data->get_size_of_extended_mask(mask_i);
->>>>>>> origin/development:src/commands.cpp
 					cout << "number of pixels in extended mask: " << npix << endl;
 				}
 			} else Complain("must specify either zero or one argument for emask_n_neighbors");
 		}
-<<<<<<< HEAD:commands.cpp
 		else if (words[0]=="fgmask_padding")
 		{
 			double padding;
@@ -16982,15 +14659,6 @@ void QLens::process_commands(bool read_file)
 					if (fft_convolution) cleanup_FFT_convolution_arrays();
 					if (mpi_id==0) cout << "NOTE: Setting include_fgmask_in_inversion to 'on'" << endl;
 				}
-=======
-		else if (words[0]=="include_emask_in_chisq")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Include extended mask in chisq & inversion (include_emask_in_chisq): " << display_switch(include_extended_mask_in_inversion) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'include_emask_in_chisq' command; must specify 'on' or 'off'");
-				set_switch(include_extended_mask_in_inversion,setword);
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="include_noise_term_in_loglike")
@@ -17002,7 +14670,6 @@ void QLens::process_commands(bool read_file)
 				set_switch(include_noise_term_in_loglike,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-<<<<<<< HEAD:commands.cpp
 		else if (words[0]=="zero_lensed_sb_fgmask_prior")
 		{
 			if (nwords==1) {
@@ -17010,31 +14677,15 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'zero_lensed_sb_emask_prior' command; must specify 'on' or 'off'");
 				set_switch(zero_sb_fgmask_prior,setword);
-=======
-		else if (words[0]=="zero_sb_emask_prior")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use zero SB prior for extended mask pixels: " << display_switch(zero_sb_extended_mask_prior) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'zero_sb_emask_prior' command; must specify 'on' or 'off'");
-				set_switch(zero_sb_extended_mask_prior,setword);
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="zero_outside_border")
 		{
 			if (nwords==1) {
-<<<<<<< HEAD:commands.cpp
 				if (mpi_id==0) cout << "Enforce zero surface brightness outside border of Delaunay grid: " << display_switch(DelaunaySourceGrid::zero_outside_border) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'zero_outside_border' command; must specify 'on' or 'off'");
 				set_switch(DelaunaySourceGrid::zero_outside_border,setword);
-=======
-				if (mpi_id==0) cout << "Enforce zero surface brightness outside border of Delaunay grid: " << display_switch(DelaunayGrid::zero_outside_border) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'zero_outside_border' command; must specify 'on' or 'off'");
-				set_switch(DelaunayGrid::zero_outside_border,setword);
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="nimg_sb_frac_threshold")
@@ -17075,34 +14726,23 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'adaptive_subgrid' command; must specify 'on' or 'off'");
 				//if ((extended_mask_n_neighbors != -1) and (setword=="on")) Complain("adaptive grid cannot reliably be used unless emask_n_neighbors is set to 'all'");
 				set_switch(adaptive_subgrid,setword);
-<<<<<<< HEAD:commands.cpp
 				if (source_fit_mode==Cartesian_Source) {
 					for (int i=0; i < n_pixellated_src; i++) {
 						update_pixsrc_active_parameters(i);
 					}
 				}
 				update_parameter_list();
-=======
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="srcgrid_maxlevels")
 		{
 			// This is the maximum number of times that the cartesian source grid cells can be split
 			if (nwords==1) {
-<<<<<<< HEAD:commands.cpp
 				if (mpi_id==0) cout << "Number of allowed splittings of Cartesian source pixels = " << CartesianSourceGrid::max_levels << endl;
 			} else if (nwords == 2) {
 				int nlev;
 				if (!(ws[1] >> nlev)) Complain("invalid number of splittings");
 				CartesianSourceGrid::max_levels = nlev;
-=======
-				if (mpi_id==0) cout << "Number of allowed splittings of Cartesian source pixels = " << SourcePixelGrid::max_levels << endl;
-			} else if (nwords == 2) {
-				int nlev;
-				if (!(ws[1] >> nlev)) Complain("invalid number of splittings");
-				SourcePixelGrid::max_levels = nlev;
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("only one argument allowed for 'srcgrid_maxlevels'");
 		}
 		else if (words[0]=="auto_srcgrid_set_pixelsize")
@@ -17161,18 +14801,6 @@ void QLens::process_commands(bool read_file)
 				set_switch(einstein_radius_prior,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-<<<<<<< HEAD:commands.cpp
-=======
-		else if (words[0]=="subhalo_prior")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Constrain subhalos (with dpie/corecusp profile) to lie within pixel mask: " << display_switch(subhalo_prior) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'subhalo_prior' command; must specify 'on' or 'off'");
-				set_switch(subhalo_prior,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="custom_prior")
 		{
 			if (nwords==1) {
@@ -17209,30 +14837,13 @@ void QLens::process_commands(bool read_file)
 				set_switch(regrid_if_unmapped_source_subpixels,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
-<<<<<<< HEAD:commands.cpp
-=======
-		else if (words[0]=="delaunay_try_two_grids")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Construct two delaunay grids for source (and pick the better one): " << display_switch(delaunay_try_two_grids) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'delaunay_try_two_grids' command; must specify 'on' or 'off'");
-				if ((!delaunay_try_two_grids) and (setword=="on") and (n_sourcepts_fit > 0)) Complain("'delaunay_try_two_grids' cannot be used if point sources are present, since the extended surface brightness threshold cannot be applied directly from the image data");
-				set_switch(delaunay_try_two_grids,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
-		}
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="delaunay_high_sn_mode")
 		{
 			if (nwords==1) {
 				if (mpi_id==0) cout << "Switch to Delaunay mode 0 for high S/N regions: " << display_switch(delaunay_high_sn_mode) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'delaunay_high_sn_mode' command; must specify 'on' or 'off'");
-<<<<<<< HEAD:commands.cpp
 				if ((!delaunay_high_sn_mode) and (setword=="on") and (n_ptsrc > 0)) Complain("'delaunay_high_sn_mode' cannot be used if point sources are present, since the extended surface brightness cannot be obtained directly from the image data");
-=======
-				if ((!delaunay_high_sn_mode) and (setword=="on") and (n_sourcepts_fit > 0)) Complain("'delaunay_high_sn_mode' cannot be used if point sources are present, since the extended surface brightness cannot be obtained directly from the image data");
->>>>>>> origin/development:src/commands.cpp
 				set_switch(delaunay_high_sn_mode,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -17257,7 +14868,6 @@ void QLens::process_commands(bool read_file)
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
 		}
-<<<<<<< HEAD:commands.cpp
 		else if (words[0]=="use_f_src_clusters")
 		{
 			if (nwords==1) {
@@ -17265,15 +14875,6 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_f_src_clusters' command; must specify 'on' or 'off'");
 				set_switch(use_f_src_clusters,setword);
-=======
-		else if (words[0]=="use_old_pixelgrids")
-		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use deprecated pixel grid objects: " << display_switch(use_old_pixelgrids) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_old_pixelgrids' command; must specify 'on' or 'off'");
-				set_switch(use_old_pixelgrids,setword);
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="use_saved_sbweights")
@@ -17382,17 +14983,11 @@ void QLens::process_commands(bool read_file)
 				if (psf_supersampling != ss_orig) {
 					if (fft_convolution) cleanup_FFT_convolution_arrays();
 				}
-<<<<<<< HEAD:commands.cpp
 				for (int band_i=0; band_i < n_model_bands; band_i++) {
 					if ((psf_supersampling) and (psf_list[band_i]->use_input_psf_matrix)) {
 						psf_list[band_i]->generate_supersampled_PSF_matrix();
 						if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << psf_list[band_i]->supersampled_psf_npixels_x << " " << psf_list[band_i]->supersampled_psf_npixels_y << ")" << endl;
 					}
-=======
-				if ((psf_supersampling) and (use_input_psf_matrix)) {
-					generate_supersampled_PSF_matrix();
-					if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
->>>>>>> origin/development:src/commands.cpp
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -17427,7 +15022,6 @@ void QLens::process_commands(bool read_file)
 				if (use_srcpixel_clustering) Complain("use_srcpixel_clustering must be turned off for this option");
 				if (use_lum_weighted_srcpixel_clustering) Complain("lum_weighted_srcpixel_clustering must be turned off for this option");
 				set_switch(delaunay_from_pixel_centers,setword);
-<<<<<<< HEAD:commands.cpp
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="raytrace_pixel_centers")
@@ -17438,8 +15032,6 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'raytrace_pixel_centers' command; must specify 'on' or 'off'");
 				set_switch(raytrace_using_pixel_centers,setword);
-=======
->>>>>>> origin/development:src/commands.cpp
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="imgpixel_nsplit")
@@ -17469,17 +15061,11 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 					}
-<<<<<<< HEAD:commands.cpp
 					for (int band_i=0; band_i < n_model_bands; band_i++) {
 						if ((psf_supersampling) and (psf_list[band_i]->use_input_psf_matrix)) {
 							psf_list[band_i]->generate_supersampled_PSF_matrix();
 							if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << psf_list[band_i]->supersampled_psf_npixels_x << " " << psf_list[band_i]->supersampled_psf_npixels_y << ")" << endl;
 						}
-=======
-					if ((psf_supersampling) and (use_input_psf_matrix)) {
-						generate_supersampled_PSF_matrix();
-						if (mpi_id==0) cout << "Generated supersampled PSF matrix (dimensions: " << supersampled_psf_npixels_x << " " << supersampled_psf_npixels_y << ")" << endl;
->>>>>>> origin/development:src/commands.cpp
 					}
 					if (fft_convolution) cleanup_FFT_convolution_arrays();
 				}
@@ -17631,7 +15217,6 @@ void QLens::process_commands(bool read_file)
 			} else Complain("invalid number of arguments; can only specify ray tracing method");
 			warn("'raytrace_method' is deprecated; use 'interpolation_method' instead");
 		}
-<<<<<<< HEAD:commands.cpp
 		else if (words[0]=="interpolation_method") {
 			if (nwords==1) {
 				if (mpi_id==0) {
@@ -17645,8 +15230,6 @@ void QLens::process_commands(bool read_file)
 				else Complain("invalid argument to 'interpolation_method'; must specify either '3pt' or 'nn'");
 			} else Complain("invalid number of arguments; can only specify one argument ('3pt' or 'nn')");
 		}
-=======
->>>>>>> origin/development:src/commands.cpp
 		else if (words[0]=="inversion_method") {
 			if (nwords==1) {
 				if (mpi_id==0) {
@@ -17794,7 +15377,6 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'optimize_regparam' command; must specify 'on' or 'off'");
 				if ((setword=="on") and ((source_fit_mode != Shapelet_Source) and (source_fit_mode != Cartesian_Source) and (source_fit_mode != Delaunay_Source))) Complain("optimize_regparam only available in pixellated (cartesian, delaunay) or Shapelet source mode");
 				set_switch(optimize_regparam,setword);
-<<<<<<< HEAD:commands.cpp
 				if (n_pixellated_src > 0) {
 					bool vary_regparam = false;
 					for (int i=0; i < n_pixellated_src; i++) {
@@ -17815,36 +15397,7 @@ void QLens::process_commands(bool read_file)
 					for (int i=0; i < n_pixellated_src; i++) {
 						if (source_fit_mode==Delaunay_Source) update_pixsrc_active_parameters(i);
 					}
-=======
-				if ((setword=="on") and (vary_regularization_parameter)) {
-					if (mpi_id==0) cout << "NOTE: setting 'vary_regparam' to 'off' and updating parameters" << endl;
-					vary_regularization_parameter = false;
->>>>>>> origin/development:src/commands.cpp
 					update_parameter_list();
-				}
-				if ((setword=="off") and (use_lum_weighted_regularization) and ((!use_saved_sbweights) or (!get_lumreg_from_sbweights))) {
-					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_regularization' to 'off' (to keep it on, consider using sbweights via 'lumreg_from_sbweights' and 'use_saved_sbweights))" << endl;
-					use_lum_weighted_regularization = false;
-					//if (vary_regparam_lhi) {
-						//if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lhi' to 'off'" << endl;
-						//vary_regparam_lhi = false;
-					//}
-					if (vary_regparam_lum_index) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_regparam_lum_index' to 'off'" << endl;
-						vary_regparam_lum_index = false;
-					}
-				}
-				if ((setword=="off") and (use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) {
-					if (mpi_id==0) cout << "NOTE: setting 'lum_weighted_srcpixel_clustering' to 'off'" << endl;
-					use_lum_weighted_srcpixel_clustering = false;
-					if (vary_alpha_clus) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_alpha_clus' to 'off'" << endl;
-						vary_alpha_clus = false;
-					}
-					if (vary_beta_clus) {
-						if (mpi_id==0) cout << "NOTE: setting 'vary_beta_clus' to 'off'" << endl;
-						vary_beta_clus = false;
-					}
 				}
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -18007,7 +15560,6 @@ void QLens::process_commands(bool read_file)
 			if (Shear::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
-<<<<<<< HEAD:commands.cpp
 			/*
 #ifdef USE_EIGEN
 			Eigen::MatrixXd A(2,2);
@@ -18045,8 +15597,6 @@ void QLens::process_commands(bool read_file)
 				//cout << "qs=" << qs << " phi_s=" << phi_s_deg << " degrees" << endl;
 			//}
 
-=======
->>>>>>> origin/development:src/commands.cpp
 			//generate_supersampled_PSF_matrix();
 			/*
 			int iter = 20;
@@ -18142,11 +15692,7 @@ void QLens::process_commands(bool read_file)
 			*/
 			//test_inverts();
 		//} else if (words[0]=="test2") {
-<<<<<<< HEAD:commands.cpp
 			//if (n_data_bands==0) Complain("image pixel data not loaded");
-=======
-			//if (image_pixel_data == NULL) Complain("image pixel data not loaded");
->>>>>>> origin/development:src/commands.cpp
 			//if (nwords < 8) Complain("need 6 args");
 			//double xi0, xistep, qi, theta_i, xc_i, yc_i;
 			//int maxit = 100;
@@ -18204,13 +15750,8 @@ void QLens::process_commands(bool read_file)
 			//else sbptr_comp = sb_list[0];
 
 			//IsophoteData isodata;
-<<<<<<< HEAD:commands.cpp
 			//if (ecomp_mode) imgdata_list[0]->fit_isophote_ecomp(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,true,sbptr_comp,sampling_mode,max_xi_it,ximax);
 			//else imgdata_list[0]->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,true,sbptr_comp,sampling_mode,max_xi_it,ximax);
-=======
-			//if (ecomp_mode) image_pixel_data->fit_isophote_ecomp(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,true,sbptr_comp,sampling_mode,max_xi_it,ximax);
-			//else image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,true,sbptr_comp,sampling_mode,max_xi_it,ximax);
->>>>>>> origin/development:src/commands.cpp
 			//isodata.plot_isophote_parameters(fit_output_dir,output_label);
 		} else if (words[0]=="test2") {
 			double scalefac = 1;
@@ -18243,10 +15784,7 @@ void QLens::process_commands(bool read_file)
 			sb_list[0]->set_limits(lower_limits,upper_limits);
 			*/
 		} else if (words[0]=="testpt") {
-<<<<<<< HEAD:commands.cpp
 			/*
-=======
->>>>>>> origin/development:src/commands.cpp
 			if (nwords==4) {
 				double x,y;
 				int pix0;
@@ -18260,7 +15798,6 @@ void QLens::process_commands(bool read_file)
 					cout << "Triangle number = " << tri << endl;
 				} else Complain("delaunay grid hasn't been created");
 			} else Complain("need coords, pixel0");
-<<<<<<< HEAD:commands.cpp
 			*/
 			//const int nn = 12;
 			//double xin[nn] = { 1, 5, 9, -1.2, 12, 18, 3, 5, 8, 4, 7.17, 10.9 };
@@ -18289,26 +15826,6 @@ void QLens::process_commands(bool read_file)
 				//cout << vertex[i][0] << " " << vertex[i][1] << endl;
 			//}
 			//cout << endl;
-=======
-			/*
-			const int nn = 10;
-			double xin[nn] = { 1, 5, 9, 2, 12, 18, 3, 5, 8, 4 };
-			double yin[nn] = { 11, 2, 19, 9, 3, 10, 2, 12, 8, 7 };
-			DelaunayGrid delaunay_grid(this,xin,yin,nn);
-			lensvector pt(3.4,8.8);
-			int trinum = delaunay_grid.search_grid(0,pt);
-			lensvector vertex[3];
-			vertex[0] = delaunay_grid.triangle[trinum].vertex[0];
-			vertex[1] = delaunay_grid.triangle[trinum].vertex[1];
-			vertex[2] = delaunay_grid.triangle[trinum].vertex[2];
-			cout << "Found point in triangle " << trinum << endl;
-			cout << "Vertices:" << endl;
-			for (int i=0; i < 3; i++) {
-				cout << vertex[i][0] << " " << vertex[i][1] << endl;
-			}
-			cout << endl;
-			*/
->>>>>>> origin/development:src/commands.cpp
 
 			/*
          Delaunay *delaunay_triangles = new Delaunay(xin, yin, nn);
@@ -18490,11 +16007,7 @@ void QLens::process_commands(bool read_file)
 			}
 			update_anchored_parameters_and_redshift_data(); // For any lens that is anchored to the foreground source
 		} else if (words[0]=="isofit") {
-<<<<<<< HEAD:commands.cpp
 			if (n_data_bands==0) Complain("image pixel data not loaded");
-=======
-			if (image_pixel_data == NULL) Complain("image pixel data not loaded");
->>>>>>> origin/development:src/commands.cpp
 			if (nwords < 8) Complain("need 6 args");
 			double xi0, xistep, qi, theta_i, xc_i, yc_i;
 			int maxit = 100;
@@ -18642,15 +16155,9 @@ void QLens::process_commands(bool read_file)
 			if (mpi_id > 0) verbal = false;
 
 			ofstream fitout((fit_output_dir + "/" + output_label + "_isofit.dat").c_str());
-<<<<<<< HEAD:commands.cpp
 			imgdata_list[0]->set_isofit_output_stream(&fitout);
 			IsophoteData isodata;
 			if (imgdata_list[0]->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,verbal,sbptr_comp,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans) == false) Complain("isofit failed");
-=======
-			image_pixel_data->set_isofit_output_stream(&fitout);
-			IsophoteData isodata;
-			if (image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,verbal,sbptr_comp,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans) == false) Complain("isofit failed");
->>>>>>> origin/development:src/commands.cpp
 
 			double xc_avg = xc_i, yc_avg = yc_i; // these will be updated if avg_center is set to true
 			if (!fix_center) {
@@ -18709,11 +16216,7 @@ void QLens::process_commands(bool read_file)
 					fix_center = true;
 					xc_i = xc_avg;
 					yc_i = yc_avg;
-<<<<<<< HEAD:commands.cpp
 					if (imgdata_list[0]->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,verbal,sbptr_comp,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans) == false) Complain("isofit failed");
-=======
-					if (image_pixel_data->fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata,polar,verbal,sbptr_comp,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans) == false) Complain("isofit failed");
->>>>>>> origin/development:src/commands.cpp
 					if (mpi_id==0) {
 						cout << "Centroid estimate:" << endl;
 						cout << "avg xc: " << xc_avg << " +/- " << xc_err << " # 3-sigma error" << endl;
@@ -18939,11 +16442,7 @@ void QLens::process_commands(bool read_file)
 					}
 
 					IsophoteData isodata_mock[nn_q];
-<<<<<<< HEAD:commands.cpp
 					//ImageData mockdata[nn_q];
-=======
-					//ImagePixelData mockdata[nn_q];
->>>>>>> origin/development:src/commands.cpp
 
 					if (n_sb==0) Complain("No surface brightness profiles have been defined"); 
 					double *q0vals = new double[nn_q];
@@ -18961,11 +16460,7 @@ void QLens::process_commands(bool read_file)
 						q0vals[i] = qq;
 						sbptr->update_specific_parameter("q",qq);
 						if (image_pixel_grid != NULL) delete image_pixel_grid;
-<<<<<<< HEAD:commands.cpp
 						image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,(*imgdata_list[0]),true);
-=======
-						image_pixel_grid = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,(*image_pixel_data),true);
->>>>>>> origin/development:src/commands.cpp
 						image_pixel_grid->find_surface_brightness(true); // the 'true' means it will only plot the foreground SB profile
 						vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector also contains the foreground
 						PSF_convolution_pixel_vector(image_surface_brightness,false);
@@ -18977,11 +16472,7 @@ void QLens::process_commands(bool read_file)
 						}
 						mockdata[i].set_lens(this);
 						mockdata[i].load_from_image_grid(image_pixel_grid,background_pixel_noise);
-<<<<<<< HEAD:commands.cpp
 						mockdata[i].copy_mask(imgdata_list[0]);
-=======
-						mockdata[i].copy_mask(image_pixel_data);
->>>>>>> origin/development:src/commands.cpp
 						//mockdata[i].plot_surface_brightness("data_pixel",true,false);
 						//run_plotter("datapixel");
 						mockdata[i].fit_isophote(xi0,xistep,emode,qq,t0,xc_i,yc_i,maxit,isodata_mock[i],polar,false,NULL,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans);
@@ -19020,7 +16511,6 @@ void QLens::process_commands(bool read_file)
 					// a correction to q, this is not particularly sensitive to getting the epsilon/PA gradient parameters exactly right; this is important
 					// since we won't know the exact values in real life, only the fits we've done to parameters that haven't had the following correction yet.
 					IsophoteData isodata_mock_t;
-<<<<<<< HEAD:commands.cpp
 					ImageData mockdata_t;
 
 					if (n_extended_src_redshifts==0) {
@@ -19029,31 +16519,14 @@ void QLens::process_commands(bool read_file)
 					if (image_pixel_grids==NULL) Complain("image pixel grids could not be generated from given data and masks");
 					if (image_pixel_grids[0] != NULL) delete image_pixel_grids[0];
 					image_pixel_grids[0] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,(*imgdata_list[0]),true);
-=======
-					ImagePixelData mockdata_t;
-
-					if (n_extended_src_redshifts==0) {
-						load_pixel_grid_from_data();
-					}
-					if (image_pixel_grids==NULL) Complain("image pixel grids could not be generated from given data and masks");
-					if (image_pixel_grids[0] != NULL) delete image_pixel_grids[0];
-					image_pixel_grids[0] = new ImagePixelGrid(this,source_fit_mode,ray_tracing_method,(*image_pixel_data),true);
->>>>>>> origin/development:src/commands.cpp
 					image_pixel_grids[0]->find_surface_brightness(true); // the 'true' means it will only plot the foreground SB profile
 					vectorize_image_pixel_surface_brightness(true); // note that in this case, the image pixel vector also contains the foreground
 					PSF_convolution_pixel_vector(0,false);
 					store_image_pixel_surface_brightness(0);
-<<<<<<< HEAD:commands.cpp
 					clear_pixel_matrices();
 					mockdata_t.set_lens(this);
 					mockdata_t.load_from_image_grid(image_pixel_grids[0]);
 					mockdata_t.copy_mask(imgdata_list[0]);
-=======
-					clear_pixel_matrices(0);
-					mockdata_t.set_lens(this);
-					mockdata_t.load_from_image_grid(image_pixel_grids[0],background_pixel_noise);
-					mockdata_t.copy_mask(image_pixel_data);
->>>>>>> origin/development:src/commands.cpp
 					//mockdata[i].plot_surface_brightness("data_pixel",true,false);
 					mockdata_t.fit_isophote(xi0,xistep,emode,qi,theta_i,xc_i,yc_i,maxit,isodata_mock_t,polar,false,NULL,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans);
 
@@ -19425,11 +16898,7 @@ bool QLens::check_vary_z()
 	else return true;
 }
 
-<<<<<<< HEAD:commands.cpp
 bool QLens::read_egrad_params(const bool vary_pars, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double &xiref, bool &linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots)
-=======
-bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvector& efunc_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, const double xc, const double yc, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int& n_bspline_coefs, dvector& knots, double& ximin, double& ximax, double &xiref, bool &linear_xivals, bool& enter_params_and_varyflags, bool& enter_knots)
->>>>>>> origin/development:src/commands.cpp
 {
 	// NOTE: the parameter enter_params_and_varyflags will be plugged in as 'enter_prior_limits', because that's how it will be used for after calling this function
 	bool anchor_params = false;
@@ -19546,11 +17015,7 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 	}
 
 	nparams_to_vary += n_efunc_params - 2; // since q and theta no longer exist as parameters that can be varied
-<<<<<<< HEAD:commands.cpp
 	if (vary_pars) {
-=======
-	if (vary_params) {
->>>>>>> origin/development:src/commands.cpp
 		int npar_old = varyflags.size();
 		int npar_new = npar_old + n_efunc_params - 2;
 		//cout << "OLD VARYFLAGS(np=" << npar_old << "): " << endl;
@@ -19645,11 +17110,7 @@ bool QLens::read_egrad_params(const bool vary_params, const int egrad_mode, dvec
 	return true;
 }
 
-<<<<<<< HEAD:commands.cpp
 bool QLens::read_fgrad_params(const bool vary_pars, const int egrad_mode, const int n_fmodes, const vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots)
-=======
-bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, const int n_fmodes, const vector<int> fourier_mvals, dvector& fgrad_params, int& nparams_to_vary, boolvector& varyflags, const int default_nparams, ParamAnchor* parameter_anchors, int& parameter_anchor_i, int n_bspline_coefs, dvector& knots, const bool enter_params_and_varyflags, const bool enter_knots)
->>>>>>> origin/development:src/commands.cpp
 {
 	bool anchor_params = false;
 	int n_fgrad_params;
@@ -19715,11 +17176,7 @@ bool QLens::read_fgrad_params(const bool vary_params, const int egrad_mode, cons
 	}
 
 	nparams_to_vary += n_fgrad_params - 2*n_fmodes;
-<<<<<<< HEAD:commands.cpp
 	if (vary_pars) {
-=======
-	if (vary_params) {
->>>>>>> origin/development:src/commands.cpp
 		int npar_old = varyflags.size();
 		int npar_new = npar_old + n_fgrad_params - n_fmodes*2;
 		//cout << "OLD VARYFLAGS(np=" << npar_old << "): " << endl;
@@ -20048,7 +17505,6 @@ bool QLens::open_script_file(const string filename)
 	}
 	return true;
 }
-
 
 void QLens::run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists)
 {

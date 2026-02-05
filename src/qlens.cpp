@@ -61,11 +61,7 @@ int main(int argc, char *argv[])
 	n_omp_threads = 1;
 #endif
 	Grid::allocate_multithreaded_variables(n_omp_threads);
-<<<<<<< HEAD:qlens.cpp
 	CartesianSourcePixel::allocate_multithreaded_variables(n_omp_threads);
-=======
-	SourcePixelGrid::allocate_multithreaded_variables(n_omp_threads);
->>>>>>> origin/development:src/qlens.cpp
 	DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 	QLens::allocate_multithreaded_variables(n_omp_threads);
@@ -256,11 +252,7 @@ int main(int argc, char *argv[])
 	}
 
 	if ((mpi_id==0) and (verbal_mode==true)) {
-<<<<<<< HEAD:qlens.cpp
 		cout << "QLens by Quinn Minor (2025)\n";
-=======
-		cout << "QLens by Quinn Minor (2023)\n";
->>>>>>> origin/development:src/qlens.cpp
 		cout << "Type 'help' for a list of commands, or 'demo1' or 'demo2' to see demos (or 'q' to quit).\n\n";
 	}
 
@@ -292,15 +284,9 @@ int main(int argc, char *argv[])
 	QLens::delete_mumps();
 #endif
 	Grid::deallocate_multithreaded_variables();
-<<<<<<< HEAD:qlens.cpp
 	ImagePixelGrid::deallocate_multithreaded_variables();
 	DelaunayGrid::deallocate_multithreaded_variables();
 	CartesianSourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
-=======
-	SourcePixelGrid::deallocate_multithreaded_variables();
-	ImagePixelGrid::deallocate_multithreaded_variables();
-	DelaunayGrid::deallocate_multithreaded_variables();
->>>>>>> origin/development:src/qlens.cpp
 	QLens::deallocate_multithreaded_variables();
 
 #ifdef USE_MPI
