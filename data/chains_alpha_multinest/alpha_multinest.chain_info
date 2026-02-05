@@ -1,0 +1,20 @@
+./alpha_multinest has 7 parameters.
+File './alpha_multinest' contains 17920 points.
+Total of 17918 points included.
+
+# Sampler: MultiNest, n_livepts = 1000
+# lnZ = -31.4082
+
+Minimum loglike point: (2*loglike = 3.5245)
+b=4.99667 q=0.696168 theta=90.8757 xc=0.90068 yc=0.303763 shear1=0.019636 shear2=0.101284 
+
+50th percentile values and errors (based on 2.5% and 97.5% percentiles of marginalized posteriors):
+
+b: 4.99802 -0.0189998 / +0.0218516
+q: 0.695933 -0.0373578 / +0.0350926
+theta: 90.7245 -3.88897 / +5.4822
+xc: 0.905674 -0.044842 / +0.0442637
+yc: 0.299237 -0.0384597 / +0.0397846
+shear1: 0.0191076 -0.00874385 / +0.00871195
+shear2: 0.101281 -0.00997326 / +0.0106582
+

@@ -1,0 +1,29 @@
+import GetDistPlots, os
+g=GetDistPlots.GetDistPlotter('./')
+g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot
+outdir=''
+roots=['alpha_multinest']
+pairs=[]
+pairs.append(['b','q'])
+pairs.append(['b','theta'])
+pairs.append(['b','xc'])
+pairs.append(['b','yc'])
+pairs.append(['b','shear1'])
+pairs.append(['b','shear2'])
+pairs.append(['q','theta'])
+pairs.append(['q','xc'])
+pairs.append(['q','yc'])
+pairs.append(['q','shear1'])
+pairs.append(['q','shear2'])
+pairs.append(['theta','xc'])
+pairs.append(['theta','yc'])
+pairs.append(['theta','shear1'])
+pairs.append(['theta','shear2'])
+pairs.append(['xc','yc'])
+pairs.append(['xc','shear1'])
+pairs.append(['xc','shear2'])
+pairs.append(['yc','shear1'])
+pairs.append(['yc','shear2'])
+pairs.append(['shear1','shear2'])
+g.plots_2d(roots,param_pairs=pairs,shaded=True)
+g.export(os.path.join(outdir,'alpha_multinest_2D.pdf'))

@@ -1,0 +1,9 @@
+global-exclude *.git *.gitignore
+include README.md LICENSE CMakeLists.txt requirements.txt
+graft include
+graft src
+graft cmake 
+graft python
+graft config
+graft executables
+graft help
