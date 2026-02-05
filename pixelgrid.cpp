@@ -934,6 +934,7 @@ double CartesianSourceGrid::find_avg_n_images(const double sb_threshold_frac)
 	return pixel_avg_n_image;
 }
 
+/*
 void CartesianSourceGrid::store_surface_brightness_grid_data(string root)
 {
 	string img_filename = root + ".sb";
@@ -947,6 +948,7 @@ void CartesianSourceGrid::store_surface_brightness_grid_data(string root)
 	pixel_info << npixels_x << " " << npixels_y << " " << levels << endl;
 	pixel_info << srcgrid_xmin << " " << srcgrid_xmax << " " << srcgrid_ymin << " " << srcgrid_ymax << endl;
 }
+*/
 
 void CartesianSourcePixel::write_surface_brightness_to_file(ofstream &sb_outfile)
 {

@@ -1037,6 +1037,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool create_sourcegrid_delaunay(const int src_i, const bool use_mask, const bool verbal);
 	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal=false);
 	bool create_lensgrid_cartesian(const int band_number, const int zsrc_i, const int pixlens_i, const bool verbal, const bool use_mask = true);
+	int make_pixellated_source_from_sbprofiles(const int band_i, const int zsrc_i, const int npix, const bool make_delaunay_from_sbprofile, const bool use_mask, const bool verbal_mode);
+
 	//void load_source_surface_brightness_grid(string source_inputfile);
 	bool load_image_pixel_data(const int band_i, string image_pixel_filename_root, const double pixsize, const double pix_xy_ratio = 1.0, const double x_offset = 0.0, const double y_offset = 0.0, const int hdu_indx = 1, const bool show_fits_header = false);
 	//bool make_image_surface_brightness_data();

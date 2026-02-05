@@ -14392,6 +14392,48 @@ bool QLens::create_lensgrid_from_imggrid_delaunay(const int zsrc_i, const int pi
 }
 */
 
+int QLens::make_pixellated_source_from_sbprofiles(const int band_i, const int zsrc_i, const int npix, const bool make_delaunay_from_sbprofile, const bool use_mask, const bool verbal_mode) {
+	bool at_least_one_lensed_src = false;
+	int src_i = -1;
+
+	for (int k=0; k < n_sb; k++) {
+		if ((sb_list[k]->is_lensed) and (sbprofile_redshift_idx[k]==zsrc_i)) { at_least_one_lensed_src = true; break; }
+	}
+	if (!at_least_one_lensed_src) return -1;
+
+	do {
+		for (int i=0; i < n_pixellated_src; i++) {
+			if ((pixellated_src_band[i]==band_i) and (pixellated_src_redshift_idx[i]==zsrc_i)) {
+				src_i = i;
+				break;
+			}
+		}
+		if (src_i < 0) {
+			if (mpi_id==0) cout << "Generating pixellated source at corresponding redshift (zsrc=" << extended_src_redshifts[zsrc_i] << ")" << endl;
+			add_pixellated_source(extended_src_redshifts[zsrc_i],band_i);
+		}
+	} while (src_i < 0);
+	int imggrid_i = band_i*n_extended_src_redshifts + zsrc_i;
+
+	if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids==NULL)) throw std::runtime_error("No pixellated source objects have been added to the model");
+	if (npix > 0) {
+		srcgrid_npixels_x = npix;
+		srcgrid_npixels_y = npix;
+		auto_srcgrid_npixels = false;
+	}
+	if (make_delaunay_from_sbprofile) {
+		create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
+		if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
+	} else {
+		create_sourcegrid_cartesian(band_i,zsrc_i,verbal_mode,use_mask);
+		cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source(imggrid_i);
+		if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids[src_i] != NULL)) {
+			cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid(delaunay_srcgrids[src_i],true);
+		}
+	}
+	return src_i;
+}
+
 void QLens::plot_source_pixel_grid(const int imggrid_i, const char filename[])
 {
 	if ((imggrid_i >= 0) and (n_extended_src_redshifts==0)) die("no ext src redshift created");

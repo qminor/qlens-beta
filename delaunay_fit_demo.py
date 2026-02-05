@@ -1,6 +1,5 @@
 from qlens_helper import *
 
-pause()
 cosmo = Cosmology(omega_m=0.3,hubble=0.7)
 q = QLens(cosmo)
 (lens,src,ptsrc,pixsrc,imgdata,params,dparams) = q.objects();
@@ -80,12 +79,10 @@ q.sbmap_invert()
 img = q.plotimg(nres=True)
 plot_sb(img,q)
 
-pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
-
 srcplt = pixsrc[0].plot(interp=True)
 plot_sb(srcplt,q)
 
-pause()
+pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
 #q.n_livepts = 300
 q.run_fit("simplex",adopt=True,show_errors=False)
