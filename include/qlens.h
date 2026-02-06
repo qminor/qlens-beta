@@ -66,6 +66,7 @@ enum DerivedParamType {
 	Einstein,
 	Einstein_Mass,
 	Xi_Param,
+	CC_Xi_Param,
 	Kappa_Re,
 	LensParam,
 	AvgLogSlope,
@@ -1473,6 +1474,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double einstein_radius_single_lens(const double src_redshift, const int lensnum);
 	double get_xi_parameter(const double src_redshift, const int lensnum);
 	double get_total_xi_parameter(const double src_redshift);
+	double cc_xi_parameter(const double src_redshift, int cc_num=-1);
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac, double& reav);
 	double einstein_radius_root(const double r);

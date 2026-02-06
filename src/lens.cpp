@@ -6556,6 +6556,104 @@ double QLens::get_total_xi_parameter(const double src_redshift)
 	return (2*r_ein*xifac_avg+2);
 }
 
+double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
+{
+	double r_ein,zfac,xi_param;
+	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->zlens,src_redshift,reference_source_redshift);
+	einstein_radius_of_primary_lens(zfac,r_ein);
+	//cout << "RE=" << r_ein << endl;
+	double xc,yc,xcc,ycc;
+	lens_list[primary_lens_number]->get_center_coords(xc,yc);
+
+	// initializiing parameter for first counter 
+	int i;
+
+	double xifac_avg = 0; // average xi
+	double dkappa_cc_tot, kappa_cc_tot, kap, dkap;
+
+	// choosing which lenses to include? I'm a little confused what's happening here -- is it only including
+	// additional lenses that are elliptical? 
+	bool* include_lens = new bool[nlens];
+	for (i=0; i < nlens; i++) {
+		include_lens[i] = false;
+		if (i==primary_lens_number) include_lens[i] = true; // includes primary lens
+		else if (lens_list[i]->lenstype==SHEET) include_lens[i] = true;
+		else {
+			if (lens_list[i]->ellipticity_mode != -1) { // this would mean it's an elliptical lens
+				lens_list[i]->get_center_coords(xcc,ycc);
+				if ((xcc==xc) and (ycc==yc)) include_lens[i] = true; // only include co-centered lenses
+			}
+		}
+	}
+
+	// get critical curve points
+
+	if (!sorted_critical_curves) sort_critical_curves(); // sort critical curves
+	int n_cc = sorted_critical_curve.size();
+	if (n_cc==0) return false; // n_cc gives us the number of points in the critical curves? 
+
+	// ensures tangential critical curve 
+	// look for the first tangential critical curve we come across
+	// ensures tangential critical curve -- can just copy and paste 
+	if (cc_num < 0) {
+		if (n_cc==1) cc_num = 0;
+		else {
+			// look for the first tangential critical curve we come across
+			int j,k;
+			double kappa_averaged_over_cc;
+			for (j=0; j < n_cc; j++) {
+				kappa_averaged_over_cc = 0;
+				for (k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
+					kappa_averaged_over_cc += kappa(sorted_critical_curve[j].cc_pts[k][0],sorted_critical_curve[j].cc_pts[k][1],reference_zfactors,default_zsrc_beta_factors);
+				}
+				kappa_averaged_over_cc /= sorted_critical_curve[j].cc_pts.size();
+				if (kappa_averaged_over_cc < 1.0) {
+					// this is a tangential critical curve
+					cc_num = j;
+					//cout << "Found tangential critical curve! cc_num=" << cc_num << endl;
+					break;
+				}
+			}
+			if (cc_num < 0) {
+				warn("could not find a tangential critical curve");
+				return false;
+			}
+		}
+	}
+
+	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
+	int npts = critical_curve->cc_pts.size();
+	if (npts==0) return false;
+
+	int m, n;
+
+	// rather than spherical averaging, let's average along the critical curve
+	double x,y;
+	// incrementing through number of critical curve points
+	for (m=0; m < npts; m++) {
+		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
+		y = critical_curve->cc_pts[m][1];
+		kappa_cc_tot = 0;
+		dkappa_cc_tot = 0;
+		// get kappa and derivative of kappa for each lens that is included
+		for (n=0; n < nlens; n++) {
+			if (include_lens[n]) {
+				lens_list[n]->kappa_and_dkappa_dR(x,y,kap,dkap); // where do we get kappa and dkappa from?
+				kappa_cc_tot += zfac*kap; // why do we multiply by zfac here?
+				dkappa_cc_tot += zfac*dkap; // we express xi in terms of derivative of kappa, rather than second derivative of the deflection
+				//cout << "K=" << kap << " " << kappa_e_tot << endl;
+				//cout << "dK=" << dkap << " " << dkappa_e_tot << endl;
+			}
+		}
+		xifac_avg += dkappa_cc_tot/(1-kappa_cc_tot); // sum up the values
+	}
+	xifac_avg /= npts; // divide through by number of points part of critical curve to average out
+	delete[] include_lens;
+	return (2*r_ein*xifac_avg+2); // full equation 
+
+}
+
 double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 {
 	// this is used by the DerivedParam class in qlens.h

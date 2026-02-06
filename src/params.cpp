@@ -264,6 +264,8 @@ bool DerivedParamList::add_dparam(const string param_type, const double param, c
 		derived_param_type = Einstein_Mass;
 	} else if (param_type=="xi") {
 		derived_param_type = Xi_Param;
+	} else if (param_type=="cc_xi") {
+		derived_param_type = CC_Xi_Param;
 	} else if (param_type=="kappa_re") {
 		derived_param_type = Kappa_Re;
 	} else if (param_type=="lensparam") {

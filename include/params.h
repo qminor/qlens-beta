@@ -114,6 +114,8 @@ struct DerivedParam
 			name = "mass_re"; latex_name = "M_{Re}";
 		} else if (derived_param_type == Xi_Param) {
 			name = "xi"; latex_name = "\\xi";
+		} else if (derived_param_type == CC_Xi_Param) {
+			name = "cc_xi"; latex_name = "\\xi_{cc}";
 		} else if (derived_param_type == Kappa_Re) {
 			name = "kappa_re"; latex_name = "\\kappa_{E}";
 		} else if (derived_param_type == LensParam) {
@@ -193,6 +195,9 @@ struct DerivedParam
 		else if (derived_param_type == Xi_Param) {
 			if (int_param >= 0) return lens_in->get_xi_parameter(funcparam,int_param);
 			else return lens_in->get_total_xi_parameter(funcparam);
+		}
+		else if (derived_param_type == CC_Xi_Param) {
+			return lens_in->cc_xi_parameter(funcparam);
 		}
 		else if (derived_param_type == AvgLogSlope) return lens_in->calculate_average_log_slope(int_param,funcparam,funcparam2,use_kpc_units);
 		else if (derived_param_type == Einstein_Mass) {
@@ -321,6 +326,8 @@ struct DerivedParam
 			} else {
 				std::cout << "xi parameter of primary and co-centered lenses " << std::endl;
 			}
+		} else if (derived_param_type == CC_Xi_Param) {
+			std::cout << "xi parameter of lens along critical curve " << std::endl;
 		} else if (derived_param_type == Kappa_Re) {
 			std::cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << std::endl;
 		} else if (derived_param_type == LensParam) {

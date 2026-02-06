@@ -1093,6 +1093,7 @@ void QLens::process_commands(bool read_file)
 							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"re_zsrc -- The (spherically averaged) Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"xi -- The xi parameter (from Kochanek 2020) for a source redshift <zsrc> (optional lens# can be specified)\n"
+							"cc_xi -- The xi parameter along the critical curves (from Kochanek 2020) for a source redshift <zsrc> \n"
 							"mass_re -- The projected mass enclosed within Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"kappa_re -- kappa(R_ein) of primary lens (+lenses that are co-centered with primary), averaged over all angles\n"
 							"logslope -- The average log-slope of kappa between <r1> and <r2> (in arcsec) for a specific lens [lens#]\n"
@@ -9081,6 +9082,15 @@ void QLens::process_commands(bool read_file)
 								}
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
+							} else if (words[3]=="cc_xi") {
+								lensnum = -1;
+								if ((nwords != 4) and (nwords != 5)) Complain("derived parameter xi requires zero or one argument (optional zsrc)");
+								if (nwords==4) {
+									dparam_arg = source_redshift;
+								} else {
+									if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								}
+								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="kappa_re") {
 								if (nwords != 4) Complain("derived parameter mass_re doesn't allow any arguments");
 								dparam_list->add_dparam(words[3],-1e30,-1,-1,false);
@@ -13008,6 +13018,13 @@ void QLens::process_commands(bool read_file)
 			}
 			if (!find_caustic_minmax(rmin,rmax,rmax_minor_axis,cc_num)) Complain("critical curves have not been found");
 			if (mpi_id==0) cout << "Caustic rmin=" << rmin << " rmax=" << rmax << " rmax_minor_axis=" << rmax_minor_axis << endl;
+		}
+		else if (words[0]=="cc_xi_parameter")
+		{
+			int cc_num=-1;
+			double xi_param;
+			xi_param = cc_xi_parameter(0.8, cc_num);
+			cout << "Xi value: " << xi_param << endl;
 		}
 		else if (words[0]=="skip_newton")
 		{
