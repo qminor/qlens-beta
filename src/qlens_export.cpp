@@ -15,9 +15,9 @@ double default_zsrc_ref = 2;
 
 QLens* global_qlens_ptr = NULL;
 
-void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_ptr, double& z, double& zs, boolvector& vary_list, py::kwargs& kwargs)
+void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_ptr, double& z, double& zs, boolvector& vary_list, bool& transform_to_pixsrc_frame, py::kwargs& kwargs)
 {
-	bool set_pmode=false, set_cosmo=false, set_qlens=false, set_z=false, set_zs=false, set_vary=false;
+	bool set_pmode=false, set_cosmo=false, set_qlens=false, set_z=false, set_zs=false, set_vary=false, set_transform_pixsrc=false;
 	if (kwargs) {
 		for (auto item : kwargs) {
 			if (py::cast<string>(item.first)=="pmode") {
@@ -35,6 +35,9 @@ void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_
 			} else if (py::cast<string>(item.first)=="zs") {
 				zs = py::cast<double>(item.second);
 				set_zs = true;
+			} else if (py::cast<string>(item.first)=="transform_to_pixsrc_frame") {
+				transform_to_pixsrc_frame = py::cast<bool>(item.second);
+				set_transform_pixsrc = true;
 			} else if (py::cast<string>(item.first)=="vary") {
 				py::list py_vary_list = py::cast<py::list>(item.second);
 				vary_list.input(py_vary_list.size());
@@ -51,6 +54,7 @@ void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_
 		if (set_z) kwargs.attr("pop")("z");
 		if (set_zs) kwargs.attr("pop")("zs");
 		if (set_vary) kwargs.attr("pop")("vary");
+		if (set_transform_pixsrc) kwargs.attr("pop")("transform_to_pixsrc_frame");
 
 		if ((set_qlens) and (!set_cosmo) and (qlens_ptr != NULL)) cosmo = qlens_ptr->cosmo;
 	}
@@ -1228,6 +1232,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def("add", [](PixSrcList &current, py::kwargs &kwargs){
 			int band = 0;
 			double zsrc = current.qlens->source_redshift;
+			int mask_i = 0;
 			for (auto item : kwargs) {
 				if (py::cast<string>(item.first)=="band") {
 					try {
@@ -1241,11 +1246,21 @@ PYBIND11_MODULE(qlens, m) {
 					} catch (...) {
 						throw std::runtime_error("Invalid src redshift");
 					}
+				} else if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid mask index");
+					}
+
 				} else {
 					throw std::runtime_error("Keyword argument not recognized for pixsrc.add");
 				}
 			}
-			current.add_pixsrc(zsrc,band);
+			int znum = current.add_pixsrc(zsrc,band);
+			if (mask_i > 0) {
+				if (!current.qlens->assign_mask(band,znum,mask_i)) throw std::runtime_error("could not assign mask");
+			}
 		})
 		.def("update", [](PixSrcList &current, py::dict dict){
 			bool status = true;
@@ -1453,9 +1468,10 @@ PYBIND11_MODULE(qlens, m) {
 			QLens_Wrap* qlens_ptr = NULL;
 			double zlens = -1;
 			double zsrc_ref = -1;
+			bool transform_to_pixsrc_frame = false;
 			boolvector vary_list;
 
-			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
 				else zlens = default_zlens;
@@ -1486,7 +1502,13 @@ PYBIND11_MODULE(qlens, m) {
 				s = 0.0;
 			}
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
+
 			SPLE_Lens* sple = new SPLE_Lens(zlens,zsrc_ref,b,p2,s,q1,q2,xc,yc,pmode,cosmo_in);
+			if (transform_to_pixsrc_frame) {
+				if (qlens_ptr==NULL) throw std::runtime_error("pointer to qlens must be passed in when creating lens object to transform center coordinates to pixsrc frame");
+				if (!sple->setup_transform_center_coords_to_pixsrc_frame(xc,yc,qlens_ptr)) throw std::runtime_error("transform center coordinates to pixsrc frame was unsuccessful");
+			}
+
 			//if (qlens_ptr != NULL) qlens_ptr->add_lens(sple); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (sple->set_vary_flags(vary_list)==false) {
@@ -1514,7 +1536,8 @@ PYBIND11_MODULE(qlens, m) {
 			double zlens = -1;
 			double zsrc_ref = -1;
 			boolvector vary_list;
-			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			bool transform_to_pixsrc_frame = false;
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
 				else zlens = default_zlens;
@@ -1563,7 +1586,8 @@ PYBIND11_MODULE(qlens, m) {
 			double zlens = -1;
 			double zsrc_ref = -1;
 			boolvector vary_list;
-			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			bool transform_to_pixsrc_frame = false;
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
 				else zlens = default_zlens;
@@ -1602,6 +1626,11 @@ PYBIND11_MODULE(qlens, m) {
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
 
 			dPIE_Lens* dpie = new dPIE_Lens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
+			if (transform_to_pixsrc_frame) {
+				if (qlens_ptr==NULL) throw std::runtime_error("pointer to qlens must be passed in when creating lens object to transform center coordinates to pixsrc frame");
+				if (!dpie->setup_transform_center_coords_to_pixsrc_frame(xc,yc,qlens_ptr)) throw std::runtime_error("transform center coordinates to pixsrc frame was unsuccessful");
+			}
+
 			//if (qlens_ptr != NULL) qlens_ptr->add_lens(dpie); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (dpie->set_vary_flags(vary_list)==false) {
@@ -1625,8 +1654,9 @@ PYBIND11_MODULE(qlens, m) {
 			bool use_median_c = false;
 			bool anchor_median_c = true; // keep c set to median if use_median_c is turned on
 			double c_median_factor = 1.0;
+			bool transform_to_pixsrc_frame = false;
 			if (kwargs) {
-				process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+				process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 				if (zlens==-1) {
 					if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
 					else zlens = default_zlens;
@@ -1673,6 +1703,11 @@ PYBIND11_MODULE(qlens, m) {
 				nfw->assign_special_anchored_parameters(nfw,c_median_factor,true);
 				if (!anchor_median_c) nfw->unassign_special_anchored_parameter();
 			}
+			if (transform_to_pixsrc_frame) {
+				if (qlens_ptr==NULL) throw std::runtime_error("pointer to qlens must be passed in when creating lens object to transform center coordinates to pixsrc frame");
+				if (!nfw->setup_transform_center_coords_to_pixsrc_frame(xc,yc,qlens_ptr)) throw std::runtime_error("transform center coordinates to pixsrc frame was unsuccessful");
+			}
+
 			//if (qlens_ptr != NULL) qlens_ptr->add_lens(nfw); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (nfw->set_vary_flags(vary_list)==false) {
@@ -1682,6 +1717,103 @@ PYBIND11_MODULE(qlens, m) {
 			return nfw;
 		}))
 		;
+
+	py::class_<Truncated_NFW, LensProfile, std::unique_ptr<Truncated_NFW, py::nodelete>>(m, "tNFW")
+		//.def(py::init<>([](){return new tNFW();}))
+		.def(py::init<const Truncated_NFW*>())
+		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
+			int pmode=0;
+			Cosmology* cosmo_in = NULL;
+			QLens_Wrap* qlens_ptr = NULL;
+			double zlens = -1;
+			double zsrc_ref = -1;
+			boolvector vary_list;
+			bool use_median_c = false;
+			bool anchor_median_c = true; // keep c set to median if use_median_c is turned on
+			int truncation_mode = 0; // specifies the outer slope of the smooth truncation; tmode=0 gives slope -5, whereas tmode=1 gives slope -7
+			double c_median_factor = 1.0;
+			bool transform_to_pixsrc_frame = false;
+			if (kwargs) {
+				process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
+				if (zlens==-1) {
+					if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
+					else zlens = default_zlens;
+				}
+				if (zsrc_ref==-1) {
+					if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
+					else zsrc_ref = default_zsrc_ref;
+				}
+				for (auto item : kwargs) {
+					if (py::cast<string>(item.first)=="c_median") {
+						use_median_c = py::cast<bool>(item.second);
+					} else if (py::cast<string>(item.first)=="c_median_init") {
+						use_median_c = py::cast<bool>(item.second);
+						anchor_median_c = false;
+					} else if (py::cast<string>(item.first)=="c_median_factor") {
+						c_median_factor = py::cast<double>(item.second);
+					} else if (py::cast<string>(item.first)=="tmode") {
+						truncation_mode = py::cast<int>(item.second);
+						if ((truncation_mode < 0) or (truncation_mode > 1)) throw std::runtime_error("truncation mode (tmode) can only be 0 or 1");
+					} else {
+						throw std::runtime_error("unknown argument to NFW");
+					}
+				}
+			}
+	
+			double p1,p2,p3,q1,q2,xc,yc;
+			if (pmode==0) {
+				p1 = py::cast<double>(dict["ks"]);
+				p2 = py::cast<double>(dict["rs"]);
+				p3 = py::cast<double>(dict["rt"]);
+			} else if (pmode==1) {
+				p1 = py::cast<double>(dict["mvir"]);
+				if (!use_median_c) {
+					p2 = py::cast<double>(dict["c"]);
+				} else {
+					p2 = 1.0; // dummy value to input before it assigns median concentration
+				}
+				p3 = py::cast<double>(dict["rt_kpc"]);
+			} else if (pmode==2) {
+				p1 = py::cast<double>(dict["mvir"]);
+				if (!use_median_c) {
+					p2 = py::cast<double>(dict["c"]);
+				} else {
+					p2 = 1.0; // dummy value to input before it assigns median concentration
+				}
+				p3 = py::cast<double>(dict["tau"]);
+			} else if (pmode==3) {
+				p1 = py::cast<double>(dict["mvir"]);
+				p2 = py::cast<double>(dict["rs_kpc"]);
+				p3 = py::cast<double>(dict["rt_kpc"]);
+			} else if (pmode==4) {
+				p1 = py::cast<double>(dict["mvir"]);
+				p2 = py::cast<double>(dict["rs_kpc"]);
+				p3 = py::cast<double>(dict["tau_s"]);
+			} else throw std::runtime_error("Can only choose pmode=0, 1, 2, 3, or 4");
+			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
+
+			if (cosmo_in==NULL) throw std::runtime_error("NFW requires cosmology object to be passed in when initializing");
+
+			Truncated_NFW* tnfw = new Truncated_NFW(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,truncation_mode,pmode,cosmo_in);
+			if (use_median_c) {
+				tnfw->assign_special_anchored_parameters(tnfw,c_median_factor,true);
+				if (!anchor_median_c) tnfw->unassign_special_anchored_parameter();
+			}
+			if (transform_to_pixsrc_frame) {
+				if (qlens_ptr==NULL) throw std::runtime_error("pointer to qlens must be passed in when creating lens object to transform center coordinates to pixsrc frame");
+				if (!tnfw->setup_transform_center_coords_to_pixsrc_frame(xc,yc,qlens_ptr)) throw std::runtime_error("transform center coordinates to pixsrc frame was unsuccessful");
+			}
+
+			//if (qlens_ptr != NULL) qlens_ptr->add_lens(nfw); // I think it would probably just lead to confusion if you have it automatically add the lens this way
+			if (vary_list.size() > 0) {
+				if (tnfw->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+				}
+			}
+			return tnfw;
+		}))
+		;
+
 
 	/*
 	py::class_<Cored_NFW, LensProfile, std::unique_ptr<Cored_NFW, py::nodelete>>(m, "Cored_NFW")
@@ -1720,7 +1852,8 @@ PYBIND11_MODULE(qlens, m) {
 			double zlens = -1;
 			double zsrc_ref = -1;
 			boolvector vary_list;
-			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			bool transform_to_pixsrc_frame = false;
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
 				else zlens = default_zlens;
@@ -1760,7 +1893,8 @@ PYBIND11_MODULE(qlens, m) {
 			double zlens = -1;
 			double zsrc_ref = -1;
 			boolvector vary_list;
-			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, kwargs);
+			bool transform_to_pixsrc_frame = false;
+			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
 				else zlens = default_zlens;
@@ -1783,6 +1917,11 @@ PYBIND11_MODULE(qlens, m) {
 			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<std::string,double>>(dict));
 
 			SersicLens* sersic = new SersicLens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
+			if (transform_to_pixsrc_frame) {
+				if (qlens_ptr==NULL) throw std::runtime_error("pointer to qlens must be passed in when creating lens object to transform center coordinates to pixsrc frame");
+				if (!sersic->setup_transform_center_coords_to_pixsrc_frame(xc,yc,qlens_ptr)) throw std::runtime_error("transform center coordinates to pixsrc frame was unsuccessful");
+			}
+
 			//if (qlens_ptr != NULL) qlens_ptr->add_lens(sersic); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (sersic->set_vary_flags(vary_list)==false) {
@@ -2131,8 +2270,8 @@ PYBIND11_MODULE(qlens, m) {
 				py::arg("lower") = -1, py::arg("upper") = -1)
 		.def("imgdata_read", &QLens_Wrap::imgdata_load_file)
 		.def("sbmap_load_psf", &QLens_Wrap::sbmap_load_psf)
-		.def("sbmap_load_noisemap", &QLens_Wrap::sbmap_load_noise_map)
-		.def("sbmap_load_mask", &QLens_Wrap::sbmap_load_mask)
+		//.def("sbmap_load_noisemap", &QLens_Wrap::sbmap_load_noise_map)
+		//.def("sbmap_load_mask", &QLens_Wrap::sbmap_load_mask)
 
 		.def_readwrite("outside_sb_prior", &QLens_Wrap::outside_sb_prior)
 		.def_readwrite("outside_sb_frac_threshold", &QLens_Wrap::outside_sb_prior_threshold)

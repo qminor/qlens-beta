@@ -1320,7 +1320,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_new_model_band();
 	void remove_model_band(const int band_number, const bool removing_pixellated_src);
 
-	void add_pixellated_source(const double zsrc, const int band_number = 0);
+	int add_pixellated_source(const double zsrc, const int band_number = 0);
 	void remove_pixellated_source(int src_number, const bool delete_pixsrc = true);
 	void print_pixellated_source_list(bool show_vary_params);
 	void find_pixellated_source_moments(const int npix, double& qs, double& phi_s, double& sigavg, double& xavg, double& yavg);
@@ -1695,8 +1695,8 @@ class PixSrcList
 	PixSrcList(QLens* qlens_in) { pixsrclist_ptr = NULL; qlens = qlens_in; n_pixsrc = 0; }
 	void input_ptr(ModelParams** ptr_in, const int n_pixsrc_in) { pixsrclist_ptr = ptr_in; n_pixsrc = n_pixsrc_in; }
 	void clear_ptr() { pixsrclist_ptr = NULL; n_pixsrc = 0; }
-	void add_pixsrc(const double zsrc, const int band) {
-		qlens->add_pixellated_source(zsrc,band);
+	int add_pixsrc(const double zsrc, const int band) {
+		return qlens->add_pixellated_source(zsrc,band);
 	}
 	bool clear(const int min_loc=-1, const int max_loc=-1) {
 		if((min_loc == -1) and (max_loc == -1)) {

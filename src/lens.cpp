@@ -3144,7 +3144,7 @@ void QLens::remove_model_band(const int band_number, const bool removing_pixella
 	}
 }
 
-void QLens::add_pixellated_source(const double zsrc, const int band_number)
+int QLens::add_pixellated_source(const double zsrc, const int band_number)
 {
 	if (band_number > n_model_bands) die("cannot add band with index that is > number of bands");
 	srcgrids = new ModelParams*[n_pixellated_src+1];
@@ -3169,7 +3169,7 @@ void QLens::add_pixellated_source(const double zsrc, const int band_number)
 	pixellated_src_band = new_pixellated_src_band;
 	if (band_number==n_model_bands) add_new_model_band();
 	pixellated_src_band[n_pixellated_src] = band_number;
-	add_new_extended_src_redshift(zsrc,n_pixellated_src,true);
+	int znum = add_new_extended_src_redshift(zsrc,n_pixellated_src,true);
 
 	newlist[n_pixellated_src] = new DelaunaySourceGrid(this,band_number,zsrc); 
 	newlist2[n_pixellated_src] = new CartesianSourceGrid(this,band_number,zsrc);
@@ -3187,6 +3187,7 @@ void QLens::add_pixellated_source(const double zsrc, const int band_number)
 	delaunay_srcgrids[n_pixellated_src-1]->srcgrid_redshift = zsrc;
 	cartesian_srcgrids[n_pixellated_src-1]->srcgrid_redshift = zsrc;
 	pixsrclist->input_ptr(srcgrids,n_pixellated_src);
+	return znum;
 }
 
 void QLens::remove_pixellated_source(int src_number, const bool delete_pixsrc)
@@ -8402,7 +8403,7 @@ bool QLens::update_lens_centers_from_pixsrc_coords()
 	bool updated = false;
 	for (int i=0; i < nlens; i++) {
 		if (lens_list[i]->transform_center_coords_to_pixsrc_frame) {
-			lens_list[i]->update_center_from_pixsrc_coords();
+			lens_list[i]->update_center_from_pixsrc_coords(this);
 			updated = true;
 		}
 	}

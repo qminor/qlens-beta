@@ -147,7 +147,7 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 		update_ellipticity_meta_parameters();
 	}
 	void calculate_ellipticity_components();
-	void update_center_from_pixsrc_coords();
+	void update_center_from_pixsrc_coords(QLens* qlensptr);
 
 	double potential_numerical(const double, const double);
 	double potential_spherical_default(const double x, const double y);
@@ -289,7 +289,7 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
 	void delete_center_anchor();
-	bool setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc);
+	bool setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc, QLens* qlensptr_in=NULL);
 	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void remove_fourier_modes();

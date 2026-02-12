@@ -246,3 +246,12 @@ def plot_sb(sbdata, QLens_Object, show_cc=True):
         add_caustics_to_srcplot(q,fig)
     plt.show(block=False)
 
+def plotimg(QLens_Object, show_cc=True, nres=False):
+    q = QLens_Object
+    img = q.plotimg(nres=nres)
+    plot_sb(img,q)
+
+def plotsrc(QLens_Object, show_cc=True, interp=False, src=0):
+    q = QLens_Object
+    srcplt = q.pixsrc[src].plot(interp=interp)
+    plot_sb(srcplt,q)

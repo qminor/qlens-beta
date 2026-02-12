@@ -465,16 +465,20 @@ void LensProfile::delete_special_parameter_anchor()
 	if (anchor_special_parameter) anchor_special_parameter = false;
 }
 
-bool LensProfile::setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc)
+bool LensProfile::setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc, QLens* qlensptr_in)
 {
-	if (qlens == NULL) return false;
+	QLens* qlensptr;
+	if (qlens == NULL) {
+		qlensptr = qlensptr_in;
+		if (qlensptr==NULL) return false;
+	} else qlensptr = qlens;
 	if (ellipticity_mode == -1) die("can only transform center coords for elliptical lens");
 	if (!transform_center_coords_to_pixsrc_frame) transform_center_coords_to_pixsrc_frame = true;
 	assign_param_pointers();
 	assign_paramnames();
 	xc_prime = dxc;
 	yc_prime = dyc;
-	update_center_from_pixsrc_coords();
+	update_center_from_pixsrc_coords(qlensptr);
 	return true;
 }
 
@@ -1778,12 +1782,12 @@ void LensProfile::update_ellipticity_meta_parameters()
 	}
 }
 
-void LensProfile::update_center_from_pixsrc_coords()
+void LensProfile::update_center_from_pixsrc_coords(QLens* qlensptr)
 {
 	double xcs, ycs;
 	//cout << "lens " << lens_number << " finding approx source size... " << endl;
 	// generalize this later so it can be anchored to an image_pixel_grid with the appropriate zsrc_i (doesn't have to be 0)
-	qlens->find_source_centroid(0,xcs,ycs,false);
+	qlensptr->find_source_centroid(0,xcs,ycs,false);
 	//cout << "lens " << lens_number << " xcs,ycs: " << xcs << " " << ycs << endl;
 	x_center = xcs + xc_prime;
 	y_center = ycs + yc_prime;

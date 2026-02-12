@@ -76,11 +76,9 @@ q.fitmodel()
 q.sbmap_invert()
 #imgdata[0].unmask_all_pixels()
 
-img = q.plotimg(nres=True)
-plot_sb(img,q)
-
-srcplt = pixsrc[0].plot(interp=True)
-plot_sb(srcplt,q)
+pause()
+plotimg(q,nres=True)
+plotsrc(q,interp=True)
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
@@ -89,11 +87,14 @@ q.run_fit("simplex",adopt=True,show_errors=False)
 
 q.sbmap_invert()
 
-img = q.plotimg(nres=True)
-plot_sb(img,q)
+plotimg(q,nres=True)
+#img = q.plotimg(nres=True)
+#plot_sb(img,q)
 
-srcplt = pixsrc[0].plot()
-plot_sb(srcplt,q)
+plotsrc(q)
+
+#srcplt = pixsrc[0].plot()
+#plot_sb(srcplt,q)
 #img = q.plotimg(nres=True)
 #plot_sb(img)
 
