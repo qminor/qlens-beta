@@ -2,6 +2,7 @@ import itertools
 from qlens import *
 import matplotlib.pyplot as plt
 import code
+import copy
 import inspect
 import sys
 
@@ -228,15 +229,19 @@ def add_caustics_to_srcplot(QLens_Object, srcplane_fig):
         
     plt.legend(loc="upper right")
 
+def checknan(img):
+    foundnan = False
+    for row in img[3]:
+        for x in row:
+            if (x*0.0 != 0.0):
+                print("NAN value!")
+                foundnan = True
+    if (foundnan==False):
+        print("Did not find any NAN's")
 
-def plot_sb(sbdata, QLens_Object, show_cc=True):
-    # This is very rudimentary, but it seems to work reasonably well
+def plot_sb(plottype, x, y, z, QLens_Object, show_cc=True):
     q = QLens_Object
     fig, ax = plt.subplots(figsize=(8, 8))
-    plottype = sbdata[0]
-    x = sbdata[1]
-    y = sbdata[2]
-    z = sbdata[3]
     extent = [x[0],x[-1],y[0],y[-1]] 
     im = ax.imshow(z, interpolation='nearest', extent=extent, cmap='viridis', origin='lower')
     fig.colorbar(im, ax=ax)
@@ -249,17 +254,29 @@ def plot_sb(sbdata, QLens_Object, show_cc=True):
 def plotimg(QLens_Object, src=-1, show_cc=True, nomask=False, nres=False, res=False, output_fits=""):
     q = QLens_Object
     img = q.plotimg(src=src,nres=nres,res=res,nomask=nomask,output_fits=output_fits)
+    plottype = img[0]
+    x = copy.deepcopy(img[1])
+    y = copy.deepcopy(img[2])
+    z = copy.deepcopy(img[3])
+
     if (output_fits==""):
         if (show_cc==True and src >= 0):
             q.mkgrid_extended_src(src)
         else:
             if (show_cc==True and src < 0):
                 q.mkgrid()
-        plot_sb(img,q,show_cc=show_cc)
+        plot_sb(plottype,x,y,z,q,show_cc=show_cc)
 
 def plotsrc(QLens_Object, show_cc=True, interp=False, src=0):
     q = QLens_Object
     srcplt = q.pixsrc[src].plot(interp=interp)
+    plottype = srcplt[0]
+    x = copy.deepcopy(srcplt[1])
+    y = copy.deepcopy(srcplt[2])
+    z = copy.deepcopy(srcplt[3])
     if (show_cc==True):
         q.mkgrid_extended_src(src)
-    plot_sb(srcplt,q,show_cc=show_cc)
+    plot_sb(plottype,x,y,z,q,show_cc=show_cc)
+
+
+

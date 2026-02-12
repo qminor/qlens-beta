@@ -1236,7 +1236,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def("add", [](PixSrcList &current, py::kwargs &kwargs){
 			int band = 0;
 			double zsrc = current.qlens->source_redshift;
-			int mask_i = 0;
+			int mask_i = current.n_pixsrc; // this way, if additional sources are added, it will try to assign masks with the same index by default (*if* they have been loaded)
 			for (auto item : kwargs) {
 				if (py::cast<string>(item.first)=="band") {
 					try {
@@ -2485,13 +2485,13 @@ PYBIND11_MODULE(qlens, m) {
 			for (auto item : kwargs) {
 				if (py::cast<string>(item.first)=="res") {
 					try {
-						plot_residual = py::cast<bool>(item.second);
+						if (!plot_residual) plot_residual = py::cast<bool>(item.second);
 					} catch (...) {
 						throw std::runtime_error("Invalid boolean value for 'res' argument");
 					}
 				} else if (py::cast<string>(item.first)=="nres") {
 					try {
-						plot_residual = py::cast<bool>(item.second);
+						if (!plot_residual) plot_residual = py::cast<bool>(item.second);
 						if (plot_residual) normalize_sb = true;
 					} catch (...) {
 						throw std::runtime_error("Invalid boolean value for 'nres' argument");

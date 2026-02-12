@@ -76,7 +76,6 @@ q.fitmodel()
 q.sbmap_invert()
 #imgdata[0].unmask_all_pixels()
 
-pause()
 plotimg(q,nres=True)
 plotsrc(q,interp=True)
 
@@ -88,19 +87,10 @@ q.run_fit("simplex",adopt=True,show_errors=False)
 q.sbmap_invert()
 
 plotimg(q,nres=True)
-#img = q.plotimg(nres=True)
-#plot_sb(img,q)
 
 plotsrc(q)
 
-#srcplt = pixsrc[0].plot()
-#plot_sb(srcplt,q)
-#img = q.plotimg(nres=True)
-#plot_sb(img)
-
 #q.run_fit("multinest",adopt=True)
-#img = q.plotimg(nres=True)
-#plot_sb(img)
 
 #plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing
 
