@@ -4756,6 +4756,21 @@ void QLens::autogrid() {
 	} else warn("cannot autogrid; no lens model has been specified");
 }
 
+bool QLens::create_grid_from_default_redshifts() // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+{
+	return create_grid(false,reference_zfactors,default_zsrc_beta_factors);
+}
+
+bool QLens::create_grid_from_ptsrc_redshifts(const int zsrc_i) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+{
+	return create_grid(false,ptsrc_zfactors[zsrc_i],ptsrc_beta_factors[zsrc_i]);
+}
+
+bool QLens::create_grid_from_extended_redshifts(const int zsrc_i) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+{
+	return create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i]);
+}
+
 bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 {
 	if (nlens==0) { warn(warnings, "no lens model is specified"); return false; }

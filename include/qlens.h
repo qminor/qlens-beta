@@ -1258,6 +1258,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	}
 	bool get_sci_notation() { return use_scientific_notation; }
 
+	bool get_warnings() { return warnings; }
+	void set_warnings(const bool setting) { warnings = setting; }
+
 	bool register_lens_vary_parameters(const int lensnumber);
 	void register_lens_prior_limits(const int lens_number);
 	void update_lens_fitparams(const int lens_number);
@@ -1348,6 +1351,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void clear_raw_chisq() { raw_chisq = -1e30; if (fitmodel) fitmodel->raw_chisq = -1e30; }
 
 	bool create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index = -1); // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+	bool create_grid_from_default_redshifts();
+	bool create_grid_from_ptsrc_redshifts(const int zsrc_i);
+	bool create_grid_from_extended_redshifts(const int zsrc_i);
 	void find_automatic_grid_position_and_size(double *zfacs);
 	void clear_lenses();
 	void clear();
@@ -1536,8 +1542,6 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	void update_imggrid_mask_values(const int mask_i);
 
-	void set_warnings(bool setting) { warnings = setting; }
-	void get_warnings(bool &setting) { setting = warnings; }
 	void set_newton_warnings(bool setting) { newton_warnings = setting; }
 	void get_newton_warnings(bool &setting) { setting = newton_warnings; }
 	void set_galsubgrid_mode(bool setting) { subgrid_around_perturbers = setting; }

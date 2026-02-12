@@ -276,6 +276,10 @@ PYBIND11_MODULE(qlens, m) {
 			if (paramnum < 0) throw std::runtime_error("specified parameter name '" + old_name + "' not recognized");
 			if (!current.rename_dparam(paramnum,new_name,new_latex_name)) throw std::runtime_error("parameter name not unique; parameter could not be renamed");
 		})
+		.def("rename", [](DerivedParamList &current, const int paramnum, const string new_name, const string new_latex_name=""){
+			if (!current.rename_dparam(paramnum,new_name,new_latex_name)) throw std::runtime_error("parameter name not unique; parameter could not be renamed");
+		})
+
 		//.def("__repr__", [](DerivedParamList &a) {
 			//string outstring = a.get_param_values_string();
 			//return("\n" + outstring);
@@ -2278,6 +2282,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("outside_sb_noise_threshold", &QLens_Wrap::outside_sb_prior_noise_frac)
 		.def_readwrite("nimg_prior", &QLens_Wrap::n_image_prior)
 		.def_readwrite("nimg_threshold", &QLens_Wrap::n_image_threshold)
+		.def_readwrite("srcpixel_clustering", &QLens_Wrap::use_srcpixel_clustering)
+		.def_readwrite("n_cluster_it", &QLens_Wrap::n_cluster_iterations)
 
 		.def("clear_lenses", &QLens_Wrap::lens_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
 		.def_property("primary_lens_number", &QLens_Wrap::get_primary_lens_number, &QLens_Wrap::set_primary_lens_number)
@@ -2426,6 +2432,9 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("adopt_chain_bestfit", &QLens_Wrap::adopt_bestfit_point_from_chain)
 		.def("test_lens", &QLens_Wrap::test_lens_functions)
+		.def("mkgrid", &QLens_Wrap::create_grid_from_default_redshifts)
+		.def("mkgrid_ptsrc", &QLens_Wrap::create_grid_from_ptsrc_redshifts)
+		.def("mkgrid_extended_src", &QLens_Wrap::create_grid_from_extended_redshifts)
 		.def("sort_critical_curves", &QLens_Wrap::sort_critical_curves)
 		.def("init_fitmodel", &QLens_Wrap::initialize_fitmodel, py::arg("run_fit_in") = true)
 		.def_readonly("params", &QLens_Wrap::param_list)
@@ -2503,9 +2512,9 @@ PYBIND11_MODULE(qlens, m) {
 				} else if (py::cast<string>(item.first)=="src") {
 					try {
 						zsrc_i = py::cast<int>(item.second);
-						if ((zsrc_i < 0) or (zsrc_i >= current.n_extended_src_redshifts)) throw std::runtime_error("source redshift index does not exist");
+						if (zsrc_i >= current.n_extended_src_redshifts) throw std::runtime_error("source redshift index does not exist");
 					} catch (...) {
-						throw std::runtime_error("Invalid boolean value for 'src' argument");
+						throw std::runtime_error("Invalid integer value for 'src' argument");
 					}
 				} else throw std::runtime_error("argument to 'plotimg' not recognized");
 			}
@@ -2561,6 +2570,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("central_image", &QLens_Wrap::include_central_image)
 		//.def_readwrite("sourcepts_fit", &QLens_Wrap::sourcepts_fit)
 		.def_readwrite("n_livepts", &QLens_Wrap::n_livepts)
+		//.def_readwrite("warnings", &QLens_Wrap::warnings)
+		.def_property("warnings", &QLens_Wrap::get_warnings, &QLens_Wrap::set_warnings)
 		.def_property("sci_notation", &QLens_Wrap::get_sci_notation, &QLens_Wrap::set_sci_notation)
 		.def_property("fit_label", &QLens_Wrap::get_fit_label, &QLens_Wrap::set_fit_label)
 		.def_readwrite("fit_output_dir", &QLens_Wrap::fit_output_dir)
