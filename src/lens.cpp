@@ -6578,7 +6578,6 @@ double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
 	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->zlens,src_redshift,reference_source_redshift);
 	einstein_radius_of_primary_lens(zfac,r_ein);
-	//cout << "RE=" << r_ein << endl;
 	double xc,yc,xcc,ycc;
 	lens_list[primary_lens_number]->get_center_coords(xc,yc);
 
@@ -6607,13 +6606,13 @@ double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
 
 	if (!create_grid_from_default_redshifts(true)) {
 		warn("could not generate grid find c.c. to calculate xi");
-		return -1e30; // n_cc gives us the number of points in the critical curves? 
+		return get_total_xi_parameter(src_redshift); // just default to spherically averaged xi if necessary
 	}
 	if (!sorted_critical_curves) sort_critical_curves(); // sort critical curves
 	int n_cc = sorted_critical_curve.size();
 	if (n_cc==0) {
 		warn("could not find critical curves to calculate xi");
-		return -1e30; // n_cc gives us the number of points in the critical curves? 
+		return get_total_xi_parameter(src_redshift); // just default to spherically averaged xi if necessary
 	}
 
 	// ensures tangential critical curve 
@@ -6640,7 +6639,7 @@ double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
 			}
 			if (cc_num < 0) {
 				warn("could not find a tangential critical curve");
-				return -1e30;
+				return get_total_xi_parameter(src_redshift); // just default to spherically averaged xi if necessary
 			}
 		}
 	}
@@ -6649,7 +6648,7 @@ double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
 	int npts = critical_curve->cc_pts.size();
 	if (npts==0) {
 		warn("Didn't get any critical curve points");
-		return -1e30;
+		return get_total_xi_parameter(src_redshift); // just default to spherically averaged xi if necessary
 	}
 
 	int m, n;
