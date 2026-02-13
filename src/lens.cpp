@@ -11565,6 +11565,7 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 		}
 	}
 
+	/*
 	if (mpi_id==0) {
 		if (!no2dposts) {
 			string hist2d_str = file_root + ".hist2d_params";
@@ -11589,6 +11590,7 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 			hist2dfile.close();
 		}
 	}
+	*/
 
 	i=0;
 	j=0;
@@ -11770,7 +11772,7 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 			ifstream hist2d_paramnames_file(hist2d_paramnames_filename.c_str());
 			for (i=0; i < nparams_eff; i++) {
 				if (!(hist2d_paramnames_file >> hist2d_param_names[i])) die("not all hist2d_parameter names are given in file '%s'",hist2d_paramnames_filename.c_str());
-				if (hist2d_param_names[i] != param_names[i]) die("hist2d parameter names do not match names given in paramnames file");
+				if (hist2d_param_names[i] != param_names[i]) die("hist2d parameter names do not match names given in paramnames file (%s versus %s)",hist2d_param_names[i].c_str(),param_names[i].c_str());
 				int pflag;
 				if (!(hist2d_paramnames_file >> pflag)) die("hist2d parameter flag not given in file '%s'",hist2d_paramnames_filename.c_str());
 				if (pflag == 0) hist2d_active_params[i] = false;
