@@ -11524,11 +11524,12 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 	int n_threads=1, n_processes=1;
 	bool show_markers = false;
 	bool make_subplot = param_list->subplot_params_defined();
-	string file_root = fit_output_dir + "/" + fit_output_filename;
+	string filename_root = fit_output_filename;
+	if (resampled_posts) filename_root += ".new";
+	string file_root = fit_output_dir + "/" + filename_root;
 	string marker_filename;
 	string subplot_paramnames_filename;
 
-	if (resampled_posts) file_root += ".new";
 	if (param_markers != "") {
 		show_markers = true;
 		marker_filename = file_root + ".markers";
@@ -12138,13 +12139,13 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 		int system_returnval;
 		if (make_1d_posts)
 		{
-			string pyname = fit_output_dir + "/" + fit_output_filename + ".py";
+			string pyname = fit_output_dir + "/" + filename_root + ".py";
 			ofstream pyscript(pyname.c_str());
 			pyscript << "import GetDistPlots, os" << endl;
 			pyscript << "g=GetDistPlots.GetDistPlotter('./')" << endl;
 			pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 			pyscript << "outdir=''" << endl;
-			pyscript << "roots=['" << fit_output_filename << "']" << endl;
+			pyscript << "roots=['" << filename_root << "']" << endl;
 			if (show_markers) {
 				pyscript << "marker_list=[";
 				for (i=0; i < n_markers; i++) {
@@ -12157,12 +12158,12 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 			}
 			pyscript << "g.plots_1d(roots,markers=marker_list,marker_color='orange')" << endl;
 			//if (add_title) pyscript << "g.add_title(r'" << plot_title << "')" << endl; // 1d title doesn't look good
-			pyscript << "g.export(os.path.join(outdir,'" << fit_output_filename << ".pdf'))" << endl;
+			pyscript << "g.export(os.path.join(outdir,'" << filename_root << ".pdf'))" << endl;
 			pyscript.close();
 			if (run_python_script) {
-				string pycommand = "cd " + fit_output_dir + "; python3 " + fit_output_filename + ".py; cd ..";
+				string pycommand = "cd " + fit_output_dir + "; python3 " + filename_root + ".py; cd ..";
 				if (system(pycommand.c_str()) == 0) {
-					cout << "Plot for 1D posteriors saved to '" << fit_output_dir + "/" + fit_output_filename << ".pdf'\n";
+					cout << "Plot for 1D posteriors saved to '" << fit_output_dir + "/" + filename_root << ".pdf'\n";
 					//string rmcommand = "rm " + pyname;
 					//system_returnval = system(rmcommand.c_str());
 				}
@@ -12174,13 +12175,13 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 
 		if (make_2d_posts)
 		{
-			string pyname = fit_output_dir + "/" + fit_output_filename + "_2D.py";
+			string pyname = fit_output_dir + "/" + filename_root + "_2D.py";
 			ofstream pyscript2d(pyname.c_str());
 			pyscript2d << "import GetDistPlots, os" << endl;
 			pyscript2d << "g=GetDistPlots.GetDistPlotter('./')" << endl;
 			pyscript2d << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 			pyscript2d << "outdir=''" << endl;
-			pyscript2d << "roots=['" << fit_output_filename << "']" << endl;
+			pyscript2d << "roots=['" << filename_root << "']" << endl;
 			pyscript2d << "pairs=[]" << endl;
 			for (i=0; i < nparams_eff_2d; i++) {
 				for (j=i+1; j < nparams_eff_2d; j++) {
@@ -12194,12 +12195,12 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 			else pyscript2d << "shaded=False";
 			pyscript2d << ")" << endl;
 			if (add_title) pyscript2d << "g.add_title(r'" << plot_title << "')" << endl;
-			pyscript2d << "g.export(os.path.join(outdir,'" << fit_output_filename << "_2D.pdf'))" << endl;
+			pyscript2d << "g.export(os.path.join(outdir,'" << filename_root << "_2D.pdf'))" << endl;
 			/*
 			if (run_python_script) {
 				string pycommand = "python " + pyname;
 				if (system(pycommand.c_str()) == 0) {
-					cout << "Plot for 2D posteriors saved to '" << fit_output_dir + "/" + fit_output_filename << "_2D.pdf'\n";
+					cout << "Plot for 2D posteriors saved to '" << fit_output_dir + "/" + filename_root << "_2D.pdf'\n";
 					//string rmcommand = "rm " + pyname;
 					//system_returnval = system(rmcommand.c_str());
 				}
@@ -12215,14 +12216,14 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 				int n_triplots = 1;
 				if (make_subplot) n_triplots++;
 				for (int k=0; k < n_triplots; k++) {
-					if (k==0) pyname = fit_output_dir + "/" + fit_output_filename + "_tri.py";
-					else pyname = fit_output_dir + "/" + fit_output_filename + "_subtri.py";
+					if (k==0) pyname = fit_output_dir + "/" + filename_root + "_tri.py";
+					else pyname = fit_output_dir + "/" + filename_root + "_subtri.py";
 					ofstream pyscript(pyname.c_str());
 					pyscript << "import GetDistPlots, os" << endl;
 					pyscript << "g=GetDistPlots.GetDistPlotter('./')" << endl;
 					pyscript << "g.settings.setSubplotSize(3.0000,width_scale=1.0)  # width_scale scales the width of all lines in the plot" << endl;
 					pyscript << "outdir=''" << endl;
-					pyscript << "roots=['" << fit_output_filename << "']" << endl;
+					pyscript << "roots=['" << filename_root << "']" << endl;
 					if (show_markers) {
 						pyscript << "marker_list=[";
 						for (i=0; i < n_markers; i++) {
@@ -12264,16 +12265,16 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 					else pyscript << "shaded=False";
 					pyscript << ")" << endl;
 					if (add_title) pyscript << "g.add_title(r'" << plot_title << "')" << endl;
-					pyscript << "g.export(os.path.join(outdir,'" << fit_output_filename;
+					pyscript << "g.export(os.path.join(outdir,'" << filename_root;
 					if (k==0) pyscript << "_tri.pdf'))" << endl;
 					else pyscript << "_subtri.pdf'))" << endl;
 					if (run_python_script) {
 						string pycommand;
-						if (k==0) pycommand = "cd " + fit_output_dir + "; python3 " + fit_output_filename + "_tri.py; cd ..";
-						else if (k==1) pycommand = "cd " + fit_output_dir + "; python3 " + fit_output_filename + "_subtri.py; cd ..";
+						if (k==0) pycommand = "cd " + fit_output_dir + "; python3 " + filename_root + "_tri.py; cd ..";
+						else if (k==1) pycommand = "cd " + fit_output_dir + "; python3 " + filename_root + "_subtri.py; cd ..";
 						if (system(pycommand.c_str()) == 0) {
-							if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << fit_output_dir + "/" + fit_output_filename << "_tri.pdf'\n";
-							else cout << "Triangle subplot saved to '" << fit_output_filename << "_subtri.pdf'\n";
+							if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << fit_output_dir + "/" + filename_root << "_tri.pdf'\n";
+							else cout << "Triangle subplot saved to '" << filename_root << "_subtri.pdf'\n";
 							//string rmcommand = "rm " + pyname;
 							//system_returnval = system(rmcommand.c_str());
 						}
