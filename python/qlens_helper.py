@@ -255,6 +255,7 @@ def plotimg(QLens_Object, src=-1, show_cc=True, nomask=False, nres=False, res=Fa
     q = QLens_Object
     img = q.plotimg(src=src,nres=nres,res=res,nomask=nomask,output_fits=output_fits)
     plottype = img[0]
+    # For some reason, if we don't make a copy of the lists from the tuple (as below), the tuple ends up getting corrupted when matplotlib stuff is called. I have no idea why, it's super annoying.
     x = copy.deepcopy(img[1])
     y = copy.deepcopy(img[2])
     z = copy.deepcopy(img[3])
