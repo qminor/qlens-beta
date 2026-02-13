@@ -1350,8 +1350,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	//void print_derived_param_list();
 	void clear_raw_chisq() { raw_chisq = -1e30; if (fitmodel) fitmodel->raw_chisq = -1e30; }
 
-	bool create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index = -1); // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
-	bool create_grid_from_default_redshifts();
+	bool create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index = -1, const bool force_store_cc_points = false); // the redshift_index (optional) argument indicates which images are being fit to; used to optimize the subgridding
+	bool create_grid_from_default_redshifts(const bool force_store_cc_points = false);
 	bool create_grid_from_ptsrc_redshifts(const int zsrc_i);
 	bool create_grid_from_extended_redshifts(const int zsrc_i);
 	void find_automatic_grid_position_and_size(double *zfacs);

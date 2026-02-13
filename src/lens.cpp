@@ -4756,9 +4756,9 @@ void QLens::autogrid() {
 	} else warn("cannot autogrid; no lens model has been specified");
 }
 
-bool QLens::create_grid_from_default_redshifts() // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+bool QLens::create_grid_from_default_redshifts(const bool force_store_cc_points) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 {
-	return create_grid(false,reference_zfactors,default_zsrc_beta_factors);
+	return create_grid(false,reference_zfactors,default_zsrc_beta_factors,-1,force_store_cc_points);
 }
 
 bool QLens::create_grid_from_ptsrc_redshifts(const int zsrc_i) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
@@ -4771,7 +4771,7 @@ bool QLens::create_grid_from_extended_redshifts(const int zsrc_i) // the last (o
 	return create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i]);
 }
 
-bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index, const bool force_store_cc_points) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
 {
 	if (nlens==0) { warn(warnings, "no lens model is specified"); return false; }
 	double mytime0, mytime;
@@ -4796,7 +4796,7 @@ bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int
 			delete grid;
 			grid = NULL;
 		}
-		if (auto_store_cc_points) {
+		if ((auto_store_cc_points) or (force_store_cc_points)) {
 			critical_curve_pts.clear();
 			caustic_pts.clear();
 			length_of_cc_cell.clear();
@@ -4829,7 +4829,7 @@ bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int
 		delete[] centers;
 		delete[] einstein_radii;
 	}
-	if (auto_store_cc_points==true) grid->store_critical_curve_pts();
+	if ((auto_store_cc_points) or (force_store_cc_points)) grid->store_critical_curve_pts();
 	if ((verbal) and (mpi_id==0)) {
 		cout << "done" << endl;
 #ifdef USE_OPENMP
@@ -6605,9 +6605,16 @@ double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
 
 	// get critical curve points
 
+	if (!create_grid_from_default_redshifts(true)) {
+		warn("could not generate grid find c.c. to calculate xi");
+		return -1e30; // n_cc gives us the number of points in the critical curves? 
+	}
 	if (!sorted_critical_curves) sort_critical_curves(); // sort critical curves
 	int n_cc = sorted_critical_curve.size();
-	if (n_cc==0) return false; // n_cc gives us the number of points in the critical curves? 
+	if (n_cc==0) {
+		warn("could not find critical curves to calculate xi");
+		return -1e30; // n_cc gives us the number of points in the critical curves? 
+	}
 
 	// ensures tangential critical curve 
 	// look for the first tangential critical curve we come across
@@ -6633,14 +6640,17 @@ double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
 			}
 			if (cc_num < 0) {
 				warn("could not find a tangential critical curve");
-				return false;
+				return -1e30;
 			}
 		}
 	}
 
 	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
 	int npts = critical_curve->cc_pts.size();
-	if (npts==0) return false;
+	if (npts==0) {
+		warn("Didn't get any critical curve points");
+		return -1e30;
+	}
 
 	int m, n;
 
