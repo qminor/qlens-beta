@@ -124,15 +124,15 @@ set(MKDIST_SOURCES
     ${PROJECT_SOURCE_DIR}/src/mcmceval.cpp
 )
 
-set(COSMOCALC_SOURCES
-    ${PROJECT_SOURCE_DIR}/src/cosmocalc.cpp
-    ${PROJECT_SOURCE_DIR}/src/errors.cpp 
-    ${PROJECT_SOURCE_DIR}/src/spline.cpp 
-    ${PROJECT_SOURCE_DIR}/src/romberg.cpp 
-    ${PROJECT_SOURCE_DIR}/src/cosmo.cpp 
-    ${PROJECT_SOURCE_DIR}/src/brent.cpp
-    ${PROJECT_SOURCE_DIR}/src/modelparams.cpp
-)
+#set(COSMOCALC_SOURCES
+    #${PROJECT_SOURCE_DIR}/src/cosmocalc.cpp
+    #${PROJECT_SOURCE_DIR}/src/errors.cpp 
+    #${PROJECT_SOURCE_DIR}/src/spline.cpp 
+    #${PROJECT_SOURCE_DIR}/src/romberg.cpp 
+    #${PROJECT_SOURCE_DIR}/src/cosmo.cpp 
+    #${PROJECT_SOURCE_DIR}/src/brent.cpp
+    #${PROJECT_SOURCE_DIR}/src/modelparams.cpp
+#)
 
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
@@ -444,7 +444,7 @@ include(cmake/python_install.cmake)
 #endif(MPI_C_FOUND OR MPI_CXX_FOUND OR MPI_Fortran_FOUND)
 
 add_custom_target(qlens-all)
-add_dependencies(qlens-all qlens mkdist cosmocalc python)
+add_dependencies(qlens-all qlens mkdist python)
 
 add_custom_target(deps)
 add_dependencies(deps pybind11 multinest polychord)

@@ -65,21 +65,3 @@ set_target_properties(
 
 target_link_libraries(mkdist ${QLENS_LIBRARIES})
 
-add_executable(cosmocalc
-    ${COSMOCALC_SOURCES}
-)
-
-set_target_properties(
-    cosmocalc
-    PROPERTIES
-    INCLUDE_DIRECTORIES "${QLENS_INCLUDE_DIRS}"
-    COMPILE_DEFINITIONS "${QLENS_COMPILE_DEFINITIONS}"
-    COMPILE_FLAGS "${QLENS_COMPILE_FLAGS} -O3"
-    #LINK_LIBRARIES ${GDP_LIBRARIES}
-    LINK_FLAGS "${QLENS_LINKER_FLAGS}"
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin"
-    LINKER_LANGUAGE Fortran
-    OUTPUT_NAME "cosmocalc"
-)
-
-target_link_libraries(cosmocalc ${QLENS_LIBRARIES})
