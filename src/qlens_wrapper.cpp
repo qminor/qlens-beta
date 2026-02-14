@@ -118,13 +118,14 @@ public:
 		set_inversion_nthreads(n_omp_threads);
 	}
 
+	/*
 	void batch_add_lenses(py::list list) {
 		LensProfile* curr;
 		for (auto arr : list){
 			try {
 				curr = py::cast<LensProfile*>(arr);
 			} catch (...) {
-				throw std::runtime_error("Error adding lenses. Input should be an array of tuples. Ex: [(<Lens1>, zl1, zs2), (<Lens2>, zl2, zs2)]");
+				throw std::runtime_error("Error adding lenses. Input should be an array of lenses. Ex: [<Lens1>, <Lens2>]");
 			}
 			add_lens(curr);
 		}
@@ -184,6 +185,7 @@ public:
 	void add_src_default(SB_Profile* src_in) {
 		add_source(src_in, false);
 	}
+	*/
 
 	std::string imgdata_load_file(const std::string &name_) { 
 		if (load_point_image_data(name_)==false) throw runtime_error("Unable to read data");
@@ -296,6 +298,7 @@ public:
 			}
 	 }
 
+	/*
 	std::string sbmap_load_image_file(const std::string &filename_, py::kwargs& kwargs) { 
 			int band_i = 0;
 			int hdu_indx = 1;
@@ -350,6 +353,7 @@ public:
 
 		return filename_;
 	}
+	*/
 
 	std::string sbmap_load_psf(const std::string &filename_, py::kwargs& kwargs) { 
 			int band_i = 0;
@@ -378,6 +382,7 @@ public:
 		return filename_;
 	}
 
+	/*
 	std::string sbmap_load_mask(const std::string &filename_, py::kwargs& kwargs) { 
 			int band_i = 0;
 			int mask_i = 0;
@@ -473,19 +478,7 @@ public:
 			}
 		}
 	}
-
-	void update_lens(py::args args, py::kwargs kwargs, int loc=-1) {
-		/* FEATURE IDEA: from https://pybind11.readthedocs.io/en/stable/advanced/functions.html#accepting-args-and-kwargs
-
-			1. Accept *args, **kwargs from python user
-			2. If an argument matches with lens parameter
-		*/
-		// TODO: Verify with Quinn on where in commands.cpp gets the updated and then adapt here.
-		if (loc == -1) throw runtime_error("Please specify the lens to update.");
-		// if (kwargs) {
-			
-		// }
-	}
+	*/
 
 	void set_regularization_method(const std::string &method) {
 		if (method=="none") {

@@ -411,6 +411,17 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			return lens_in;
 		})
+		.def("add", [](LensList &current, py::list list){
+			LensProfile* lens;
+			for (auto item : list){
+				try {
+					lens = py::cast<LensProfile*>(item);
+				} catch (...) {
+					throw std::runtime_error("Error adding lenses. Input should be an array of lens objects. Ex: [<Lens1>, <Lens2>, <Lens3>]");
+				}
+				current.add_lens(lens);
+			}
+		})
 		.def("update", [](LensList &current, py::dict dict){
 			bool status = true;
 			for (int i=0; i < current.nlens; i++) {
@@ -1108,7 +1119,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def("mkpixsrc", [](SourceList &current, py::kwargs& kwargs){
 			int zsrc_i = 0;
 			int band_i = 0;
-			int npix = -1;
+			int npix = 200;
 			bool make_delaunay_from_sbprofile = false;
 			bool use_mask = true;
 			bool verbal_mode = true;
@@ -1150,61 +1161,6 @@ PYBIND11_MODULE(qlens, m) {
 			if ((current.qlens->source_fit_mode==Delaunay_Source) and (!make_delaunay_from_sbprofile)) throw std::runtime_error("to make Delaunay source grid from source profiles, use '-delaunay' argument");
 			int src_i = current.qlens->make_pixellated_source_from_sbprofiles(band_i,zsrc_i,npix,make_delaunay_from_sbprofile,use_mask,verbal_mode);
 			if (src_i < 0) throw std::runtime_error("at least one analytic lensed source is required for 'sbmap mksrc'");
-		})
-		.def("mkplotsrc", [](SourceList &current, py::kwargs& kwargs){
-			int zsrc_i = 0;
-			int band_i = 0;
-			int npix = -1;
-			bool use_mask = true;
-			bool verbal_mode = true;
-
-			for (auto item : kwargs) {
-				if (py::cast<string>(item.first)=="npix") {
-					try {
-						npix = py::cast<int>(item.second);
-					} catch (...) {
-						throw std::runtime_error("Invalid integer value for 'npix' argument");
-					}
-				} else if (py::cast<string>(item.first)=="use_mask") {
-					try {
-						use_mask = py::cast<bool>(item.second);
-					} catch (...) {
-						throw std::runtime_error("Invalid integer value for 'use_mask' argument");
-					}
-				} else if (py::cast<string>(item.first)=="band") {
-					try {
-						band_i = py::cast<int>(item.second);
-					} catch (...) {
-						throw std::runtime_error("Invalid integer value for 'band' argument");
-					}
-				} else if (py::cast<string>(item.first)=="zsrc_i") {
-					try {
-						zsrc_i = py::cast<int>(item.second);
-					} catch (...) {
-						throw std::runtime_error("Invalid integer value for 'zsrc_i' argument");
-					}
-				} else throw std::runtime_error("argument to 'mkpixsrc' not recognized");
-			}
-
-			int src_i = current.qlens->make_pixellated_source_from_sbprofiles(band_i,zsrc_i,npix,false,use_mask,verbal_mode);
-			if (src_i < 0) throw std::runtime_error("at least one analytic lensed source is required for 'sbmap mksrc'");
-
-			dvector xvals,yvals,zvals;
-			dvector maglogvals,nimgvals; // not used here, but still part of the output from cartesian srcgrid
-			current.qlens->cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
-			int nx,ny;
-			nx = xvals.size()-1;
-			ny = yvals.size()-1;
-
-			string plottype = "srcplane"; 
-			py::array_t<double> xvec(nx+1,xvals.array());
-			py::array_t<double> yvec(ny+1,yvals.array());
-			double *zptr;
-			//if (show_mag) zptr = zvals.array();
-			//else
-			zptr = zvals.array();
-			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zptr,py::none());
-			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		.def("clear", [](SourceList &current){
 			current.clear();
@@ -2174,6 +2130,13 @@ PYBIND11_MODULE(qlens, m) {
 					} catch (...) {
 						throw std::runtime_error("Invalid boolean value for 'output_fits' argument");
 					}
+				} else if (py::cast<string>(item.first)=="interp") {
+					try {
+						bool interp = py::cast<bool>(item.second);
+						if (interp) throw std::runtime_error("Plotting interpolated surface brightness is not currently allowed for Cartesian sources");
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'interp' argument");
+					}
 				} else throw std::runtime_error("argument to 'plot' not recognized");
 			}
 
@@ -2285,7 +2248,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("srcpixel_clustering", &QLens_Wrap::use_srcpixel_clustering)
 		.def_readwrite("n_cluster_it", &QLens_Wrap::n_cluster_iterations)
 
-		.def("clear_lenses", &QLens_Wrap::lens_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
+		//.def("clear_lenses", &QLens_Wrap::lens_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
 		.def_property("primary_lens_number", &QLens_Wrap::get_primary_lens_number, &QLens_Wrap::set_primary_lens_number)
 		.def_property("secondary_lens_number", &QLens_Wrap::get_secondary_lens_number, &QLens_Wrap::set_secondary_lens_number)
 		.def_property("shear_components", &QLens_Wrap::get_shear_components_mode, &QLens_Wrap::set_shear_components_mode)
@@ -2293,9 +2256,9 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("split_imgpixels", &QLens_Wrap::get_split_imgpixels, &QLens_Wrap::set_split_imgpixels)
 		.def_property("imgpixel_nsplit", &QLens_Wrap::get_imgpixel_nsplit, &QLens_Wrap::set_imgpixel_nsplit)
 		.def_property("major_axis_along_y", &QLens_Wrap::get_major_axis_along_y, &QLens_Wrap::toggle_major_axis_along_y)
-		.def("lens_list", &QLens_Wrap::lens_display)
-		.def("src_list", &QLens_Wrap::src_display)
-		.def("pixsrc_list", &QLens_Wrap::pixsrc_display)
+		//.def("lens_list", &QLens_Wrap::lens_display)
+		//.def("src_list", &QLens_Wrap::src_display)
+		//.def("pixsrc_list", &QLens_Wrap::pixsrc_display)
 		//.def("pixsrc_clear", &QLens_Wrap::pixsrc_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
 		//.def("remove_pixsrc", &QLens_Wrap::remove_pixellated_source)
 		//.def("lens", &QLens_Wrap::get_lens_pointer)
@@ -2304,24 +2267,23 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("src", &QLens_Wrap::srclist)
 		.def_readonly("pixsrc", &QLens_Wrap::pixsrclist)
 		.def_readonly("ptsrc", &QLens_Wrap::ptsrclist)
-		.def("add_lens", &QLens_Wrap::add_lens_tuple, "Input should be a tuple that specifies the lens' zl and zs value. \nEx: (Lens1, zl1, zs1)")
-		.def("add_lens", &QLens_Wrap::add_lens, "Input should be a lens object.")
-		.def("add_lens_extshear", &QLens_Wrap::add_lens_extshear, "Input should be a	lens object, and a shear lens object to anchor to the original lens object.")
+		//.def("add_lens", &QLens_Wrap::add_lens_tuple, "Input should be a tuple that specifies the lens' zl and zs value. \nEx: (Lens1, zl1, zs1)")
+		//.def("add_lens", &QLens_Wrap::add_lens, "Input should be a lens object.")
+		//.def("add_lens_extshear", &QLens_Wrap::add_lens_extshear, "Input should be a	lens object, and a shear lens object to anchor to the original lens object.")
 		//.def("add_lenses", &QLens_Wrap::batch_add_lenses_tuple, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values. \nEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]")
-		.def("add_lenses", &QLens_Wrap::batch_add_lenses, "Input should be an array of lenses.")
+		//.def("add_lenses", &QLens_Wrap::batch_add_lenses, "Input should be an array of lenses.")
 		//.def("add_lenses", [](QLens_Wrap &self){
 				//return "Pass in an array of lenses \n\tEx: [Lens1, Lens2, Lens3] \nor an array of tuples. Each tuple must contain the lens, the zl and zs values for each corresponding lens. \n\tEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]";
 		//})
 		//.def("remove_lens", &QLens_Wrap::remove_lens) // lens_clear is the better function to use
 		//.def("clear_lenses", &QLens_Wrap::clear_lenses)
-
-		.def("add_src", &QLens_Wrap::add_src_default, "Input should be a source object.")
-		.def("add_sources", &QLens_Wrap::batch_add_sources, "Input should be an array of sources")
+		//.def("add_src", &QLens_Wrap::add_src_default, "Input should be a source object.")
+		//.def("add_sources", &QLens_Wrap::batch_add_sources, "Input should be an array of sources")
 		//.def("add_sources", &QLens_Wrap::batch_add_sources_tuple, "Input should be an array of tuples. Each tuple must specify each source's zs values. \nEx: [(src1, zs1), (src2, zs2)]")
-		.def("add_sources", [](QLens_Wrap &self){
-				return "Pass in an array of sourcees \n\tEx: [src1, src2, src3] \nor an array of tuples. Each tuple must contain the source, the zs values for each corresponding source. \n\tEx: [(src1, zs1), (src2, zs2)]";
-		})
-		.def("src_clear", &QLens_Wrap::source_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
+		//.def("add_sources", [](QLens_Wrap &self){
+				//return "Pass in an array of sourcees \n\tEx: [src1, src2, src3] \nor an array of tuples. Each tuple must contain the source, the zs values for each corresponding source. \n\tEx: [(src1, zs1), (src2, zs2)]";
+		//})
+		//.def("src_clear", &QLens_Wrap::source_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
 
 		.def("add_pixsrc", [](QLens_Wrap &current, py::kwargs &kwargs){ 
 			int band=0;
@@ -2346,7 +2308,6 @@ PYBIND11_MODULE(qlens, m) {
 				py::arg("x_source"), py::arg("y_source"), py::arg("verbal")=false,
 				py::arg("flux")=-1, py::arg("show_labels")=false
 				)
-		// .def("get_imageset", &QLens_Wrap::get_imageset)
 		.def("get_imageset", [](QLens_Wrap &curr, PointSource &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false) {
 				curr.get_imageset(src_x, src_y, imgset, verbal);
 		},  py::arg("imgset"), py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)		
@@ -2541,7 +2502,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("nlens", &QLens_Wrap::nlens)
 		.def_readwrite("default_pixsize", &QLens_Wrap::default_data_pixel_size)
 		.def_readwrite("simulate_pixel_noise", &QLens_Wrap::simulate_pixel_noise)
-		.def_readwrite("bg_pixel_noise", &QLens_Wrap::background_pixel_noise)
+		.def_property("bg_pixel_noise", &QLens_Wrap::get_bg_pixel_noise, &QLens_Wrap::set_bg_pixel_noise)
 		.def_property("random_seed", &QLens_Wrap::get_random_seed, &QLens_Wrap::set_random_seed)
 		.def("set_grid_from_imgpixels", [](QLens_Wrap &current, py::kwargs& kwargs){ 
 			for (auto item : kwargs) {

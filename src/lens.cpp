@@ -4756,22 +4756,22 @@ void QLens::autogrid() {
 	} else warn("cannot autogrid; no lens model has been specified");
 }
 
-bool QLens::create_grid_from_default_redshifts(const bool force_store_cc_points) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+bool QLens::create_grid_from_default_redshifts(const bool force_store_cc_points)
 {
 	return create_grid(false,reference_zfactors,default_zsrc_beta_factors,-1,force_store_cc_points);
 }
 
-bool QLens::create_grid_from_ptsrc_redshifts(const int zsrc_i) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+bool QLens::create_grid_from_ptsrc_redshifts(const int zsrc_i)
 {
 	return create_grid(false,ptsrc_zfactors[zsrc_i],ptsrc_beta_factors[zsrc_i]);
 }
 
-bool QLens::create_grid_from_extended_redshifts(const int zsrc_i) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+bool QLens::create_grid_from_extended_redshifts(const int zsrc_i)
 {
 	return create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i]);
 }
 
-bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index, const bool force_store_cc_points) // the last (optional) argument indicates which images are being fit to; used to optimize the subgridding
+bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index, const bool force_store_cc_points) // the redshift_index argument (optional) indicates which images are being fit to; used to optimize the subgridding
 {
 	if (nlens==0) { warn(warnings, "no lens model is specified"); return false; }
 	double mytime0, mytime;
@@ -4815,12 +4815,12 @@ bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int
 	if ((verbal) and (mpi_id==0)) cout << "Creating grid..." << flush;
 	if (grid != NULL) {
 		if (radial_grid)
-			grid->redraw_grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs, betafacs); // setting grid_q to 1 for the moment...I will play with that later
+			grid->redraw_grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs, betafacs); // setting grid_q to 1...not sure if there would be much benefit in grid_q < 1
 		else
 			grid->redraw_grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
 	} else {
 		if (radial_grid)
-			grid = new Grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs, betafacs); // setting grid_q to 1 for the moment...I will play with that later
+			grid = new Grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs, betafacs); // setting grid_q to 1 (see above comment)
 		else
 			grid = new Grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
 	}
@@ -6572,11 +6572,11 @@ double QLens::get_total_xi_parameter(const double src_redshift)
 	return (2*r_ein*xifac_avg+2);
 }
 
-double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
+double QLens::cc_xi_parameter(int cc_num)
 {
 	double r_ein,zfac,xi_param;
 	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
-	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->zlens,src_redshift,reference_source_redshift);
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->zlens,source_redshift,reference_source_redshift);
 	einstein_radius_of_primary_lens(zfac,r_ein);
 	double xc,yc,xcc,ycc;
 	lens_list[primary_lens_number]->get_center_coords(xc,yc);
@@ -6605,14 +6605,16 @@ double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
 	// get critical curve points
 
 	if (!create_grid_from_default_redshifts(true)) {
-		warn("could not generate grid find c.c. to calculate xi");
-		return get_total_xi_parameter(src_redshift); // just default to spherically averaged xi if necessary
+		warn("could not generate grid find c.c. to calculate xi; calculating spherically averaged xi instead");
+		delete[] include_lens;
+		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
 	}
 	if (!sorted_critical_curves) sort_critical_curves(); // sort critical curves
 	int n_cc = sorted_critical_curve.size();
 	if (n_cc==0) {
-		warn("could not find critical curves to calculate xi");
-		return get_total_xi_parameter(src_redshift); // just default to spherically averaged xi if necessary
+		warn("could not find critical curves to calculate xi; calculating spherically averaged xi instead");
+		delete[] include_lens;
+		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
 	}
 
 	// ensures tangential critical curve 
@@ -6638,8 +6640,9 @@ double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
 				}
 			}
 			if (cc_num < 0) {
-				warn("could not find a tangential critical curve");
-				return get_total_xi_parameter(src_redshift); // just default to spherically averaged xi if necessary
+				warn("could not find a tangential critical curve; calculating spherically averaged xi instead");
+				delete[] include_lens;
+				return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
 			}
 		}
 	}
@@ -6647,13 +6650,13 @@ double QLens::cc_xi_parameter(const double src_redshift, int cc_num)
 	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
 	int npts = critical_curve->cc_pts.size();
 	if (npts==0) {
-		warn("Didn't get any critical curve points");
-		return get_total_xi_parameter(src_redshift); // just default to spherically averaged xi if necessary
+		warn("Didn't get any critical curve points; calculating spherically averaged xi instead");
+		delete[] include_lens;
+		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
 	}
 
-	int m, n;
-
 	// rather than spherical averaging, let's average along the critical curve
+	int m, n;
 	double x,y;
 	// incrementing through number of critical curve points
 	for (m=0; m < npts; m++) {
@@ -14784,6 +14787,15 @@ void QLens::plot_sbmap(const string filename, dvector& xvals, dvector& yvals, dv
 	}
 }
 
+void QLens::set_bg_pixel_noise(double noise_in) {
+	background_pixel_noise = noise_in;
+	if ((!use_noise_map) and (n_image_pixel_grids != 0)) {
+		for (int imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
+			image_pixel_grids[imggrid_i]->setup_noise_map(this);
+		}
+	}
+}
+
 void QLens::set_imgpixel_nsplit(const int nsplit_in) {
 	bool changed_npix = false;
 	if (nsplit_in != default_imgpixel_nsplit) {
@@ -15039,6 +15051,7 @@ const bool QLens::output_lensed_surface_brightness(dvector& xvals, dvector& yval
 			noise = background_pixel_noise;
 			double signal_to_noise = image_pixel_grid->calculate_signal_to_noise(total_signal);
 			if (mpi_id==0) {
+				cout << "Background pixel noise = " << background_pixel_noise << endl;
 				cout << "Signal-to-noise ratio = " << signal_to_noise << endl;
 				cout << "Total integrated signal = " << total_signal << endl;
 			}

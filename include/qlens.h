@@ -1480,7 +1480,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double einstein_radius_single_lens(const double src_redshift, const int lensnum);
 	double get_xi_parameter(const double src_redshift, const int lensnum);
 	double get_total_xi_parameter(const double src_redshift);
-	double cc_xi_parameter(const double src_redshift, int cc_num=-1);
+	double cc_xi_parameter(int cc_num=-1);
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac, double& reav);
 	double einstein_radius_root(const double r);
@@ -1547,6 +1547,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void set_galsubgrid_mode(bool setting) { subgrid_around_perturbers = setting; }
 	void get_galsubgrid_mode(bool &setting) { setting = subgrid_around_perturbers; }
 	void set_auto_store_cc_points(bool setting) { auto_store_cc_points = setting; }
+
+	double get_bg_pixel_noise() { return background_pixel_noise; }
+	void set_bg_pixel_noise(double noise_in); // the definition of this setter function is in lens.cpp
 
 	void set_usplit_initial(int setting) { usplit_initial = setting; }
 	void get_usplit_initial(int &setting) { setting = usplit_initial; }

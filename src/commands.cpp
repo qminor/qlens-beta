@@ -1093,7 +1093,7 @@ void QLens::process_commands(bool read_file)
 							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"re_zsrc -- The (spherically averaged) Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"xi -- The xi parameter (from Kochanek 2020) for a source redshift <zsrc> (optional lens# can be specified)\n"
-							"cc_xi -- The xi parameter along the critical curves (from Kochanek 2020) for a source redshift <zsrc> \n"
+							"cc_xi -- The xi parameter along the critical curves (from Kochanek 2020) for the default source redshift\n"
 							"mass_re -- The projected mass enclosed within Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"kappa_re -- kappa(R_ein) of primary lens (+lenses that are co-centered with primary), averaged over all angles\n"
 							"logslope -- The average log-slope of kappa between <r1> and <r2> (in arcsec) for a specific lens [lens#]\n"
@@ -9083,14 +9083,8 @@ void QLens::process_commands(bool read_file)
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="cc_xi") {
-								lensnum = -1;
-								if ((nwords != 4) and (nwords != 5)) Complain("derived parameter xi requires zero or one argument (optional zsrc)");
-								if (nwords==4) {
-									dparam_arg = source_redshift;
-								} else {
-									if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
-								}
-								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
+								if (nwords != 4) Complain("derived parameter xi requires zero arguments");
+								dparam_list->add_dparam(words[3],-1e30,-1,-1,use_kpc);
 							} else if (words[3]=="kappa_re") {
 								if (nwords != 4) Complain("derived parameter mass_re doesn't allow any arguments");
 								dparam_list->add_dparam(words[3],-1e30,-1,-1,false);
@@ -13023,7 +13017,7 @@ void QLens::process_commands(bool read_file)
 		{
 			int cc_num=-1;
 			double xi_param;
-			xi_param = cc_xi_parameter(0.8, cc_num);
+			xi_param = cc_xi_parameter(cc_num);
 			cout << "Xi value: " << xi_param << endl;
 		}
 		else if (words[0]=="skip_newton")
@@ -14479,7 +14473,9 @@ void QLens::process_commands(bool read_file)
 			if (nwords == 2) {
 				if (!(ws[1] >> pnoise)) Complain("invalid image pixel surface brightness noise");
 				background_pixel_noise = pnoise;
-				if ((n_data_bands > 0) and (!use_noise_map)) imgdata_list[0]->set_uniform_pixel_noise(pnoise);
+				if ((n_data_bands > 0) and (!use_noise_map)) {
+					imgdata_list[0]->set_uniform_pixel_noise(pnoise);
+				}
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "background image pixel surface brightness dispersion = " << background_pixel_noise << endl;
 			} else Complain("must specify either zero or one argument (background image pixel surface brightness dispersion)");

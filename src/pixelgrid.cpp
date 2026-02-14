@@ -12972,6 +12972,10 @@ double ImagePixelGrid::calculate_signal_to_noise(double& total_signal)
 	int npixels=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
+			if (noise_map[i][j]==0.0) {
+				warn("pixel noise is zero; cannot calculate signal-to-noise");
+				return 0.0;
+			}
 			if ((foreground_surface_brightness[i][j] + surface_brightness[i][j]) > signal_threshold_frac*sbmax) {
 				signal_mean += foreground_surface_brightness[i][j] + surface_brightness[i][j];
 				sn_mean += (foreground_surface_brightness[i][j] + surface_brightness[i][j])/noise_map[i][j];

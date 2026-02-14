@@ -27,15 +27,16 @@ extshear = Shear({"shear": 0.21, "theta": -18},qlens=q)
 lens.add(stars,shear=extshear)
 lens.add(dm_halo,anchor_center=0)
 
-plotcrit(q)
+#plotcrit(q)
 
 sersic_src = Sersic({"s0": 7, "R_eff": 0.087, "n": 1.5, "q": 0.70, "theta": 80, "xc": 0.06, "yc": -0.03})
 
 src.add(sersic_src)
 
 # Plot the analytic source
-srcplt = src.mkplotsrc(npix=200)  # this actually generates a cartesian source grid from the analytic source (as in 'src.mkpixsrc'), but then returns a plot of it immediately
-plot_sb(srcplt,q)
+src.mkpixsrc(npix=400) # npix=200 is the default if npix argument is not given, i.e. if you do src.mkpixsrc()
+plotsrc(q)
+
 pause()
 
 q.nimg_prior=True
@@ -43,17 +44,18 @@ q.nimg_threshold=1.4
 q.outside_sb_prior=True
 q.set_source_mode("sbprofile")
 
-q.bg_pixel_noise = 0.03
+q.bg_pixel_noise = 0.3
 q.simulate_pixel_noise = True
 
 dparams.add("xi",q.zsrc)
 dparams.print()
 
-img = q.plotimg()
-plot_sb(img,q)
+plotimg(q)
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
-q.plotimg(output_fits="sbprofile_mock_data.fits")
+fits_filename = "sbprofile_mock_data.fits"
+print("Now outputting FITS file '" + fits_filename + "'")
+plotimg(q,output_fits=fits_filename)
 
 

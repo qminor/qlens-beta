@@ -197,7 +197,7 @@ struct DerivedParam
 			else return lens_in->get_total_xi_parameter(funcparam);
 		}
 		else if (derived_param_type == CC_Xi_Param) {
-			return lens_in->cc_xi_parameter(funcparam);
+			return lens_in->cc_xi_parameter();
 		}
 		else if (derived_param_type == AvgLogSlope) return lens_in->calculate_average_log_slope(int_param,funcparam,funcparam2,use_kpc_units);
 		else if (derived_param_type == Einstein_Mass) {
