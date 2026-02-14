@@ -34,14 +34,12 @@ sersic_src = Sersic({"s0": 7, "R_eff": 0.087, "n": 1.5, "q": 0.70, "theta": 80, 
 src.add(sersic_src)
 
 # Plot the analytic source
+print("Plotting the Sersic source...")
 src.mkpixsrc(npix=400) # npix=200 is the default if npix argument is not given, i.e. if you do src.mkpixsrc()
 plotsrc(q)
 
 pause()
 
-q.nimg_prior=True
-q.nimg_threshold=1.4
-q.outside_sb_prior=True
 q.set_source_mode("sbprofile")
 
 q.bg_pixel_noise = 0.3
