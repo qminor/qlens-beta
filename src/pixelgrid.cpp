@@ -13117,7 +13117,6 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 	double rsq, rsqavg;
 	sig = 1e30;
 	int npts=10000000, npts_old, iter=0;
-	//ofstream wtf("wtf.dat");
 	if ((verbal) and (qlens->n_ptsrc > 0) and ((qlens->include_imgfluxes_in_inversion) or (qlens->include_srcflux_in_inversion))) warn("estimated approx extended source size may be biased due to point source when 'invert_imgflux' is on");
 	xcavg = 0;
 	ycavg = 0;
@@ -13242,7 +13241,6 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 	double rsq, rsqavg;
 	sig = 1e30;
 	int npts=0, npts_old, iter=0;
-	//ofstream wtf("wtf.dat");
 	do {
 		// will use 3-sigma clipping to estimate center and dispersion of source
 		npts_old = npts;
@@ -13590,38 +13588,6 @@ int ImagePixelGrid::count_nonzero_lensgrid_pixel_mappings()
 		//tot += mapped_delaunay_srcpixels[i][j].size();
 	}
 	return tot;
-}
-
-
-void ImagePixelGrid::wtf(const bool delaunay, const bool potential_perturbations, const bool map_all_imgpixels)
-{
-	//cout << "ASSIGNING MAPPING FLASGS" << endl;
-	int i,j,k;
-	n_active_pixels = 0;
-	n_high_sn_pixels = 0;
-	int nsubpix = INTSQR(qlens->default_imgpixel_nsplit);
-	int *ptr;
-	for (j=0; j < y_N; j++) {
-		for (i=0; i < x_N; i++) {
-			if (delaunay) mapped_delaunay_srcpixels[i][j].clear();
-			else mapped_cartesian_srcpixels[i][j].clear();
-			maps_to_source_pixel[i][j] = false;
-			if ((map_all_imgpixels) and ((pixel_in_mask == NULL) or (pixel_in_mask[i][j]))) {
-				maps_to_source_pixel[i][j] = true;
-			}
-			ptr = n_mapped_srcpixels[i][j];
-			for (k=0; k < nsubpix; k++) {
-				(*ptr++) = 0;
-			}
-			if (potential_perturbations) {
-				mapped_potpixels[i][j].clear();
-				ptr = n_mapped_potpixels[i][j];
-				for (k=0; k < nsubpix; k++) {
-					(*ptr++) = 0;
-				}
-			}
-		}
-	}
 }
 
 void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool potential_perturbations, const bool map_all_imgpixels)

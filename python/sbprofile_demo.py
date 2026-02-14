@@ -46,8 +46,10 @@ q.bg_pixel_noise = 0.3
 q.simulate_pixel_noise = True
 
 dparams.add("xi",q.zsrc)
+print("Showing the derived parameter 'xi':")
 dparams.print()
 
+print("Plotting the lensed images...")
 plotimg(q)
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)

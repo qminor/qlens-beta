@@ -272,7 +272,7 @@ def plotimg(QLens_Object, src=-1, show_cc=True, nomask=False, nres=False, res=Fa
             q.mkgrid_extended_src(src)
         else:
             if (show_cc==True and src < 0):
-                q.mkgrid(False)
+                q.mkgrid()
         plot_sb(img,q,show_cc=show_cc)
 
 def plotsrc(QLens_Object, show_cc=True, interp=False, fix_limits_before_cc=True, src=0):

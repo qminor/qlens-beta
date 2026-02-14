@@ -4756,9 +4756,14 @@ void QLens::autogrid() {
 	} else warn("cannot autogrid; no lens model has been specified");
 }
 
-bool QLens::create_grid_from_default_redshifts(const bool force_store_cc_points)
+bool QLens::create_grid_from_default_redshift()
 {
-	return create_grid(false,reference_zfactors,default_zsrc_beta_factors,-1,force_store_cc_points);
+	return create_grid(false,reference_zfactors,default_zsrc_beta_factors,-1,false);
+}
+
+bool QLens::create_grid_from_default_redshift_and_store_cc()
+{
+	return create_grid(false,reference_zfactors,default_zsrc_beta_factors,-1,true);
 }
 
 bool QLens::create_grid_from_ptsrc_redshifts(const int zsrc_i)
@@ -6604,7 +6609,7 @@ double QLens::cc_xi_parameter(int cc_num)
 
 	// get critical curve points
 
-	if (!create_grid_from_default_redshifts(true)) {
+	if (!create_grid_from_default_redshift_and_store_cc()) {
 		warn("could not generate grid find c.c. to calculate xi; calculating spherically averaged xi instead");
 		delete[] include_lens;
 		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary

@@ -692,7 +692,6 @@ class ImagePixelGrid : private Sort
 	}
 	double calculate_signal_to_noise(double &total_signal);
 	void assign_image_mapping_flags(const bool delaunay, const bool potential_perturbations = false, const bool map_all_imgpixels = false);
-	void wtf(const bool delaunay, const bool potential_perturbations, const bool map_all_imgpixels);
 	int count_nonzero_source_pixel_mappings_cartesian();
 	int count_nonzero_source_pixel_mappings_delaunay();
 	int count_nonzero_lensgrid_pixel_mappings();

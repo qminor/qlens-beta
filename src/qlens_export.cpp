@@ -2393,7 +2393,7 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("adopt_chain_bestfit", &QLens_Wrap::adopt_bestfit_point_from_chain)
 		.def("test_lens", &QLens_Wrap::test_lens_functions)
-		.def("mkgrid", &QLens_Wrap::create_grid_from_default_redshifts)
+		.def("mkgrid", &QLens_Wrap::create_grid_from_default_redshift)
 		.def("mkgrid_ptsrc", &QLens_Wrap::create_grid_from_ptsrc_redshifts)
 		.def("mkgrid_extended_src", &QLens_Wrap::create_grid_from_extended_redshifts)
 		.def("sort_critical_curves", &QLens_Wrap::sort_critical_curves)
