@@ -299,64 +299,82 @@ struct DerivedParam
 		else die("no user defined function yet");
 		return 0.0;
 	}
-	void print_param_description(QLens* lens_in)
+	string mkstring_doub(const double db)
+	{
+		std::stringstream dstr;
+		string dstring;
+		dstr << db;
+		dstr >> dstring;
+		return dstring;
+	}
+	string mkstring_int(const int i)
+	{
+		std::stringstream istr;
+		string istring;
+		istr << i;
+		istr >> istring;
+		return istring;
+	}
+	string get_param_description(QLens* lens_in)
 	{
 		string unitstring = (use_kpc_units) ? " kpc" : " arcsec";
+		string outstring;
 		double dpar = get_derived_param(lens_in);
 		//cout << name << ": ";
 		if (derived_param_type == KappaR) {
-			if (int_param==-1) std::cout << "Total kappa within r = " << funcparam << unitstring << std::endl;
-			else std::cout << "kappa for lens " << int_param << " within r = " << funcparam << unitstring << std::endl;
+			if (int_param==-1) outstring = "Total kappa within r = " + mkstring_doub(funcparam) + unitstring + "\n";
+			else outstring = "kappa for lens " + mkstring_int(int_param) + " within r = " + mkstring_doub(funcparam) + unitstring + "\n";
 		} else if (derived_param_type == LambdaR) {
-			std::cout << "One minus average kappa at r = " << funcparam << unitstring << std::endl;
+			outstring = "One minus average kappa at r = " + mkstring_doub(funcparam) + unitstring + "\n";
 		} else if (derived_param_type == DlogKappaR) {
-			if (int_param==-1) std::cout << "Derivative of total kappa within r = " << funcparam << unitstring << std::endl;
-			else std::cout << "Derivative of kappa for lens " << int_param << " within r = " << funcparam << unitstring << std::endl;
+			if (int_param==-1) outstring = "Derivative of total kappa within r = " + mkstring_doub(funcparam) + unitstring + "\n";
+			else outstring = "Derivative of kappa for lens " + mkstring_int(int_param) + " within r = " + mkstring_doub(funcparam) + unitstring + "\n";
 		} else if (derived_param_type == Mass2dR) {
-			std::cout << "Projected (2D) mass of lens " << int_param << " enclosed within r = " << funcparam << unitstring << std::endl;
+			outstring = "Projected (2D) mass of lens " + mkstring_int(int_param) + " enclosed within r = " + mkstring_doub(funcparam) + unitstring + "\n";
 		} else if (derived_param_type == Mass3dR) {
-			std::cout << "Deprojected (3D) mass of lens " << int_param << " enclosed within r = " << funcparam << unitstring << std::endl;
+			outstring = "Deprojected (3D) mass of lens " + mkstring_int(int_param) + " enclosed within r = " + mkstring_doub(funcparam) + unitstring + "\n";
 		} else if (derived_param_type == Einstein) {
-			std::cout << "Einstein radius of lens " << int_param << " for source redshift zsrc = " << funcparam << std::endl;
+			outstring = "Einstein radius of lens " + mkstring_int(int_param) + " for source redshift zsrc = " + mkstring_doub(funcparam) + "\n";
 		} else if (derived_param_type == Einstein_Mass) {
-			std::cout << "Projected mass within Einstein radius of lens " << int_param << " for source redshift zsrc = " << funcparam << std::endl;
+			outstring = "Projected mass within Einstein radius of lens " + mkstring_int(int_param) + " for source redshift zsrc = " + mkstring_doub(funcparam) + "\n";
 		} else if (derived_param_type == Xi_Param) {
 			if (int_param >= 0) {
-				std::cout << "xi parameter of lens " << int_param << std::endl;
+				outstring = "xi parameter of lens " + mkstring_int(int_param) + "\n";
 			} else {
-				std::cout << "xi parameter of primary and co-centered lenses " << std::endl;
+				outstring = "xi parameter of primary and co-centered lenses \n";
 			}
 		} else if (derived_param_type == CC_Xi_Param) {
-			std::cout << "xi parameter of lens along critical curve " << std::endl;
+			outstring = "xi parameter of lens along critical curve \n";
 		} else if (derived_param_type == Kappa_Re) {
-			std::cout << "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles" << std::endl;
+			outstring = "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles\n";
 		} else if (derived_param_type == LensParam) {
-			std::cout << "Parameter " << ((int) funcparam) << " of lens " << int_param << " using pmode=" << ((int) funcparam2) << std::endl;
+			outstring = "Parameter " + mkstring_int(((int) funcparam)) + " of lens " + mkstring_int(int_param) + " using pmode=" + mkstring_int((int) funcparam2) + "\n";
 		} else if (derived_param_type == AvgLogSlope) {
-			std::cout << "Average log-slope of kappa from lens " << int_param << " between r1=" << funcparam << unitstring << " and r2=" << funcparam2 << unitstring << std::endl;
+			outstring = "Average log-slope of kappa from lens " + mkstring_int(int_param) + " between r1=" + mkstring_doub(funcparam) + unitstring + " and r2=" + mkstring_doub(funcparam2) + unitstring + "\n";
 		} else if (derived_param_type == Perturbation_Radius) {
-			std::cout << "Critical curve perturbation radius of lens " << int_param << std::endl;
+			outstring = "Critical curve perturbation radius of lens " + mkstring_int(int_param) + "\n";
 		} else if (derived_param_type == Relative_Perturbation_Radius) {
-			std::cout << "Relative critical curve perturbation radius of lens " << int_param << std::endl;
+			outstring = "Relative critical curve perturbation radius of lens " + mkstring_int(int_param) + "\n";
 		} else if (derived_param_type == Robust_Perturbation_Mass) {
-			std::cout << "Projected mass within perturbation radius of lens " << int_param << std::endl;
+			outstring = "Projected mass within perturbation radius of lens " + mkstring_int(int_param) + "\n";
 		} else if (derived_param_type == Robust_Perturbation_Density) {
-			std::cout << "Average projected density within perturbation radius of lens " << int_param << std::endl;
+			outstring = "Average projected density within perturbation radius of lens " + mkstring_int(int_param) + "\n";
 		} else if (derived_param_type == Adaptive_Grid_qs) {
-			std::cout << "Axis ratio derived from source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
+			outstring = "Axis ratio derived from source pixel covariance matrix using a " + mkstring_int(int_param) + "x" + mkstring_int(int_param) + " sampling\n";
 		} else if (derived_param_type == Adaptive_Grid_phi_s) {
-			std::cout << "Orientation angle derived of source pixel covariance matrix using a " << int_param << "x" << int_param << " sampling" << std::endl;
+			outstring = "Orientation angle derived of source pixel covariance matrix using a " + mkstring_int(int_param) + "x" + mkstring_int(int_param) + " sampling\n";
 		} else if (derived_param_type == Adaptive_Grid_sig_s) {
-			std::cout << "Dispersion of source using a " << int_param << "x" << int_param << " sampling" << std::endl;
+			outstring = "Dispersion of source using a " + mkstring_int(int_param) + "x" + mkstring_int(int_param) + " sampling\n";
 		} else if (derived_param_type == Adaptive_Grid_xavg) {
-			std::cout << "Centroid x-coordinate of pixellated source using a " << int_param << "x" << int_param << " sampling" << std::endl;
+			outstring = "Centroid x-coordinate of pixellated source using a " + mkstring_int(int_param) + "x" + mkstring_int(int_param) + " sampling\n";
 		} else if (derived_param_type == Adaptive_Grid_yavg) {
-			std::cout << "Centroid y-coordinate of pixellated source using a " << int_param << "x" << int_param << " sampling" << std::endl;
+			outstring = "Centroid y-coordinate of pixellated source using a " + mkstring_int(int_param) + "x" + mkstring_int(int_param) + " sampling\n";
 		} else if (derived_param_type == Chi_Square) {
-			std::cout << "Raw chi-square value for given set of parameters" << std::endl;
+			outstring = "Raw chi-square value for given set of parameters\n";
 		} else die("no user defined function yet");
-		std::cout << "   name: '" << name << "', latex_name: '" << latex_name << "'" << std::endl;
-		std::cout << "   " << name << " = " << dpar << std::endl;
+		outstring += "   name: '" + name + "', latex_name: '" + latex_name + "'\n";
+		outstring += "   " + name + " = " + mkstring_doub(dpar) + "\n";
+		return outstring;
 	}
 	void rename(const string new_name, const string new_latex_name)
 	{
@@ -443,6 +461,9 @@ struct ParamList
 	bool remove_params(const int pi, const int pf);
 	bool print_priors_and_limits();
 	bool print_parameter_values();
+	void get_values(double* values_in) {
+		for (int i=0; i < nparams; i++) values_in[i] = values[i];
+	}
 	string mkstring_doub(const double db);
 	string mkstring_int(const int i);
 	string get_param_values_string();
@@ -1148,6 +1169,13 @@ struct ParamList
 		qlens = NULL;
 		set_null_param_ptrs();
 	}
+	MyIterator<double> begin() {
+		return MyIterator<double>(values);
+	}
+	MyIterator<double> end() {
+		return MyIterator<double>(values+nparams);
+	}
+	double& operator[](size_t i) { return values[i]; }
 	~ParamList()
 	{
 		delete_param_ptrs();
@@ -1232,23 +1260,26 @@ struct DerivedParamList
 			n_dparams = 0;
 		}
 	}
-	bool print_dparam_list()
+	string get_dparam_values_string()
 	{
-		bool status = true;
+		string outstring = "";
 		if (n_dparams > 0) {
 			if (qlens) {
 				for (int i=0; i < n_dparams; i++) {
-					std::cout << i << ". " << std::flush;
-					dparams[i]->print_param_description(qlens);
+					std::stringstream istr;
+					string istring;
+					istr << i;
+					istr >> istring;
+					outstring += istring + ". ";
+					string description = dparams[i]->get_param_description(qlens);
+					outstring += description;
 				}
-			} else {
-				status = false;
 			}
 		}
 		else {
 			std::cout << "No derived parameters have been created" << std::endl;
 		}
-		return status;
+		return outstring;
 	}
 	int lookup_param_number(const string pname)
 	{

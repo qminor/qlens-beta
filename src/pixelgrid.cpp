@@ -290,6 +290,19 @@ void PointSource::copy_imageset(const lensvector& pos_in, const double zsrc_in, 
 	}
 }
 
+void PointSource::set_images(image* images_in, const int nimg)
+{
+	n_images = nimg;
+	images.clear();
+	images.resize(n_images);
+	for (int i=0; i < n_images; i++) {
+		images[i].pos = images_in[i].pos;
+		images[i].mag = images_in[i].mag;
+		images[i].td = images_in[i].td;
+		images[i].parity = images_in[i].parity;
+	}
+}
+
 void PointSource::update_srcpos(const lensvector& srcpt)
 {
 	pos[0] = srcpt[0];

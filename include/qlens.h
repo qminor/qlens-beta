@@ -25,6 +25,7 @@
 #include <sstream>
 #include <fstream>
 #include <complex>
+#include <iterator>
 #define USE_COMM_WORLD -987654
 
 #ifdef USE_FFTW
@@ -102,6 +103,7 @@ class SourceList;
 class PixSrcList;
 class PtSrcList;
 class ImgDataList;
+class PtImgDataList;
 
 struct image {
 	lensvector pos;
@@ -161,6 +163,7 @@ class PointSource : public ModelParams
 	void set_vary_source_coords();
 	void copy_ptsrc_data(PointSource* ptsrc_in);
 	void copy_imageset(const lensvector& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0);
+	void set_images(image* images_in, const int nimg);
 	void update_srcpos(const lensvector& srcpt);
 	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*srcflux); else return -1; }
 	void print(bool include_time_delays = false, bool show_labels = true) { print_to_file(include_time_delays,show_labels,NULL,NULL); }
@@ -456,6 +459,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int n_ptsrc;
 	PointSource **ptsrc_list;
 	PtSrcList *ptsrclist;
+	PointImageData *point_image_data;
+	PtImgDataList *ptimgdata_list;
 	int* ptsrc_redshift_idx;
 	std::vector<int> ptsrc_redshift_groups;
 
@@ -561,7 +566,6 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	}
 	bool auto_save_bestfit;
 	bool borrowed_image_data; // tells whether image_data is pointing to that of another QLens object (e.g. fitmodel pointing to initial lens object)
-	PointImageData *point_image_data;
 	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
 	int lumreg_max_it;
@@ -619,7 +623,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	bool fits_format;
 	double default_data_pixel_size;
-	bool add_simulated_image_data(const lensvector &sourcept, const double srcflux = 1);
+	bool add_simulated_point_image_data(const lensvector &sourcept, const double srcflux = 1);
 	bool add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
 	//bool add_fit_sourcept(const lensvector &sourcept, const double zsrc);
 	void write_point_image_data(string filename);
@@ -636,10 +640,10 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool read_data_line(std::ifstream& infile, std::vector<string>& datawords, int &n_datawords);
 	bool datastring_convert(const string& instring, int& outvar);
 	bool datastring_convert(const string& instring, double& outvar);
-	void clear_image_data();
+	void clear_point_image_data();
 	void clear_sourcepts();
 
-	void print_image_data(bool include_errors);
+	void print_point_image_data(bool include_errors);
 
 	bool autocenter;
 	int primary_lens_number;
@@ -1191,7 +1195,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
 	bool get_imageset(const double src_x, const double src_y, PointSource& image_set, bool verbal = true); // used by Python wrapper
-	std::vector<PointSource> get_fit_imagesets(bool& status, int min_dataset = 0, int max_dataset = -1, bool verbal = true); // defined in imgsrch.cpp
+	bool get_fit_imagesets(int min_dataset = 0, int max_dataset = -1, bool verbal = true); // defined in imgsrch.cpp
+
 	bool plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal);
 	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
@@ -1343,11 +1348,6 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_image_pixel_data();
 	void remove_image_pixel_data(int band_number);
 
-	//void add_derived_param(DerivedParamType type_in, double param, int lensnum, double param2 = -1e30, bool use_kpc = false);
-	//void remove_derived_param(int dparam_number);
-	//void rename_derived_param(int dparam_number, string newname, string new_latex_name);
-	//void clear_derived_params();
-	//void print_derived_param_list();
 	void clear_raw_chisq() { raw_chisq = -1e30; if (fitmodel) fitmodel->raw_chisq = -1e30; }
 
 	bool create_grid(bool verbal, double *zfacs, double **betafacs, const int redshift_index = -1, const bool force_store_cc_points = false); // the redshift_index (optional) argument indicates which images are being fit to; used to optimize the subgridding
@@ -1377,7 +1377,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	public:
 	double chi_square_fit_simplex(const bool show_parameter_errors);
 	double chi_square_fit_powell(const bool show_parameter_errors);
-	void output_fit_results(dvector& stepsizes, const double chisq_bestfit, const int chisq_evals, const bool calculate_parameter_errors);
+	void output_fit_results(double* fitparams, dvector& stepsizes, const double chisq_bestfit, const int chisq_evals, const bool calculate_parameter_errors);
 	void nested_sampling();
 	void polychord(const bool resume_previous, const bool skip_run);
 	void multinest(const bool resume_previous, const bool skip_run);
@@ -1612,6 +1612,43 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void test_lens_functions();
 };
 
+template <typename T>
+class MyIterator {
+	public:
+	// Required type definitions for STL compatibility
+	using iterator_category = std::forward_iterator_tag;
+	using value_type = T;
+	using difference_type = std::ptrdiff_t;
+	using pointer = T*;
+	using reference = T&;
+
+	MyIterator(pointer ptr) : m_ptr(ptr) {}
+
+	// Dereference operator
+	reference operator*() const { return *m_ptr; }
+	pointer operator->() const { return m_ptr; }
+
+	// Prefix increment
+	MyIterator& operator++() {
+		m_ptr++;
+		return *this;
+	}
+
+	// Postfix increment
+	MyIterator operator++(int) {
+		MyIterator temp = *this;
+		++(*this);
+		return temp;
+	}
+
+	// Equality and inequality operators
+	friend bool operator==(const MyIterator& a, const MyIterator& b) { return a.m_ptr == b.m_ptr; }
+	friend bool operator!=(const MyIterator& a, const MyIterator& b) { return a.m_ptr != b.m_ptr; }
+
+	private:
+	pointer m_ptr;
+};
+
 class LensList
 {
 	public:
@@ -1651,6 +1688,13 @@ class LensList
 		lenslistptr[lens_num1]->anchor_center_to_lens(lens_num2);
 		return true;
 	}
+	MyIterator<LensProfile*> begin() {
+		return MyIterator<LensProfile*>(lenslistptr);
+	}
+	MyIterator<LensProfile*> end() {
+		return MyIterator<LensProfile*>(lenslistptr+nlens);
+	}
+	LensProfile* operator[](size_t i) { return lenslistptr[i]; }
 };
 
 class SourceList
@@ -1692,6 +1736,13 @@ class SourceList
 		srclistptr[src_num]->anchor_center_to_lens(qlens->lens_list,lens_num);
 		return true;
 	}
+	MyIterator<SB_Profile*> begin() {
+		return MyIterator<SB_Profile*>(srclistptr);
+	}
+	MyIterator<SB_Profile*> end() {
+		return MyIterator<SB_Profile*>(srclistptr+n_sb);
+	}
+	SB_Profile* operator[](size_t i) { return srclistptr[i]; }
 };
 
 class PixSrcList
@@ -1699,7 +1750,7 @@ class PixSrcList
 	public:
 	QLens* qlens;
 	int n_pixsrc;
-	ModelParams** pixsrclist_ptr;
+	ModelParams** pixsrclist_ptr; // we use ModelParams (the base class) because the pixellated source could be either DelaunaySourceGrid or CartesianSourceGrid
 	PixSrcList(QLens* qlens_in) { pixsrclist_ptr = NULL; qlens = qlens_in; n_pixsrc = 0; }
 	void input_ptr(ModelParams** ptr_in, const int n_pixsrc_in) { pixsrclist_ptr = ptr_in; n_pixsrc = n_pixsrc_in; }
 	void clear_ptr() { pixsrclist_ptr = NULL; n_pixsrc = 0; }
@@ -1723,6 +1774,13 @@ class PixSrcList
 		}
 		return true;
 	}
+	MyIterator<ModelParams*> begin() {
+		return MyIterator<ModelParams*>(pixsrclist_ptr);
+	}
+	MyIterator<ModelParams*> end() {
+		return MyIterator<ModelParams*>(pixsrclist_ptr+n_pixsrc);
+	}
+	ModelParams* operator[](size_t i) { return pixsrclist_ptr[i]; }
 };
 
 class PtSrcList
@@ -1754,6 +1812,13 @@ class PtSrcList
 		}
 		return true;
 	}
+	MyIterator<PointSource*> begin() {
+		return MyIterator<PointSource*>(ptsrclist_ptr);
+	}
+	MyIterator<PointSource*> end() {
+		return MyIterator<PointSource*>(ptsrclist_ptr+n_ptsrc);
+	}
+	PointSource* operator[](size_t i) { return ptsrclist_ptr[i]; }
 };
 
 class ImgDataList
@@ -1788,6 +1853,13 @@ class ImgDataList
 		}
 		return true;
 	}
+	MyIterator<ImageData*> begin() {
+		return MyIterator<ImageData*>(imgdatalist_ptr);
+	}
+	MyIterator<ImageData*> end() {
+		return MyIterator<ImageData*>(imgdatalist_ptr+n_data_bands);
+	}
+	ImageData* operator[](size_t i) { return imgdatalist_ptr[i]; }
 };
 
 struct PointImageData
@@ -1810,6 +1882,53 @@ struct PointImageData
 	void write_to_file(std::ofstream &outfile);
 	bool set_use_in_chisq(int image_i, bool use_in_chisq_in);
 	~PointImageData();
+};
+
+class PtImgDataList
+{
+	public:
+	QLens* qlens;
+	int n_ptimgdata;
+	PointImageData* ptimgdatalist_ptr;
+	PtImgDataList(QLens* qlens_in) { ptimgdatalist_ptr = NULL; qlens = qlens_in; n_ptimgdata = 0; }
+	void input_ptr(PointImageData* ptr_in, const int n_ptimgdata_in) { ptimgdatalist_ptr = ptr_in; n_ptimgdata = n_ptimgdata_in; }
+	void clear_ptr() { ptimgdatalist_ptr = NULL; n_ptimgdata = 0; }
+	void print() {
+		qlens->print_point_image_data(true);
+	}
+
+	bool load_ptimgdata(string filename) {
+		return (qlens->load_point_image_data(filename));
+	}
+	bool add_ptimgdata(const lensvector &sourcept, const double srcflux) {
+		return (qlens->add_simulated_point_image_data(sourcept, srcflux));
+	}
+
+	bool clear(const int min_loc=-1, const int max_loc=-1) {
+		if((min_loc == -1) and (max_loc == -1)) {
+			for (int i=n_ptimgdata-1; i >= 0; i--) {
+				qlens->remove_point_source(i);
+			}
+		} else if ((min_loc != -1) and (max_loc == -1)) {
+			if (min_loc >= n_ptimgdata) { warn("specified source index does not exist"); return false; }
+			qlens->remove_point_source(min_loc);
+		} else {
+			if (((min_loc < 0) or (min_loc >= n_ptimgdata)) or ((max_loc < 0) or (max_loc >= n_ptimgdata))) { warn("specified source index does not exist"); return false; }
+			if (min_loc > max_loc) { warn("max index must be greater than min index"); return false; }
+			for (int i=max_loc; i >= min_loc; i--) {
+				qlens->remove_point_source(i);
+			}
+		}
+		return true;
+	}
+
+	MyIterator<PointImageData> begin() {
+		return MyIterator<PointImageData>(ptimgdatalist_ptr);
+	}
+	MyIterator<PointImageData> end() {
+		return MyIterator<PointImageData>(ptimgdatalist_ptr+n_ptimgdata);
+	}
+	PointImageData operator[](size_t i) { return ptimgdatalist_ptr[i]; }
 };
 
 #endif // QLENS_H

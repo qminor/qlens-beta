@@ -1780,27 +1780,6 @@ void QLens::output_images_single_source(const double &x_source, const double &y_
 			return;
 		}
 	}
-	//cout << Grid::image_pos_accuracy << endl; // default
-	//cout << Grid::theta_offset << endl; // slight offset in the initial angle for creating the grid; obsolete, but keeping it here just in case
-	//cout << Grid::ccroot_t << endl;
-	//cout << Grid::enforce_min_area << endl;
-	//cout << Grid::cc_neighbor_splittings << endl;
-	//double *Grid::grid_zfactors;
-	//double **Grid::grid_betafactors;
-	//cout << "zfacs: " << Grid::grid_zfactors[0] << " " << reference_zfactors[0] << " " << specific_ptsrc_zfactors[0][0] << endl;
-
-	// parameters for creating the recursive grid
-	//cout << Grid::rmin << endl;
-	//cout << Grid::rmax << endl;
-	//cout << Grid::xcenter << endl;
-	//cout << Grid::ycenter << endl;
-	//cout << Grid::grid_q << endl;
-	//cout << Grid::u_split_initial << endl; cout << Grid::w_split_initial << endl;
-	//cout << Grid::levels << endl;
-	//cout << Grid::splitlevels << endl;
-	//cout << Grid::cc_splitlevels << endl;
-	//cout << Grid::min_cell_area << endl;
-
 
 	source[0] = x_source; source[1] = y_source;
 
@@ -1922,16 +1901,11 @@ bool QLens::get_imageset(const double src_x, const double src_y, PointSource& im
 	return true;
 }
 
-vector<PointSource> QLens::get_fit_imagesets(bool &status, int min_dataset, int max_dataset, bool verbal)
+bool QLens::get_fit_imagesets(int min_dataset, int max_dataset, bool verbal)
 {
-	status = true;
-	if (n_ptsrc==0) status = false;
+	if (n_ptsrc==0) return false;
 	if (max_dataset < 0) max_dataset = n_ptsrc - 1;
-	if ((min_dataset < 0) or (min_dataset > max_dataset)) status = false;
-	vector<PointSource> image_sets;
-	image_sets.clear();
-	if (!status) return image_sets;
-	image_sets.resize(n_ptsrc);
+	if ((min_dataset < 0) or (min_dataset > max_dataset)) return false;
 
 	if (analytic_source_flux) set_analytic_srcflux(false);
 	if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
@@ -1940,17 +1914,17 @@ vector<PointSource> QLens::get_fit_imagesets(bool &status, int min_dataset, int 
 	for (int i=min_dataset; i <= max_dataset; i++) {
 		redshift_idx = ptsrc_redshift_idx[i];
 		if ((i == min_dataset) or (redshift_idx != ptsrc_redshift_idx[i-1])) {
-			create_grid(false,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+			if (!create_grid(false,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx])) return false;
 		}
 
 		source[0] = ptsrc_list[i]->pos[0];
 		source[1] = ptsrc_list[i]->pos[1];
 
 		find_images();
-		image_sets[i].copy_imageset(source,ptsrc_redshifts[redshift_idx],images_found,Grid::nfound,ptsrc_list[i]->srcflux);
+		ptsrc_list[i]->set_images(images_found,Grid::nfound);
 	}
 	reset_grid();
-	return image_sets;
+	return true;
 }
 
 bool QLens::plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal)

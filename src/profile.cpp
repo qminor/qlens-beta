@@ -2310,6 +2310,17 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 	zfac = 1.0;
 }
 
+double LensProfile::einstein_radius() {
+	// uses qlens->reference_zfactors, and give re_average only
+	double re_maj, re_avg;
+	if (qlens==NULL) {
+		warn("lens has not been added to qlens list; cannot find Einstein radius");
+		return 0.0;
+	}
+	get_einstein_radius(re_maj,re_avg,qlens->reference_zfactors[qlens->lens_redshift_idx[lens_number]]);
+	return re_avg;
+}
+
 double LensProfile::get_xi_parameter(const double zfactor)
 {
 	double r_ein, re_sq, kappa_e, dkappa_e;

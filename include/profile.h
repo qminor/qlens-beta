@@ -72,14 +72,16 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 	double kappa_rsq_deriv_splint(double);
 	double qx_parameter, f_parameter;
 
+	public:
+	double zlens, zsrc_ref;
+	double sigma_cr, kpc_to_arcsec;
+	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
+
 	protected:
 	LensProfileName lenstype;
 	bool center_defined;
 	bool lensed_center_coords; // option for line-of-sight perturber that makes the lensed position of the perturber the free parameters
-	double zlens, zsrc_ref;
 	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
-	double sigma_cr, kpc_to_arcsec;
-	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
 	double xc_prime, yc_prime; // used if lensed_center_coords is set to true
 	double f_major_axis; // used for defining elliptical radius; set in function set_q(q)
 	double epsilon, epsilon1, epsilon2; // used for defining ellipticity, and/or components of ellipticity (epsilon1, epsilon2)
@@ -402,7 +404,7 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 	virtual bool calculate_total_scaled_mass(double& total_mass);
 	virtual double calculate_scaled_density_3d(const double r, const double tolerance, bool &converged);
 	virtual double calculate_scaled_mass_3d(const double r);
-
+	double einstein_radius();
 	bool calculate_half_mass_radius(double& half_mass_radius, const double mtot_in = -10);
 	double mass_rsq(const double rsq);
 
@@ -628,7 +630,7 @@ class SPLE_Lens : public LensProfile
 	double calculate_scaled_mass_3d(const double r);
 	bool core_present() { return (sprime==0) ? false : true; }
 	double get_inner_logslope() { return -alpha; }
-	void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
+	void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor = 1.0);
 	bool output_cosmology_info(const int lens_number);
 };
 
@@ -678,7 +680,7 @@ class dPIE_Lens : public LensProfile
 	bool output_cosmology_info(const int lens_number = -1);
 	double calculate_scaled_mass_3d(const double r);
 	bool calculate_total_scaled_mass(double& total_mass);
-	void get_einstein_radius(double& r1, double &r2, const double zfactor) { rmin_einstein_radius = 0.01*b; rmax_einstein_radius = 100*b; LensProfile::get_einstein_radius(r1,r2,zfactor); } 
+	void get_einstein_radius(double& r1, double &r2, const double zfactor = 1.0) { rmin_einstein_radius = 0.01*b; rmax_einstein_radius = 100*b; LensProfile::get_einstein_radius(r1,r2,zfactor); } 
 	double get_tidal_radius() { return aprime; }
 	bool core_present() { return (sprime==0) ? false : true; }
 };
@@ -885,7 +887,7 @@ class Shear : public LensProfile
 	}
 
 	double kappa(double, double) { return 0; }
-	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
+	void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0) { r1=0; r2=0; }
 };
 
 class Multipole : public LensProfile
@@ -922,7 +924,7 @@ class Multipole : public LensProfile
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	void get_einstein_radius(double& r1, double& r2, const double zfactor);
+	void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0);
 };
 
 class PointMass : public LensProfile
@@ -966,7 +968,7 @@ class PointMass : public LensProfile
 
 	bool calculate_total_scaled_mass(double& total_mass);
 	double calculate_scaled_mass_3d(const double r);
-	void get_einstein_radius(double& r1, double& r2, const double zfactor);
+	void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0);
 };
 
 class CoreCusp : public LensProfile
@@ -1155,7 +1157,7 @@ class MassSheet : public LensProfile
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
-	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
+	void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0) { r1=0; r2=0; }
 };
 
 class Deflection : public LensProfile
@@ -1193,7 +1195,7 @@ class Deflection : public LensProfile
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
-	void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; }
+	void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0) { r1=0; r2=0; }
 };
 
 class TopHatLens : public LensProfile
@@ -1261,7 +1263,7 @@ class Tabulated_Model : public LensProfile
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
-	//void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; } // cannot use this
+	//void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0) { r1=0; r2=0; } // cannot use this
 };
 
 class QTabulated_Model : public LensProfile
@@ -1301,7 +1303,7 @@ class QTabulated_Model : public LensProfile
 	void deflection(double, double, lensvector&);
 	void hessian(double, double, lensmatrix&);
 
-	//void get_einstein_radius(double& r1, double& r2, const double zfactor) { r1=0; r2=0; } // cannot use this
+	//void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0) { r1=0; r2=0; } // cannot use this
 };
 
 // Model for testing purposes; can also be used as a template for a new lens model

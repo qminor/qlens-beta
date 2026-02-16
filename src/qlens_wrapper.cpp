@@ -195,7 +195,7 @@ public:
 
 	void imgdata_display() {
 		if (n_ptsrc==0) throw runtime_error("no image data has been loaded");
-		print_image_data(true);
+		print_point_image_data(true);
 	}
 
 	void imgdata_write_file(const std::string &name_) {
@@ -208,7 +208,7 @@ public:
 
 	bool imgdata_clear(int lower = -1, int upper = -1) {
 		// No argument, clear all
-		if (lower==-1) { clear_image_data(); return true; }
+		if (lower==-1) { clear_point_image_data(); return true; }
 
 		if (upper > n_ptsrc) {throw runtime_error("Specified max image dataset number exceeds number of data sets in list");}
 		
@@ -229,7 +229,7 @@ public:
 		lensvector src;
 		src[0] = x;
 		src[1] = y;
-		if(add_simulated_image_data(src)) update_parameter_list();
+		if(add_simulated_point_image_data(src)) update_parameter_list();
 	}
 
 	bool get_shear_components_mode() { return Shear::use_shear_component_params; }

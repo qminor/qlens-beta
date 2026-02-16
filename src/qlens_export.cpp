@@ -75,10 +75,6 @@ PYBIND11_MODULE(qlens, m) {
 			for (int i=0; i < current.nparams; i++) vals[i] = current.values[i];
 				return vals;
 		})
-		.def("__getitem__", [](ParamList &current, size_t index) {
-			//current.print_parameter_values();
-			return &current.values[index];
-		})
 		.def("print",&ParamList::print_parameter_values)
 		.def("print_stepsizes",&ParamList::print_stepsizes)
 		.def("print_priors",&ParamList::print_priors_and_limits)
@@ -219,15 +215,26 @@ PYBIND11_MODULE(qlens, m) {
 			if (paramnum < 0) throw std::runtime_error("specified parameter name '" + old_name + "' not recognized");
 			if (!current.set_override_parameter_name(paramnum,new_name)) throw std::runtime_error("parameter name not unique; parameter could not be renamed");
 		})
+		.def("__len__", [](ParamList &current) {
+			return current.nparams;
+		})
 		.def("__getitem__", [](ParamList &current, size_t index) {
+			if (index >= current.nparams) throw std::runtime_error("Parameter with given index does not exist");
 			return current.values[index];
 		})
+		.def("__setitem__", [](ParamList &current, size_t index, double val) {
+			if (index >= current.nparams) throw std::runtime_error("Parameter with given index does not exist");
+			if (!current.update_param_value(index, val)) throw std::runtime_error("could not update parameter value");
+		})
+		.def("__iter__", [](ParamList &current) {
+			if (current.nparams==0) throw std::runtime_error("No fit parameters have been setup; cannot iterate over param list");
+			return py::make_iterator(current.begin(), current.end());
+		}, py::keep_alive<0,1>())
 		.def("__repr__", [](ParamList &a) {
 			string outstring = a.get_param_values_string();
 			return("\n" + outstring);
 		})
 		;
-
 
 	py::class_<DerivedParamList, std::unique_ptr<DerivedParamList, py::nodelete>>(m, "DerivedParamList")
 		.def(py::init<>([](QLens_Wrap* qlens_in){return new DerivedParamList(qlens_in);}))
@@ -236,7 +243,11 @@ PYBIND11_MODULE(qlens, m) {
 			for (int i=0; i < current.n_dparams; i++) vals[i] = current.get_dparam(i);
 				return vals;
 		})
-		.def("print",&DerivedParamList::print_dparam_list)
+		//.def("print",&DerivedParamList::print_dparam_list)
+		.def("print", [](DerivedParamList &current){
+			string outstring = current.get_dparam_values_string();
+			std::cout << outstring << std::endl;
+		})
 		.def("add", [](DerivedParamList &current, const string param_type, py::args &args, py::kwargs &kwargs){
 			double param1=-1.0, param2=-1.0;
 			bool use_kpc = false;
@@ -279,11 +290,13 @@ PYBIND11_MODULE(qlens, m) {
 		.def("rename", [](DerivedParamList &current, const int paramnum, const string new_name, const string new_latex_name=""){
 			if (!current.rename_dparam(paramnum,new_name,new_latex_name)) throw std::runtime_error("parameter name not unique; parameter could not be renamed");
 		})
-
-		//.def("__repr__", [](DerivedParamList &a) {
-			//string outstring = a.get_param_values_string();
-			//return("\n" + outstring);
-		//})
+		.def("__len__", [](DerivedParamList &current) {
+			return current.n_dparams;
+		})
+		.def("__repr__", [](DerivedParamList &a) {
+			string outstring = a.get_dparam_values_string();
+			return(outstring);
+		})
 		;
 
 
@@ -334,6 +347,7 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 		})
+		.def_readonly("indx",&ModelParams::entry_number)
 		.def("__repr__", [](ModelParams &a) {
 				string outstring = a.get_parameters_string();
 				return("\n" + outstring);
@@ -521,12 +535,21 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("clear",&LensList::clear)
 		.def("__getitem__", [](LensList &current, size_t index) {
-			//current.print_parameter_values();
+			if (index >= current.nlens) throw std::runtime_error("Lens with given index has not been created");
 			return current.lenslistptr[index];
 		})
 		.def("__len__", [](LensList &current) {
 			return current.nlens;
 		})
+		.def("print", [](LensList &current){
+			string lens_info;
+			for (int i=0; i < current.nlens; i++) lens_info += "\n" + current.lenslistptr[i]->get_parameters_string();
+			std::cout << lens_info << std::endl;
+		})
+		.def("__iter__", [](LensList &current) {
+			if (current.nlens==0) throw std::runtime_error("No lens objects have been created; cannot iterate over lens list");
+			return py::make_iterator(current.begin(), current.end());
+		}, py::keep_alive<0,1>())
 		.def("__repr__", [](LensList &current) {
 			string lens_info;
 			for (int i=0; i < current.nlens; i++) lens_info += "\n" + current.lenslistptr[i]->get_parameters_string();
@@ -1040,19 +1063,79 @@ PYBIND11_MODULE(qlens, m) {
 			current.clear(min,max);
 		})
 		.def("clear",&ImgDataList::clear)
+		.def_readonly("n_bands", &ImgDataList::n_data_bands)
 		.def("__getitem__", [](ImgDataList &current, size_t index) {
-			//current.print_parameter_values();
+			if (index >= current.n_data_bands) throw std::runtime_error("Data with given band index has not loaded");
 			return current.imgdatalist_ptr[index];
 		})
 		.def("__len__", [](ImgDataList &current) {
 			return current.n_data_bands;
 		})
+		.def("__iter__", [](ImgDataList &current) {
+			if (current.n_data_bands==0) throw std::runtime_error("No image data have been loaded; cannot iterate over imgdata list");
+			return py::make_iterator(current.begin(), current.end());
+		}, py::keep_alive<0,1>())
 		.def("__repr__", [](ImgDataList &current) {
 			string imgdata_info;
 			for (int i=0; i < current.n_data_bands; i++) imgdata_info += "\n" + current.imgdatalist_ptr[i]->get_imgdata_info_string();
 			return(imgdata_info);
 		})
 		;
+
+	py::class_<PtImgDataList>(m, "PtImgDataList")
+		.def(py::init<>([](QLens_Wrap* qlens_in){return new PtImgDataList(qlens_in);}))
+		//.def("add",&PtImgDataList::add_lens)
+		.def("load", &PtImgDataList::load_ptimgdata)
+		.def("print", &PtImgDataList::print)
+		//.def("load", [](PtImgDataList &current, const string filename){
+			//current.load_ptimgdata(filename);
+		//})
+		.def("add", [](PtImgDataList &current, const double x, const double y, py::kwargs &kwargs){
+			//double zsrc = current.qlens->source_redshift;
+			double srcflux = 1.0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="srcflux") {
+					try {
+						srcflux = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid srcflux");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for ptimgdata.add");
+				}
+			}
+			lensvector pos;
+			pos[0]=x;
+			pos[1]=y;
+			current.add_ptimgdata(pos,srcflux);
+		})
+		.def("clear", [](PtImgDataList &current){
+			current.clear();
+		})
+		.def("clear", [](PtImgDataList &current, const int num){
+			current.clear(num);
+		})
+		.def("clear", [](PtImgDataList &current, const int min, const int max){
+			current.clear(min,max);
+		})
+		.def("__getitem__", [](PtImgDataList &current, size_t index) {
+			if (index >= current.n_ptimgdata) throw std::runtime_error("Point source with given index has not been created");
+			return current.ptimgdatalist_ptr[index];
+		})
+		.def("__len__", [](PtImgDataList &current) {
+			return current.n_ptimgdata;
+		})
+		.def("__iter__", [](PtImgDataList &current) {
+			if (current.n_ptimgdata==0) throw std::runtime_error("No point source objects have been created; cannot iterate over ptsrc list");
+			return py::make_iterator(current.begin(), current.end());
+		}, py::keep_alive<0,1>())
+		//.def("__repr__", [](PtImgDataList &current) {
+			//string ptsrc_info;
+			//for (int i=0; i < current.n_ptimgdata; i++) ptsrc_info += "\n" + current.ptimgdatalist_ptr[i]->get_parameters_string();
+			//return(ptsrc_info);
+		//})
+		;
+
 
 	py::class_<SourceList>(m, "SrcList")
 		.def(py::init<>([](QLens_Wrap* qlens_in){return new SourceList(qlens_in);}))
@@ -1173,12 +1256,16 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("clear",&SourceList::clear)
 		.def("__getitem__", [](SourceList &current, size_t index) {
-			//current.print_parameter_values();
+			if (index >= current.n_sb) throw std::runtime_error("Source with given index has not been created");
 			return current.srclistptr[index];
 		})
 		.def("__len__", [](SourceList &current) {
 			return current.n_sb;
 		})
+		.def("__iter__", [](SourceList &current) {
+			if (current.n_sb==0) throw std::runtime_error("No source objects have been created; cannot iterate over src list");
+			return py::make_iterator(current.begin(), current.end());
+		}, py::keep_alive<0,1>())
 		.def("__repr__", [](SourceList &current) {
 			string src_info;
 			for (int i=0; i < current.n_sb; i++) src_info += "\n" + current.srclistptr[i]->get_parameters_string();
@@ -1249,12 +1336,16 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("clear",&PixSrcList::clear)
 		.def("__getitem__", [](PixSrcList &current, size_t index) {
-			//current.print_parameter_values();
+			if (index >= current.n_pixsrc) throw std::runtime_error("Pixellated source with given index has not been created");
 			return current.pixsrclist_ptr[index];
 		})
 		.def("__len__", [](PixSrcList &current) {
 			return current.n_pixsrc;
 		})
+		.def("__iter__", [](PixSrcList &current) {
+			if (current.n_pixsrc==0) throw std::runtime_error("No pixellated source objects have been created; cannot iterate over pixsrc list");
+			return py::make_iterator(current.begin(), current.end());
+		}, py::keep_alive<0,1>())
 		.def("__repr__", [](PixSrcList &current) {
 			string pixsrc_info;
 			for (int i=0; i < current.n_pixsrc; i++) pixsrc_info += "\n" + current.pixsrclist_ptr[i]->get_parameters_string();
@@ -1308,14 +1399,17 @@ PYBIND11_MODULE(qlens, m) {
 		.def("clear", [](PtSrcList &current, const int min, const int max){
 			current.clear(min,max);
 		})
-		//.def("clear",&PtSrcList::clear)
 		.def("__getitem__", [](PtSrcList &current, size_t index) {
-			//current.print_parameter_values();
+			if (index >= current.n_ptsrc) throw std::runtime_error("Point source with given index has not been created");
 			return current.ptsrclist_ptr[index];
 		})
 		.def("__len__", [](PtSrcList &current) {
 			return current.n_ptsrc;
 		})
+		.def("__iter__", [](PtSrcList &current) {
+			if (current.n_ptsrc==0) throw std::runtime_error("No point source objects have been created; cannot iterate over ptsrc list");
+			return py::make_iterator(current.begin(), current.end());
+		}, py::keep_alive<0,1>())
 		.def("__repr__", [](PtSrcList &current) {
 			string ptsrc_info;
 			for (int i=0; i < current.n_ptsrc; i++) ptsrc_info += "\n" + current.ptsrclist_ptr[i]->get_parameters_string();
@@ -1326,9 +1420,15 @@ PYBIND11_MODULE(qlens, m) {
 	py::class_<LensProfile>(m, "LensProfile")
 		.def(py::init<>([](){return new LensProfile();}))
 		.def(py::init<const LensProfile*>())
-		// .def(py::init<>([](const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int& nn, const double &acc, const double &qx_in, const double &f_in, Lens* lens_in){
-		//		return new LensProfile(splinefile, zlens_in, zsrc_in, q_in, theta_degrees, xc_in, yc_in, nn, acc, qx_in, f_in, lens_in);
-		// }))
+		.def_readonly("indx",&LensProfile::lens_number)
+		.def_readonly("z",&LensProfile::zlens)
+		.def_readonly("zlens",&LensProfile::zlens)
+		.def_readonly("zsrc_ref",&LensProfile::zsrc_ref)
+		.def_readonly("sigma_cr",&LensProfile::sigma_cr)
+		.def_readonly("xc",&LensProfile::x_center)
+		.def_readonly("yc",&LensProfile::y_center)
+		.def_readonly("q",&LensProfile::q)
+		.def_readonly("theta",&LensProfile::theta)
 		.def("print_params", &LensProfile::print_parameters)
 		.def("print_vary_params", &LensProfile::print_vary_parameters)
 		.def("get_model_name", &LensProfile::get_model_name)
@@ -1417,6 +1517,29 @@ PYBIND11_MODULE(qlens, m) {
 			def[1] = def_vec[1];
 			return def;
 		})
+		.def("hessian", [](LensProfile &current, const double x, const double y){ 
+			py::list hess(2);
+			py::list hess_row(2);
+			py::list hess_row2(2);
+			lensmatrix hessmat;
+			current.hessian(x,y,hessmat);
+			hess_row[0] = hessmat[0][0];
+			hess_row[1] = hessmat[0][1];
+			hess_row2[0] = hessmat[1][0];
+			hess_row2[1] = hessmat[1][1];
+			hess[0] = hess_row;
+			hess[1] = hess_row2;
+			return hess;
+		})
+		.def("shear", [](LensProfile &current, const double x, const double y){ 
+			py::list shear(2);
+			lensmatrix hessmat;
+			current.hessian(x,y,hessmat);
+			shear[0] = (hessmat[0][0]-hessmat[1][1])/2;
+			shear[1] = hessmat[0][1];
+			return shear;
+		})
+		.def("einstein_radius", &LensProfile::einstein_radius)
 		;
 
 	py::class_<SPLE_Lens, LensProfile, std::unique_ptr<SPLE_Lens, py::nodelete>>(m, "SPLE")
@@ -1924,6 +2047,7 @@ PYBIND11_MODULE(qlens, m) {
 	py::class_<SB_Profile>(m, "SrcProfile")
 		.def(py::init<>([](){return new SB_Profile();}))
 		.def(py::init<const SB_Profile*>())
+		.def_readonly("indx",&SB_Profile::sb_number)
 		.def("update", [](SB_Profile &current, py::dict dict){
 			for (auto item : dict) {
 				if(!current.update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second)))
@@ -2205,7 +2329,16 @@ PYBIND11_MODULE(qlens, m) {
 		}))
 		.def_readonly("cosmo", &QLens_Wrap::cosmo)
 		.def("objects", [](QLens_Wrap &current){ 
-			return std::make_tuple(current.lenslist, current.srclist, current.ptsrclist, current.pixsrclist, current.imgdatalist, current.param_list, current.dparam_list);
+			return std::make_tuple(current.lenslist, current.srclist, current.ptsrclist, current.pixsrclist, current.ptimgdata_list, current.imgdatalist, current.param_list, current.dparam_list);
+		})
+		.def("pix_objects", [](QLens_Wrap &current){ 
+			return std::make_tuple(current.lenslist, current.srclist, current.pixsrclist, current.imgdatalist);
+		})
+		.def("ptimg_objects", [](QLens_Wrap &current){ 
+			return std::make_tuple(current.lenslist, current.ptsrclist, current.ptimgdata_list);
+		})
+		.def("param_objects", [](QLens_Wrap &current){ 
+			return std::make_tuple(current.param_list, current.dparam_list);
 		})
 		.def("lens_object", [](QLens_Wrap &current){ 
 			return current.lenslist;
@@ -2263,6 +2396,7 @@ PYBIND11_MODULE(qlens, m) {
 		//.def("remove_pixsrc", &QLens_Wrap::remove_pixellated_source)
 		//.def("lens", &QLens_Wrap::get_lens_pointer)
 		.def_readonly("imgdata", &QLens_Wrap::imgdatalist)
+		.def_readonly("ptimgdata", &QLens_Wrap::ptimgdata_list)
 		.def_readonly("lens", &QLens_Wrap::lenslist)
 		.def_readonly("src", &QLens_Wrap::srclist)
 		.def_readonly("pixsrc", &QLens_Wrap::pixsrclist)
@@ -2311,9 +2445,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def("get_imageset", [](QLens_Wrap &curr, PointSource &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false) {
 				curr.get_imageset(src_x, src_y, imgset, verbal);
 		},  py::arg("imgset"), py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)		
-		.def("get_fit_imagesets", &QLens_Wrap::get_fit_imagesets, 
-				py::arg("status") = false, py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, 
-				py::arg("verbal") = false) 
+		.def("get_fit_imagesets", &QLens_Wrap::get_fit_imagesets, py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, py::arg("verbal") = false) 
 		.def("get_data_imagesets", &QLens_Wrap::export_to_ImageDataSet)
 		.def("run_fit", [](QLens_Wrap &curr, const std::string &fitmethod, py::kwargs &kwargs){
 			bool adopt_bestfit = false;
@@ -2387,7 +2519,11 @@ PYBIND11_MODULE(qlens, m) {
 			else if (curr.source_fit_mode == Shapelet_Source) cout << "shapelet" << endl;
 			else throw std::runtime_error("Source_modes not recognized");
 		})
-		//.def("use_bestfit", &QLens_Wrap::use_bestfit)
+		.def("bestfitparams", [](QLens_Wrap &curr){
+			py::list bf_params(curr.bestfitparams.size());
+			for (int i=0; i < curr.bestfitparams.size(); i++) bf_params[i] = curr.bestfitparams[i];
+			return bf_params;
+		})
 		.def("use_bestfit", [](QLens_Wrap &curr){
 			curr.adopt_model(curr.bestfitparams);
 		})
@@ -2574,17 +2710,17 @@ PYBIND11_MODULE(qlens, m) {
 
 	py::class_<PointSource, ModelParams, std::unique_ptr<PointSource, py::nodelete>>(m, "PtSrc")
 		.def(py::init<>([](QLens* qlens_in){ return new PointSource(qlens_in); }))
-		// .def()
-		// .def("print", &PointSource::print)
-		//.def("print", [](&PointSource curr, bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL){
-				//curr.print(include_time_delays, show_labels, srcfile, imgfile);
-		//}, 
 		.def("print", &PointSource::print,
 				py::arg("include_time_delays") = false, py::arg("include_time_delays") = true)
 		.def_readonly("n_images", &PointSource::n_images)
 		.def_readonly("zsrc", &PointSource::zsrc)
 		.def_readonly("srcflux", &PointSource::srcflux)
 		.def_readonly("pos", &PointSource::pos)
+		//.def("pos", [](PointSource &curr){
+			//py::list srcpos(2);
+			//for (int i=0; i < 2; i++) srcpos[i] = curr.pos[i];
+			//return srcpos;
+		//})
 		.def_readonly("images", &PointSource::images)
 		;
 

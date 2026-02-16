@@ -2,7 +2,9 @@ from qlens_helper import *
 
 cosmo = Cosmology(omega_m=0.3,hubble=0.7)
 q = QLens(cosmo)
-(lens,src,ptsrc,pixsrc,imgdata,params,dparams) = q.objects();
+(lens,ptsrc,ptimgdata) = q.ptimg_objects()   # this is so we can enter 'lens' instead of 'q.lens', 'ptsrc' instead of 'q.ptsrc', etc.
+(params,dparams) = q.param_objects()         # same as above; we can enter 'params' instead of 'q.params', etc.
+
 
 q.sci_notation = False
 q.imgdata_read("alphafit.dat") # this function will become obsolete once the ptimgdata class is wrapped
@@ -19,8 +21,8 @@ q.imgplane_chisq = True
 q.flux_chisq = True
 q.chisqtol = 1e-6
 pause()
-q.analytic_bestfit_src = True
-#q.set_sourcepts_auto()
+q.analytic_bestfit_src = False
+q.set_sourcepts_auto()
 q.nrepeat = 2
 print("Fit model:")
 q.fitmodel()
@@ -36,7 +38,7 @@ pause() # note, pause will be ignored if script is not run in interactive mode (
 #print("initial loglike: ",logl)
 #pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
-q.run_fit("simplex",adopt=False)
+q.run_fit("simplex",adopt=True)
 
 # Note, when qlens runs an optimization, it destroys the "fitmodel" object at the end. So you'd have to do another q.init_fitmodel() if you want to
 # evaluate the likelihood again with LogLike(...)
@@ -47,12 +49,13 @@ q.run_fit("simplex",adopt=False)
 #params
 #print(q.fitparams())
 
-q.adopt_model(params.values()) # this will adopt the best-fit model, since fitparams() returns the fit parameters at the end of the optimization
+#q.use_bestfit()  # this will adopt the best-fit model
+#q.adopt_model(q.bestfitparams()) # this is another way to adopt the best-fit model, since bestfitparams() returns the fit parameters at the end of the optimization
 # note that if you're doing your own optimization, you might have the best-fit parameters stored in a separate
-# python list (or numpy array?) of your own; in this case, replace q.fitparams() in the above line with your own list
+# python list (or numpy array?) of your own; in this case, replace q.bestfitparams() in the above line with your own list
 
+pause()
 
-#q.use_bestfit()
 fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
                 # (srcfig, imgfig) = fit_plotimg(q,showplot=False) and modify the figures
 

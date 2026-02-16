@@ -2,7 +2,9 @@ from qlens_helper import *
 
 cosmo = Cosmology(omega_m=0.3,hubble=0.7)
 q = QLens(cosmo)
-(lens,src,ptsrc,pixsrc,imgdata,params,dparams) = q.objects();
+(lens,ptsrc,ptimgdata) = q.ptimg_objects()   # this is so we can enter 'lens' instead of 'q.lens', 'ptsrc' instead of 'q.ptsrc', etc.
+(params,dparams) = q.param_objects()         # same as above; we can enter 'params' instead of 'q.params', etc.
+
 
 q.fit_label = 'alpha_multinest'
 
@@ -37,7 +39,6 @@ q.imgplane_chisq = False
 q.analytic_bestfit_src = True
 q.flux_chisq = True
 q.chisqtol = 1e-6
-#q.set_sourcepts_auto()
 q.nrepeat = 2
 #print("Fit model:")
 q.fitmodel()
@@ -45,8 +46,9 @@ pause() # note, pause will be ignored if script is not run in interactive mode (
 
 q.n_livepts = 300
 q.run_fit("nest",adopt=True,resume=False)
-#q.use_bestfit()
+
 #q.adopt_chain_bestfit()
+
 fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
                 # (srcfig, imgfig) = fit_plotimg(q,showplot=False) and modify the figures
 

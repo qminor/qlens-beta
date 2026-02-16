@@ -9001,7 +9001,10 @@ void QLens::process_commands(bool read_file)
 							else Complain("argument '" << args[i] << "' not recognized");
 						}
 					}
-					if (nwords==2) { if (mpi_id==0) dparam_list->print_dparam_list(); }
+					if (nwords==2) {
+						string outstring = dparam_list->get_dparam_values_string();
+						if (mpi_id==0) cout << outstring << endl;
+					}
 					else {
 						if (words[2]=="clear") {
 							if (nwords==3) dparam_list->clear_dparams();
@@ -9231,7 +9234,7 @@ void QLens::process_commands(bool read_file)
 		{
 			if (nwords == 1) {
 				if (n_ptsrc==0) Complain("no image data has been loaded");
-				print_image_data(true); // The boolean argument should be removed (it says to print errors...should ALWAYS print errors!)
+				print_point_image_data(true); // The boolean argument should be removed (it says to print errors...should ALWAYS print errors!)
 				// print the image data that is being used
 			} else if (nwords >= 2) {
 				if (words[1]=="add") {
@@ -9240,7 +9243,7 @@ void QLens::process_commands(bool read_file)
 					lensvector src;
 					if (!(ws[2] >> src[0])) Complain("invalid x-coordinate of source point");
 					if (!(ws[3] >> src[1])) Complain("invalid y-coordinate of source point");
-					if (add_simulated_image_data(src))
+					if (add_simulated_point_image_data(src))
 						update_parameter_list();
 				} else if (words[1]=="read") {
 					if (nwords != 3) Complain("One argument required for 'imgdata read' (filename)");
@@ -9251,7 +9254,7 @@ void QLens::process_commands(bool read_file)
 					write_point_image_data(words[2]);
 				} else if (words[1]=="clear") {
 					if (nwords==2) {
-						clear_image_data();
+						clear_point_image_data();
 					} else if (nwords==3) {
 						int imgset_number, min_imgnumber, max_imgnumber, pos;
 						if ((pos = words[2].find("-")) != string::npos) {

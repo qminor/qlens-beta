@@ -2,7 +2,9 @@ from qlens_helper import *
 
 cosmo = Cosmology(omega_m=0.3,hubble=0.7)
 q = QLens(cosmo)
-(lens,src,ptsrc,pixsrc,imgdata,params,dparams) = q.objects();
+
+(lens,src,pixsrc,imgdata) = q.pix_objects()   # this is so we can enter 'lens' instead of 'q.lens', 'src' instead of 'q.src', etc.
+(params,dparams) = q.param_objects()         # same as above; we can enter 'params' instead of 'q.params', etc.
 
 q.fit_label = 'delaunay_fit'
 
@@ -76,8 +78,8 @@ q.fitmodel()
 q.sbmap_invert()
 #imgdata[0].unmask_all_pixels()
 
-plotimg(q,nres=True)
-plotsrc(q,interp=True)
+plotimg(q,nres=True)      # NOTE: plotimg, plotsrc, and plotdata all return figures and axes, so you can also do e.g.
+plotsrc(q,interp=True)    # (fig, ax) = plotimg(q,show=False) and modify the figures
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 

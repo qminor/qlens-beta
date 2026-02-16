@@ -6,18 +6,33 @@ import copy
 import inspect
 import sys
 
+_cmap_scheme = 'turbo'      # this is the colormap scheme that I like the best, but it can be changed with the set_cmap function
+
 def pause():
     if bool(getattr(sys, 'ps1', sys.flags.interactive))==True:   # will ignore the pause if not in interactive mode to begin with
         frame = inspect.currentframe().f_back
         code.interact(local=frame.f_locals,banner="Pausing for input...press <Ctrl-d> to continue the script",exitmsg="")
 
-def fit_plotimg(QLens_Object, include_cc=True, show=True, grid=False):
-    if(QLens_Object is None):
+def set_cmap(scheme):
+    global _cmap_scheme
+    try:
+        plt.get_cmap(scheme)
+        _cmap_scheme = scheme
+        return True
+    except ValueError:
+        return False
+
+def get_cmap():
+    print(_cmap_scheme)
+
+def fit_plotimg(QLens_Object, include_cc=True, show=True, grid=False, title=""):
+    if (QLens_Object is None):
         raise RuntimeError("This function requires the first input to be a QLens object.")
 
     q = QLens_Object
-    I = q.get_fit_imagesets()
+    q.get_fit_imagesets()
     D = q.get_data_imagesets()
+    I = q.ptsrc
 
     if (len(I) != len(D)):
         raise RunTimeError("Data and model do not have the same number of imagesets")
@@ -68,12 +83,15 @@ def fit_plotimg(QLens_Object, include_cc=True, show=True, grid=False):
     if (include_cc==True):
         add_crit_to_plot(q,srcplane_fig,imgplane_fig)
 
+    if (title != ""):
+        plt.title(title)
+
     if (show==True):
         plt.show(block=False)
 
     return (srcplane_fig,imgplane_fig)
 
-def plotcrit(QLens_Object, show=True, grid=False):
+def plotcrit(QLens_Object, show=True, grid=False, title=""):
     if(QLens_Object is None):
         raise RuntimeError("This function requires the first input to be a QLens object.")
 
@@ -90,6 +108,9 @@ def plotcrit(QLens_Object, show=True, grid=False):
         plt.grid(True)
 
     add_crit_to_plot(q,srcplane_fig,imgplane_fig)
+
+    if (title != ""):
+        plt.title(title)
 
     if (show==True):
         plt.show(block=False)
@@ -229,18 +250,19 @@ def add_caustics_to_srcplot(QLens_Object, srcplane_fig):
         
     plt.legend(loc="upper right")
 
-def checknan(img):
-    foundnan = False
-    for row in img[3]:
-        for x in row:
-            if (x*0.0 != 0.0):
-                print("NAN value!")
-                foundnan = True
-    if (foundnan==False):
-        print("Did not find any NAN's")
+#def checknan(img):
+    #foundnan = False
+    #for row in img[3]:
+        #for x in row:
+            #if (x*0.0 != 0.0):
+                #print("NAN value!")
+                #foundnan = True
+    #if (foundnan==False):
+        #print("Did not find any NAN's")
 
-def plot_sb(img, QLens_Object, show_cc=True, fix_limits_before_cc=True):
+def plot_sb(img, QLens_Object, show=True, show_cc=True, fix_limits_before_cc=True, title=""):
     q = QLens_Object
+    global _cmap_scheme
     plottype = img[0]
     # For some reason, if we don't make copies of the lists from the tuple (as below), the tuple ends up getting corrupted when matplotlib stuff is called. I have no idea why, it's super annoying.
     x = copy.deepcopy(img[1])
@@ -249,7 +271,7 @@ def plot_sb(img, QLens_Object, show_cc=True, fix_limits_before_cc=True):
 
     fig, ax = plt.subplots(figsize=(8, 8))
     extent = [x[0],x[-1],y[0],y[-1]] 
-    im = ax.imshow(z, interpolation='nearest', extent=extent, cmap='viridis', origin='lower')
+    im = ax.imshow(z, interpolation='nearest', extent=extent, cmap=_cmap_scheme, origin='lower')
     fig.colorbar(im, ax=ax)
     if (fix_limits_before_cc):
         xlim_before = ax.get_xlim()
@@ -262,9 +284,24 @@ def plot_sb(img, QLens_Object, show_cc=True, fix_limits_before_cc=True):
     if (fix_limits_before_cc):
         ax.set_xlim(xlim_before)
         ax.set_ylim(ylim_before)
-    plt.show(block=False)
+    if (title != ""):
+        plt.title(title)
 
-def plotimg(QLens_Object, src=-1, show_cc=True, nomask=False, nres=False, res=False, output_fits=""):
+    if (show==True):
+        plt.show(block=False)
+
+    return (fig, ax)
+
+def plotdata(QLens_Object, show=True, band=0, title="", nomask=False, fgmask=False):
+    q = QLens_Object
+    if (len(q.imgdata)==0):
+        raise RunTimeError("No image data has been loaded")
+    if (band >= len(q.imgdata)):
+        raise RunTimeError("Specified data band has not been created (n_bands=" + len(q.imgdata) + ")")
+    dataimg = q.imgdata[band].plot(nomask=nomask,fgmask=fgmask)
+    return plot_sb(dataimg,q,show=show,title=title)
+
+def plotimg(QLens_Object, src=-1, show=True, show_cc=True, nomask=False, nres=False, res=False, title="", output_fits=""):
     q = QLens_Object
     img = q.plotimg(src=src,nres=nres,res=res,nomask=nomask,output_fits=output_fits)
     if (output_fits==""):
@@ -273,14 +310,14 @@ def plotimg(QLens_Object, src=-1, show_cc=True, nomask=False, nres=False, res=Fa
         else:
             if (show_cc==True and src < 0):
                 q.mkgrid()
-        plot_sb(img,q,show_cc=show_cc)
+        return plot_sb(img,q,show=show,show_cc=show_cc,title=title)
+    else:
+        return None
 
-def plotsrc(QLens_Object, show_cc=True, interp=False, fix_limits_before_cc=True, src=0):
+def plotsrc(QLens_Object, show=True, show_cc=True, interp=False, title="", fix_limits_before_cc=True, src=0):
     q = QLens_Object
     srcplt = q.pixsrc[src].plot(interp=interp)
     if (show_cc==True):
         q.mkgrid_extended_src(src)
-    plot_sb(srcplt,q,show_cc=show_cc,fix_limits_before_cc=fix_limits_before_cc)
-
-
+    return plot_sb(srcplt,q,show=show,title=title,show_cc=show_cc,fix_limits_before_cc=fix_limits_before_cc)
 

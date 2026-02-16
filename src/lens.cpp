@@ -384,6 +384,7 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), ModelParams()
 	pixsrclist = new PixSrcList(this);
 	ptsrclist = new PtSrcList(this);
 	imgdatalist = new ImgDataList(this);
+	ptimgdata_list = new PtImgDataList(this);
 	param_list = new ParamList(this);
 	dparam_list = new DerivedParamList(this);
 	sim_err_pos = 0.005;
@@ -768,6 +769,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	pixsrclist = new PixSrcList(this);
 	ptsrclist = new PtSrcList(this);
 	imgdatalist = new ImgDataList(this);
+	ptimgdata_list = new PtImgDataList(this);
 	param_list = new ParamList(*lens_in->param_list,this);
 	dparam_list = new DerivedParamList(*lens_in->dparam_list,this);
 	sim_err_pos = lens_in->sim_err_pos;
@@ -3449,14 +3451,14 @@ void QLens::remove_pixellated_lens(int pixlens_number)
 
 void QLens::add_point_source(const double zsrc, const lensvector &sourcept, const bool vary_source_coords)
 {
-	PointImageData *new_image_data = new PointImageData[n_ptsrc+1];
+	PointImageData *new_ptimg_data = new PointImageData[n_ptsrc+1];
 	for (int i=0; i < n_ptsrc; i++) {
-		new_image_data[i].input(point_image_data[i]);
+		new_ptimg_data[i].input(point_image_data[i]);
 	}
 	if (n_ptsrc > 0) {
 		delete[] point_image_data;
 	}
-	point_image_data = new_image_data;
+	point_image_data = new_ptimg_data;
 
 	PointSource** newlist = new PointSource*[n_ptsrc+1];
 	int* new_ptsrc_redshift_idx = new int[n_ptsrc+1];
@@ -3480,6 +3482,7 @@ void QLens::add_point_source(const double zsrc, const lensvector &sourcept, cons
 	for (int i=0; i < n_ptsrc; i++) ptsrc_list[i]->entry_number = i;
 	register_ptsrc_vary_parameters(n_ptsrc-1);
 	ptsrclist->input_ptr(ptsrc_list,n_ptsrc);
+	ptimgdata_list->input_ptr(point_image_data,n_ptsrc);
 }
 
 void QLens::remove_point_source(int ptsrc_number)
@@ -3490,11 +3493,11 @@ void QLens::remove_point_source(int ptsrc_number)
 
 	PointSource** newlist;
 	int* new_ptsrc_redshift_idx;
-	PointImageData *new_image_data;
+	PointImageData *new_ptimg_data;
 	if (n_ptsrc > 1) {
 		newlist = new PointSource*[n_ptsrc-1];
 		new_ptsrc_redshift_idx = new int[n_ptsrc-1];
-		new_image_data = new PointImageData[n_ptsrc-1];
+		new_ptimg_data = new PointImageData[n_ptsrc-1];
 	}
 
 	remove_old_ptsrc_redshift(ptsrc_redshift_idx[ptsrc_number]); // removes the ptsrc redshift from the list if no other sources share that redshift
@@ -3503,7 +3506,7 @@ void QLens::remove_point_source(int ptsrc_number)
 		if (i != ptsrc_number) {
 			newlist[j] = ptsrc_list[i];
 			new_ptsrc_redshift_idx[j] = ptsrc_redshift_idx[i];
-			new_image_data[j].input(point_image_data[i]);
+			new_ptimg_data[j].input(point_image_data[i]);
 			j++;
 		}
 	}
@@ -3521,7 +3524,7 @@ void QLens::remove_point_source(int ptsrc_number)
 	if (n_ptsrc > 0) {
 		ptsrc_redshift_idx = new_ptsrc_redshift_idx;
 		ptsrc_list = newlist;
-		point_image_data = new_image_data;
+		point_image_data = new_ptimg_data;
 	} else {
 		ptsrc_redshift_idx = NULL;
 		ptsrc_list = NULL;
@@ -3531,6 +3534,7 @@ void QLens::remove_point_source(int ptsrc_number)
 
 	if (pf > pi) param_list->remove_params(pi,pf); // eliminate any fit parameters associated with the point source being removed
 	ptsrclist->input_ptr(ptsrc_list,n_ptsrc);
+	ptimgdata_list->input_ptr(point_image_data,n_ptsrc);
 }
 
 void QLens::print_point_source_list(bool show_vary_params)
@@ -6950,7 +6954,7 @@ void QLens::raytrace_image_rectangle(const double xmin, const double xmax, const
 
 /********************************* Functions for point image data (reading, writing, simulating etc.) *********************************/
 
-bool QLens::add_simulated_image_data(const lensvector &sourcept, const double srcflux)
+bool QLens::add_simulated_point_image_data(const lensvector &sourcept, const double srcflux)
 {
 	int i,n_images;
 	if (nlens==0) { warn("no lens model has been created"); return false; }
@@ -7005,7 +7009,7 @@ bool QLens::add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_f
 		imgs[i].pos[1] = ptsrc_list[i]->pos[1];
 		imgs[i].flux = 0; // we don't have a good estimate of the flux
 	}
-	clear_image_data();
+	clear_point_image_data();
 
 	lensvector sourcept(0,0);
 	bool vary_source_coords = (use_analytic_bestfit_src) ? false : true;
@@ -7117,23 +7121,23 @@ bool QLens::load_point_image_data(string filename)
 	for (i=0; i < nsrcfit; i++) {
 		if (read_data_line(data_infile,datawords,n_datawords)==false) { 
 			warn("data file could not be read; unexpected end of file"); 
-			clear_image_data();
+			clear_point_image_data();
 			return false;
 		}
 		if ((n_datawords != 1) and (n_datawords != 2)) {
 			warn("input data file has incorrect format; invalid number of images for source point %i",i);
-			clear_image_data();
+			clear_point_image_data();
 			return false;
 		}
 		if (datastring_convert(datawords[0],nn)==false) {
 			warn("data file has incorrect format; could not read number of images for source point %i",i);
-			clear_image_data();
+			clear_point_image_data();
 			return false;
 		}
 		if (n_datawords==2) {
 			if (datastring_convert(datawords[1],zsrc)==false) {
 				warn("data file has incorrect format; could not read redshift for source point %i",i);
-				clear_image_data();
+				clear_point_image_data();
 				return false;
 			}
 			zsrc_given_in_datafile = true;
@@ -7144,48 +7148,48 @@ bool QLens::load_point_image_data(string filename)
 		for (j=0; j < nn; j++) {
 			if (read_data_line(data_infile,datawords,n_datawords)==false) {
 				warn("data file could not be read; unexpected end of file"); 
-				clear_image_data();
+				clear_point_image_data();
 				return false;
 			}
 			if ((n_datawords != 5) and (n_datawords != 7)) {
 				warn("input data file has incorrect format; wrong number of data entries for source point %i, image number %i",i,j);
-				clear_image_data();
+				clear_point_image_data();
 				return false;
 			}
 			if (datastring_convert(datawords[0],point_image_data[i].pos[j][0])==false) {
 				warn("image position x-coordinate has incorrect format; could not read entry for source point %i, image number %i",i,j);
-				clear_image_data();
+				clear_point_image_data();
 				return false;
 			}
 			if (datastring_convert(datawords[1],point_image_data[i].pos[j][1])==false) {
 				warn("image position y-coordinate has incorrect format; could not read entry for source point %i, image number %i",i,j);
-				clear_image_data();
+				clear_point_image_data();
 				return false;
 			}
 			if (datastring_convert(datawords[2],point_image_data[i].sigma_pos[j])==false) {
 				warn("image position measurement error has incorrect format; could not read entry for source point %i, image number %i",i,j);
-				clear_image_data();
+				clear_point_image_data();
 				return false;
 			}
 			if (datastring_convert(datawords[3],point_image_data[i].flux[j])==false) {
 				warn("image flux has incorrect format; could not read entry for source point %i, image number %i",i,j);
-				clear_image_data();
+				clear_point_image_data();
 				return false;
 			}
 			if (datastring_convert(datawords[4],point_image_data[i].sigma_f[j])==false) {
 				warn("image flux measurement error has incorrect format; could not read entry for source point %i, image number %i",i,j);
-				clear_image_data();
+				clear_point_image_data();
 				return false;
 			}
 			if (n_datawords==7) {
 				if (datastring_convert(datawords[5],point_image_data[i].time_delays[j])==false) {
 					warn("image time delay has incorrect format; could not read entry for source point %i, image number %i",i,j);
-					clear_image_data();
+					clear_point_image_data();
 					return false;
 				}
 				if (datastring_convert(datawords[6],point_image_data[i].sigma_t[j])==false) {
 					warn("image time delay has incorrect format; could not read entry for source point %i, image number %i",i,j);
-					clear_image_data();
+					clear_point_image_data();
 					return false;
 				}
 			} else {
@@ -7312,7 +7316,7 @@ void QLens::sort_image_data_into_redshift_groups()
 void QLens::remove_image_data(int image_set)
 {
 	if (image_set >= n_ptsrc) { warn(warnings,"Specified image dataset has not been loaded"); return; }
-	if (n_ptsrc==1) { clear_image_data(); return; }
+	if (n_ptsrc==1) { clear_point_image_data(); return; }
 	sourcepts_fit.erase(sourcepts_fit.begin()+image_set);
 	PointImageData *new_image_data = new PointImageData[n_sourcepts_fit-1];
 	int i,j,k;
@@ -7664,14 +7668,14 @@ void QLens::clear_sourcepts()
 	}
 }
 
-void QLens::clear_image_data()
+void QLens::clear_point_image_data()
 {
 	while (n_ptsrc > 0) {
 		remove_point_source(n_ptsrc-1);
 	}
 }
 
-void QLens::print_image_data(bool include_errors)
+void QLens::print_point_image_data(bool include_errors)
 {
 	if (mpi_id==0) {
 		double zsrc;
@@ -8629,6 +8633,7 @@ void QLens::set_analytic_sourcepts(const bool verbal)
 		}
 	}
 	delete[] srcpts;
+	update_parameter_list();
 }
 
 double QLens::chisq_pos_source_plane()
@@ -9764,7 +9769,9 @@ double QLens::chi_square_fit_simplex(const bool show_parameter_errors)
 		cout << endl << endl;
 	}
 
-	double *fitparams = param_list->values;
+	double *fitparams = new double[param_list->nparams];
+	param_list->get_values(fitparams);
+	//double *fitparams = param_list->values;
 	initialize_simplex(fitparams,n_fitparams,stepsizes.array(),chisq_tolerance);
 	simplex_set_display_bfpont(simplex_show_bestfit);
 	simplex_set_function(loglikeptr);
@@ -9794,6 +9801,7 @@ double QLens::chi_square_fit_simplex(const bool show_parameter_errors)
 		(this->*loglikeptr)(fitparams);
 		if (mpi_id==0) cout << endl << endl;
 	}
+
 	//use_ansi_characters = false;
 
 	bool turned_on_chisqmag = false;
@@ -9834,10 +9842,11 @@ double QLens::chi_square_fit_simplex(const bool show_parameter_errors)
 		}
 	}
 
-	output_fit_results(stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
+	output_fit_results(fitparams,stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
 
 	if (turned_on_chisqmag) use_magnification_in_chisq = false; // restore chisqmag to original setting
 	fit_restore_defaults();
+	delete[] fitparams;
 	delete fitmodel;
 	fitmodel = NULL;
 	return chisq_bestfit;
@@ -9869,7 +9878,8 @@ double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 		cout << endl << endl;
 	}
 
-	double *fitparams = param_list->values;
+	double *fitparams = new double[param_list->nparams];
+	param_list->get_values(fitparams);
 	double chisq_initial = (this->*loglikeptr)(fitparams);
 	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
 
@@ -9914,19 +9924,19 @@ double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 	display_chisq_status = false;
 	if (group_id==0) fitmodel->logfile << "Optimization finished: min chisq = " << chisq_bestfit << endl;
 
-	output_fit_results(stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
+	output_fit_results(fitparams,stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
 
 	if (turned_on_chisqmag) use_magnification_in_chisq = false; // restore chisqmag to original setting
 	fit_restore_defaults();
+	delete[] fitparams;
 	delete fitmodel;
 	fitmodel = NULL;
 	return chisq_bestfit;
 }
 
-void QLens::output_fit_results(dvector &stepsizes, const double chisq_bestfit, const int chisq_evals, const bool show_parameter_errors)
+void QLens::output_fit_results(double *fitparams, dvector &stepsizes, const double chisq_bestfit, const int chisq_evals, const bool show_parameter_errors)
 {
 	bool fisher_matrix_is_nonsingular;
-	double *fitparams = param_list->values;
 	if (show_parameter_errors) {
 		if (mpi_id==0) cout << "Calculating parameter errors... (press CTRL-C to skip)" << endl;
 		fisher_matrix_is_nonsingular = calculate_fisher_matrix(fitparams,stepsizes);
