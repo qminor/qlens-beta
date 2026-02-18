@@ -52,4 +52,4 @@ q.run_fit("nest",adopt=True,resume=False)
 plot_fit_ptimgs(q) # plot_fit_ptimgs returns the source and image figures, so you can also do
                 # (srcfig, imgfig) = plot_fit_ptimgs(q,showplot=False) and modify the figures
 
-plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing
+#plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing

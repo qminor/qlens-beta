@@ -6,7 +6,7 @@ q.lens.add(SPLE({"b":10,"alpha":1,"s":0.5,"q":0.7,"theta":90},qlens=q))
 
 q.set_grid_corners(-18,18,-18,18) # Not essential, but it nicely zooms in the pixel image plots
 
-# Now we create a satellite galaxies with a dPIE profile (which is isothermal with
+# Now we create satellite galaxies with a dPIE profile (which is isothermal with
 # a tidal break radius):
 q.lens.add([
     dPIE({"b":0.06,"a":1,"s":0.001,"q":1,"xc":-0.3,"yc":0.4},qlens=q),
@@ -18,6 +18,9 @@ q.lens.add([
     dPIE({"b":0.3,"a":1,"s":0.01,"q":1,"xc":-10,"yc":7},qlens=q),
 ])
 
+set_aspect_ratio('equal') # options are 'auto', 'equal', or a specific number (note, 1 is the same 
+                          # as 'equal'). The default is 'equal' if you don't include this line
+
 # Plot the grid so you can see what it looks like:
 plot_ptimg_grid(q,lw=0.5) # smaller line thickness so we can see the galaxy subgridding more easily
 plot_ptimgs(-1.2,0.1,q)
@@ -25,9 +28,12 @@ plot_ptimgs(-1.2,0.1,q)
 # Now let's show the same thing but with a lensed surface brightness map of a Gaussian source:
 q.set_img_npixels(300,300)
 q.set_src_npixels(50,50) # for Cartesian pixel sources
+
 q.src.add(Gaussian({"sbmax":1.0,"sigma":1.0,"q":0.7,"xc":-1.4,"yc":-0.7}))
-q.src.mkpixsrc(npix=600) # npix=200 is the default if npix argument is not given, i.e. if you do src.mkpixsrc()
+q.src.mkpixsrc(npix=600) # npix=200 is the default if npix argument is not given
 
 plotsrc(q)
 plotimg(q)
+
+#plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing
 

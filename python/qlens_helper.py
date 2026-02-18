@@ -4,10 +4,12 @@ import matplotlib.pyplot as plt
 import code
 import copy
 import inspect
+import numbers
 import sys
 
 _cmap_scheme = 'turbo'      # this is the colormap scheme that I like the best, but it can be changed with the set_cmap function
 _line_thickness = 1.2
+_aspect = 'equal'
 
 def pause():
     if bool(getattr(sys, 'ps1', sys.flags.interactive))==True:   # will ignore the pause if not in interactive mode to begin with
@@ -25,6 +27,20 @@ def set_cmap(scheme):
 
 def get_cmap():
     print(_cmap_scheme)
+
+def set_aspect_ratio(aspect_in):
+    global _aspect
+    if (aspect_in=='equal'):
+        _aspect = 'equal'
+    elif (aspect_in=='auto'):
+        _aspect = 'auto'
+    elif (isinstance(aspect_in,numbers.Real)):
+        _aspect = aspect_in
+    else:
+        raise RuntimeError("set_aspect_ratio(...) requires input to be either a floating point number, 'equal' or 'auto'.")
+
+def get_aspect():
+    print(_aspect)
 
 def set_lw(thickness):
     global _line_thickness
@@ -55,7 +71,6 @@ def plot_ptimgs(src_x, src_y, QLens_Object, *, show_cc=True, show=True, grid=Fal
 
     srcplane_fig=plt.figure()
     srcplane_ax=plt.gca()
-
     srcplane_ax.plot(src_x, src_y, marker='o', linestyle='None', lw=_line_thickness, color='b', label='Source (z=' + str(imgs.zsrc) + ')')
 
     plt.legend(loc="upper right")
@@ -68,6 +83,8 @@ def plot_ptimgs(src_x, src_y, QLens_Object, *, show_cc=True, show=True, grid=Fal
     if (title != ""):
         plt.title(title)
 
+    imgplane_ax.set_aspect(_aspect, adjustable='box')
+    srcplane_ax.set_aspect(_aspect, adjustable='box')
     if (show==True):
         plt.show(block=False)
 
@@ -102,7 +119,8 @@ def plot_fit_ptimgs(QLens_Object, *, show_cc=True, show=True, grid=False, title=
 
     imgplane_fig=plt.figure()
     imgplane_ax=plt.gca()
-    ## Plotting the critical curves
+
+    ## Plotting the image sets
     markers = itertools.cycle(['o','s','v']) 
     markers_source = itertools.cycle(['o','s','v']) 
     for j in range(len(images_x)):
@@ -134,6 +152,8 @@ def plot_fit_ptimgs(QLens_Object, *, show_cc=True, show=True, grid=False, title=
     if (title != ""):
         plt.title(title)
 
+    imgplane_ax.set_aspect(_aspect, adjustable='box')
+    srcplane_ax.set_aspect(_aspect, adjustable='box')
     if (show==True):
         plt.show(block=False)
 
@@ -147,6 +167,7 @@ def plotcrit(QLens_Object, *, show=True, grid=False, title=""):
 
     imgplane_fig=plt.figure()
     imgplane_ax=plt.gca()
+
     if grid==True:
         plt.grid(True)
 
@@ -160,6 +181,8 @@ def plotcrit(QLens_Object, *, show=True, grid=False, title=""):
     if (title != ""):
         plt.title(title)
 
+    imgplane_ax.set_aspect(_aspect, adjustable='box')
+    srcplane_ax.set_aspect(_aspect, adjustable='box')
     if (show==True):
         plt.show(block=False)
 
@@ -174,8 +197,9 @@ def plot_ptimg_grid(QLens_Object, *, show_cc=True, lw=_line_thickness, show=True
 
     imgplane_fig=plt.figure()
     imgplane_ax=plt.gca()
-    ## Plotting the critical curves
-    imgplane_ax.plot(grid[0], grid[1], lw=lw, color='r', label="ptimg_grid for point image searching")
+
+    ## Plotting the grid
+    imgplane_ax.plot(grid[0], grid[1], lw=lw, color='r', label="ptimg_grid for image searching")
     #plt.legend(loc="upper right")
 
     if show_srcplane==True:
@@ -191,6 +215,10 @@ def plot_ptimg_grid(QLens_Object, *, show_cc=True, lw=_line_thickness, show=True
 
     if (title != ""):
         plt.title(title)
+
+    imgplane_ax.set_aspect(_aspect, adjustable='box')
+    if show_srcplane==True:
+        srcplane_ax.set_aspect(_aspect, adjustable='box')
 
     if (show==True):
         plt.show(block=False)
@@ -310,6 +338,7 @@ def plot_sb(img, QLens_Object, *, show=True, cc_color='gray', show_cc=True, fix_
     if (title != ""):
         plt.title(title)
 
+    ax.set_aspect(_aspect, adjustable='box')
     if (show==True):
         plt.show(block=False)
 
