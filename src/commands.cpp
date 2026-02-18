@@ -9341,7 +9341,7 @@ void QLens::process_commands(bool read_file)
 						if (point_image_data[n_imgset].set_use_in_chisq(n_img,use_in_chisq) == false) Complain("specified image number does not exist");
 					} else {
 						if (n_img >= point_image_data[n_imgset].n_images) Complain("specified image number does not exist");
-						if (mpi_id==0) cout << "Include image (" << n_imgset << "," << n_img << ") in chisq: " << display_switch(point_image_data[n_imgset].use_in_chisq[n_img]) << endl;
+						if (mpi_id==0) cout << "Include image (" << n_imgset << "," << n_img << ") in chisq: " << display_switch(point_image_data[n_imgset].images[n_img].use_in_chisq) << endl;
 					}
 				} else Complain("invalid argument to command 'imgdata'");
 			}

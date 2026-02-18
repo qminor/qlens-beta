@@ -56,7 +56,7 @@ q.run_fit("simplex",adopt=True)
 
 pause()
 
-fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
-                # (srcfig, imgfig) = fit_plotimg(q,showplot=False) and modify the figures
+plot_fit_ptimgs(q) # plot_fit_ptimgs returns the source and image figures, so you can also do
+                # (srcfig, imgfig) = plot_fit_ptimgs(q,showplot=False) and modify the figures
 
 #plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing

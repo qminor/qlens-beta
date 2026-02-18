@@ -23,7 +23,8 @@ pause()
 
 q.run_fit("simplex")
 q.use_bestfit()
-fit_plotimg(q) # fit_plotimg returns the source and image figures, so you can also do
-                # (srcfig, imgfig) = fit_plotimg(q,show=False) and modify the figures
+
+plot_fit_ptimgs(q) # plot_fit_ptimgs returns the source and image figures, so you can also do
+                # (srcfig, imgfig) = plot_fit_ptimgs(q,showplot=False) and modify the figures
 
 #plt.show()

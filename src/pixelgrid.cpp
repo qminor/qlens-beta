@@ -12972,34 +12972,40 @@ bool ImageData::test_if_in_fit_region(const double& x, const double& y, const in
 
 double ImagePixelGrid::calculate_signal_to_noise(double& total_signal)
 {
-	// NOTE: This function should be called *before* adding noise to the image.
+	// NOTE: Ideally, this function should be called *before* adding noise to the image.
 	double sbmax=-1e30;
-	static const double signal_threshold_frac = 1e-1;
-	int i,j;
+	static const double signal_threshold_frac = 1e-2;
+	int i,j,npixels_above_threshold=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if (surface_brightness[i][j] > sbmax) sbmax = foreground_surface_brightness[i][j] + surface_brightness[i][j];
+			if (pixel_in_mask[i][j]) {
+				if ((foreground_surface_brightness[i][j] + surface_brightness[i][j]) > sbmax) {
+					sbmax = foreground_surface_brightness[i][j] + surface_brightness[i][j];
+					npixels_above_threshold++;
+				}
+			}
 		}
 	}
 	double signal_mean=0,sn_mean=0;
 	int npixels=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if (noise_map[i][j]==0.0) {
-				warn("pixel noise is zero; cannot calculate signal-to-noise");
-				return 0.0;
-			}
-			if ((foreground_surface_brightness[i][j] + surface_brightness[i][j]) > signal_threshold_frac*sbmax) {
-				signal_mean += foreground_surface_brightness[i][j] + surface_brightness[i][j];
-				sn_mean += (foreground_surface_brightness[i][j] + surface_brightness[i][j])/noise_map[i][j];
-				npixels++;
+			if (pixel_in_mask[i][j]) {
+				if ((foreground_surface_brightness[i][j] + surface_brightness[i][j]) > signal_threshold_frac*sbmax) {
+					if (noise_map[i][j]==0.0) {
+						warn("pixel noise is zero; cannot calculate signal-to-noise");
+					}
+					signal_mean += foreground_surface_brightness[i][j] + surface_brightness[i][j];
+					sn_mean += (foreground_surface_brightness[i][j] + surface_brightness[i][j])/noise_map[i][j];
+					npixels++;
+				}
 			}
 		}
 	}
 	total_signal = signal_mean * pixel_xlength * pixel_ylength;
 	if (npixels > 0) {
-		sn_mean /= npixels;
-		signal_mean /= npixels;
+		sn_mean /= npixels_above_threshold;
+		signal_mean /= npixels_above_threshold;
 	}
 	return sn_mean;
 }

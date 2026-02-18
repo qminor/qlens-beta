@@ -73,7 +73,7 @@ PYBIND11_MODULE(qlens, m) {
 			//current.print_parameter_values();
 			py::list vals(current.nparams);
 			for (int i=0; i < current.nparams; i++) vals[i] = current.values[i];
-				return vals;
+			return vals;
 		})
 		.def("print",&ParamList::print_parameter_values)
 		.def("print_stepsizes",&ParamList::print_stepsizes)
@@ -1120,7 +1120,8 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("__getitem__", [](PtImgDataList &current, size_t index) {
 			if (index >= current.n_ptimgdata) throw std::runtime_error("Point source with given index has not been created");
-			return current.ptimgdatalist_ptr[index];
+			PointImageData* ptimgdata_ptr = &current.ptimgdatalist_ptr[index]; // Note, __getitem__ *must* return a pointer (found this out the hard way)
+			return ptimgdata_ptr;
 		})
 		.def("__len__", [](PtImgDataList &current) {
 			return current.n_ptimgdata;
@@ -1129,11 +1130,11 @@ PYBIND11_MODULE(qlens, m) {
 			if (current.n_ptimgdata==0) throw std::runtime_error("No point source objects have been created; cannot iterate over ptsrc list");
 			return py::make_iterator(current.begin(), current.end());
 		}, py::keep_alive<0,1>())
-		//.def("__repr__", [](PtImgDataList &current) {
-			//string ptsrc_info;
-			//for (int i=0; i < current.n_ptimgdata; i++) ptsrc_info += "\n" + current.ptimgdatalist_ptr[i]->get_parameters_string();
-			//return(ptsrc_info);
-		//})
+		.def("__repr__", [](PtImgDataList &current) {
+			string ptimgdata_info = current.output_image_data(true);
+			//for (int i=0; i < current.n_ptimgdata; i++) ptimgdata_info += "\n" + current.ptimgdatalist_ptr[i].output_data_string(true,current.qlens->use_scientific_notation);
+			return(ptimgdata_info);
+		})
 		;
 
 
@@ -2442,11 +2443,15 @@ PYBIND11_MODULE(qlens, m) {
 				py::arg("x_source"), py::arg("y_source"), py::arg("verbal")=false,
 				py::arg("flux")=-1, py::arg("show_labels")=false
 				)
-		.def("get_imageset", [](QLens_Wrap &curr, PointSource &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false) {
+		//.def("get_imageset", [](QLens_Wrap &curr, PointSource &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false) {
+				//curr.get_imageset(src_x, src_y, imgset, verbal);
+		.def("find_ptimgs", [](QLens_Wrap &curr, double src_x=0.5, double src_y=0.1, bool verbal=false) {
+				PtImageSet imgset(&curr);
 				curr.get_imageset(src_x, src_y, imgset, verbal);
-		},  py::arg("imgset"), py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)		
-		.def("get_fit_imagesets", &QLens_Wrap::get_fit_imagesets, py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, py::arg("verbal") = false) 
-		.def("get_data_imagesets", &QLens_Wrap::export_to_ImageDataSet)
+				return imgset;
+		},  py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)		
+		.def("get_fit_ptimgs", &QLens_Wrap::get_fit_imagesets, py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, py::arg("verbal") = false) 
+		//.def("get_data_imagesets", &QLens_Wrap::export_to_ImageDataSet)
 		.def("run_fit", [](QLens_Wrap &curr, const std::string &fitmethod, py::kwargs &kwargs){
 			bool adopt_bestfit = false;
 			bool show_errors = true;
@@ -2706,6 +2711,11 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("x", &lensvector::xval, &lensvector::set_xval)
 		.def_property("y", &lensvector::yval, &lensvector::set_yval)
 		.def("pos", [](lensvector &lens){ return std::make_tuple(lens.v[0], lens.v[1]); })
+		.def("__getitem__", [](lensvector &current, size_t index) {
+			if (index > 1) throw std::runtime_error("lensvector has only two components (0 and 1 for x and y respectively)");
+			return current.v[index];
+		})
+
 		;
 
 	py::class_<PointSource, ModelParams, std::unique_ptr<PointSource, py::nodelete>>(m, "PtSrc")
@@ -2724,15 +2734,57 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("images", &PointSource::images)
 		;
 
+	py::class_<PointImageData, std::unique_ptr<PointImageData, py::nodelete>>(m, "PtImgData")
+		.def(py::init<>([]() { return new PointImageData(); }))
+		.def_readonly("n_images", &PointImageData::n_images)
+		.def_readonly("images", &PointImageData::images)
+		.def_readonly("zsrc", &PointImageData::zsrc)
+		.def("print", [](PointImageData &curr){
+			cout << curr.output_data_string(true,curr.qlens_ptr->use_scientific_notation) << endl;
+		})
+		.def("__repr__", [](PointImageData &a) {
+				string outstring = a.output_data_string(true,a.qlens_ptr->use_scientific_notation);
+				return("\n" + outstring);
+		})
+		;
+
+	py::class_<PtImageSet>(m, "PtImageSet")
+		.def(py::init<>([](){ return new PtImageSet(); }))
+		.def_readonly("n_images", &PtImageSet::n_images)
+		.def_readonly("zsrc", &PtImageSet::zsrc)
+		.def_readonly("srcpos", &PtImageSet::srcpos)
+		.def_readonly("images", &PtImageSet::images)
+		//.def("images", [](PtImageSet &curr){
+			//py::list imglist;
+			//for (int i=0; i < curr.n_images; i++) imglist.append(curr.images[i]); // this doesn't work
+			//return imglist;
+		//})
+		.def("print", [](PtImageSet &curr){
+			bool use_sci = true;
+			if (curr.qlens_ptr != NULL) use_sci = curr.qlens_ptr->use_scientific_notation;
+			cout << curr.output_images_string(use_sci) << endl;
+		})
+		.def("__len__", [](PtImageSet &current) {
+			return current.n_images;
+		})
+		.def("__getitem__", [](PtImageSet &current, size_t index) {
+			if (index >= current.n_images) throw std::runtime_error("Parameter with given index does not exist");
+			return current.images[index];
+		})
+		.def("__iter__", [](PtImageSet &current) {
+			if (current.n_images==0) throw std::runtime_error("No images have been found; cannot iterate over image list");
+			return py::make_iterator(current.begin(), current.end());
+		}, py::keep_alive<0,1>())
+		.def("__repr__", [](PtImageSet &a) {
+			bool use_sci = true;
+			if (a.qlens_ptr != NULL) use_sci = a.qlens_ptr->use_scientific_notation;
+			string outstring = a.output_images_string(use_sci);
+			return("\n" + outstring);
+		})
+		;
+
 	py::class_<PtImageDataSet>(m, "PtImageDataSet")
 		.def(py::init<>([](){ return new PtImageDataSet(); }))
-		// .def()
-		// .def("print", &PointSource::print)
-		// .def("print_s", [](&PointSource curr, bool include_time_delays = false, bool show_labels = true, ofstream* srcfile = NULL, ofstream* imgfile = NULL){
-		//		curr.print(include_time_delays, show_labels, srcfile, imgfile);
-		// }, 
-		//		py::arg("include_time_delays") = false, py::arg("include_time_delays") = true,
-		//		py::arg("srcfile") = NULL, py::arg("imgfile") = NULL)
 		.def_readonly("n_images", &PtImageDataSet::n_images)
 		.def_readonly("zsrc", &PtImageDataSet::zsrc)
 		.def_readonly("images", &PtImageDataSet::images)

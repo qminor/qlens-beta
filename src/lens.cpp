@@ -3454,6 +3454,7 @@ void QLens::add_point_source(const double zsrc, const lensvector &sourcept, cons
 	PointImageData *new_ptimg_data = new PointImageData[n_ptsrc+1];
 	for (int i=0; i < n_ptsrc; i++) {
 		new_ptimg_data[i].input(point_image_data[i]);
+		new_ptimg_data[i].input_qlensptr(this);
 	}
 	if (n_ptsrc > 0) {
 		delete[] point_image_data;
@@ -3507,6 +3508,7 @@ void QLens::remove_point_source(int ptsrc_number)
 			newlist[j] = ptsrc_list[i];
 			new_ptsrc_redshift_idx[j] = ptsrc_redshift_idx[i];
 			new_ptimg_data[j].input(point_image_data[i]);
+			new_ptimg_data[j].input_qlensptr(this);
 			j++;
 		}
 	}
@@ -5064,7 +5066,7 @@ void QLens::subgrid_around_perturber_galaxies(lensvector *centers, double *einst
 			min_distsqr = 1e30;
 			for (i=ptsrc_redshift_groups[zindx]; i < ptsrc_redshift_groups[zindx+1]; i++) {
 				for (k=0; k < point_image_data[i].n_images; k++) {
-					distsqr = SQR(point_image_data[i].pos[k][0] - galcenter[j][0]) + SQR(point_image_data[i].pos[k][1] - galcenter[j][1]);
+					distsqr = SQR(point_image_data[i].images[k].pos[0] - galcenter[j][0]) + SQR(point_image_data[i].images[k].pos[1] - galcenter[j][1]);
 					if (distsqr < min_distsqr) min_distsqr = distsqr;
 				}
 			}
@@ -6992,7 +6994,7 @@ bool QLens::add_simulated_point_image_data(const lensvector &sourcept, const dou
 			imgs[i].td -= min_td;
 		}
 	}
-	point_image_data[n_ptsrc-1].input(n_images,imgs,err_pos,err_flux,sim_err_td,include_image,include_time_delays);
+	point_image_data[n_ptsrc-1].input(n_images,imgs,err_pos,err_flux,sim_err_td,include_image,include_time_delays,source_redshift);
 
 	sort_image_data_into_redshift_groups();
 	include_imgpos_chisq = true;
@@ -7039,7 +7041,7 @@ bool QLens::add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_f
 		err_flux[i] = sim_err_flux;
 		//point_image_data[0].add_image(sourcepts_fit[i], sim_err_pos, 0, 0, 0, 0);
 	}
-	point_image_data[0].input(n_images,imgs,err_pos,err_flux,0,include,false);
+	point_image_data[0].input(n_images,imgs,err_pos,err_flux,0,include,false,source_redshift);
 
 	sort_image_data_into_redshift_groups();
 	include_imgpos_chisq = true;
@@ -7105,7 +7107,9 @@ bool QLens::load_point_image_data(string filename)
 		if (datastring_convert(datawords[1],zlens)==false) { warn("data file has incorrect format; could not read lens redshift"); return false; }
 		if (zlens < 0) { warn("invalid redshift; redshift must be greater than zero"); return false; }
 		lens_redshift = zlens;
+	ptimgdata_list->input_ptr(point_image_data,n_ptsrc);
 		if (read_data_line(data_infile,datawords,n_datawords)==false) { warn("data file could not be read; unexpected end of file"); return false; }
+
 	}
 	if (n_datawords != 1) { warn("input data file has incorrect format; first line should specify number of source points"); return false; }
 	int nsrcfit;
@@ -7145,6 +7149,7 @@ bool QLens::load_point_image_data(string filename)
 		add_point_source(zsrc,zeros,vary_source_coords);
 		if (nn==0) warn("no images in data file for source point %i",i);
 		point_image_data[i].input(nn);
+		point_image_data[i].zsrc = zsrc;
 		for (j=0; j < nn; j++) {
 			if (read_data_line(data_infile,datawords,n_datawords)==false) {
 				warn("data file could not be read; unexpected end of file"); 
@@ -7156,46 +7161,46 @@ bool QLens::load_point_image_data(string filename)
 				clear_point_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[0],point_image_data[i].pos[j][0])==false) {
+			if (datastring_convert(datawords[0],point_image_data[i].images[j].pos[0])==false) {
 				warn("image position x-coordinate has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_point_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[1],point_image_data[i].pos[j][1])==false) {
+			if (datastring_convert(datawords[1],point_image_data[i].images[j].pos[1])==false) {
 				warn("image position y-coordinate has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_point_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[2],point_image_data[i].sigma_pos[j])==false) {
+			if (datastring_convert(datawords[2],point_image_data[i].images[j].sigma_pos)==false) {
 				warn("image position measurement error has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_point_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[3],point_image_data[i].flux[j])==false) {
+			if (datastring_convert(datawords[3],point_image_data[i].images[j].flux)==false) {
 				warn("image flux has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_point_image_data();
 				return false;
 			}
-			if (datastring_convert(datawords[4],point_image_data[i].sigma_f[j])==false) {
+			if (datastring_convert(datawords[4],point_image_data[i].images[j].sigma_flux)==false) {
 				warn("image flux measurement error has incorrect format; could not read entry for source point %i, image number %i",i,j);
 				clear_point_image_data();
 				return false;
 			}
 			if (n_datawords==7) {
-				if (datastring_convert(datawords[5],point_image_data[i].time_delays[j])==false) {
+				if (datastring_convert(datawords[5],point_image_data[i].images[j].td)==false) {
 					warn("image time delay has incorrect format; could not read entry for source point %i, image number %i",i,j);
 					clear_point_image_data();
 					return false;
 				}
-				if (datastring_convert(datawords[6],point_image_data[i].sigma_t[j])==false) {
+				if (datastring_convert(datawords[6],point_image_data[i].images[j].sigma_td)==false) {
 					warn("image time delay has incorrect format; could not read entry for source point %i, image number %i",i,j);
 					clear_point_image_data();
 					return false;
 				}
 			} else {
 				time_delay_info_included = false;
-				point_image_data[i].time_delays[j] = 0;
-				point_image_data[i].sigma_t[j] = 0;
+				point_image_data[i].images[j].td = 0;
+				point_image_data[i].images[j].sigma_td = 0;
 			}
 		}
 	}
@@ -7227,7 +7232,7 @@ bool QLens::load_point_image_data(string filename)
 		n=0;
 		for (k=0; k < point_image_data[i].n_images; k++) {
 			for (j=k+1; j < point_image_data[i].n_images; j++) {
-				distsqrs[n] = SQR(point_image_data[i].pos[k][0] - point_image_data[i].pos[j][0]) + SQR(point_image_data[i].pos[k][1] - point_image_data[i].pos[j][1]);
+				distsqrs[n] = SQR(point_image_data[i].images[k].pos[0] - point_image_data[i].images[j].pos[0]) + SQR(point_image_data[i].images[k].pos[1] - point_image_data[i].images[j].pos[1]);
 				n++;
 			}
 		}
@@ -7242,7 +7247,7 @@ bool QLens::load_point_image_data(string filename)
 			n=0;
 			for (k=0; k < point_image_data[i].n_images; k++) {
 				for (j=k+1; j < point_image_data[i].n_images; j++) {
-					tdsqrs[n] = SQR(point_image_data[i].time_delays[k] - point_image_data[i].time_delays[j]);
+					tdsqrs[n] = SQR(point_image_data[i].images[k].td - point_image_data[i].images[j].td);
 					n++;
 				}
 			}
@@ -7258,6 +7263,7 @@ bool QLens::load_point_image_data(string filename)
 	//}
 
 	include_imgpos_chisq = true;
+	ptimgdata_list->input_ptr(point_image_data,n_ptsrc);
 	return true;
 }
 
@@ -7281,6 +7287,7 @@ void QLens::sort_image_data_into_redshift_groups()
 	for (i=0; i < n_ptsrc; i++) {
 		if (!assigned[i]) {
 			sorted_image_data[j].input(point_image_data[i]);
+			sorted_image_data[j].input_qlensptr(this);
 			sorted_ptsrc_list[j] = ptsrc_list[i];
 			sorted_ptsrc_redshift_idx[j] = ptsrc_redshift_idx[i];
 			//sorted_redshifts[j] = specific_ptsrc_redshifts[i];
@@ -7310,6 +7317,7 @@ void QLens::sort_image_data_into_redshift_groups()
 	ptsrc_list = sorted_ptsrc_list;
 	ptsrc_redshift_idx = sorted_ptsrc_redshift_idx;
 	ptsrclist->input_ptr(ptsrc_list,n_ptsrc);
+	ptimgdata_list->input_ptr(point_image_data,n_ptsrc);
 }
 
 /*
@@ -7372,7 +7380,7 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 	double *specific_zfacs = ptsrc_zfactors[ptsrc_redshift_idx[dataset_number]];
 	double **specific_betafacs = ptsrc_beta_factors[ptsrc_redshift_idx[dataset_number]];
 	for (i=0; i < n_srcpts; i++) {
-		find_sourcept(point_image_data[dataset_number].pos[i],srcpts[i],0,specific_zfacs,specific_betafacs);
+		find_sourcept(point_image_data[dataset_number].images[i].pos,srcpts[i],0,specific_zfacs,specific_betafacs);
 	}
 
 	if (use_scientific_notation==false) {
@@ -7390,8 +7398,8 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (i=0; i < n_srcpts; i++) {
-			pot = potential(point_image_data[dataset_number].pos[i],specific_zfacs,specific_betafacs);
-			time_delays_mod[i] = 0.5*(SQR(point_image_data[dataset_number].pos[i][0] - srcpts[i][0]) + SQR(point_image_data[dataset_number].pos[i][1] - srcpts[i][1])) - pot;
+			pot = potential(point_image_data[dataset_number].images[i].pos,specific_zfacs,specific_betafacs);
+			time_delays_mod[i] = 0.5*(SQR(point_image_data[dataset_number].images[i].pos[0] - srcpts[i][0]) + SQR(point_image_data[dataset_number].images[i].pos[1] - srcpts[i][1])) - pot;
 			if (time_delays_mod[i] < min_td_mod) min_td_mod = time_delays_mod[i];
 		}
 		for (i=0; i < n_srcpts; i++) {
@@ -7408,10 +7416,10 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 		cout << endl;
 		double imgflux;
 		for (i=0; i < n_srcpts; i++) {
-			cout << point_image_data[dataset_number].pos[i][0] << "\t" << point_image_data[dataset_number].pos[i][1] << "\t" << srcpts[i][0] << "\t" << srcpts[i][1];
+			cout << point_image_data[dataset_number].images[i].pos[0] << "\t" << point_image_data[dataset_number].images[i].pos[1] << "\t" << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (srcfile != NULL) (*srcfile) << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (flux != -1) {
-				imgflux = flux/inverse_magnification(point_image_data[dataset_number].pos[i],0,specific_zfacs,specific_betafacs);
+				imgflux = flux/inverse_magnification(point_image_data[dataset_number].images[i].pos,0,specific_zfacs,specific_betafacs);
 				cout << "\t" << imgflux;
 			}
 			if (include_time_delays) {
@@ -7428,28 +7436,6 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 
 	delete[] srcpts;
 	return true;
-}
-
-vector<PtImageDataSet> QLens::export_to_ImageDataSet()
-{
-	vector<PtImageDataSet> ptimage_data_sets;
-	ptimage_data_sets.clear();
-	ptimage_data_sets.resize(n_ptsrc);
-	int i,j;
-	for (i=0; i < n_ptsrc; i++) {
-		ptimage_data_sets[i].set_n_images(point_image_data[i].n_images);
-		ptimage_data_sets[i].zsrc = ptsrc_redshifts[ptsrc_redshift_idx[i]];
-		for (j=0; j < point_image_data[i].n_images; j++) {
-			ptimage_data_sets[i].images[j].pos[0] = point_image_data[i].pos[j][0];
-			ptimage_data_sets[i].images[j].pos[1] = point_image_data[i].pos[j][1];
-			ptimage_data_sets[i].images[j].flux = point_image_data[i].flux[j];
-			ptimage_data_sets[i].images[j].td = point_image_data[i].time_delays[j];
-			ptimage_data_sets[i].images[j].sigma_pos = point_image_data[i].sigma_pos[j];
-			ptimage_data_sets[i].images[j].sigma_flux = point_image_data[i].sigma_f[j];
-			ptimage_data_sets[i].images[j].sigma_td = point_image_data[i].sigma_t[j];
-		}
-	}
-	return ptimage_data_sets;
 }
 
 /********************************* Functions for weak lensing data (reading, writing, simulating etc.) *********************************/
@@ -7684,214 +7670,200 @@ void QLens::print_point_image_data(bool include_errors)
 			cout << "Source " << i << ": zsrc=" << zsrc;
 			if ((n_lens_redshifts==0) or ((n_lens_redshifts==1) and (zsrc==lens_redshifts[0]))) cout << " (unlensed)";
 			cout << endl;
-			point_image_data[i].print_list(include_errors,use_scientific_notation);
+			string imgstring = point_image_data[i].output_data_string(include_errors,use_scientific_notation);
+			cout << imgstring << endl;
+			//point_image_data[i].print_list(include_errors,use_scientific_notation);
 		}
 	}
 }
 
 void PointImageData::input(const int &nn)
 {
-	n_images = nn;
-	pos = new lensvector[n_images];
-	flux = new double[n_images];
-	time_delays = new double[n_images];
-	sigma_pos = new double[n_images];
-	sigma_f = new double[n_images];
-	sigma_t = new double[n_images];
-	use_in_chisq = new bool[n_images];
+	set_n_images(nn);
 	max_distsqr = 1e30;
 }
 
-void PointImageData::input(const PointImageData& imgs_in)
+void PointImageData::input(const PointImageData& imgdata_in)
 {
-	if (n_images != 0) {
-		// delete arrays so we can re-create them
-		delete[] pos;
-		delete[] flux;
-		delete[] time_delays;
-		delete[] sigma_pos;
-		delete[] sigma_f;
-		delete[] sigma_t;
-		delete[] use_in_chisq;
-	}
-	n_images = imgs_in.n_images;
-	pos = new lensvector[n_images];
-	flux = new double[n_images];
-	time_delays = new double[n_images];
-	sigma_pos = new double[n_images];
-	sigma_f = new double[n_images];
-	sigma_t = new double[n_images];
-	use_in_chisq = new bool[n_images];
+	set_n_images(imgdata_in.n_images);
+	zsrc = imgdata_in.zsrc;
 	for (int i=0; i < n_images; i++) {
-		pos[i] = imgs_in.pos[i];
-		flux[i] = imgs_in.flux[i];
-		time_delays[i] = imgs_in.time_delays[i];
-		sigma_pos[i] = imgs_in.sigma_pos[i];
-		sigma_f[i] = imgs_in.sigma_f[i];
-		sigma_t[i] = imgs_in.sigma_t[i];
-		use_in_chisq[i] = true;
+		images[i].pos = imgdata_in.images[i].pos;
+		images[i].flux = imgdata_in.images[i].flux;
+		images[i].td = imgdata_in.images[i].td;
+		images[i].sigma_pos = imgdata_in.images[i].sigma_pos;
+		images[i].sigma_flux = imgdata_in.images[i].sigma_flux;
+		images[i].sigma_td = imgdata_in.images[i].sigma_td;
+		images[i].use_in_chisq = true;
 	}
-	max_distsqr = imgs_in.max_distsqr;
+	max_distsqr = imgdata_in.max_distsqr;
 }
 
-void PointImageData::input(const int &nn, image* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays)
+void PointImageData::input(const int &nn, image* imgs_in, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, const bool include_time_delays, const double zsrc_in)
 {
 	// this function is used to store simulated data
 	int n_images_include=0;
 	for (int i=0; i < nn; i++) if (include[i]) n_images_include++;
-	n_images = n_images_include;
-	pos = new lensvector[n_images];
-	flux = new double[n_images];
-	time_delays = new double[n_images];
-	sigma_pos = new double[n_images];
-	sigma_f = new double[n_images];
-	sigma_t = new double[n_images];
-	use_in_chisq = new bool[n_images];
+	set_n_images(n_images_include);
+	zsrc = zsrc_in;
 	int j=0;
 	for (int i=0; i < nn; i++) {
 		if (!include[i]) continue;
-		pos[j] = images[i].pos;
-		flux[j] = images[i].flux;
+		images[j].pos = imgs_in[i].pos;
+		images[j].flux = imgs_in[i].flux;
 		if (include_time_delays) {
-			time_delays[j] = images[i].td;
-			sigma_t[j] = sigma_td_in;
+			images[j].td = imgs_in[i].td;
+			images[j].sigma_td = sigma_td_in;
 		}
 		else {
-			time_delays[j] = 0;
-			sigma_t[j] = 0;
+			images[j].td = 0;
+			images[j].sigma_td = 0;
 		}
-		sigma_pos[j] = sigma_pos_in[j];
-		sigma_f[j] = sigma_flux_in[j];
-		use_in_chisq[j] = true;
+		images[j].sigma_pos = sigma_pos_in[j];
+		images[j].sigma_flux = sigma_flux_in[j];
+		images[j].use_in_chisq = true;
 		j++;
 	}
 	max_distsqr = 1e30;
 }
 
 
-void PointImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in)
+void PointImageData::add_image(lensvector& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_flux_in, const double time_delay_in, const double sigma_td_in)
 {
-	int n_images_new = n_images+1;
-	if (n_images != 0) {
-		lensvector *new_pos = new lensvector[n_images_new];
-		double *new_flux = new double[n_images_new];
-		double *new_time_delays = new double[n_images_new];
-		double *new_sigma_pos = new double[n_images_new];
-		double *new_sigma_f = new double[n_images_new];
-		double *new_sigma_t = new double[n_images_new];
-		bool *new_use_in_chisq = new bool[n_images_new];
-		for (int i=0; i < n_images; i++) {
-			new_pos[i][0] = pos[i][0];
-			new_pos[i][1] = pos[i][1];
-			new_flux[i] = flux[i];
-			new_time_delays[i] = time_delays[i];
-			new_sigma_pos[i] = sigma_pos[i];
-			new_sigma_f[i] = sigma_f[i];
-			new_sigma_t[i] = sigma_t[i];
-			new_use_in_chisq[i] = use_in_chisq[i];
-		}
-		delete[] pos;
-		delete[] flux;
-		delete[] time_delays;
-		delete[] sigma_pos;
-		delete[] sigma_f;
-		delete[] sigma_t;
-		delete[] use_in_chisq;
-		pos = new_pos;
-		flux = new_flux;
-		time_delays = new_time_delays;
-		sigma_pos = new_sigma_pos;
-		sigma_f = new_sigma_f;
-		sigma_t = new_sigma_t;
-		use_in_chisq = new_use_in_chisq;
-		n_images++;
-	} else {
-		n_images = 1;
-		pos = new lensvector[n_images];
-		flux = new double[n_images];
-		time_delays = new double[n_images];
-		sigma_pos = new double[n_images];
-		sigma_f = new double[n_images];
-		sigma_t = new double[n_images];
-		use_in_chisq = new bool[n_images];
-	}
-	pos[n_images-1][0] = pos_in[0];
-	pos[n_images-1][1] = pos_in[1];
-	flux[n_images-1] = flux_in;
-	time_delays[n_images-1] = time_delay_in;
-	sigma_pos[n_images-1] = sigma_pos_in;
-	sigma_f[n_images-1] = sigma_f_in;
-	sigma_t[n_images-1] = sigma_t_in;
-	use_in_chisq[n_images-1] = true;
+	image_data new_imgdata;
+	new_imgdata.pos = pos_in;
+	new_imgdata.flux = flux_in;
+	new_imgdata.td = time_delay_in;
+	new_imgdata.sigma_pos = sigma_pos_in;
+	new_imgdata.sigma_flux = sigma_flux_in;
+	new_imgdata.sigma_td = sigma_td_in;
+	new_imgdata.use_in_chisq = true;
+	images.push_back(new_imgdata);
+	n_images++;
 }
 
 bool PointImageData::set_use_in_chisq(int image_i, bool use_in_chisq_in)
 {
 	if (image_i >= n_images) return false;
-	use_in_chisq[image_i] = use_in_chisq_in;
+	images[image_i].use_in_chisq = use_in_chisq_in;
 	return true;
 }
 
-void PointImageData::print_list(bool print_errors, bool use_sci)
+/*
+string PointImageData::mkstring_doub(const double db, const bool use_sci)
 {
-	if (n_images==0) {
-		cout << "# no image data available" << endl << endl;
+	stringstream dstr;
+	if (use_sci==false) {
+		dstr << setprecision(6);
+		dstr << fixed;
 	} else {
-		if (use_sci==false) {
-			cout << setprecision(6);
-			cout << fixed;
-		}
-		if (print_errors) cout << "#        pos_x(arcsec)\tpos_y(arcsec)\tsig_pos\t\tflux\t\tsig_flux";
-		else cout << "#        pos_x\t\tpos_y\t\tflux";
-		if (sigma_t[0] != 0) {
-			if (print_errors) cout << "\ttime_delay(days)\tsigma_t\n";
-			else cout << "\ttime_delay\n";
-		}
-		else cout << endl;
-		for (int i=0; i < n_images; i++) {
-			cout << "Image " << i << ": " << pos[i][0] << "\t" << pos[i][1];
-			if (print_errors) cout << "\t" << sigma_pos[i];
-			cout << "\t" << flux[i];
-			if (print_errors) cout << "\t" << sigma_f[i];
-			if (sigma_t[0] != 0) {
-				cout << "\t" << time_delays[i];
-				if (print_errors) cout << "\t\t" << sigma_t[i];
-			}
-			if (!use_in_chisq[i]) cout << "   (excluded from chisq)";
-			cout << endl;
-		}
-		cout << endl;
-		if (use_sci==false)
-			cout.unsetf(ios_base::floatfield);
+		dstr << setiosflags(ios::scientific);
 	}
+	string dstring;
+	dstr << db;
+	dstr >> dstring;
+	return dstring;
+}
+
+string PointImageData::mkstring_int(const int i)
+{
+	stringstream istr;
+	string istring;
+	istr << i;
+	istr >> istring;
+	return istring;
+}
+*/
+
+string PointImageData::output_data_string(const bool print_errors, const bool use_sci)
+{
+	auto mkstring_doub = [](const double db, const bool use_sci) {
+		stringstream dstr;
+		if (use_sci==false) {
+			dstr << setprecision(6);
+			dstr << fixed;
+		} else {
+			dstr << setiosflags(ios::scientific);
+		}
+		string dstring;
+		dstr << db;
+		dstr >> dstring;
+		return dstring;
+	};
+
+	auto mkstring_int = [](const int i) {
+		stringstream istr;
+		string istring;
+		istr << i;
+		istr >> istring;
+		return istring;
+	};
+
+	string datastring = "";
+	if (n_images==0) {
+		datastring += "# no image data available\n\n";
+	} else {
+		if (print_errors) datastring += "#        pos_x(arcsec)\tpos_y(arcsec)\tsig_pos\t\tflux\t\tsig_flux";
+		else datastring += "#        pos_x\t\tpos_y\t\tflux";
+		if (images[0].sigma_td != 0) {
+			if (print_errors) datastring += "\ttime_delay(days)\tsigma_t\n";
+			else datastring += "\ttime_delay\n";
+		}
+		else datastring += "\n";
+		for (int i=0; i < n_images; i++) {
+			datastring += "Image " + mkstring_int(i) + ": " + mkstring_doub(images[i].pos[0],use_sci) + "\t" + mkstring_doub(images[i].pos[1],use_sci);
+			if (print_errors) datastring += "\t" + mkstring_doub(images[i].sigma_pos,use_sci);
+			datastring += "\t" + mkstring_doub(images[i].flux,use_sci);
+			if (print_errors) datastring += "\t" + mkstring_doub(images[i].sigma_flux,use_sci);
+			if (images[0].sigma_td != 0) {
+				datastring += "\t" + mkstring_doub(images[i].td,use_sci);
+				if (print_errors) datastring += "\t\t" + mkstring_doub(images[i].sigma_td,use_sci);
+			}
+			if (!images[i].use_in_chisq) datastring += "   (excluded from chisq)";
+			datastring += "\n";
+		}
+		datastring += "\n";
+	}
+	return datastring;
 }
 
 void PointImageData::write_to_file(ofstream &outfile)
 {
 	for (int i=0; i < n_images; i++) {
-		outfile << pos[i][0] << " " << pos[i][1];
-		outfile << " " << sigma_pos[i];
-		outfile << " " << flux[i];
-		outfile << " " << sigma_f[i];
-		if (sigma_t[0] != 0) {
-			outfile << " " << time_delays[i];
-			outfile << " " << sigma_t[i];
+		outfile << images[i].pos[0] << " " << images[i].pos[1];
+		outfile << " " << images[i].sigma_pos;
+		outfile << " " << images[i].flux;
+		outfile << " " << images[i].sigma_flux;
+		if (images[0].sigma_td != 0) {
+			outfile << " " << images[i].td;
+			outfile << " " << images[i].sigma_td;
 		}
 		outfile << endl;
 	}
 }
 
-PointImageData::~PointImageData()
+string PtImgDataList::output_image_data(const bool include_errors)
 {
-	if (n_images != 0) {
-		delete[] pos;
-		delete[] flux;
-		delete[] time_delays;
-		delete[] sigma_pos;
-		delete[] sigma_f;
-		delete[] sigma_t;
-		delete[] use_in_chisq;
+	double zsrc;
+	string outstring = "";
+
+	for (int i=0; i < n_ptimgdata; i++) {
+		zsrc = qlens->ptsrc_redshifts[qlens->ptsrc_redshift_idx[i]];
+		stringstream istr;
+		string istring;
+		istr << i;
+		istr >> istring;
+		stringstream zstr;
+		string zstring;
+		zstr << zsrc;
+		zstr >> zstring;
+		outstring += "Source " + istring + ": zsrc=" + zstring;
+		if ((qlens->n_lens_redshifts==0) or ((qlens->n_lens_redshifts==1) and (zsrc==qlens->lens_redshifts[0]))) cout << " (unlensed)";
+		outstring += "\n";
+		string imgstring = ptimgdatalist_ptr[i].output_data_string(include_errors,qlens->use_scientific_notation);
+		outstring += imgstring + "\n";
 	}
+	return outstring;
 }
 
 void WeakLensingData::input(const int &nn)
@@ -8585,12 +8557,12 @@ void QLens::find_analytic_srcpos(lensvector *beta_i)
 		specific_zfacs = ptsrc_zfactors[ptsrc_redshift_idx[i]];
 		specific_betafacs = ptsrc_beta_factors[ptsrc_redshift_idx[i]];
 		for (j=0; j < point_image_data[i].n_images; j++) {
-			if (point_image_data[i].use_in_chisq[j]) {
+			if (point_image_data[i].images[j].use_in_chisq) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(point_image_data[i].pos[j],beta_ji,jac,0,specific_zfacs,specific_betafacs);
+					sourcept_jacobian(point_image_data[i].images[j].pos,beta_ji,jac,0,specific_zfacs,specific_betafacs);
 					mag = jac.inverse();
 					lensmatsqr(mag,magsqr);
-					siginv = 1.0/(SQR(point_image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
+					siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 					amatrix[0][0] += magsqr[0][0]*siginv;
 					amatrix[1][0] += magsqr[1][0]*siginv;
 					amatrix[0][1] += magsqr[0][1]*siginv;
@@ -8598,8 +8570,8 @@ void QLens::find_analytic_srcpos(lensvector *beta_i)
 					bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
 					bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
 				} else {
-					find_sourcept(point_image_data[i].pos[j],beta_ji,0,specific_zfacs,specific_betafacs);
-					siginv = 1.0/(SQR(point_image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
+					find_sourcept(point_image_data[i].images[j].pos,beta_ji,0,specific_zfacs,specific_betafacs);
+					siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 					beta_i[i][0] += beta_ji[0]*siginv;
 					beta_i[i][1] += beta_ji[1]*siginv;
 					src_norm += siginv;
@@ -8667,9 +8639,9 @@ double QLens::chisq_pos_source_plane()
 		src_bf[0] = src_bf[1] = 0;
 		src_norm=0;
 		for (j=0; j < point_image_data[i].n_images; j++) {
-			if (point_image_data[i].use_in_chisq[j]) {
+			if (point_image_data[i].images[j].use_in_chisq) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(point_image_data[i].pos[j],beta_ji[j],jac,0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					sourcept_jacobian(point_image_data[i].images[j].pos,beta_ji[j],jac,0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					mag = jac.inverse();
 					mag00[j] = mag[0][0];
 					mag01[j] = mag[0][1];
@@ -8677,7 +8649,7 @@ double QLens::chisq_pos_source_plane()
 
 					if (use_analytic_bestfit_src) {
 						lensmatsqr(mag,magsqr);
-						siginv = 1.0/(SQR(point_image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
+						siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 						amatrix[0][0] += magsqr[0][0]*siginv;
 						amatrix[1][0] += magsqr[1][0]*siginv;
 						amatrix[0][1] += magsqr[0][1]*siginv;
@@ -8686,9 +8658,9 @@ double QLens::chisq_pos_source_plane()
 						bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
 					}
 				} else {
-					find_sourcept(point_image_data[i].pos[j],beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					find_sourcept(point_image_data[i].images[j].pos,beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					if (use_analytic_bestfit_src) {
-						siginv = 1.0/(SQR(point_image_data[i].sigma_pos[j]) + syserr_pos*syserr_pos);
+						siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 						src_bf[0] += beta_ji[j][0]*siginv;
 						src_bf[1] += beta_ji[j][1]*siginv;
 						src_norm += siginv;
@@ -8712,10 +8684,10 @@ double QLens::chisq_pos_source_plane()
 		}
 
 		for (j=0; j < point_image_data[i].n_images; j++) {
-			if (point_image_data[i].use_in_chisq[j]) {
+			if (point_image_data[i].images[j].use_in_chisq) {
 				delta_beta[0] = (*beta)[0] - beta_ji[j][0];
 				delta_beta[1] = (*beta)[1] - beta_ji[j][1];
-				sigsq = SQR(point_image_data[i].sigma_pos[j]);
+				sigsq = SQR(point_image_data[i].images[j].sigma_pos);
 				if (syserr_pos != 0.0) {
 					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
 					 sigsq += syserr_pos*syserr_pos;
@@ -8807,7 +8779,7 @@ double QLens::chisq_pos_image_plane()
 			for (k=0; k < point_image_data[i].n_images; k++) {
 				for (j=0; j < n_images; j++) {
 					if (ignore[j]) continue;
-					distsqrs[n] = SQR(point_image_data[i].pos[k][0] - img[j].pos[0]) + SQR(point_image_data[i].pos[k][1] - img[j].pos[1]);
+					distsqrs[n] = SQR(point_image_data[i].images[k].pos[0] - img[j].pos[0]) + SQR(point_image_data[i].images[k].pos[1] - img[j].pos[1]);
 					data_k[n] = k;
 					model_j[n] = j;
 					n++;
@@ -8834,13 +8806,13 @@ double QLens::chisq_pos_image_plane()
 			}
 
 			for (k=0; k < point_image_data[i].n_images; k++) {
-				sigsq = SQR(point_image_data[i].sigma_pos[k]);
+				sigsq = SQR(point_image_data[i].images[k].sigma_pos);
 				if (syserr_pos != 0.0) {
 					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
 					 sigsq += syserr_pos*syserr_pos;
 				}
 				if (closest_image_j[k] != -1) {
-					if (point_image_data[i].use_in_chisq[k]) {
+					if (point_image_data[i].images[k].use_in_chisq) {
 						chisq_each_srcpt += closest_distsqrs[k]/sigsq + signormfac;
 					}
 				} else {
@@ -8946,7 +8918,7 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 			for (k=0; k < point_image_data[i].n_images; k++) {
 				for (j=0; j < n_images; j++) {
 					if (ignore[j]) continue;
-					distsqrs[n] = SQR(point_image_data[i].pos[k][0] - img[j].pos[0]) + SQR(point_image_data[i].pos[k][1] - img[j].pos[1]);
+					distsqrs[n] = SQR(point_image_data[i].images[k].pos[0] - img[j].pos[0]) + SQR(point_image_data[i].images[k].pos[1] - img[j].pos[1]);
 					data_k[n] = k;
 					model_j[n] = j;
 					n++;
@@ -8974,29 +8946,29 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 			double chisq_this_img, chi_x, chi_y;
 			int this_src_nimgs = point_image_data[i].n_images;
 			for (k=0; k < point_image_data[i].n_images; k++) {
-				sigsq = SQR(point_image_data[i].sigma_pos[k]);
+				sigsq = SQR(point_image_data[i].images[k].sigma_pos);
 				if (syserr_pos != 0.0) {
 					 signormfac = 2*log(1.0 + syserr_pos*syserr_pos/sigsq);
 					 sigsq += syserr_pos*syserr_pos;
 				}
 				if ((mpi_id==0) and (verbose)) cout << "source " << i << ", image " << k << ": ";
 				if (closest_image_j[k] != -1) {
-					if (point_image_data[i].use_in_chisq[k]) {
+					if (point_image_data[i].images[k].use_in_chisq) {
 						rms_err_each_srcpt += closest_distsqrs[k];
 						n_matched_images_each_srcpt++;
 						chisq_this_img = closest_distsqrs[k]/sigsq + signormfac;
-						chi_x = (img[closest_image_j[k]].pos[0]-point_image_data[i].pos[k][0])/sqrt(sigsq);
-						chi_y = (img[closest_image_j[k]].pos[1]-point_image_data[i].pos[k][1])/sqrt(sigsq);
+						chi_x = (img[closest_image_j[k]].pos[0]-point_image_data[i].images[k].pos[0])/sqrt(sigsq);
+						chi_y = (img[closest_image_j[k]].pos[1]-point_image_data[i].images[k].pos[1])/sqrt(sigsq);
 						closest_chivals.push_back(abs(chi_x));
 						closest_xvals_model.push_back(img[closest_image_j[k]].pos[0]);
 						closest_yvals_model.push_back(img[closest_image_j[k]].pos[1]);
-						closest_xvals_data.push_back(point_image_data[i].pos[k][0]);
-						closest_yvals_data.push_back(point_image_data[i].pos[k][1]);
+						closest_xvals_data.push_back(point_image_data[i].images[k].pos[0]);
+						closest_yvals_data.push_back(point_image_data[i].images[k].pos[1]);
 						closest_chivals.push_back(abs(chi_y));
 						closest_xvals_model.push_back(img[closest_image_j[k]].pos[0]);
 						closest_yvals_model.push_back(img[closest_image_j[k]].pos[1]);
-						closest_xvals_data.push_back(point_image_data[i].pos[k][0]);
-						closest_yvals_data.push_back(point_image_data[i].pos[k][1]);
+						closest_xvals_data.push_back(point_image_data[i].images[k].pos[0]);
+						closest_yvals_data.push_back(point_image_data[i].images[k].pos[1]);
 
 						if ((mpi_id==0) and (verbose)) cout << "chi_x=" << chi_x << ", chi_y=" << chi_y << ", chisq=" << chisq_this_img << " matched to (" << img[closest_image_j[k]].pos[0] << "," << img[closest_image_j[k]].pos[1] << ")" << endl << flush;
 						chisq_each_srcpt += chisq_this_img;
@@ -9124,19 +9096,19 @@ void QLens::find_analytic_srcflux(double *bestfit_flux)
 	for (i=0; i < n_ptsrc; i++) {
 		double num=0, denom=0;
 		for (j=0; j < point_image_data[i].n_images; j++) {
-			if (point_image_data[i].sigma_f[j]==0) { k++; continue; }
-			hessian(point_image_data[i].pos[j],jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
+			if (point_image_data[i].images[j].sigma_flux==0) { k++; continue; }
+			hessian(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
 			jac[1][0] = -jac[1][0];
 			image_mag = 1.0/determinant(jac);
 			if (include_parity_in_chisq) {
-				num += point_image_data[i].flux[j] * image_mag / SQR(point_image_data[i].sigma_f[j]);
+				num += point_image_data[i].images[j].flux * image_mag / SQR(point_image_data[i].images[j].sigma_flux);
 			} else {
-				num += abs(point_image_data[i].flux[j] * image_mag) / SQR(point_image_data[i].sigma_f[j]);
+				num += abs(point_image_data[i].images[j].flux * image_mag) / SQR(point_image_data[i].images[j].sigma_flux);
 			}
-			denom += SQR(image_mag/point_image_data[i].sigma_f[j]);
+			denom += SQR(image_mag/point_image_data[i].images[j].sigma_flux);
 			k++;
 		}
 		if (denom==0) bestfit_flux[i] = -1; // indicates we cannot find the source flux
@@ -9175,19 +9147,19 @@ double QLens::chisq_flux()
 	for (i=0; i < n_ptsrc; i++) {
 		k=0; num=0; denom=0;
 		for (j=0; j < point_image_data[i].n_images; j++) {
-			if (point_image_data[i].sigma_f[j]==0) { k++; continue; }
-			hessian(point_image_data[i].pos[j],jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
+			if (point_image_data[i].images[j].sigma_flux==0) { k++; continue; }
+			hessian(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
 			jac[1][0] = -jac[1][0];
 			image_mags[k] = 1.0/determinant(jac);
 			if (include_parity_in_chisq) {
-				num += point_image_data[i].flux[j] * image_mags[k] / SQR(point_image_data[i].sigma_f[j]);
+				num += point_image_data[i].images[j].flux * image_mags[k] / SQR(point_image_data[i].images[j].sigma_flux);
 			} else {
-				num += abs(point_image_data[i].flux[j] * image_mags[k]) / SQR(point_image_data[i].sigma_f[j]);
+				num += abs(point_image_data[i].images[j].flux * image_mags[k]) / SQR(point_image_data[i].images[j].sigma_flux);
 			}
-			denom += SQR(image_mags[k]/point_image_data[i].sigma_f[j]);
+			denom += SQR(image_mags[k]/point_image_data[i].images[j].sigma_flux);
 			k++;
 		}
 
@@ -9204,13 +9176,13 @@ double QLens::chisq_flux()
 		k=0;
 		if (include_parity_in_chisq) {
 			for (j=0; j < point_image_data[i].n_images; j++) {
-				if (point_image_data[i].sigma_f[j]==0) { k++; continue; }
-				chisq += SQR((point_image_data[i].flux[j] - image_mags[k++]*flux_src)/point_image_data[i].sigma_f[j]);
+				if (point_image_data[i].images[j].sigma_flux==0) { k++; continue; }
+				chisq += SQR((point_image_data[i].images[j].flux - image_mags[k++]*flux_src)/point_image_data[i].images[j].sigma_flux);
 			}
 		} else {
 			for (j=0; j < point_image_data[i].n_images; j++) {
-				if (point_image_data[i].sigma_f[j]==0) { k++; continue; }
-				chisq += SQR((abs(point_image_data[i].flux[j]) - abs(image_mags[k++]*flux_src))/point_image_data[i].sigma_f[j]);
+				if (point_image_data[i].images[j].sigma_flux==0) { k++; continue; }
+				chisq += SQR((abs(point_image_data[i].images[j].flux) - abs(image_mags[k++]*flux_src))/point_image_data[i].images[j].sigma_flux);
 			}
 		}
 	}
@@ -9244,24 +9216,24 @@ double QLens::chisq_time_delays()
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (j=0; j < point_image_data[i].n_images; j++) {
-			if (point_image_data[i].sigma_t[j]==0) continue;
-			find_sourcept(point_image_data[i].pos[j],beta_ij,0,specific_zfacs,specific_betafacs);
-			pot = potential(point_image_data[i].pos[j],specific_zfacs,specific_betafacs);
-			time_delays_mod[j] = 0.5*(SQR(point_image_data[i].pos[j][0] - beta_ij[0]) + SQR(point_image_data[i].pos[j][1] - beta_ij[1])) - pot;
+			if (point_image_data[i].images[j].sigma_td==0) continue;
+			find_sourcept(point_image_data[i].images[j].pos,beta_ij,0,specific_zfacs,specific_betafacs);
+			pot = potential(point_image_data[i].images[j].pos,specific_zfacs,specific_betafacs);
+			time_delays_mod[j] = 0.5*(SQR(point_image_data[i].images[j].pos[0] - beta_ij[0]) + SQR(point_image_data[i].images[j].pos[1] - beta_ij[1])) - pot;
 			if (time_delays_mod[j] < min_td_mod) min_td_mod = time_delays_mod[j];
 
-			if (point_image_data[i].time_delays[j] < min_td_obs) min_td_obs = point_image_data[i].time_delays[j];
+			if (point_image_data[i].images[j].td < min_td_obs) min_td_obs = point_image_data[i].images[j].td;
 		}
 		for (k=0, j=0; j < point_image_data[i].n_images; j++) {
-			if (point_image_data[i].sigma_t[j]==0) { k++; continue; }
+			if (point_image_data[i].images[j].sigma_td==0) { k++; continue; }
 			time_delays_mod[k] -= min_td_mod;
 			if (time_delays_mod[k] != 0.0) time_delays_mod[k] *= td_factor; // td_factor contains the cosmological factors and is in units of days
-			time_delays_obs[k] = point_image_data[i].time_delays[j] - min_td_obs;
+			time_delays_obs[k] = point_image_data[i].images[j].td - min_td_obs;
 			k++;
 		}
 		for (k=0, j=0; j < point_image_data[i].n_images; j++) {
-			if (point_image_data[i].sigma_t[j]==0) { k++; continue; }
-			chisq += SQR((time_delays_obs[k] - time_delays_mod[k]) / point_image_data[i].sigma_t[j]);
+			if (point_image_data[i].images[j].sigma_td==0) { k++; continue; }
+			chisq += SQR((time_delays_obs[k] - time_delays_mod[k]) / point_image_data[i].images[j].sigma_td);
 			k++;
 		}
 	}
@@ -9325,14 +9297,14 @@ double QLens::chisq_time_delays_from_model_imgs()
 		int *model_j = new int[n_dists];
 		n=0;
 		for (k=0; k < point_image_data[i].n_images; k++) {
-			if (point_image_data[i].time_delays[k]==0) {
+			if (point_image_data[i].images[k].td==0) {
 				zero_td_exists = true;
 				zero_td_indx = k;
 			}
 		}
 		for (k=0; k < point_image_data[i].n_images; k++) {
 			for (j=0; j < n_images; j++) {
-				distsqrs[n] = SQR(point_image_data[i].pos[k][0] - ptsrc_list[i]->images[j].pos[0]) + SQR(point_image_data[i].pos[k][1] - ptsrc_list[i]->images[j].pos[1]);
+				distsqrs[n] = SQR(point_image_data[i].images[k].pos[0] - ptsrc_list[i]->images[j].pos[0]) + SQR(point_image_data[i].images[k].pos[1] - ptsrc_list[i]->images[j].pos[1]);
 				data_k[n] = k;
 				model_j[n] = j;
 				n++;
@@ -9366,11 +9338,11 @@ double QLens::chisq_time_delays_from_model_imgs()
 
 		if (!skip) {
 			for (k=0; k < point_image_data[i].n_images; k++) {
-				sigsq = SQR(point_image_data[i].sigma_t[k]);
+				sigsq = SQR(point_image_data[i].images[k].sigma_td);
 				j = closest_image_j[k];
 				if (j != -1) {
-					if (point_image_data[i].use_in_chisq[k]) {
-						chisq_each_srcpt += SQR(ptsrc_list[i]->images[j].td - td_offset - point_image_data[i].time_delays[k])/sigsq;
+					if (point_image_data[i].images[k].use_in_chisq) {
+						chisq_each_srcpt += SQR(ptsrc_list[i]->images[j].td - td_offset - point_image_data[i].images[k].td)/sigsq;
 					}
 				} else {
 					// add a penalty value to chi-square for not reproducing this data image; the effective time delay difference is 10 times the maximum difference between any pair of time delays
@@ -9461,7 +9433,7 @@ double QLens::get_avg_ptsrc_dist(const int ptsrc_i)
 		n_srcpts = point_image_data[ptsrc_i].n_images;
 		lensvector *srcpts = new lensvector[n_srcpts];
 		for (j=0; j < n_srcpts; j++) {
-			find_sourcept(point_image_data[ptsrc_i].pos[j],srcpts[j],0,ptsrc_zfactors[ptsrc_redshift_idx[ptsrc_i]],ptsrc_beta_factors[ptsrc_redshift_idx[ptsrc_i]]);
+			find_sourcept(point_image_data[ptsrc_i].images[j].pos,srcpts[j],0,ptsrc_zfactors[ptsrc_redshift_idx[ptsrc_i]],ptsrc_beta_factors[ptsrc_redshift_idx[ptsrc_i]]);
 			for (k=0; k < j; k++) {
 				avg_srcdist += sqrt(SQR(srcpts[j][0] - srcpts[k][0]) + SQR(srcpts[j][1] - srcpts[k][1]));
 				n_src_pairs++;
@@ -12958,7 +12930,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 							int i,k;
 							for (i=0; i < n_ptsrc; i++) {
 								for (k=0; k < point_image_data[i].n_images; k++) {
-									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/point_image_data[i].sigma_pos[k]));
+									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/point_image_data[i].images[k].sigma_pos));
 									chisq_sys -= signormfac;
 								}
 							}
@@ -12975,7 +12947,7 @@ double QLens::fitmodel_loglike_point_source(double* params)
 							int i,k;
 							for (i=0; i < n_ptsrc; i++) {
 								for (k=0; k < point_image_data[i].n_images; k++) {
-									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/point_image_data[i].sigma_pos[k]));
+									signormfac = 2*log(1.0 + SQR(fitmodel->syserr_pos/point_image_data[i].images[k].sigma_pos));
 									chisq_sys -= signormfac;
 								}
 							}
@@ -15066,7 +15038,7 @@ const bool QLens::output_lensed_surface_brightness(dvector& xvals, dvector& yval
 			noise = background_pixel_noise;
 			double signal_to_noise = image_pixel_grid->calculate_signal_to_noise(total_signal);
 			if (mpi_id==0) {
-				cout << "Background pixel noise = " << background_pixel_noise << endl;
+				if (!use_noise_map) cout << "Background pixel noise = " << background_pixel_noise << endl;
 				cout << "Signal-to-noise ratio = " << signal_to_noise << endl;
 				cout << "Total integrated signal = " << total_signal << endl;
 			}

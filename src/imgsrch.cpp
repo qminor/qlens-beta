@@ -1874,6 +1874,66 @@ bool QLens::plot_images_single_source(const double &x_source, const double &y_so
 	return true;
 }
 
+void PtImageSet::copy_imageset(const lensvector& srcpos_in, const double zsrc_in, image* images_in, const int nimg)
+{
+	n_images = nimg;
+	zsrc = zsrc_in;
+	srcpos[0] = srcpos_in[0];
+	srcpos[1] = srcpos_in[1];
+	images.clear();
+	images.resize(n_images);
+	for (int i=0; i < n_images; i++) {
+		images[i].pos = images_in[i].pos;
+		images[i].mag = images_in[i].mag;
+		images[i].td = images_in[i].td;
+		images[i].parity = images_in[i].parity;
+	}
+}
+
+string PtImageSet::output_images_string(const bool use_sci)
+{
+	auto mkstring_doub = [](const double db, const bool use_sci) {
+		stringstream dstr;
+		if (use_sci==false) {
+			dstr << setprecision(6);
+			dstr << fixed;
+		} else {
+			dstr << setiosflags(ios::scientific);
+		}
+		string dstring;
+		dstr << db;
+		dstr >> dstring;
+		return dstring;
+	};
+
+	auto mkstring_int = [](const int i) {
+		stringstream istr;
+		string istring;
+		istr << i;
+		istr >> istring;
+		return istring;
+	};
+
+	string imgstring = "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
+	//if (srcflux != -1) imgstring += "\tsrc_flux";
+	imgstring += "\n";
+	imgstring += mkstring_doub(srcpos[0],use_sci) + "\t" + mkstring_doub(srcpos[1],use_sci) + "\t" + mkstring_int(n_images) + "\t";
+	//if (srcflux != -1) imgstring += "\t" + srcflux;
+	imgstring += "\n\n";
+
+	if (n_images==0) {
+		imgstring += "# no images were generated\n\n";
+	} else {
+		imgstring += "#pos_x(arcsec)\tpos_y(arcsec)\tmagnification\n";
+		for (int i=0; i < n_images; i++) {
+			imgstring += mkstring_doub(images[i].pos[0],use_sci) + "\t" + mkstring_doub(images[i].pos[1],use_sci) + "\t" + mkstring_doub(images[i].mag,use_sci);
+			if (include_time_delays) imgstring += "\t" + mkstring_doub(images[i].td,use_sci);
+			imgstring += "\n";
+		}
+	}
+	return imgstring;
+}
+
 image* QLens::get_images(const lensvector &source_in, int &n_images, bool verbal)
 {
 	if (grid==NULL) {
@@ -1888,7 +1948,7 @@ image* QLens::get_images(const lensvector &source_in, int &n_images, bool verbal
 }
 
 // this is for the Python wrapper, but I would like to replace the above functions with this in qlens anyway (DO LATER)
-bool QLens::get_imageset(const double src_x, const double src_y, PointSource& image_set, bool verbal)
+bool QLens::get_imageset(const double src_x, const double src_y, PtImageSet& image_set, bool verbal)
 {
 	if (grid==NULL) {
 		if (create_grid(verbal,reference_zfactors,default_zsrc_beta_factors)==false) return false;
@@ -1898,6 +1958,7 @@ bool QLens::get_imageset(const double src_x, const double src_y, PointSource& im
 
 	find_images();
 	image_set.copy_imageset(source,source_redshift,images_found,Grid::nfound);
+	image_set.include_time_delays = include_time_delays;
 	return true;
 }
 

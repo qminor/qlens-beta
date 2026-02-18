@@ -105,18 +105,96 @@ class PtSrcList;
 class ImgDataList;
 class PtImgDataList;
 
+
+template <typename T>
+class MyIterator {
+	public:
+	// Required type definitions for STL compatibility
+	using iterator_category = std::forward_iterator_tag;
+	using value_type = T;
+	using difference_type = std::ptrdiff_t;
+	using pointer = T*;
+	using reference = T&;
+
+	MyIterator(pointer ptr) : m_ptr(ptr) {}
+
+	// Dereference operator
+	reference operator*() const { return *m_ptr; }
+	pointer operator->() const { return m_ptr; }
+
+	// Prefix increment
+	MyIterator& operator++() {
+		m_ptr++;
+		return *this;
+	}
+
+	// Postfix increment
+	MyIterator operator++(int) {
+		MyIterator temp = *this;
+		++(*this);
+		return temp;
+	}
+
+	// Equality and inequality operators
+	friend bool operator==(const MyIterator& a, const MyIterator& b) { return a.m_ptr == b.m_ptr; }
+	friend bool operator!=(const MyIterator& a, const MyIterator& b) { return a.m_ptr != b.m_ptr; }
+
+	private:
+	pointer m_ptr;
+};
+
 struct image {
 	lensvector pos;
 	double mag, flux, td;
 	int parity;
+	//image() {}
+	//image(image& img_in) { pos=img_in.pos; mag=img_in.mag; flux=img_in.flux; td=img_in.td; parity=img_in.parity; }
+	//void copy_img(image& img_in) { pos=img_in.pos; mag=img_in.mag; flux=img_in.flux; td=img_in.td; parity=img_in.parity; }
 };
 
 struct image_data : public image
 {
-	double flux;
 	double sigma_pos;
 	double sigma_flux;
 	double sigma_td;
+	bool use_in_chisq;
+	//image_data() {}
+	//image_data(image_data& img_in) { pos=img_in.pos; mag=img_in.mag; flux=img_in.flux; td=img_in.td; parity=img_in.parity; sigma_pos=img_in.sigma_pos; sigma_flux=img_in.sigma_flux; sigma_td=img_in.sigma_td; use_in_chisq=img_in.use_in_chisq; }
+	//image_data(image& img_in) { pos=img_in.pos; mag=img_in.mag; flux=img_in.flux; td=img_in.td; parity=img_in.parity; }
+};
+
+struct PtImageSet
+{
+	QLens* qlens_ptr;
+	double zsrc;
+	int n_images;
+	lensvector srcpos;
+	bool include_time_delays;
+	std::vector<image> images;
+
+	PtImageSet() { qlens_ptr = NULL; }
+	PtImageSet(QLens* qlens_ptr_in) { qlens_ptr = qlens_ptr_in; }
+	void set_n_images(const int nimg) {
+		n_images = nimg;
+		images.clear();
+		images.resize(n_images);
+		include_time_delays = false;
+	}
+	void copy_imageset(const lensvector& srcpos_in, const double zsrc_in, image* images_in, const int nimg);
+	string output_images_string(const bool use_sci);
+
+	//MyIterator<image> begin() {
+		//return MyIterator<image>(images.data());
+	//}
+	//MyIterator<image> end() {
+		//return MyIterator<image>(images.data()+n_images);
+	//}
+
+	std::vector<image>::iterator begin() { return images.begin(); }
+   std::vector<image>::iterator end() { return images.end(); }
+   std::vector<image>::const_iterator begin() const { return images.begin(); }
+   std::vector<image>::const_iterator end() const { return images.end(); }
+	image operator[](size_t i) { return images[i]; }
 };
 
 struct PtImageDataSet {
@@ -631,7 +709,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void sort_image_data_into_redshift_groups();
 	bool plot_srcpts_from_image_data(int dataset_number, std::ofstream* srcfile, const double srcpt_x, const double srcpt_y, const double flux = -1);
 	//void remove_image_data(int image_set);
-	std::vector<PtImageDataSet> export_to_ImageDataSet(); // for the Python wrapper
+	//std::vector<PtImageDataSet> export_to_ImageDataSet(); // for the Python wrapper
 
 	bool load_weak_lensing_data(string filename);
 	void add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc);
@@ -1194,7 +1272,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, std::ofstream& imgfile, std::ofstream& srcfile, const double flux = -1.0, const bool show_labels = false);
 	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
-	bool get_imageset(const double src_x, const double src_y, PointSource& image_set, bool verbal = true); // used by Python wrapper
+	bool get_imageset(const double src_x, const double src_y, PtImageSet& image_set, bool verbal = true); // used by Python wrapper
+
 	bool get_fit_imagesets(int min_dataset = 0, int max_dataset = -1, bool verbal = true); // defined in imgsrch.cpp
 
 	bool plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal);
@@ -1612,43 +1691,6 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void test_lens_functions();
 };
 
-template <typename T>
-class MyIterator {
-	public:
-	// Required type definitions for STL compatibility
-	using iterator_category = std::forward_iterator_tag;
-	using value_type = T;
-	using difference_type = std::ptrdiff_t;
-	using pointer = T*;
-	using reference = T&;
-
-	MyIterator(pointer ptr) : m_ptr(ptr) {}
-
-	// Dereference operator
-	reference operator*() const { return *m_ptr; }
-	pointer operator->() const { return m_ptr; }
-
-	// Prefix increment
-	MyIterator& operator++() {
-		m_ptr++;
-		return *this;
-	}
-
-	// Postfix increment
-	MyIterator operator++(int) {
-		MyIterator temp = *this;
-		++(*this);
-		return temp;
-	}
-
-	// Equality and inequality operators
-	friend bool operator==(const MyIterator& a, const MyIterator& b) { return a.m_ptr == b.m_ptr; }
-	friend bool operator!=(const MyIterator& a, const MyIterator& b) { return a.m_ptr != b.m_ptr; }
-
-	private:
-	pointer m_ptr;
-};
-
 class LensList
 {
 	public:
@@ -1862,30 +1904,47 @@ class ImgDataList
 	ImageData* operator[](size_t i) { return imgdatalist_ptr[i]; }
 };
 
-struct PointImageData
+class PointImageData
 {
+	friend class PtImgDataList;
+	public:
+	QLens* qlens_ptr;
 	int n_images;
-	lensvector *pos;
-	double *flux;
-	double *time_delays;
-	double *sigma_pos, *sigma_f, *sigma_t;
-	bool *use_in_chisq;
+
+	double zsrc;
+	std::vector<image_data> images;
+
+	void set_n_images(const int nimg) {
+		n_images = nimg;
+		images.clear();
+		images.resize(n_images);
+	}
+
+	//lensvector *pos;
+	//double *flux;
+	//double *time_delays;
+	//double *sigma_pos, *sigma_f, *sigma_t;
+	//bool *use_in_chisq;
 	double max_distsqr; // maximum squared distance between any pair of images
 	double max_tdsqr; // max squared difference between any pair of time delays
-	PointImageData() { n_images = 0; }
+	PointImageData() { n_images = 0; qlens_ptr = NULL; }
+	void input_qlensptr(QLens* qlensptr_in) { qlens_ptr = qlensptr_in; }
 	void input(const int &nn);
 	void input(const PointImageData& imgs_in);
 	//void input(const int &nn, image* images, const double sigma_pos_in, const double sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays);
-	void input(const int &nn, image* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays);
+	void input(const int &nn, image* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, const bool include_time_delays, const double zsrc);
 	void add_image(lensvector& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in);
-	void print_list(bool print_errors, bool use_sci);
+	//string mkstring_doub(const double db, const bool use_sci);
+	//string mkstring_int(const int i);
+	string output_data_string(const bool print_errors, const bool use_sci);
 	void write_to_file(std::ofstream &outfile);
 	bool set_use_in_chisq(int image_i, bool use_in_chisq_in);
-	~PointImageData();
+	//~PointImageData();
 };
 
 class PtImgDataList
 {
+	friend class PointImageData;
 	public:
 	QLens* qlens;
 	int n_ptimgdata;
@@ -1896,6 +1955,7 @@ class PtImgDataList
 	void print() {
 		qlens->print_point_image_data(true);
 	}
+	string output_image_data(const bool include_errors); // function defined in lens.cpp
 
 	bool load_ptimgdata(string filename) {
 		return (qlens->load_point_image_data(filename));

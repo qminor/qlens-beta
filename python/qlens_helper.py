@@ -25,14 +25,57 @@ def set_cmap(scheme):
 def get_cmap():
     print(_cmap_scheme)
 
-def fit_plotimg(QLens_Object, include_cc=True, show=True, grid=False, title=""):
+def plot_ptimgs(src_x, src_y, QLens_Object, *, show_cc=True, show=True, grid=False, title=""):
     if (QLens_Object is None):
-        raise RuntimeError("This function requires the first input to be a QLens object.")
+        raise RuntimeError("plot_ptimgs(...) requires the third input to be a QLens object.")
 
     q = QLens_Object
-    q.get_fit_imagesets()
-    D = q.get_data_imagesets()
-    I = q.ptsrc
+    imgs = q.find_ptimgs(src_x,src_y)  # this finds the lensed images and stores them in q.ptsrc
+
+    images_x = []
+    images_y = []
+
+    k=0
+    for img in imgs:
+        images_x.append(img.pos[0])
+        images_y.append(img.pos[1])
+
+    imgplane_fig=plt.figure()
+    imgplane_ax=plt.gca()
+    ## Plotting the critical curves
+    imgplane_ax.plot(images_x, images_y, marker='o', linestyle='None', color='b', label='Images (z=' + str(imgs.zsrc) + ')')
+    plt.legend(loc="upper right")
+    if grid==True:
+        plt.grid(True)
+
+    srcplane_fig=plt.figure()
+    srcplane_ax=plt.gca()
+
+    srcplane_ax.plot(src_x, src_y, marker='o', linestyle='None', color='b', label='Source (z=' + str(imgs.zsrc) + ')')
+
+    plt.legend(loc="upper right")
+    if grid==True:
+        plt.grid(True)
+
+    if (show_cc==True):
+        add_crit_to_plot(q,srcplane_fig,imgplane_fig)
+
+    if (title != ""):
+        plt.title(title)
+
+    if (show==True):
+        plt.show(block=False)
+
+    return (srcplane_fig,imgplane_fig)
+
+def plot_fit_ptimgs(QLens_Object, *, show_cc=True, show=True, grid=False, title=""):
+    if (QLens_Object is None):
+        raise RuntimeError("plot_fit_ptimgs(...) requires the first input to be a QLens object.")
+
+    q = QLens_Object
+    q.get_fit_ptimgs()  # this finds the lensed images and stores them in q.ptsrc
+    D = q.ptimgdata
+    I = q.ptsrc  
 
     if (len(I) != len(D)):
         raise RunTimeError("Data and model do not have the same number of imagesets")
@@ -45,11 +88,11 @@ def fit_plotimg(QLens_Object, include_cc=True, show=True, grid=False, title=""):
     k=0
     for i,d in zip(I,D):
         for j in range(i.n_images):
-            images_x[k].append(i.images[j].pos.x)
-            images_y[k].append(i.images[j].pos.y)
+            images_x[k].append(i.images[j].pos[0])
+            images_y[k].append(i.images[j].pos[1])
         for j in range(d.n_images):
-            data_images_x[k].append(d.images[j].pos.x)
-            data_images_y[k].append(d.images[j].pos.y)
+            data_images_x[k].append(d.images[j].pos[0])
+            data_images_y[k].append(d.images[j].pos[1])
         k += 1
 
     imgplane_fig=plt.figure()
@@ -80,7 +123,7 @@ def fit_plotimg(QLens_Object, include_cc=True, show=True, grid=False, title=""):
     if grid==True:
         plt.grid(True)
 
-    if (include_cc==True):
+    if (show_cc==True):
         add_crit_to_plot(q,srcplane_fig,imgplane_fig)
 
     if (title != ""):
@@ -91,7 +134,7 @@ def fit_plotimg(QLens_Object, include_cc=True, show=True, grid=False, title=""):
 
     return (srcplane_fig,imgplane_fig)
 
-def plotcrit(QLens_Object, show=True, grid=False, title=""):
+def plotcrit(QLens_Object, *, show=True, grid=False, title=""):
     if(QLens_Object is None):
         raise RuntimeError("This function requires the first input to be a QLens object.")
 
@@ -117,138 +160,78 @@ def plotcrit(QLens_Object, show=True, grid=False, title=""):
 
     return (srcplane_fig,imgplane_fig)
 
-def add_crit_to_plot(QLens_Object, srcplane_fig, imgplane_fig):
-    if(QLens_Object is None or srcplane_fig is None or imgplane_fig is None):
-        raise RuntimeError("This function requires the first input to be a QLens object, and the 2nd and 3rd inputs to be matplotlib ax objects (srcplane,imgplane).")
+def add_crit_to_plot(QLens_Object, srcplane_fig=None, imgplane_fig=None):
+    if(QLens_Object is None or (srcplane_fig is None and imgplane_fig is None)):
+        raise RuntimeError("add_crit_to_plot(...) requires first input to be a QLens object, and 2nd and 3rd inputs to be matplotlib ax objects (srcplane,imgplane).")
 
-    L = QLens_Object
+    q = QLens_Object
 
-    L.sort_critical_curves()
-
-    plt.figure(imgplane_fig.number)
-    imgplane_ax=plt.gca()
-    ## Plotting the critical curves
-
-    for last_cc in L.sorted_critical_curve:
+    q.sort_critical_curves()
+    for last_cc in q.sorted_critical_curve:
         pass
-    label=''
-    for curve in L.sorted_critical_curve:
-        cc_x = []
-        cc_y = []
 
-        for point in curve.cc_pts:
-            cc_x.append(point.x) # x coordinate
-            cc_y.append(point.y) # y coordinate
+    if imgplane_fig is not None:
+        plt.figure(imgplane_fig.number)
+        imgplane_ax=plt.gca()
+        ## Plotting the critical curves
 
-        # Required to connect the curve continously
+        label=''
+        for curve in q.sorted_critical_curve:
+            cc_x = []
+            cc_y = []
 
-        cc_x.append(cc_x[0])
-        cc_y.append(cc_y[0]) 
+            for point in curve.cc_pts:
+                cc_x.append(point.x) # x coordinate
+                cc_y.append(point.y) # y coordinate
 
-        # imgplane_ax.scatter(sources_x, sources_y, color='r', s=3) # s is the size of the points
-        if (curve == last_cc):
-            label='Critical Curve ($z_{src}$=' + str(L.zsrc) + ')'
-        imgplane_ax.plot(cc_x, cc_y, color='k', label=label)
-        cc_x = []
-        cc_y = []
+            # Required to connect the curve continously
 
-    plt.legend(loc="upper right")
+            cc_x.append(cc_x[0])
+            cc_y.append(cc_y[0]) 
 
-    plt.figure(srcplane_fig.number)
-    srcplane_ax=plt.gca()
+            # imgplane_ax.scatter(sources_x, sources_y, color='r', s=3) # s is the size of the points
+            if (curve == last_cc):
+                label='Critical Curve ($z_{src}$=' + str(q.zsrc) + ')'
+            imgplane_ax.plot(cc_x, cc_y, color='k', label=label)
+            cc_x = []
+            cc_y = []
 
-    ## Plotting the caustic curves
-    label=''
-    for curve in L.sorted_critical_curve:
-        caustic_x = []
-        caustic_y = []
+        plt.legend(loc="upper right")
 
-        for point in curve.caustic_pts:
-            caustic_x.append(point.x) # x coordinate
-            caustic_y.append(point.y) # y coordinate
+    if srcplane_fig is not None:
+        plt.figure(srcplane_fig.number)
+        srcplane_ax=plt.gca()
 
-        # Required to connect the curve continously
+        ## Plotting the caustic curves
+        label=''
+        for curve in q.sorted_critical_curve:
+            caustic_x = []
+            caustic_y = []
 
-        caustic_x.append(caustic_x[0])
-        caustic_y.append(caustic_y[0]) 
+            for point in curve.caustic_pts:
+                caustic_x.append(point.x) # x coordinate
+                caustic_y.append(point.y) # y coordinate
 
-        if (curve == last_cc):
-            label='Caustic ($z_{src}$=' + str(L.zsrc) + ')'
-        srcplane_ax.plot(caustic_x, caustic_y, color='k', label=label)
-        
-    plt.legend(loc="upper right")
+            # Required to connect the curve continously
+
+            caustic_x.append(caustic_x[0])
+            caustic_y.append(caustic_y[0]) 
+
+            if (curve == last_cc):
+                label='Caustic ($z_{src}$=' + str(q.zsrc) + ')'
+            srcplane_ax.plot(caustic_x, caustic_y, color='k', label=label)
+            
+        plt.legend(loc="upper right")
 
 def add_crit_to_imgplot(QLens_Object, imgplane_fig):
     if(QLens_Object is None or imgplane_fig is None):
-        raise RuntimeError("This function requires the first input to be a QLens object, and the 2nd input to be matplotlib ax objects (imgplane).")
-
-    L = QLens_Object
-
-    L.sort_critical_curves()
-
-    plt.figure(imgplane_fig.number)
-    imgplane_ax=plt.gca()
-    ## Plotting the critical curves
-
-    for last_cc in L.sorted_critical_curve:
-        pass
-    label=''
-    for curve in L.sorted_critical_curve:
-        cc_x = []
-        cc_y = []
-
-        for point in curve.cc_pts:
-            cc_x.append(point.x) # x coordinate
-            cc_y.append(point.y) # y coordinate
-
-        # Required to connect the curve continously
-
-        cc_x.append(cc_x[0])
-        cc_y.append(cc_y[0]) 
-
-        # imgplane_ax.scatter(sources_x, sources_y, color='r', s=3) # s is the size of the points
-        if (curve == last_cc):
-            label='Critical Curve ($z_{src}$=' + str(L.zsrc) + ')'
-        imgplane_ax.plot(cc_x, cc_y, color='k', label=label)
-        cc_x = []
-        cc_y = []
-
-    plt.legend(loc="upper right")
+        raise RuntimeError("add_crit_to_imgplot(...) requires the first input to be a QLens object, and the 2nd input to be matplotlib ax objects (imgplane).")
+    add_crit_to_plot(QLens_Object,imgplane_fig=imgplane_fig)
 
 def add_caustics_to_srcplot(QLens_Object, srcplane_fig):
     if(QLens_Object is None or srcplane_fig is None):
-        raise RuntimeError("This function requires the first input to be a QLens object, and the 2nd input to be matplotlib ax objects (srcplane).")
-
-    L = QLens_Object
-
-    L.sort_critical_curves()
-
-    for last_cc in L.sorted_critical_curve:
-        pass
-
-    plt.figure(srcplane_fig.number)
-    srcplane_ax=plt.gca()
-
-    ## Plotting the caustic curves
-    label=''
-    for curve in L.sorted_critical_curve:
-        caustic_x = []
-        caustic_y = []
-
-        for point in curve.caustic_pts:
-            caustic_x.append(point.x) # x coordinate
-            caustic_y.append(point.y) # y coordinate
-
-        # Required to connect the curve continously
-
-        caustic_x.append(caustic_x[0])
-        caustic_y.append(caustic_y[0]) 
-
-        if (curve == last_cc):
-            label='Caustic ($z_{src}$=' + str(L.zsrc) + ')'
-        srcplane_ax.plot(caustic_x, caustic_y, color='k', label=label)
-        
-    plt.legend(loc="upper right")
+        raise RuntimeError("add_caustics_to_srcplot(...) requires the first input to be a QLens object, and the 2nd input to be matplotlib ax objects (srcplane).")
+    add_crit_to_plot(QLens_Object,srcplane_fig=srcplane_fig)
 
 #def checknan(img):
     #foundnan = False
@@ -260,7 +243,7 @@ def add_caustics_to_srcplot(QLens_Object, srcplane_fig):
     #if (foundnan==False):
         #print("Did not find any NAN's")
 
-def plot_sb(img, QLens_Object, show=True, show_cc=True, fix_limits_before_cc=True, title=""):
+def plot_sb(img, QLens_Object, *, show=True, show_cc=True, fix_limits_before_cc=True, title=""):
     q = QLens_Object
     global _cmap_scheme
     plottype = img[0]
@@ -292,7 +275,7 @@ def plot_sb(img, QLens_Object, show=True, show_cc=True, fix_limits_before_cc=Tru
 
     return (fig, ax)
 
-def plotdata(QLens_Object, show=True, band=0, title="", nomask=False, fgmask=False):
+def plotdata(QLens_Object, *, show=True, band=0, title="", nomask=False, fgmask=False):
     q = QLens_Object
     if (len(q.imgdata)==0):
         raise RunTimeError("No image data has been loaded")
@@ -301,7 +284,7 @@ def plotdata(QLens_Object, show=True, band=0, title="", nomask=False, fgmask=Fal
     dataimg = q.imgdata[band].plot(nomask=nomask,fgmask=fgmask)
     return plot_sb(dataimg,q,show=show,title=title)
 
-def plotimg(QLens_Object, src=-1, show=True, show_cc=True, nomask=False, nres=False, res=False, title="", output_fits=""):
+def plotimg(QLens_Object, *, src=-1, show=True, show_cc=True, nomask=False, nres=False, res=False, title="", output_fits=""):
     q = QLens_Object
     img = q.plotimg(src=src,nres=nres,res=res,nomask=nomask,output_fits=output_fits)
     if (output_fits==""):
@@ -314,7 +297,7 @@ def plotimg(QLens_Object, src=-1, show=True, show_cc=True, nomask=False, nres=Fa
     else:
         return None
 
-def plotsrc(QLens_Object, show=True, show_cc=True, interp=False, title="", fix_limits_before_cc=True, src=0):
+def plotsrc(QLens_Object, *, show=True, show_cc=True, interp=False, title="", fix_limits_before_cc=True, src=0):
     q = QLens_Object
     srcplt = q.pixsrc[src].plot(interp=interp)
     if (show_cc==True):
