@@ -4730,6 +4730,13 @@ void QLens::set_img_npixels(const int npix_x, const int npix_y)
 	}
 }
 
+void QLens::set_cartesian_src_npixels(const int npix_x, const int npix_y)
+{
+	srcgrid_npixels_x = npix_x;
+	srcgrid_npixels_y = npix_y;
+	auto_srcgrid_npixels = false;
+}
+
 void QLens::autogrid(double rmin, double rmax, double frac)
 {
 	cc_rmin = rmin;

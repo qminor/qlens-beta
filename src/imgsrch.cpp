@@ -1112,6 +1112,7 @@ void Grid::assign_subcell_lensing_properties(const int& thread)
 	}
 }
 
+/*
 ofstream Grid::xgrid;
 
 bool QLens::plot_recursive_grid(const char filename[])
@@ -1147,6 +1148,79 @@ void Grid::plot_corner_coordinates()
 				cell[i][j]->plot_corner_coordinates();
 	}
 }
+*/
+
+bool QLens::plot_recursive_grid(const char filename[])
+{
+	vector<double> pts_x, pts_y, srcpts_x, srcpts_y;
+	if (!output_recursive_grid(pts_x,pts_y,srcpts_x,srcpts_y)) return false;
+	string filelabel(filename);
+	string filename_string = fit_output_dir + "/" + filelabel;
+	if (mpi_id==0) {
+		ofstream xgrid(filename_string.c_str());
+		int npts = pts_x.size();
+		for (int i=0; i < npts; i++) {
+			if (pts_x[i] != numeric_limits<double>::quiet_NaN()) xgrid << pts_x[i] << " " << pts_y[i] << " " << srcpts_x[i] << " " << srcpts_y[i] << endl;
+			else xgrid << endl;
+		}
+	}
+
+	return true;
+}
+
+bool QLens::output_recursive_grid(vector<double>& pts_x, vector<double>& pts_y, vector<double>& srcpts_x, vector<double>& srcpts_y)
+{
+	sort_critical_curves();
+
+	// clear the vectors just in case this function has been called before with the same vector objects
+	pts_x.clear();
+	pts_y.clear();
+	srcpts_x.clear();
+	srcpts_y.clear();
+
+	if ((grid==NULL) and (create_grid(true,reference_zfactors,default_zsrc_beta_factors)==false)) return false;
+
+	if (mpi_id==0) {
+		grid->output_corner_coordinates(pts_x,pts_y,srcpts_x,srcpts_y);
+	}
+	return true;
+}
+
+void Grid::output_corner_coordinates(vector<double>& pts_x, vector<double>& pts_y, vector<double>& srcpts_x, vector<double>& srcpts_y)
+{
+	if (level > 0) {
+		pts_x.push_back(corner_pt[1][0]);
+		pts_y.push_back(corner_pt[1][1]);
+		pts_x.push_back(corner_pt[3][0]);
+		pts_y.push_back(corner_pt[3][1]);
+		pts_x.push_back(corner_pt[2][0]);
+		pts_y.push_back(corner_pt[2][1]);
+		pts_x.push_back(corner_pt[0][0]);
+		pts_y.push_back(corner_pt[0][1]);
+		pts_x.push_back(numeric_limits<double>::quiet_NaN());
+		pts_y.push_back(numeric_limits<double>::quiet_NaN());
+
+		srcpts_x.push_back((*corner_sourcept[1])[0]);
+		srcpts_y.push_back((*corner_sourcept[1])[1]);
+		srcpts_x.push_back((*corner_sourcept[3])[0]);
+		srcpts_y.push_back((*corner_sourcept[3])[1]);
+		srcpts_x.push_back((*corner_sourcept[2])[0]);
+		srcpts_y.push_back((*corner_sourcept[2])[1]);
+		srcpts_x.push_back((*corner_sourcept[0])[0]);
+		srcpts_y.push_back((*corner_sourcept[0])[1]);
+		srcpts_x.push_back(numeric_limits<double>::quiet_NaN());
+		srcpts_y.push_back(numeric_limits<double>::quiet_NaN());
+	}
+
+	if (cell != NULL) {
+		int i,j;
+		for (i=0; i < u_N; i++)
+			for (j=0; j < w_N; j++)
+				cell[i][j]->output_corner_coordinates(pts_x,pts_y,srcpts_x,srcpts_y);
+	}
+}
+
+
 
 void Grid::store_critical_curve_pts()
 {

@@ -391,8 +391,10 @@ public:
 	static void set_enforce_min_area(const bool& setting) { enforce_min_area = setting; }
 
 	// for plotting the grid to a file:
-	static std::ofstream xgrid;
-	void plot_corner_coordinates();
+	//static std::ofstream xgrid;
+	//void plot_corner_coordinates();
+	void output_corner_coordinates(std::vector<double>& pts_x, std::vector<double>& pts_y, std::vector<double>& srcpts_x, std::vector<double>& srcpts_y);
+
 	void get_usplit_initial(int &setting) { setting = u_split_initial; }
 	void get_wsplit_initial(int &setting) { setting = w_split_initial; }
 };
@@ -1261,6 +1263,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	public:
 	bool plot_recursive_grid(const char filename[]);
+	bool output_recursive_grid(std::vector<double>& pts_x, std::vector<double>& pts_y, std::vector<double>& srcpts_x, std::vector<double>& srcpts_y);
 	void output_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux = -1.0, const bool show_labels = false);
 	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, const double flux = -1.0, const bool show_labels = false, string imgheader = "", string srcheader = "") {
 		std::ofstream imgfile; open_output_file(imgfile,"imgs.dat");
@@ -1483,7 +1486,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	//bool setup_fit_parameters(const bool ignore_limits = false);
 	//bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
-	void get_all_parameter_names(vector<string>& fit_parameter_names, vector<string>& latex_parameter_names);
+	void get_all_parameter_names(std::vector<string>& fit_parameter_names, std::vector<string>& latex_parameter_names);
 	bool get_lens_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_sb_parameter_numbers(const int lens_i, int& pi, int& pf);
 	bool get_pixsrc_parameter_numbers(const int pixsrc_i, int& pi, int& pf);
@@ -1510,7 +1513,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double fitmodel_loglike_extended_source(double* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
-	double LogLikeVecFunc(vector<double>& params) { return (this->*LogLikePtr)(params.data()); }
+	double LogLikeVecFunc(std::vector<double>& params) { return (this->*LogLikePtr)(params.data()); }
 	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);
 	double get_lens_parameter_using_pmode(const int lensnum, const int paramnum, const int pmode = -1);
@@ -1593,6 +1596,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void set_grid_corners(double xmin, double xmax, double ymin, double ymax);
 	void set_grid_from_pixels();
 	void set_img_npixels(const int npix_x, const int npix_y);
+	void set_cartesian_src_npixels(const int npix_x, const int npix_y);
 
 	void set_gridsize(double xl, double yl);
 	void set_gridcenter(double xc, double yc);

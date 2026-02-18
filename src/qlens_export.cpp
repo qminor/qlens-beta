@@ -2452,6 +2452,16 @@ PYBIND11_MODULE(qlens, m) {
 		},  py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)		
 		.def("get_fit_ptimgs", &QLens_Wrap::get_fit_imagesets, py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, py::arg("verbal") = false) 
 		//.def("get_data_imagesets", &QLens_Wrap::export_to_ImageDataSet)
+		.def("output_ptimg_grid", [](QLens_Wrap &curr) {
+			vector<double> pts_x, pts_y, srcpts_x, srcpts_y;
+			if (!curr.output_recursive_grid(pts_x,pts_y,srcpts_x,srcpts_y)) throw std::runtime_error("Could not plot recursive grid for image finding");
+			int npts = pts_x.size();
+			py::array_t<double> xvec(npts,pts_x.data());
+			py::array_t<double> yvec(npts,pts_y.data());
+			py::array_t<double> src_xvec(npts,srcpts_x.data());
+			py::array_t<double> src_yvec(npts,srcpts_y.data());
+			return std::make_tuple(xvec,yvec,src_xvec,src_yvec);
+		})
 		.def("run_fit", [](QLens_Wrap &curr, const std::string &fitmethod, py::kwargs &kwargs){
 			bool adopt_bestfit = false;
 			bool show_errors = true;
@@ -2657,7 +2667,9 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			current.set_grid_from_pixels();
 		})
+		.def("set_grid_corners", &QLens_Wrap::set_grid_corners) 
 		.def("set_img_npixels", &QLens_Wrap::set_img_npixels)
+		.def("set_src_npixels", &QLens_Wrap::set_cartesian_src_npixels)
 		.def_readwrite("psf_threshold", &QLens_Wrap::psf_threshold)
 		.def_property("zsrc", &QLens_Wrap::get_source_redshift, &QLens_Wrap::set_source_redshift)
 		.def_property("zsrc_ref", &QLens_Wrap::get_reference_source_redshift, &QLens_Wrap::set_reference_source_redshift)

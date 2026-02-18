@@ -7,6 +7,7 @@ import inspect
 import sys
 
 _cmap_scheme = 'turbo'      # this is the colormap scheme that I like the best, but it can be changed with the set_cmap function
+_line_thickness = 1.2
 
 def pause():
     if bool(getattr(sys, 'ps1', sys.flags.interactive))==True:   # will ignore the pause if not in interactive mode to begin with
@@ -24,6 +25,10 @@ def set_cmap(scheme):
 
 def get_cmap():
     print(_cmap_scheme)
+
+def set_lw(thickness):
+    global _line_thickness
+    _line_thickness = thickness
 
 def plot_ptimgs(src_x, src_y, QLens_Object, *, show_cc=True, show=True, grid=False, title=""):
     if (QLens_Object is None):
@@ -43,7 +48,7 @@ def plot_ptimgs(src_x, src_y, QLens_Object, *, show_cc=True, show=True, grid=Fal
     imgplane_fig=plt.figure()
     imgplane_ax=plt.gca()
     ## Plotting the critical curves
-    imgplane_ax.plot(images_x, images_y, marker='o', linestyle='None', color='b', label='Images (z=' + str(imgs.zsrc) + ')')
+    imgplane_ax.plot(images_x, images_y, marker='o', linestyle='None', lw=_line_thickness, color='b', label='Images (z=' + str(imgs.zsrc) + ')')
     plt.legend(loc="upper right")
     if grid==True:
         plt.grid(True)
@@ -51,14 +56,14 @@ def plot_ptimgs(src_x, src_y, QLens_Object, *, show_cc=True, show=True, grid=Fal
     srcplane_fig=plt.figure()
     srcplane_ax=plt.gca()
 
-    srcplane_ax.plot(src_x, src_y, marker='o', linestyle='None', color='b', label='Source (z=' + str(imgs.zsrc) + ')')
+    srcplane_ax.plot(src_x, src_y, marker='o', linestyle='None', lw=_line_thickness, color='b', label='Source (z=' + str(imgs.zsrc) + ')')
 
     plt.legend(loc="upper right")
     if grid==True:
         plt.grid(True)
 
     if (show_cc==True):
-        add_crit_to_plot(q,srcplane_fig,imgplane_fig)
+        add_crit_to_plot(q,srcplane_fig=srcplane_fig,imgplane_fig=imgplane_fig)
 
     if (title != ""):
         plt.title(title)
@@ -102,8 +107,8 @@ def plot_fit_ptimgs(QLens_Object, *, show_cc=True, show=True, grid=False, title=
     markers_source = itertools.cycle(['o','s','v']) 
     for j in range(len(images_x)):
         mark=next(markers)
-        imgplane_ax.plot(images_x[j], images_y[j], marker=mark, linestyle='None', color='b', label='Model (z=' + str(D[j].zsrc) + ')')
-        imgplane_ax.plot(data_images_x[j], data_images_y[j], marker=mark, linestyle='None', color='g', label='Data (z=' + str(D[j].zsrc) + ')')
+        imgplane_ax.plot(images_x[j], images_y[j], marker=mark, linestyle='None', lw=_line_thickness, color='b', label='Model (z=' + str(D[j].zsrc) + ')')
+        imgplane_ax.plot(data_images_x[j], data_images_y[j], marker=mark, linestyle='None', lw=_line_thickness, color='g', label='Data (z=' + str(D[j].zsrc) + ')')
     plt.legend(loc="upper right")
     if grid==True:
         plt.grid(True)
@@ -117,14 +122,14 @@ def plot_fit_ptimgs(QLens_Object, *, show_cc=True, show=True, grid=False, title=
         sources_x.append(i.pos.x)
         sources_y.append(i.pos.y)
     for j in range(len(sources_x)):
-        srcplane_ax.plot(sources_x[j], sources_y[j], marker=next(markers_source), linestyle='None', color='b', label='Source (z=' + str(D[j].zsrc) + ')')
+        srcplane_ax.plot(sources_x[j], sources_y[j], marker=next(markers_source), linestyle='None', lw=_line_thickness, color='b', label='Source (z=' + str(D[j].zsrc) + ')')
 
     plt.legend(loc="upper right")
     if grid==True:
         plt.grid(True)
 
     if (show_cc==True):
-        add_crit_to_plot(q,srcplane_fig,imgplane_fig)
+        add_crit_to_plot(q,srcplane_fig=srcplane_fig,imgplane_fig=imgplane_fig)
 
     if (title != ""):
         plt.title(title)
@@ -150,7 +155,7 @@ def plotcrit(QLens_Object, *, show=True, grid=False, title=""):
     if grid==True:
         plt.grid(True)
 
-    add_crit_to_plot(q,srcplane_fig,imgplane_fig)
+    add_crit_to_plot(q,srcplane_fig=srcplane_fig,imgplane_fig=imgplane_fig)
 
     if (title != ""):
         plt.title(title)
@@ -160,7 +165,42 @@ def plotcrit(QLens_Object, *, show=True, grid=False, title=""):
 
     return (srcplane_fig,imgplane_fig)
 
-def add_crit_to_plot(QLens_Object, srcplane_fig=None, imgplane_fig=None):
+def plot_ptimg_grid(QLens_Object, *, show_cc=True, lw=_line_thickness, show=True, show_srcplane=False, title=""):
+    if (QLens_Object is None):
+        raise RuntimeError("plot_ptimgs(...) requires the third input to be a QLens object.")
+
+    q = QLens_Object
+    grid = q.output_ptimg_grid()
+
+    imgplane_fig=plt.figure()
+    imgplane_ax=plt.gca()
+    ## Plotting the critical curves
+    imgplane_ax.plot(grid[0], grid[1], lw=lw, color='r', label="ptimg_grid for point image searching")
+    #plt.legend(loc="upper right")
+
+    if show_srcplane==True:
+        srcplane_fig=plt.figure()
+        srcplane_ax=plt.gca()
+        srcplane_ax.plot(grid[2], grid[3], lw=_line_thickness, color='r', label="ptimg_grid (ray-traced to source plane)")
+
+        if (show_cc==True):
+            add_crit_to_plot(q,srcplane_fig=srcplane_fig,imgplane_fig=imgplane_fig)
+    else:
+        if (show_cc==True):
+            add_crit_to_imgplot(q,imgplane_fig)
+
+    if (title != ""):
+        plt.title(title)
+
+    if (show==True):
+        plt.show(block=False)
+
+    if show_srcplane==True:
+        return (srcplane_fig,imgplane_fig)
+    else:
+        return (imgplane_fig)
+
+def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, color='black'):
     if(QLens_Object is None or (srcplane_fig is None and imgplane_fig is None)):
         raise RuntimeError("add_crit_to_plot(...) requires first input to be a QLens object, and 2nd and 3rd inputs to be matplotlib ax objects (srcplane,imgplane).")
 
@@ -192,7 +232,7 @@ def add_crit_to_plot(QLens_Object, srcplane_fig=None, imgplane_fig=None):
             # imgplane_ax.scatter(sources_x, sources_y, color='r', s=3) # s is the size of the points
             if (curve == last_cc):
                 label='Critical Curve ($z_{src}$=' + str(q.zsrc) + ')'
-            imgplane_ax.plot(cc_x, cc_y, color='k', label=label)
+            imgplane_ax.plot(cc_x, cc_y, lw=_line_thickness, color=color, label=label)
             cc_x = []
             cc_y = []
 
@@ -219,19 +259,19 @@ def add_crit_to_plot(QLens_Object, srcplane_fig=None, imgplane_fig=None):
 
             if (curve == last_cc):
                 label='Caustic ($z_{src}$=' + str(q.zsrc) + ')'
-            srcplane_ax.plot(caustic_x, caustic_y, color='k', label=label)
+            srcplane_ax.plot(caustic_x, caustic_y, lw=_line_thickness, color=color, label=label)
             
         plt.legend(loc="upper right")
 
-def add_crit_to_imgplot(QLens_Object, imgplane_fig):
+def add_crit_to_imgplot(QLens_Object, imgplane_fig, color='gray'):
     if(QLens_Object is None or imgplane_fig is None):
         raise RuntimeError("add_crit_to_imgplot(...) requires the first input to be a QLens object, and the 2nd input to be matplotlib ax objects (imgplane).")
-    add_crit_to_plot(QLens_Object,imgplane_fig=imgplane_fig)
+    add_crit_to_plot(QLens_Object,imgplane_fig=imgplane_fig, color=color)
 
-def add_caustics_to_srcplot(QLens_Object, srcplane_fig):
+def add_caustics_to_srcplot(QLens_Object, srcplane_fig, color='gray'):
     if(QLens_Object is None or srcplane_fig is None):
         raise RuntimeError("add_caustics_to_srcplot(...) requires the first input to be a QLens object, and the 2nd input to be matplotlib ax objects (srcplane).")
-    add_crit_to_plot(QLens_Object,srcplane_fig=srcplane_fig)
+    add_crit_to_plot(QLens_Object,srcplane_fig=srcplane_fig,color=color)
 
 #def checknan(img):
     #foundnan = False
@@ -243,7 +283,7 @@ def add_caustics_to_srcplot(QLens_Object, srcplane_fig):
     #if (foundnan==False):
         #print("Did not find any NAN's")
 
-def plot_sb(img, QLens_Object, *, show=True, show_cc=True, fix_limits_before_cc=True, title=""):
+def plot_sb(img, QLens_Object, *, show=True, cc_color='gray', show_cc=True, fix_limits_before_cc=True, title=""):
     q = QLens_Object
     global _cmap_scheme
     plottype = img[0]
@@ -261,9 +301,9 @@ def plot_sb(img, QLens_Object, *, show=True, show_cc=True, fix_limits_before_cc=
         ylim_before = ax.get_ylim()
 
     if (plottype=="imgplane" and show_cc==True):
-        add_crit_to_imgplot(q,fig)
+        add_crit_to_imgplot(q,fig,color=cc_color)
     if (plottype=="srcplane" and show_cc==True):
-        add_caustics_to_srcplot(q,fig)
+        add_caustics_to_srcplot(q,fig,color=cc_color)
     if (fix_limits_before_cc):
         ax.set_xlim(xlim_before)
         ax.set_ylim(ylim_before)
