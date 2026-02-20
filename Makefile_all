@@ -97,10 +97,10 @@ mkdist: $(mkdist_objects) $(mkdist_shared_objects)
 $(OBJ_DIR)/cosmo.o: $(SRC_DIR)/cosmo.cpp $(INCLUDE_DIR)/cosmo.h
 	$(CC) -c $(SRC_DIR)/cosmo.cpp -o $(OBJ_DIR)/cosmo.o
 
-$(OBJ_DIR)/qlens_wrapper.o: $(SRC_DIR)/qlens_wrapper.cpp
+$(OBJ_DIR)/qlens_wrapper.o: $(SRC_DIR)/qlens_wrapper.cpp $(INCLUDE_DIR)/qlens.h $(INCLUDE_DIR)/pixelgrid.h $(INCLUDE_DIR)/modelparams.h $(INCLUDE_DIR)/params.h $(INCLUDE_DIR)/delaunay.h $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/profile.h $(INCLUDE_DIR)/sbprofile.h 
 	$(CC) $(PYBIND11_CFLAGS) -c $(SRC_DIR)/qlens_wrapper.cpp -o $(OBJ_DIR)/qlens_wrapper.o
 
-$(OBJ_DIR)/qlens_export.o: $(SRC_DIR)/qlens_export.cpp
+$(OBJ_DIR)/qlens_export.o: $(SRC_DIR)/qlens_export.cpp $(INCLUDE_DIR)/qlens.h $(INCLUDE_DIR)/pixelgrid.h $(INCLUDE_DIR)/modelparams.h $(INCLUDE_DIR)/params.h $(INCLUDE_DIR)/delaunay.h $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/profile.h $(INCLUDE_DIR)/sbprofile.h 
 	$(CC) $(PYBIND11_CFLAGS) -c $(SRC_DIR)/qlens_export.cpp -o $(OBJ_DIR)/qlens_export.o
 
 $(OBJ_DIR)/qlens.o: $(SRC_DIR)/qlens.cpp $(INCLUDE_DIR)/qlens.h

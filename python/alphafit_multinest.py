@@ -5,12 +5,11 @@ q = QLens(cosmo)
 (lens,ptsrc,ptimgdata) = q.ptimg_objects()   # this is so we can enter 'lens' instead of 'q.lens', 'ptsrc' instead of 'q.ptsrc', etc.
 (params,dparams) = q.param_objects()         # same as above; we can enter 'params' instead of 'q.params', etc.
 
-
 q.fit_label = 'alpha_multinest'
-
 q.sci_notation = False
-q.imgdata_read("alphafit.dat")
-#q.imgdata_display()
+
+ptimgdata.load("alphafit.dat") # this function will become obsolete once the ptimgdata class is wrapped
+print(ptimgdata)               # Note: when in interactive mode you can just type 'ptimgdata' to print the data
 
 q.shear_components=True
 q.ellipticity_components=False
@@ -33,6 +32,7 @@ extshear.set_limits([
 ])
 
 lens.add(Alpha,shear=extshear)
+print("Lenses:",lens,"\n")
 
 q.central_image = False
 q.imgplane_chisq = False
@@ -41,7 +41,7 @@ q.flux_chisq = True
 q.chisqtol = 1e-6
 q.nrepeat = 2
 #print("Fit model:")
-q.fitmodel()
+#q.fitmodel()
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
 q.n_livepts = 300

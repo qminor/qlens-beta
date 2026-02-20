@@ -1086,6 +1086,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def(py::init<>([](QLens_Wrap* qlens_in){return new PtImgDataList(qlens_in);}))
 		//.def("add",&PtImgDataList::add_lens)
 		.def("load", &PtImgDataList::load_ptimgdata)
+		.def("write", &PtImgDataList::write_ptimgdata)
 		.def("print", &PtImgDataList::print)
 		//.def("load", [](PtImgDataList &current, const string filename){
 			//current.load_ptimgdata(filename);
@@ -2654,6 +2655,9 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("default_pixsize", &QLens_Wrap::default_data_pixel_size)
 		.def_readwrite("simulate_pixel_noise", &QLens_Wrap::simulate_pixel_noise)
 		.def_property("bg_pixel_noise", &QLens_Wrap::get_bg_pixel_noise, &QLens_Wrap::set_bg_pixel_noise)
+		.def_readwrite("sim_err_pos", &QLens_Wrap::sim_err_pos)
+		.def_readwrite("sim_err_flux", &QLens_Wrap::sim_err_flux)
+		.def_readwrite("sim_err_td", &QLens_Wrap::sim_err_td)
 		.def_property("random_seed", &QLens_Wrap::get_random_seed, &QLens_Wrap::set_random_seed)
 		.def("set_grid_from_imgpixels", [](QLens_Wrap &current, py::kwargs& kwargs){ 
 			for (auto item : kwargs) {

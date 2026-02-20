@@ -7829,7 +7829,6 @@ string PointImageData::output_data_string(const bool print_errors, const bool us
 			if (!images[i].use_in_chisq) datastring += "   (excluded from chisq)";
 			datastring += "\n";
 		}
-		datastring += "\n";
 	}
 	return datastring;
 }
@@ -7865,10 +7864,10 @@ string PtImgDataList::output_image_data(const bool include_errors)
 		zstr << zsrc;
 		zstr >> zstring;
 		outstring += "Source " + istring + ": zsrc=" + zstring;
-		if ((qlens->n_lens_redshifts==0) or ((qlens->n_lens_redshifts==1) and (zsrc==qlens->lens_redshifts[0]))) cout << " (unlensed)";
+		//if ((qlens->n_lens_redshifts==0) or ((qlens->n_lens_redshifts==1) and (zsrc==qlens->lens_redshifts[0]))) outstring += " (unlensed)";
 		outstring += "\n";
 		string imgstring = ptimgdatalist_ptr[i].output_data_string(include_errors,qlens->use_scientific_notation);
-		outstring += imgstring + "\n";
+		outstring += imgstring;
 	}
 	return outstring;
 }

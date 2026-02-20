@@ -2,7 +2,8 @@ from qlens_helper import *
 
 cosmo = Cosmology(omega_m=0.3,hubble=0.7)
 q = QLens(cosmo)
-(lens,src,ptsrc,pixsrc,imgdata,params,dparams) = q.objects();
+(lens,src,pixsrc,imgdata) = q.pix_objects();
+(params,dparams) = q.param_objects();
 
 q.fit_label = 'sbprofile_demo'
 

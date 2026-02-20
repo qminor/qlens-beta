@@ -1609,7 +1609,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void set_integral_convergence_warnings(const bool warn);
 
 	void set_integration_method(IntegrationMethod method) { LensProfile::integral_method = method; }
-	void set_analytic_bestfit_src(bool setting) {
+	void set_analytic_bestfit_src(const bool setting) {
 		use_analytic_bestfit_src = setting;
 		bool vary_source_coords = (use_analytic_bestfit_src) ? false : true;
 		// Automatically turn source coordinate parameters on/off accordingly
@@ -1622,7 +1622,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 		}
 		update_parameter_list();
 	}
-	void get_analytic_bestfit_src(bool &setting) { setting = use_analytic_bestfit_src; }
+	bool get_analytic_bestfit_src() { return use_analytic_bestfit_src; }
 
 	void update_imggrid_mask_values(const int mask_i);
 
@@ -1964,6 +1964,10 @@ class PtImgDataList
 	bool load_ptimgdata(string filename) {
 		return (qlens->load_point_image_data(filename));
 	}
+	void write_ptimgdata(string filename) {
+		qlens->write_point_image_data(filename);
+	}
+
 	bool add_ptimgdata(const lensvector &sourcept, const double srcflux) {
 		return (qlens->add_simulated_point_image_data(sourcept, srcflux));
 	}
