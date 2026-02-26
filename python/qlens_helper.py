@@ -8,7 +8,7 @@ import numbers
 import sys
 
 _cmap_scheme = 'turbo'      # this is the colormap scheme that I like the best, but it can be changed with the set_cmap function
-_line_thickness = 1.2
+_line_width = 1.2
 _aspect = 'equal'
 
 def pause():
@@ -42,9 +42,9 @@ def set_aspect_ratio(aspect_in):
 def get_aspect():
     print(_aspect)
 
-def set_lw(thickness):
-    global _line_thickness
-    _line_thickness = thickness
+def set_lw(width):
+    global _line_width
+    _line_width = width
 
 def plot_ptimgs(src_x, src_y, QLens_Object, *, show_cc=True, show=True, grid=False, title=""):
     if (QLens_Object is None):
@@ -64,14 +64,14 @@ def plot_ptimgs(src_x, src_y, QLens_Object, *, show_cc=True, show=True, grid=Fal
     imgplane_fig=plt.figure()
     imgplane_ax=plt.gca()
     ## Plotting the critical curves
-    imgplane_ax.plot(images_x, images_y, marker='o', linestyle='None', lw=_line_thickness, color='b', label='Images (z=' + str(imgs.zsrc) + ')')
+    imgplane_ax.plot(images_x, images_y, marker='o', linestyle='None', lw=_line_width, color='b', label='Images (z=' + str(imgs.zsrc) + ')')
     plt.legend(loc="upper right")
     if grid==True:
         plt.grid(True)
 
     srcplane_fig=plt.figure()
     srcplane_ax=plt.gca()
-    srcplane_ax.plot(src_x, src_y, marker='o', linestyle='None', lw=_line_thickness, color='b', label='Source (z=' + str(imgs.zsrc) + ')')
+    srcplane_ax.plot(src_x, src_y, marker='o', linestyle='None', lw=_line_width, color='b', label='Source (z=' + str(imgs.zsrc) + ')')
 
     plt.legend(loc="upper right")
     if grid==True:
@@ -125,8 +125,8 @@ def plot_fit_ptimgs(QLens_Object, *, show_cc=True, show=True, grid=False, title=
     markers_source = itertools.cycle(['o','s','v']) 
     for j in range(len(images_x)):
         mark=next(markers)
-        imgplane_ax.plot(images_x[j], images_y[j], marker=mark, linestyle='None', lw=_line_thickness, color='b', label='Model (z=' + str(D[j].zsrc) + ')')
-        imgplane_ax.plot(data_images_x[j], data_images_y[j], marker=mark, linestyle='None', lw=_line_thickness, color='g', label='Data (z=' + str(D[j].zsrc) + ')')
+        imgplane_ax.plot(images_x[j], images_y[j], marker=mark, linestyle='None', lw=_line_width, color='b', label='Model (z=' + str(D[j].zsrc) + ')')
+        imgplane_ax.plot(data_images_x[j], data_images_y[j], marker=mark, linestyle='None', lw=_line_width, color='g', label='Data (z=' + str(D[j].zsrc) + ')')
     plt.legend(loc="upper right")
     if grid==True:
         plt.grid(True)
@@ -140,7 +140,7 @@ def plot_fit_ptimgs(QLens_Object, *, show_cc=True, show=True, grid=False, title=
         sources_x.append(i.pos.x)
         sources_y.append(i.pos.y)
     for j in range(len(sources_x)):
-        srcplane_ax.plot(sources_x[j], sources_y[j], marker=next(markers_source), linestyle='None', lw=_line_thickness, color='b', label='Source (z=' + str(D[j].zsrc) + ')')
+        srcplane_ax.plot(sources_x[j], sources_y[j], marker=next(markers_source), linestyle='None', lw=_line_width, color='b', label='Source (z=' + str(D[j].zsrc) + ')')
 
     plt.legend(loc="upper right")
     if grid==True:
@@ -188,9 +188,9 @@ def plotcrit(QLens_Object, *, show=True, grid=False, title=""):
 
     return (srcplane_fig,imgplane_fig)
 
-def plot_ptimg_grid(QLens_Object, *, show_cc=True, lw=_line_thickness, show=True, show_srcplane=False, title=""):
+def plotgrid(QLens_Object, *, show_cc=True, lw=_line_width, show=True, show_srcplane=False, title=""):
     if (QLens_Object is None):
-        raise RuntimeError("plot_ptimgs(...) requires the third input to be a QLens object.")
+        raise RuntimeError("plotgrid(...) requires the first input to be a QLens object.")
 
     q = QLens_Object
     grid = q.output_ptimg_grid()
@@ -200,12 +200,11 @@ def plot_ptimg_grid(QLens_Object, *, show_cc=True, lw=_line_thickness, show=True
 
     ## Plotting the grid
     imgplane_ax.plot(grid[0], grid[1], lw=lw, color='r', label="ptimg_grid for image searching")
-    #plt.legend(loc="upper right")
 
     if show_srcplane==True:
         srcplane_fig=plt.figure()
         srcplane_ax=plt.gca()
-        srcplane_ax.plot(grid[2], grid[3], lw=_line_thickness, color='r', label="ptimg_grid (ray-traced to source plane)")
+        srcplane_ax.plot(grid[2], grid[3], lw=_line_width, color='r', label="ptimg_grid (ray-traced to source plane)")
 
         if (show_cc==True):
             add_crit_to_plot(q,srcplane_fig=srcplane_fig,imgplane_fig=imgplane_fig)
@@ -260,7 +259,7 @@ def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, colo
             # imgplane_ax.scatter(sources_x, sources_y, color='r', s=3) # s is the size of the points
             if (curve == last_cc):
                 label='Critical Curve ($z_{src}$=' + str(q.zsrc) + ')'
-            imgplane_ax.plot(cc_x, cc_y, lw=_line_thickness, color=color, label=label)
+            imgplane_ax.plot(cc_x, cc_y, lw=_line_width, color=color, label=label)
             cc_x = []
             cc_y = []
 
@@ -287,7 +286,7 @@ def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, colo
 
             if (curve == last_cc):
                 label='Caustic ($z_{src}$=' + str(q.zsrc) + ')'
-            srcplane_ax.plot(caustic_x, caustic_y, lw=_line_thickness, color=color, label=label)
+            srcplane_ax.plot(caustic_x, caustic_y, lw=_line_width, color=color, label=label)
             
         plt.legend(loc="upper right")
 
@@ -300,16 +299,6 @@ def add_caustics_to_srcplot(QLens_Object, srcplane_fig, color='gray'):
     if(QLens_Object is None or srcplane_fig is None):
         raise RuntimeError("add_caustics_to_srcplot(...) requires the first input to be a QLens object, and the 2nd input to be matplotlib ax objects (srcplane).")
     add_crit_to_plot(QLens_Object,srcplane_fig=srcplane_fig,color=color)
-
-#def checknan(img):
-    #foundnan = False
-    #for row in img[3]:
-        #for x in row:
-            #if (x*0.0 != 0.0):
-                #print("NAN value!")
-                #foundnan = True
-    #if (foundnan==False):
-        #print("Did not find any NAN's")
 
 def plot_sb(img, QLens_Object, *, show=True, cc_color='gray', show_cc=True, fix_limits_before_cc=True, title=""):
     q = QLens_Object

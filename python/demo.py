@@ -22,7 +22,7 @@ set_aspect_ratio('equal') # options are 'auto', 'equal', or a specific number (n
                           # as 'equal'). The default is 'equal' if you don't include this line
 
 # Plot the grid so you can see what it looks like:
-plot_ptimg_grid(q,lw=0.5) # smaller line thickness so we can see the galaxy subgridding more easily
+plotgrid(q,lw=0.5) # smaller line thickness so we can see the galaxy subgridding more easily
 plot_ptimgs(-1.2,0.1,q)
 
 # Now let's show the same thing but with a lensed surface brightness map of a Gaussian source:

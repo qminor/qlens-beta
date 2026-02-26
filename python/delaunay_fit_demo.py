@@ -28,17 +28,18 @@ q.split_imgpixels = False
 
 q.sci_notation = True
 q.shear_components=True
+q.ellipticity_components=True
 
 q.zlens = 0.5
 q.zsrc = 2
 
 #Alpha = SPLE({"b": 1.3634, "alpha": 1.17163, "s": 0.0, "q": 0.963867, "theta": 81.9, "xc": 0.0102892, "yc": 0.00358392}) # true model
-Alpha = SPLE({"b": 1.35, "alpha": 1.1, "s": 0.0, "q": 0.90, "theta": 80, "xc": 0.01, "yc": 0})
+Alpha = SPLE({"b": 1.2, "alpha": 1.17, "s": 0.0, "e1": 0.0, "e2": 0.0, "xc": 0.0, "yc": 0.0})
 Alpha.vary([1,1,0,1,1,1,1])
 #Alpha.set_limits([     # if you are doing nested sampling, you can define limits within the lens object, *or*
     #("b",4,6),         # you can define limits using the 'params' object instead (see below after lens.add)
-    #("q",0.2,1),
-    #("theta",20,155),
+    #("e1",0,0.6),
+    #("e2",0,0.6),
     #("xc",0.3,1.3),
     #("yc",0,0.6)
 #])
