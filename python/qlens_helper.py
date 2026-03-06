@@ -6,6 +6,7 @@ import copy
 import inspect
 import numbers
 import sys
+import os
 
 _cmap_scheme = 'turbo'      # this is the colormap scheme that I like the best, but it can be changed with the set_cmap function
 _line_width = 1.2
@@ -14,7 +15,15 @@ _aspect = 'equal'
 def pause():
     if bool(getattr(sys, 'ps1', sys.flags.interactive))==True:   # will ignore the pause if not in interactive mode to begin with
         frame = inspect.currentframe().f_back
-        code.interact(local=frame.f_locals,banner="Pausing for input...press <Ctrl-d> to continue the script",exitmsg="")
+        locals_dict = frame.f_locals.copy()
+        def quit_script():
+            sys.exit()
+        locals_dict["quit"] = quit_script
+        locals_dict["exit"] = quit_script
+        try:
+            code.interact(local=locals_dict,banner="Pausing for input...press <Ctrl-d> to continue the script, or 'quit()' to exit.",exitmsg="")
+        except SystemExit:
+            os._exit(0)
 
 def set_cmap(scheme):
     global _cmap_scheme
