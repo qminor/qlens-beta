@@ -529,6 +529,16 @@ bool LensProfile::set_vary_flags(boolvector &vary_flags)
 	return true;
 }
 
+bool LensProfile::update_specific_varyflag(const string name_in, const bool flag)
+{
+	int paramnum;
+	if (!lookup_parameter_number(name_in,paramnum)) return false;
+	boolvector new_vary_flags(vary_params);
+	new_vary_flags[paramnum] = flag;
+	if (vary_parameters(new_vary_flags)==false) return false;
+	return true;
+}
+
 void LensProfile::get_vary_flags(boolvector &vary_flags)
 {
 	vary_flags.input(n_params);
@@ -657,6 +667,18 @@ double LensProfile::get_parameter(const int i)
 	if (i >= n_params) die("requested parameter with index greater than number of params");
 	if (angle_param[i]) return radians_to_degrees(*(param[i]));
 	else return *(param[i]);
+}
+
+bool LensProfile::check_parameter_name(const string name_in)
+{
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if (paramnames[i]==name_in) {
+			found_match = true;
+			break;
+		}
+	}
+	return found_match;
 }
 
 bool LensProfile::lookup_parameter_number(const string name_in, int& paramnum)
@@ -2396,10 +2418,7 @@ void LensProfile::plot_kappa_profile(const int n_rvals, double* rvals, double* k
 
 void LensProfile::deflection_spherical_default(const double x, const double y, lensvector& def)
 {
-	//if (x*0.0 != 0.0) die("HARGMF %g %g",x,y);
-	//cout << "defsphere: " << x << " " << y << endl;
 	double kapavg = (this->*kapavgptr_rsq_spherical)(x*x+y*y);
-	//if (kapavg*0.0 != 0.0) die("FUCK %g %g",x,y);
 
 	def[0] = kapavg*x;
 	def[1] = kapavg*y;

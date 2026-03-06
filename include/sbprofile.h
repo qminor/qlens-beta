@@ -159,6 +159,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
+	bool update_specific_varyflag(const std::string name_in, const bool flag);
 	bool vary_parameters(const boolvector& vary_params_in);
 	void add_fourier_mode(const int m_in, const double amp_in, const double phi_in, const bool vary1, const bool vary2);
 	void add_boxiness_parameter(const double c0_in, const bool vary_c0);
@@ -241,6 +242,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL, const bool include_suffix = false);
 	virtual void get_parameters(double* params);
 	bool lookup_parameter_number(const std::string name_in, int& paramnum);
+	bool check_parameter_name(const std::string name_in);
 	bool get_specific_parameter(const std::string name_in, double& value);
 	bool get_specific_limit(const std::string name_in, double& lower, double& upper);
 	bool update_specific_parameter(const std::string name_in, const double& value);

@@ -755,6 +755,16 @@ bool SB_Profile::set_vary_flags(boolvector &vary_flags)
 	return true;
 }
 
+bool SB_Profile::update_specific_varyflag(const string name_in, const bool flag)
+{
+	int paramnum;
+	if (!lookup_parameter_number(name_in,paramnum)) return false;
+	boolvector new_vary_flags(vary_params);
+	new_vary_flags[paramnum] = flag;
+	if (vary_parameters(new_vary_flags)==false) return false;
+	return true;
+}
+
 void SB_Profile::get_vary_flags(boolvector& vary_flags)
 {
 	vary_flags.input(n_params);
@@ -820,6 +830,18 @@ void SB_Profile::get_parameters(double* params)
 		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
+}
+
+bool SB_Profile::check_parameter_name(const string name_in)
+{
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if (paramnames[i]==name_in) {
+			found_match = true;
+			break;
+		}
+	}
+	return found_match;
 }
 
 bool SB_Profile::lookup_parameter_number(const string name_in, int& paramnum)

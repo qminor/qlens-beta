@@ -9,6 +9,7 @@
 #include <vector>
 #include <complex>
 #include <functional>
+#include <limits>
 #include <stdio.h>
 
 #ifdef USE_EIGEN

@@ -273,6 +273,18 @@ void ModelParams::get_fit_parameter_names(vector<string>& paramnames_vary, vecto
 	}
 }
 
+bool ModelParams::check_parameter_name(const string name_in)
+{
+	bool found_match = false;
+	for (int i=0; i < n_params; i++) {
+		if ((active_params[i]) and (paramnames[i]==name_in)) {
+			found_match = true;
+			break;
+		}
+	}
+	return found_match;
+}
+
 bool ModelParams::get_specific_parameter(const string name_in, double& value)
 {
 	bool found_match = false;

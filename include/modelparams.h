@@ -75,6 +75,7 @@ class ModelParams
 
 	void get_fit_parameters(double *fitparams, int &index);
 	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL);
+	bool check_parameter_name(const std::string name_in);
 	bool get_specific_parameter(const std::string name_in, double& value);
 	bool get_specific_varyflag(const std::string name_in, bool& flag);
 	bool get_specific_stepsize(const std::string name_in, double& step);

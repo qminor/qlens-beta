@@ -304,6 +304,7 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 	bool set_vary_flags(boolvector &vary_flags);
 	void get_vary_flags(boolvector &vary_flags);
 	bool vary_parameters(const boolvector& vary_params_in);
+	bool update_specific_varyflag(const std::string name_in, const bool flag);
 	void set_limits(const dvector& lower, const dvector& upper);
 	bool set_limits_specific_parameter(const std::string name_in, const double& lower, const double& upper);
 	void update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index);
@@ -359,6 +360,7 @@ class LensProfile : private Romberg, private GaussLegendre, private GaussPatters
 	virtual double get_parameter(const int i);
 	virtual void get_parameters(double* params);
 	bool lookup_parameter_number(const std::string name_in, int& paramnum);
+	bool check_parameter_name(const std::string name_in);
 	bool get_specific_parameter(const std::string name_in, double& value);
 	bool get_specific_limit(const std::string name_in, double& lower, double& upper);
 	virtual void get_parameters_pmode(const int pmode_in, double* params);

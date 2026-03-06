@@ -1704,6 +1704,9 @@ class LensList
 	LensList(QLens* qlens_in) { lenslistptr = NULL; qlens = qlens_in; nlens = 0; }
 	void input_ptr(LensProfile** ptr_in, const int nlens_in) { lenslistptr = ptr_in; nlens = nlens_in; }
 	void clear_ptr() { lenslistptr = NULL; nlens = 0; }
+	void print() {
+		qlens->print_lens_list(true);
+	}
 	void add_lens(LensProfile* lens_in) {
 		qlens->add_lens(lens_in);
 	}
@@ -1752,6 +1755,9 @@ class SourceList
 	SourceList(QLens* qlens_in) { srclistptr = NULL; qlens = qlens_in; n_sb = 0; }
 	void input_ptr(SB_Profile** ptr_in, const int n_sb_in) { srclistptr = ptr_in; n_sb = n_sb_in; }
 	void clear_ptr() { srclistptr = NULL; n_sb = 0; }
+	void print() {
+		qlens->print_source_list(true);
+	}
 	void add_source(SB_Profile* src_in, const bool is_lensed) {
 		qlens->add_source(src_in,is_lensed);
 	}
@@ -1800,6 +1806,9 @@ class PixSrcList
 	PixSrcList(QLens* qlens_in) { pixsrclist_ptr = NULL; qlens = qlens_in; n_pixsrc = 0; }
 	void input_ptr(ModelParams** ptr_in, const int n_pixsrc_in) { pixsrclist_ptr = ptr_in; n_pixsrc = n_pixsrc_in; }
 	void clear_ptr() { pixsrclist_ptr = NULL; n_pixsrc = 0; }
+	void print() {
+		qlens->print_pixellated_source_list(true);
+	}
 	int add_pixsrc(const double zsrc, const int band) {
 		return qlens->add_pixellated_source(zsrc,band);
 	}
@@ -1836,6 +1845,9 @@ class PtSrcList
 	int n_ptsrc;
 	PointSource** ptsrclist_ptr;
 	PtSrcList(QLens* qlens_in) { ptsrclist_ptr = NULL; qlens = qlens_in; n_ptsrc = 0; }
+	void print() {
+		qlens->print_point_source_list(true);
+	}
 	void input_ptr(PointSource** ptr_in, const int n_ptsrc_in) { ptsrclist_ptr = ptr_in; n_ptsrc = n_ptsrc_in; }
 	void clear_ptr() { ptsrclist_ptr = NULL; n_ptsrc = 0; }
 	void add_ptsrc(const double zsrc, const lensvector &sourcept, const bool vary_source_coords = false) {

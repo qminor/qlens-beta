@@ -57,4 +57,4 @@ sbmap plotimg -nres3 # plot (normalized) residuals
 sbmap plotsrc # plot the pixellated source
 sbmap plotsrc -interp # plot the pixellated source
 
-#plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing
+

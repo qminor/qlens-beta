@@ -7,6 +7,7 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 using namespace std;
 
 int Grid::nthreads = 0;
