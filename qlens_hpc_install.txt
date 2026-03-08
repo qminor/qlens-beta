@@ -1,4 +1,4 @@
-1. Purge all modules if any are currently loaded ('module purge'). Install conda with wget if not already installed. Next...
+1. Purge all modules if any are currently loaded ('module purge'). Install conda/miniconda with wget if not already installed. Next...
 
 conda create --name <environment_name> python=3.13 openmpi pybind11 cxx-compiler gfortran cfitsio fftw mkl mkl-include numpy matplotlib libumfpack armadillo
 
@@ -21,11 +21,13 @@ git clone https://github.com/PolyChord/PolyChordLite.git
 cd PolyChordLite
 make
 
-5. Now edit the Makefile in qlens-beta. For the lines USERNAME and ENV_NAME, substitute your username (as indicated by 'whoami' command) and conda environment name.
+5. Now edit the Makefile_conda in qlens-beta. For the lines HOMEDIR and ENV_NAME, substitute your home directory and conda environment name. For CONDA_DIR and QLENS_DIR, make sure it matches your conda directory and qlens directories, respectively.
 
-6. Then go back to the terminal and run make, and watch magic happen. If something goes wrong, yell at Quinn for forgetting to include something important in this file (or maybe just send him the error message and ask what's up).
 
-7. Make sure your PYTHONPATH has the folder where the qlens python library is, something like e.g. /mendel-nas1/<username>/qlens-beta/python/qlens
+
+6. Now go back to the terminal. You can either rename/copy Makefile_conda to Makefile (in which case you'll just run "make"), or you can just run "make -f Makefile_conda". Either way, run make and watch magic happen. If something goes wrong, yell at Quinn for forgetting to include something important in this file (or maybe just send him the error message and ask what's up).
+
+7. Before trying to run qlens, make sure your PYTHONPATH has the folder where the qlens python library is, something like e.g. /mendel-nas1/<username>/qlens-beta/python/qlens.
 
 8. If all has gone well, cd into the qlens-beta/python folder and try running 'python3 alphafit.py'. If that script works, now try 'python3 -i delaunay_fit_demo.py'. If that works, then you're all set!
 
