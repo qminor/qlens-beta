@@ -34,7 +34,7 @@
 
 #ifdef USE_FFTW
 #ifdef USE_MKL
-#include "fftw/fftw3.h"
+#include "fftw/fftw3_mkl.h"
 #else
 #include "fftw3.h"
 #endif
