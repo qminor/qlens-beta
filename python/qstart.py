@@ -1,5 +1,5 @@
-# You can use this to start an interactive session quickly by running "python -i qheader.py".
-# You can also copy this file to start writing a new script quickly
+# You can use this to start an interactive session quickly by running "python -i qstart.py".
+# You can also copy this file to start writing a new script quickly, or you can start a new script with "from qstart import *".
 
 from qlens_helper import *
 
