@@ -15318,8 +15318,8 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Use non-negative least squares solver: " << display_switch(use_non_negative_least_squares) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_nnls' command; must specify 'on' or 'off'");
-#ifndef USE_EIGEN
-				if (setword=="on") Complain("must compile qlens with eigen to use non-negative least squares");
+#if !defined(USE_EIGEN) || !defined(USE_EIGEN_NNLS)
+				if (setword=="on") Complain("must compile qlens with eigen (including NNLS support) to use non-negative least squares");
 #endif
 				set_switch(use_non_negative_least_squares,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");

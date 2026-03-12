@@ -18,7 +18,9 @@
 #endif
 #include "Eigen/Cholesky"
 #include "Eigen/Dense"
+#ifdef USE_EIGEN_NNLS
 #include "unsupported/Eigen/NNLS"
+#endif
 //#include "fnnls.hpp"
 #endif
 
@@ -20503,6 +20505,7 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 			//lltmat = Fmatrix_llt.matrixL();
 		//} else
 		if (use_non_negative_least_squares) {
+#ifdef USE_EIGEN_NNLS
 			if (show_wtime) {
 				inv_wtime0 = omp_get_wtime();
 			}
@@ -20517,6 +20520,9 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 			}
 			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(F);
 			lltmat = Fmatrix_llt.matrixL();
+#else
+			die("qlens must be compiled with Eigen NNLS support to use non-negative least squares fitting");
+#endif
 		} else {
 			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(F);
 			lltmat = Fmatrix_llt.matrixL();
