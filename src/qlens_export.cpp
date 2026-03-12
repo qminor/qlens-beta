@@ -2924,6 +2924,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("analytic_bestfit_src", &QLens_Wrap::get_analytic_bestfit_src, &QLens_Wrap::set_analytic_bestfit_src)
 		.def_property("matrix_format", &QLens_Wrap::get_matrix_format_string, &QLens_Wrap::set_matrix_format_string)
 		.def_property("sparse_solver", &QLens_Wrap::get_sparse_solver_string, &QLens_Wrap::set_sparse_solver_string)
+		.def_readwrite("use_nnls", &QLens_Wrap::use_non_negative_least_squares)
 		.def_readwrite("cc_splitlevels", &QLens_Wrap::cc_splitlevels)
 		.def_readwrite("zlens", &QLens_Wrap::lens_redshift)
 		.def("lensinfo", &QLens_Wrap::print_lensing_info_at_point)
