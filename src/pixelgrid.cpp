@@ -13,6 +13,9 @@
 #include <stdio.h>
 
 #ifdef USE_EIGEN
+#ifdef USE_MKL
+#define EIGEN_USE_MKL_ALL
+#endif
 #include "Eigen/Cholesky"
 #include "Eigen/Dense"
 #include "unsupported/Eigen/NNLS"
@@ -15341,7 +15344,7 @@ void QLens::initialize_pixel_matrices(const int imggrid_i, const bool potential_
 	if ((mpi_id==0) and (verbal)) cout << "Creating Lmatrix...\n";
 	if (!psf_supersampling) construct_Lmatrix(imggrid_i,delaunay,potential_perturbations,verbal);
 	else construct_Lmatrix_supersampled(imggrid_i,delaunay,potential_perturbations,verbal);
-	if (inversion_method==DENSE) {
+	if (matrix_format==DENSE) {
 		convert_Lmatrix_to_dense();
 		if (n_mge_amps > 0) add_MGE_amplitudes_to_Lmatrix(imggrid_i);
 	}
@@ -17195,15 +17198,16 @@ bool QLens::create_regularization_matrix(const int imggrid_i, const bool allow_r
 				die("Regularization method not recognized");
 		}
 		if (!successful_Rmatrix) return false;
-		if ((dense_Rmatrix) and (inversion_method!=DENSE) and (inversion_method!=DENSE_FMATRIX)) die("inversion method must be set to 'dense' or 'fdense' if a dense regularization matrix is used");
+		if ((dense_Rmatrix) and (matrix_format!=DENSE) and (matrix_format!=DENSE_FMATRIX)) die("inversion method must be set to 'dense' or 'fdense' if a dense regularization matrix is used");
 		if (!dense_Rmatrix) {
 			// If doing a sparse inversion, the determinant of R-matrix will be calculated when doing the inversion; otherwise, must be done here
 			// unless R-matrix is dense (as in the covariance kernel reg.), in which case determinant is found during its construction
 
-#ifdef USE_UMFPACK
+#if defined(USE_EIGEN)
+		Rmatrix_determinant_EIGEN(false);
+#elif defined(USE_UMFPACK)
 			Rmatrix_determinant_UMFPACK(potential_perturbations);
-#else
-#ifdef USE_MUMPS
+#elif defined(USE_MUMPS)
 			Rmatrix_determinant_MUMPS(potential_perturbations);
 #else
 			//warn("Converting Rmatrix to dense, since MUMPS or UMFPACK is required to calculate sparse R-matrix determinants");
@@ -17217,7 +17221,6 @@ bool QLens::create_regularization_matrix(const int imggrid_i, const bool allow_r
 				npixels = lensgrid_npixels;
 			}
 			matrix_determinant_dense((*Rmatrix_log_determinant_ptr),(*Rmatrix_packed_ptr),npixels);
-#endif
 #endif
 		}
 		source_npixels_ptr++;
@@ -17279,17 +17282,17 @@ void QLens::create_regularization_matrix_shapelet(const int imggrid_i)
 			default:
 				die("Regularization method not recognized for dense matrices");
 		}
-#ifdef USE_UMFPACK
+#if defined(USE_EIGEN)
+		Rmatrix_determinant_EIGEN(false);
+#elif defined(USE_UMFPACK)
 		Rmatrix_determinant_UMFPACK(false);
-#else
-#ifdef USE_MUMPS
+#elif defined(USE_MUMPS)
 		Rmatrix_determinant_MUMPS(false);
 #else
 		//warn("Converting Rmatrix to dense, since MUMPS or UMFPACK is required to calculate sparse R-matrix determinants");
 		// MKL should use Pardiso to get the Cholesky decomposition & determinant since Rmatrix is sparse, but for now, I will just convert to dense matrix and do it that way
 		convert_Rmatrix_to_dense();
 		matrix_determinant_dense((*Rmatrix_log_determinant_ptr),(*Rmatrix_packed_ptr),(*source_npixels_ptr));
-#endif
 #endif
 		source_npixels_ptr++;
 		src_npixel_start_ptr++;
@@ -17815,7 +17818,48 @@ bool QLens::generate_Rmatrix_from_covariance_kernel(const int imggrid_i, const i
 #endif
 
 	for (int i=0; i < ntot; i++) (*new_covmatrix_factored_ptr)[i] = (*new_covmatrix_packed_ptr)[i];
-#ifdef USE_MKL
+
+#if defined(USE_EIGEN)
+	// YOU REALLY NEED TO DITCH THE PACKED STORAGE ENTIRELY! It wastes time.
+	using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+	MatrixRMd A = MatrixRMd::Zero(npixels,npixels);
+
+	int idx = 0;
+	double *covfac = new_covmatrix_factored_ptr->array();
+	for (int i=0; i<npixels; i++) {
+		for (int j=i; j<npixels; j++) {
+			A(i,j) = covfac[idx++];
+			A(j,i) = A(i,j);  // symmetric
+		}
+	}
+	Eigen::LLT<MatrixRMd> chol(A);
+	if(chol.info() != Eigen::Success) {
+		if (verbal) warn("cholesky decomposition of covmatrix was not successful; covmatrix is not positive definite");
+		if (penalize_defective_covmatrix) return false;
+	}
+	MatrixRMd U = chol.matrixU();
+	covfac = new_covmatrix_factored_ptr->array();
+	idx=0;
+	for(int i=0;i<npixels;i++) {
+		 for(int j=i;j<npixels;j++) {
+			  covfac[idx++] = U(i,j);
+		 }
+	}
+	Cholesky_logdet_packed(new_covmatrix_factored_ptr->array(),(*new_Rmatrix_logdet_ptr),npixels);
+	(*new_Rmatrix_logdet_ptr) = -(*new_Rmatrix_logdet_ptr); // since this was the (log-)determinant of the inverse of the Rmatrix (i.e. using det(cov) = 1/det(cov_inverse))
+	if (!use_covariance_matrix) {
+		// Since we're going to use R-matrix explicitly, we must find it by taking cov_inverse
+		for (int i=0; i < ntot; i++) (*new_Rmatrix_packed_ptr)[i] = (*new_covmatrix_factored_ptr)[i];
+		MatrixRMd R = chol.solve(MatrixRMd::Identity(npixels, npixels));
+		idx=0;
+		double *Rmat = new_Rmatrix_packed_ptr->array();
+		for(int i=0;i<npixels;i++) {
+			 for(int j=i;j<npixels;j++) {
+				  Rmat[idx++] = R(i,j);
+			 }
+		}
+	}
+#elif defined(USE_MKL)
 	lapack_int status;
    status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',npixels,new_covmatrix_factored_ptr->array()); // Cholesky decomposition
 	if ((verbal) and (status > 0)) warn("cholesky decomposition of covmatrix was not successful; covmatrix is not positive definite");
@@ -18006,23 +18050,52 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool
 	if (group_id == group_np-1) mpi_chunk += (n_amps % group_np); // assign the remainder elements to the last mpi process
 	mpi_end = mpi_start + mpi_chunk;
 
-#ifdef USE_MKL
+#if defined(USE_EIGEN) || defined(USE_MKL)
 	int *srcpixel_location_Fmatrix, *srcpixel_end_Fmatrix, *Fmatrix_csr_index;
 	double *Fmatrix_csr;
+#if defined(USE_EIGEN)
+	using SparseRMd = Eigen::SparseMatrix<double, Eigen::RowMajor>;
+	SparseRMd L(image_npixels, n_amps);
+	std::vector<Eigen::Triplet<double>> triplets;
+
+	for(int i = 0; i < image_npixels; i++) {
+		 for(int k = image_pixel_location_Lmatrix[i]; k < image_pixel_location_Lmatrix[i+1]; k++) {
+			  triplets.emplace_back(i, Lmatrix_index[k], Lmatrix[k]);
+		 }
+	}
+	L.setFromTriplets(triplets.begin(), triplets.end());
+#elif defined(USE_MKL)
 	int nsrc1, nsrc2;
 	sparse_index_base_t indxing;
 	sparse_matrix_t Lsparse;
 	sparse_matrix_t Fsparse;
+	//cout << "Creating CSR matrix..." << endl;
 	int *image_pixel_end_Lmatrix = new int[image_npixels];
 	for (i=0; i < image_npixels; i++) image_pixel_end_Lmatrix[i] = image_pixel_location_Lmatrix[i+1];
-	//cout << "Creating CSR matrix..." << endl;
 	mkl_sparse_d_create_csr(&Lsparse, SPARSE_INDEX_BASE_ZERO, image_npixels, n_amps, image_pixel_location_Lmatrix, image_pixel_end_Lmatrix, Lmatrix_index, Lmatrix);
 	mkl_sparse_order(Lsparse);
 	sparse_status_t status;
+#endif
 	if (!dense_Fmatrix) {
+#if defined(USE_EIGEN)
+		SparseRMd Ffull = L.transpose() * L;
+		SparseRMd F = Ffull.triangularView<Eigen::Upper>();
+		F.makeCompressed();
+		int nsrc1 = F.rows();
+		//int nsrc2 = F.cols();
+
+		srcpixel_location_Fmatrix = F.outerIndexPtr();  // row pointers (starts of rows)
+		srcpixel_end_Fmatrix = F.outerIndexPtr() + 1; // you can access row ends similarly
+		Fmatrix_csr_index = F.innerIndexPtr();  // column indices
+		Fmatrix_csr = F.valuePtr();       // nonzero values
+		//srcpixel_end_Fmatrix = new int[nsrc1];
+		//for(int i=0;i<nsrc1;i++) {
+			 //srcpixel_end_Fmatrix[i] = srcpixel_location_Fmatrix[i+1];
+		//}
+#elif defined(USE_MKL)
 		status = mkl_sparse_syrk(SPARSE_OPERATION_TRANSPOSE, Lsparse, &Fsparse);
 		mkl_sparse_d_export_csr(Fsparse, &indxing, &nsrc1, &nsrc2, &srcpixel_location_Fmatrix, &srcpixel_end_Fmatrix, &Fmatrix_csr_index, &Fmatrix_csr);
-
+#endif
 		if ((verbal) and (mpi_id==0)) cout << "Fmatrix_sparse has " << srcpixel_end_Fmatrix[n_amps-1] << " elements" << endl;
 		bool duplicate_column;
 		int dup_k;
@@ -18058,20 +18131,29 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool
 				//cout << Lmatrix_index[j] << " " << Lmatrix[j] << endl;
 			//}
 		//}
-
 		//cout << endl << "FMATRIX:" << endl;
-
+		//double Fsum=0;
+		//int Fisum=0;
 		//for (i=0; i < n_amps; i++) {
-			//cout << "Row " << i << ":" << endl;
+			////cout << "Row " << i << ":" << endl;
 			//for (j=srcpixel_location_Fmatrix[i]; j < srcpixel_end_Fmatrix[i]; j++) {
-				//cout << Fmatrix_csr_index[j] << " " << Fmatrix_csr[j] << endl;
+				//Fsum += Fmatrix_csr[j];
+				//Fisum += Fmatrix_csr_index[j];
+				////cout << Fmatrix_csr_index[j] << " " << Fmatrix_csr[j] << endl;
 			//}
 		//}
+		//cout << "Fsum=" << Fsum << " Fisum=" << Fisum << endl;
 	} else {
 		Fmatrix_packed.input(ntot_packed);
 		Fmatrix_stacked.input(ntot);
 		for (i=0; i < ntot; i++) Fmatrix_stacked[i] = 0;
+#if defined(USE_EIGEN)
+		using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+		Eigen::Map<MatrixRMd> F(Fmatrix_stacked.array(), n_amps, n_amps);
+		F = (L.transpose() * L).toDense();
+#elif defined(USE_MKL)
 		mkl_sparse_d_syrkd(SPARSE_OPERATION_TRANSPOSE,Lsparse,1.0,0.0,Fmatrix_stacked.array(),SPARSE_LAYOUT_ROW_MAJOR,n_amps);
+#endif
 		int nf=0;
 		for (i=0; i < ntot; i++) {
 			if (Fmatrix_stacked[i] != 0) {
@@ -18079,7 +18161,16 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool
 				nf++;
 			}
 		}
+#if defined(USE_EIGEN)
+	int idx = 0;
+	for(int i = 0; i < n_amps; ++i) {
+		 for(int j = i; j < n_amps; ++j) {
+			  Fmatrix_packed[idx++] = F(i,j);
+		 }
+	}
+#elif defined(USE_MKL)
 		LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_stacked.array(),n_amps,Fmatrix_packed.array());
+#endif
 		if ((verbal) and (mpi_id==0)) cout << "Fmatrix_dense has " << nf << " nonzero elements" << endl;
 		if (use_covariance_matrix) generate_Gmatrix();
 	}
@@ -18413,11 +18504,13 @@ void QLens::create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool
 	}
 	*/	
 
-#ifdef USE_MKL
+#if defined(USE_MKL) || defined(USE_EIGEN)
+#if !defined(USE_EIGEN)
 	mkl_sparse_destroy(Lsparse);
 	if (!dense_Fmatrix) mkl_sparse_destroy(Fsparse);
 	delete[] image_pixel_end_Lmatrix;
 	//delete[] Lmatrix_eff;
+#endif
 #else
 	for (i=0; i < nthreads; i++) {
 		delete[] jlvals[i];
@@ -18463,7 +18556,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int imggrid_i, cons
 	for (i=0; i < n_amps; i++) Dvector[i] = 0;
 	int ntot_packed = n_amps*(n_amps+1)/2;
 	Fmatrix_packed.input(ntot_packed);
-#ifdef USE_MKL
+#if defined(USE_MKL) || defined(USE_EIGEN)
    double *Ltrans_stacked = new double[n_amps*image_npixels];
 	Fmatrix_stacked.input(n_amps*n_amps);
 #else
@@ -18511,7 +18604,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int imggrid_i, cons
 					if (((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) and (n_ptsrc > 0)) sb_adj -= point_image_surface_brightness[j];
 					Dvector[i] += Lmatrix_dense[j][i]*sb_adj*covinv;
 				}
-#ifdef USE_MKL
+#if defined(USE_MKL) or defined(USE_EIGEN)
 				Ltrans_stacked[row+j] = Lmatrix_dense[j][i]*sqrt(covinv); // hack to get the cov_inverse in there
 #else
 				Ltrans[i][j] = Lmatrix_dense[j][i];
@@ -18530,7 +18623,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int imggrid_i, cons
 		}
 #endif
 
-#ifndef USE_MKL
+#if !defined(USE_MKL) && !defined(USE_EIGEN)
 		// The following is not as fast as the Blas function dsyrk (below), but it still gets the job done
 
 		double *fpmatptr;
@@ -18559,9 +18652,25 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int imggrid_i, cons
 #endif
 	}
 
+#ifdef USE_EIGEN
+	using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+
+	Eigen::Map<MatrixRMd> L(Ltrans_stacked, n_amps, image_npixels);
+	Eigen::Map<MatrixRMd> F(Fmatrix_stacked.array(), n_amps, n_amps);
+
+	F.setZero();
+	F.selfadjointView<Eigen::Upper>().rankUpdate(L);
+	int idx = 0;
+	for (i=0; i < n_amps; i++) {
+		 for (j=i; j < n_amps; j++) {
+			  Fmatrix_packed[idx++] = F(i,j);
+		 }
+	}
+#else
 #ifdef USE_MKL
    cblas_dsyrk(CblasRowMajor,CblasUpper,CblasNoTrans,n_amps,image_npixels,1,Ltrans_stacked,image_npixels,0,Fmatrix_stacked.array(),n_amps); // Note: this only fills the upper triangular half of the stacked matrix
 	LAPACKE_dtrttp(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_stacked.array(),n_amps,Fmatrix_packed.array());
+#endif
 #endif
 	if (use_covariance_matrix) generate_Gmatrix();
 	if (regularization_method != None) {
@@ -18608,7 +18717,7 @@ void QLens::create_lensing_matrices_from_Lmatrix_dense(const int imggrid_i, cons
 		wtime0 = omp_get_wtime();
 	}
 #endif
-#ifdef USE_MKL
+#if defined(USE_MKL) || defined(USE_EIGEN)
 	delete[] Ltrans_stacked;
 #else
 	for (i=0; i < n_amps; i++) delete[] Ltrans[i];
@@ -18633,7 +18742,46 @@ void QLens::generate_Gmatrix()
 	}
 #endif
 
-#ifdef USE_MKL
+#if defined(USE_EIGEN)
+	using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+	Eigen::Map<MatrixRMd> F(Fmatrix_stacked.array(), n_amps, n_amps);
+	using VectorXd  = Eigen::VectorXd;
+	int i,j,idx = 0;
+	for (i=0; i < n_amps; i++) {
+		 for (j=i; j < n_amps; j++) {
+			  F(j,i) = Fmatrix_packed[idx++];  // transpose into lower
+		 }
+	}
+	idx=0;
+	Eigen::Map<MatrixRMd> C(covmatrix_stacked_ptr->array(), n_amps, source_npixels);
+	double* covpacked = covmatrix_packed_ptr->array();
+	for (i=0; i < source_npixels; i++) {
+		 for (j=i; j < source_npixels; j++) {
+			  C(i,j) = covpacked[idx++];
+			  C(j,i) = C(i,j);
+		 }
+	}
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime_gmat = omp_get_wtime() - wtime_gmat0;
+		if (mpi_id==0) cout << "Wall time for unpacking F- and cov-matrices: " << wtime_gmat << endl;
+		wtime_gmat0 = omp_get_wtime();
+	}
+#endif
+	Eigen::Map<MatrixRMd> Cov(covmatrix_stacked_ptr->array(), n_amps, n_amps);
+	Eigen::Map<MatrixRMd> G(Gmatrix_stacked.array(), n_amps, n_amps);
+	G.noalias() = Cov.selfadjointView<Eigen::Upper>() * F;
+
+	Eigen::Map<VectorXd> D(Dvector, n_amps);
+	Eigen::Map<VectorXd> Dcov(Dvector_cov, n_amps);
+	Dcov.noalias() = Cov.selfadjointView<Eigen::Upper>() * D;
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		wtime_gmat = omp_get_wtime() - wtime_gmat0;
+		if (mpi_id==0) cout << "Wall time for generating Gmatrix and D_cov: " << wtime_gmat << endl;
+	}
+#endif
+#elif defined(USE_MKL)
 	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
 	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',source_npixels,covmatrix_packed_ptr->array(),1,1,n_amps,source_npixels,covmatrix_stacked_ptr->array(),n_amps);
 	LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',source_npixels,covmatrix_packed_ptr->array(),1,1,n_amps,source_npixels,covmatrix_stacked_ptr->array(),n_amps);
@@ -18644,7 +18792,6 @@ void QLens::generate_Gmatrix()
 		wtime_gmat0 = omp_get_wtime();
 	}
 #endif
-
 	cblas_dsymm(CblasRowMajor,CblasLeft,CblasUpper,n_amps,n_amps,1.0,covmatrix_stacked_ptr->array(),n_amps,Fmatrix_stacked.array(),n_amps,0,Gmatrix_stacked.array(),n_amps);
 	cblas_dsymv(CblasRowMajor,CblasUpper,n_amps,1.0,covmatrix_stacked_ptr->array(),n_amps,Dvector,1,0,Dvector_cov,1);
 #ifdef USE_OPENMP
@@ -18653,9 +18800,8 @@ void QLens::generate_Gmatrix()
 		if (mpi_id==0) cout << "Wall time for generating Gmatrix and D_cov: " << wtime_gmat << endl;
 	}
 #endif
-
 #else
-	die("MKL is currently required for covariance kernel regularization");
+	die("MKL or Eigen is currently required for covariance kernel regularization");
 #endif
 }
 
@@ -18825,7 +18971,26 @@ double QLens::calculate_regularization_prior_term(double *regparam, const bool p
 			// Need to expand this to work for potential perturbations
 			double* sprime = new double[(*source_npixels_ptr)];
 			for (int i=0; i < (*source_npixels_ptr); i++) sprime[i] = amplitude_vector[i];
-#ifdef USE_MKL
+#if defined(USE_EIGEN)
+			using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+			using VectorXd  = Eigen::VectorXd;
+			Eigen::Map<VectorXd> b(sprime, source_npixels);
+			MatrixRMd U = MatrixRMd::Zero(source_npixels, source_npixels);
+
+			// NOTE: You should NOT be storing these matrices in packed format, because Eigen doesn't support it (and it's slower anyway).
+			// Please fix later so everything is stored in stacked format only.
+			int idx = 0;
+			double* covfac = covmatrix_factored_ptr->array();
+			for (int i=0; i < source_npixels; i++) {
+				 for (int j=i; j < source_npixels; j++) {
+					  U(i,j) = covfac[idx++];
+				 }
+			}
+			auto Ut = U.transpose();
+			VectorXd y = Ut.triangularView<Eigen::Lower>().solve(b);
+			VectorXd x = U.triangularView<Eigen::Upper>().solve(y);
+			b = x;   // This stores the solution in sprime (which b maps to)
+#elif defined(USE_MKL)
 			LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',(*source_npixels_ptr),1,covmatrix_factored_ptr->array(),sprime,1);
 #else
 			die("Compiling with MKL is currently required for covariance kernel regularization");
@@ -19541,9 +19706,10 @@ double QLens::chisq_regparam(const double logreg)
 
 	double Fmatrix_logdet;
 
-	if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(-1,Fmatrix_logdet,false,true);
-	else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(-1,Fmatrix_logdet,false,true);
-	else die("can only use MUMPS or UMFPACK for sparse inversions with optimize_regparam on");
+	if (sparse_solver==MUMPS) invert_lens_mapping_MUMPS(-1,Fmatrix_logdet,false,true);
+	else if (sparse_solver==UMFPACK) invert_lens_mapping_UMFPACK(-1,Fmatrix_logdet,false,true);
+	else if (sparse_solver==EIGEN_SPARSE) invert_lens_mapping_EIGEN_sparse(-1,Fmatrix_logdet,false,true);
+	else die("can only use MUMPS, UMFPACK or Eigen for sparse inversions with optimize_regparam on");
 
 	//double temp_img, Ed_times_two=0,Es_times_two=0;
 	double temp_img, Ed_times_two=0;
@@ -19653,12 +19819,18 @@ double QLens::chisq_regparam_dense(const double logreg)
 
 	double Fmatrix_logdet, Gmatrix_logdet;
 	if (!use_covariance_matrix) {
-#ifdef USE_MKL
-#ifdef USE_EIGEN
-		LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed_copy.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
-		LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',n_amps,Fmatrix_packed_copy.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the upper half of Fmatrix_stacked
-		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> Fmatrix_eigen(Fmatrix_stacked.array(),n_amps,n_amps);
-		Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
+#if defined(USE_EIGEN)
+		using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+		Eigen::Map<MatrixRMd> F(Fmatrix_stacked.array(), n_amps, n_amps);
+		int i,j,idx = 0;
+		double* Fmat = Fmatrix_packed_copy.array();
+		for (i=0; i < n_amps; i++) {
+			 for (j=i; j < n_amps; j++) {
+				  F(j,i) = Fmat[idx++];
+				  F(i,j) = F(j,i);
+			 }
+		}
+		Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(F);
 		Eigen::MatrixXd lltmat(n_amps,n_amps);
 		lltmat = Fmatrix_llt.matrixL();
 		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> dvector_eigen(Dvector,n_amps,1);
@@ -19669,14 +19841,13 @@ double QLens::chisq_regparam_dense(const double logreg)
 		for (i=0; i < n_amps; i++) Fmatrix_logdet += log(abs(lltmat(i,i)));
 		Fmatrix_logdet *= 2;
 		//Fmatrix_log_determinant = 2*log(abs(lltmat.diagonal().prod()));
-#else
+#elif defined(USE_MKL)
 		lapack_int status;
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed_copy.array());
 		if (status != 0) warn("Matrix was not invertible and/or positive definite");
 		for (i=0; i < n_amps; i++) amplitude_vector[i] = Dvector[i];
 		LAPACKE_dpptrs(LAPACK_ROW_MAJOR,'U',n_amps,1,Fmatrix_packed_copy.array(),amplitude_vector,1);
 		Cholesky_logdet_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,n_amps);
-#endif
 #else
 		// At the moment, the native (non-MKL) Cholesky decomposition code does a lower triangular decomposition; since Fmatrix/Rmatrix stores the upper
 		// triangular part, we have to switch Fmatrix to a lower triangular version here. Fix later so it uses the upper triangular Cholesky version!!!
@@ -19688,18 +19859,27 @@ double QLens::chisq_regparam_dense(const double logreg)
 		Cholesky_logdet_lower_packed(Fmatrix_packed_copy.array(),Fmatrix_logdet,n_amps);
 #endif
 	} else {
-#ifdef USE_MKL
+		for (i=0; i < n_amps; i++) amplitude_vector[i] = Dvector_cov_copy[i];
+#if defined(USE_EIGEN)
+		using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+		using VectorXd  = Eigen::VectorXd;
+
+		Eigen::Map<MatrixRMd> G(Gmatrix_stacked_copy.array(), n_amps, n_amps);
+		Eigen::Map<VectorXd> b(amplitude_vector, n_amps);
+		Eigen::PartialPivLU<MatrixRMd> lu(G);
+		if(lu.determinant()==0.0) warn("Matrix was not invertible");
+		b = lu.solve(b);
+#elif defined(USE_MKL)
 		int *ipiv = new int[source_npixels];
 		lapack_int status;
 		status = LAPACKE_dgetrf(LAPACK_ROW_MAJOR, n_amps, n_amps, Gmatrix_stacked_copy.array(), n_amps, ipiv);
 		if (status != 0) warn("Matrix was not invertible");
-		for (i=0; i < n_amps; i++) amplitude_vector[i] = Dvector_cov_copy[i];
 		LAPACKE_dgetrs(LAPACK_ROW_MAJOR, 'N', n_amps, 1, Gmatrix_stacked_copy.array(), n_amps, ipiv, amplitude_vector, 1);
-		LU_logdet_stacked(Gmatrix_stacked_copy.array(),Gmatrix_logdet,n_amps);
 		delete[] ipiv;
 #else
-		die("Currently MKL is required to do cov_inverse kernel regularization");
+		die("Currently Eigen or MKL is required to do cov_inverse kernel regularization");
 #endif
+		LU_logdet_stacked(Gmatrix_stacked_copy.array(),Gmatrix_logdet,n_amps);
 	}
 
 	double temp_img, Ed_times_two=0,Es_times_two=0;
@@ -19717,8 +19897,8 @@ double QLens::chisq_regparam_dense(const double logreg)
 		} else {
 			cov_inverse = cov_inverse_bg;
 		}
-		if ((source_fit_mode==Shapelet_Source) or (inversion_method==DENSE)) {
-			// even if using a pixellated source, if inversion_method is set to DENSE, only the dense form of the Lmatrix has been convolved with the PSF, so this form must be used
+		if ((source_fit_mode==Shapelet_Source) or (matrix_format==DENSE)) {
+			// even if using a pixellated source, if matrix_format is set to DENSE, only the dense form of the Lmatrix has been convolved with the PSF, so this form must be used
 			Lmatptr = (Lmatrix_dense.pointer())[i];
 			tempsrcptr = amplitude_vector;
 			while (tempsrcptr != tempsrc_end) {
@@ -20289,16 +20469,26 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 	}
 #endif
 	int i,j;
-#ifdef USE_MKL
+#if defined(USE_EIGEN) || defined(USE_MKL)
 	if (!use_covariance_matrix) {
-#ifdef USE_EIGEN
+#if defined(USE_EIGEN)
 		double inv_wtime0, inv_wtime;
 		if (show_wtime) {
 			inv_wtime0 = omp_get_wtime();
 		}
-		LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
-		LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the upper half of Fmatrix_stacked
-		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> Fmatrix_eigen(Fmatrix_stacked.array(),n_amps,n_amps);
+		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
+		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the upper half of Fmatrix_stacked
+		using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+		Eigen::Map<MatrixRMd> F(Fmatrix_stacked.array(), n_amps, n_amps);
+		int i,j,idx = 0;
+		double* Fmat = Fmatrix_packed.array();
+		for (i=0; i < n_amps; i++) {
+			 for (j=i; j < n_amps; j++) {
+				  F(j,i) = Fmat[idx++];
+				  F(i,j) = F(j,i);
+			 }
+		}
+		//Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> Fmatrix_eigen(Fmatrix_stacked.array(),n_amps,n_amps);
 		Eigen::MatrixXd lltmat(n_amps,n_amps);
 		Eigen::VectorXd amplitudes_eigen(n_amps);
 		Eigen::Map<Eigen::MatrixXd, Eigen::Unaligned> dvector_eigen(Dvector,n_amps,1);
@@ -20309,7 +20499,7 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 				//inv_wtime0 = omp_get_wtime();
 			//}
 			//amplitudes_eigen = fnnls::fnnls_solver<double>(ZT_map,x_map,max_nnls_iterations,nnls_tolerance);
-			//Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
+			//Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(F);
 			//lltmat = Fmatrix_llt.matrixL();
 		//} else
 		if (use_non_negative_least_squares) {
@@ -20318,17 +20508,17 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 			}
 			Eigen::MatrixXd lnnlsmat(n_amps,n_amps);
 
-			Eigen::NNLS<Eigen::MatrixXd> Fmatrix_nnls(Fmatrix_eigen,max_nnls_iterations,nnls_tolerance);
+			Eigen::NNLS<Eigen::MatrixXd> Fmatrix_nnls(F,max_nnls_iterations,nnls_tolerance);
 			Fmatrix_nnls.setTolerance(nnls_tolerance);
 			amplitudes_eigen = Fmatrix_nnls.solve(dvector_eigen);
 			if ((mpi_id==0) and (verbal)) {
 				cout << "Number of iterations required: " << Fmatrix_nnls.iterations() << endl;
 				cout << "Tolerance: " << Fmatrix_nnls.tolerance() << endl;
 			}
-			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
+			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(F);
 			lltmat = Fmatrix_llt.matrixL();
 		} else {
-			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(Fmatrix_eigen);
+			Eigen::LLT<Eigen::MatrixXd> Fmatrix_llt(F);
 			lltmat = Fmatrix_llt.matrixL();
 			amplitudes_eigen = Fmatrix_llt.solve(dvector_eigen);
 		}
@@ -20337,7 +20527,7 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 		for (int i=0; i < n_amps; i++) Fmatrix_log_determinant += log(abs(lltmat(i,i)));
 		Fmatrix_log_determinant *= 2;
 		//Fmatrix_log_determinant = 2*log(abs(lltmat.diagonal().prod()));
-#else
+#elif defined(USE_MKL)
 		lapack_int status;
 		status = LAPACKE_dpptrf(LAPACK_ROW_MAJOR,'U',n_amps,Fmatrix_packed.array());
 		if (status != 0) {
@@ -20352,16 +20542,25 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 		Cholesky_logdet_packed(Fmatrix_packed.array(),Fmatrix_log_determinant,n_amps);
 #endif
 	} else {
+		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector_cov[i];
+#if defined(USE_EIGEN)
+		using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
+		using VectorXd  = Eigen::VectorXd;
+
+		Eigen::Map<MatrixRMd> G(Gmatrix_stacked.array(), n_amps, n_amps);
+		Eigen::Map<VectorXd> b(amplitude_vector, n_amps);
+		Eigen::PartialPivLU<MatrixRMd> lu(G);
+		if(lu.determinant()==0.0) warn("Matrix was not invertible");
+		b = lu.solve(b);
+#elif defined(USE_MKL)
 		lapack_int status;
 		int *ipiv = new int[n_amps];
 		status = LAPACKE_dgetrf(LAPACK_ROW_MAJOR, n_amps, n_amps, Gmatrix_stacked.array(), n_amps, ipiv);
 		if (status != 0) warn("Matrix was not invertible");
-		//LAPACKE_dsptrf(LAPACK_ROW_MAJOR,'U', n_amps, Gmatrix_packed.array(), ipiv);
-		for (int i=0; i < n_amps; i++) amplitude_vector[i] = Dvector_cov[i];
-		//LAPACKE_dsptrs(LAPACK_ROW_MAJOR,'U',n_amps,1,Gmatrix_packed.array(),ipiv,amplitude_vector,1);
 		LAPACKE_dgetrs (LAPACK_ROW_MAJOR, 'N', n_amps, 1, Gmatrix_stacked.array(), n_amps, ipiv, amplitude_vector, 1);
-		LU_logdet_stacked(Gmatrix_stacked.array(),Gmatrix_log_determinant,n_amps);
 		delete[] ipiv;
+#endif
+		LU_logdet_stacked(Gmatrix_stacked.array(),Gmatrix_log_determinant,n_amps);
 		//cout << "DETERMINANTS: " << Fmatrix_log_determinant << " " << Gmatrix_log_determinant << " " << (Gmatrix_log_determinant+Rmatrix_log_determinant) << endl;
 	}
 #else
@@ -20465,12 +20664,57 @@ void QLens::invert_lens_mapping_CG_method(const int imggrid_i, bool verbal)
 //#endif
 }
 
-void QLens::invert_lens_mapping_UMFPACK(const int imggrid_i, double& logdet, bool verbal, bool use_copy)
+void QLens::invert_lens_mapping_EIGEN_sparse(const int imggrid_i, double& logdet, const bool verbal, const bool use_copy)
+{
+#ifndef USE_EIGEN
+	die("QLens requires compilation with UMFPACK for factorization");
+#else
+	double *Fmatptr = (use_copy==true) ? Fmatrix_copy : Fmatrix;
+
+	std::vector<Eigen::Triplet<double>> triplets;
+
+	int i,k;
+	for (i=0; i < n_amps; i++) {
+	  triplets.emplace_back(i, i, Fmatptr[i]);
+	}
+
+	for (i=0; i < n_amps; i++) {
+		 for (k=Fmatrix_index[i]; k < Fmatrix_index[i+1]; k++) {
+			  triplets.emplace_back(i, Fmatrix_index[k], Fmatptr[k]);
+			  triplets.emplace_back(Fmatrix_index[k], i, Fmatptr[k]);
+		 }
+	}
+	Eigen::SparseMatrix<double> F(n_amps,n_amps);
+	F.setFromTriplets(triplets.begin(), triplets.end());
+
+
+	Eigen::SimplicialLLT<Eigen::SparseMatrix<double>> solver;
+	using VectorXd  = Eigen::VectorXd;
+	Eigen::Map<VectorXd> D(Dvector, n_amps);
+	solver.compute(F);
+	if(solver.info() != Eigen::Success) warn("Sparse Cholesky factorization failed");
+	VectorXd s = solver.solve(D);
+	for (i=0; i < n_amps; i++) {
+		amplitude_vector[i] = s(i);
+	}
+	const auto& Lview = solver.matrixL();
+	const auto& L = Lview.nestedExpression(); // underlying sparse matrix
+
+	logdet = 0.0;
+	for (i=0; i < L.rows(); i++) {
+		logdet += std::log(L.coeff(i,i));
+	}
+	logdet *= 2;
+
+	if (imggrid_i >= 0) update_source_and_lensgrid_amplitudes(imggrid_i,verbal);
+#endif
+}
+
+void QLens::invert_lens_mapping_UMFPACK(const int imggrid_i, double& logdet, const bool verbal, const bool use_copy)
 {
 #ifndef USE_UMFPACK
 	die("QLens requires compilation with UMFPACK for factorization");
 #else
-	int default_nthreads=1;
 
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -20645,7 +20889,7 @@ void QLens::invert_lens_mapping_UMFPACK(const int imggrid_i, double& logdet, boo
 #endif
 }
 
-void QLens::invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, bool verbal, bool use_copy)
+void QLens::invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, const bool verbal, const bool use_copy)
 {
 //#ifdef USE_MPI
 	//MPI_Comm sub_comm;
@@ -20895,6 +21139,40 @@ void QLens::update_source_and_lensgrid_amplitudes(const int imggrid_i, const boo
 		}
 	}
 	delete[] imggrids;
+}
+
+void QLens::Rmatrix_determinant_EIGEN(const bool potential_perturbations)
+{
+#ifndef USE_EIGEN
+	die("QLens requires compilation with UMFPACK (or MUMPS) for determinants of sparse matrices");
+#else
+	int npixels;
+	if (!potential_perturbations) {
+		npixels = (*source_npixels_ptr);
+	} else {
+		npixels = lensgrid_npixels;
+	}
+
+	std::vector<Eigen::Triplet<double>> triplets;
+
+	int i,k;
+	for (i=0; i < npixels; i++) {
+	  triplets.emplace_back(i, i, (*Rmatrix)[i]);
+	}
+
+	for (i=0; i < npixels; i++) {
+		 for (k=(*Rmatrix_index_ptr)[i]; k < (*Rmatrix_index_ptr)[i+1]; k++) {
+			  triplets.emplace_back(i, (*Rmatrix_index_ptr)[k], (*Rmatrix)[k]);
+			  triplets.emplace_back((*Rmatrix_index_ptr)[k], i, (*Rmatrix)[k]);
+		 }
+	}
+	Eigen::SparseMatrix<double> R(npixels,npixels);
+	R.setFromTriplets(triplets.begin(), triplets.end());
+
+	Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+	solver.compute(R);
+	(*Rmatrix_log_determinant_ptr) = solver.logAbsDeterminant();
+#endif
 }
 
 void QLens::Rmatrix_determinant_UMFPACK(const bool potential_perturbations)

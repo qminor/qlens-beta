@@ -758,7 +758,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
 	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
 	RegularizationMethod regularization_method;
-	enum InversionMethod { CG_Method, MUMPS, UMFPACK, DENSE, DENSE_FMATRIX } inversion_method;
+	enum MatrixFormat { DENSE, DENSE_FMATRIX, SPARSE } matrix_format; // DENSE_FMATRIX means Lmatrix is stored as sparse even after PSF convolution, but Fmatrix is stored as dense
+	enum SparseSolver { CG_Method, MUMPS, UMFPACK, EIGEN_SPARSE, NONE } sparse_solver;
 	bool use_non_negative_least_squares;
 	//bool use_fnnls;
 	int max_nnls_iterations;
@@ -1077,12 +1078,14 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	void create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool dense_Fmatrix=false, const bool potential_perturbations=false, const bool verbal=false);
 	void invert_lens_mapping_dense(const int imggrid_i, bool verbal=false);
-	void invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, bool verbal, bool use_copy = false);
-	void invert_lens_mapping_UMFPACK(const int imggrid_i, double& logdet, bool verbal, bool use_copy = false);
+	void invert_lens_mapping_EIGEN_sparse(const int imggrid_i, double& logdet, const bool verbal, const bool use_copy = false);
+	void invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, const bool verbal, const bool use_copy = false);
+	void invert_lens_mapping_UMFPACK(const int imggrid_i, double& logdet, const bool verbal, const bool use_copy = false);
 	void convert_Rmatrix_to_dense();
 	void convert_Rmatrix_pot_to_dense();
 	void Rmatrix_determinant_MUMPS(const bool potential_perturbations);
 	void Rmatrix_determinant_UMFPACK(const bool potential_perturbations);
+	void Rmatrix_determinant_EIGEN(const bool potential_perturbations);
 	void matrix_determinant_dense(double& logdet, const dvector& matrix_in, const int npixels);
 
 	void invert_lens_mapping_CG_method(const int imggrid_i, bool verbal);
@@ -1623,6 +1626,64 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 		update_parameter_list();
 	}
 	bool get_analytic_bestfit_src() { return use_analytic_bestfit_src; }
+
+	string get_matrix_format_string() {
+		string mfstring;
+		if (matrix_format==DENSE) mfstring = "dense";
+		else if (matrix_format==DENSE_FMATRIX) mfstring = "fdense";
+		else if (matrix_format==SPARSE) mfstring = "sparse";
+		else throw std::runtime_error("Unknown matrix format");
+		return mfstring;
+	}
+	void set_matrix_format_string(const string setting) {
+		if (setting=="dense") matrix_format = DENSE;
+		else if (setting=="fdense") {
+#if defined(USE_MKL) || defined(USE_EIGEN)
+			matrix_format = DENSE_FMATRIX;
+#else
+			throw std::runtime_error("currently 'fdense' matrix inversion mode is only supported with Eigen and/or MKL");
+#endif
+		}
+		else if (setting=="sparse") matrix_format = SPARSE;
+		else throw std::runtime_error("invalid argument to 'matrix_format' command; must specify valid matrix format");
+	}
+
+	string get_sparse_solver_string() {
+		string setting;
+		if (sparse_solver==MUMPS) setting = "mumps";
+		else if (sparse_solver==UMFPACK) setting = "umfpack";
+		else if (sparse_solver==EIGEN_SPARSE) setting = "eigen";
+		else if (sparse_solver==CG_Method) setting = "cg";
+		else if (sparse_solver==NONE) setting = "none";
+		else throw std::runtime_error("Unknown sparse solver");
+		return setting;
+	}
+	void set_sparse_solver_string(const string setting) {
+		if (setting=="mumps") {
+#ifdef USE_MUMPS
+			sparse_solver = MUMPS;
+#else
+			throw std::runtime_error("qlens must be compiled with MUMPS in order to set sparse solver to 'mumps'");
+#endif
+		}
+		else if (setting=="umfpack") {
+#ifdef USE_UMFPACK
+			sparse_solver = UMFPACK;
+#else
+			throw std::runtime_error("qlens must be compiled with UMFPACK in order to set sparse solver to 'umfpack'");
+#endif
+		}
+		else if (setting=="eigen") {
+#ifdef USE_EIGEN
+			sparse_solver = EIGEN_SPARSE;
+#else
+			throw std::runtime_error("qlens must be compiled with Eigen in order to set sparse solver to 'eigen'");
+#endif
+		}
+		else if (setting=="cg") sparse_solver = CG_Method;
+		else if (setting=="none") sparse_solver = NONE;
+		else throw std::runtime_error("invalid argument to 'sparse_solver' command; must specify valid sparse_solver");
+	}
 
 	void update_imggrid_mask_values(const int mask_i);
 

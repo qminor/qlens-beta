@@ -422,7 +422,16 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), ModelParams()
 	delaunay_mode = 1;
 	ray_tracing_method = Interpolate;
 	natural_neighbor_interpolation = true; // if false, uses 3-point interpolation
-	inversion_method = DENSE;
+	matrix_format = DENSE;
+#if defined(USE_MUMPS)
+	sparse_solver = MUMPS;
+#elif defined(USE_UMFPACK)
+	sparse_solver = UMFPACK;
+#elif defined(USE_EIGEN)
+	sparse_solver = EIGEN_SPARSE;
+#else
+	sparse_solver = NONE;
+#endif
 	use_non_negative_least_squares = false;
 	//use_fnnls = false;
 	max_nnls_iterations = 1000;
@@ -848,7 +857,8 @@ QLens::QLens(QLens *lens_in) : UCMC(), ModelParams() // creates lens object with
 	max_regopt_iterations = lens_in->max_regopt_iterations;
 
 	ray_tracing_method = lens_in->ray_tracing_method;
-	inversion_method = lens_in->inversion_method;
+	matrix_format = lens_in->matrix_format;
+	sparse_solver = lens_in->sparse_solver;
 	use_non_negative_least_squares = lens_in->use_non_negative_least_squares;
 	//use_fnnls = lens_in->use_fnnls;
 	max_nnls_iterations = lens_in->max_nnls_iterations;
@@ -15504,10 +15514,9 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 						if (mpi_id==0) cout << "Wall time for creating source pixel grid: " << srcgrid_wtime << endl;
 					}
 #endif
-
 					if (!generate_and_invert_lensing_matrix_cartesian(imggrid_i,src_i,tot_wtime,tot_wtime0,verbal)) return 2e30;
 
-					if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
+					if (matrix_format==DENSE) calculate_image_pixel_surface_brightness_dense();
 					else calculate_image_pixel_surface_brightness();
 					store_image_pixel_surface_brightness(imggrid_i);
 					if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
@@ -15598,7 +15607,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 
 					if ((!use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights) and (save_sbweights_during_inversion)) calculate_subpixel_sbweights(imggrid_i,true,verbal);
 
-					if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
+					if (matrix_format==DENSE) calculate_image_pixel_surface_brightness_dense();
 					else calculate_image_pixel_surface_brightness();
 					store_image_pixel_surface_brightness(imggrid_i);
 					if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
@@ -16030,7 +16039,7 @@ bool QLens::generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, co
 	if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices...\n";
 	initialize_pixel_matrices(imggrid_i,false,verbal);
 	if (regularization_method != None) create_regularization_matrix(imggrid_i);
-	if (inversion_method==DENSE) {
+	if (matrix_format==DENSE) {
 		PSF_convolution_Lmatrix_dense(imggrid_i,verbal);
 	} else {
 		PSF_convolution_Lmatrix(imggrid_i,verbal);
@@ -16048,8 +16057,8 @@ bool QLens::generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, co
 	}
 
 	if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
-	bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
-	if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(imggrid_i,false,verbal);
+	bool dense_Fmatrix = ((matrix_format==DENSE) or (matrix_format==DENSE_FMATRIX)) ? true : false;
+	if (matrix_format==DENSE) create_lensing_matrices_from_Lmatrix_dense(imggrid_i,false,verbal);
 	else create_lensing_matrices_from_Lmatrix(imggrid_i,dense_Fmatrix,false,verbal);
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -16063,10 +16072,17 @@ bool QLens::generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, co
 		optimize_regularization_parameter(imggrid_i,dense_Fmatrix,verbal);
 	}
 	if ((!optimize_regparam)) {
-		if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(imggrid_i,Fmatrix_log_determinant,verbal);
-		else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(imggrid_i,Fmatrix_log_determinant,verbal);
-		else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(imggrid_i,verbal);
-		else invert_lens_mapping_CG_method(imggrid_i,verbal);
+		if ((matrix_format==DENSE) or (matrix_format==DENSE_FMATRIX)) invert_lens_mapping_dense(imggrid_i,verbal);
+		else {
+			if (sparse_solver==MUMPS) invert_lens_mapping_MUMPS(imggrid_i,Fmatrix_log_determinant,verbal);
+			else if (sparse_solver==UMFPACK) invert_lens_mapping_UMFPACK(imggrid_i,Fmatrix_log_determinant,verbal);
+			else if (sparse_solver==EIGEN_SPARSE) invert_lens_mapping_EIGEN_sparse(imggrid_i,Fmatrix_log_determinant,verbal);
+			else if (sparse_solver==CG_Method) invert_lens_mapping_CG_method(imggrid_i,verbal);
+			else {
+				warn("no sparse solver has been chosen; cannot invert lensing F-matrix");
+				return false;
+			}
+		}
 	}
 	return true;
 }
@@ -16099,7 +16115,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		if (n_amps > source_npixels) cout << "Number of total amplitudes: " << n_amps << endl;
 	}
 
-	if (inversion_method==DENSE) {
+	if (matrix_format==DENSE) {
 		PSF_convolution_Lmatrix_dense(imggrid_i,verbal);
 	} else {
 		PSF_convolution_Lmatrix(imggrid_i,verbal);
@@ -16115,8 +16131,8 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 	}
 
 	if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices...\n" << flush;
-	bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
-	if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(imggrid_i,potential_perturbations,verbal);
+	bool dense_Fmatrix = ((matrix_format==DENSE) or (matrix_format==DENSE_FMATRIX)) ? true : false;
+	if (matrix_format==DENSE) create_lensing_matrices_from_Lmatrix_dense(imggrid_i,potential_perturbations,verbal);
 	else create_lensing_matrices_from_Lmatrix(imggrid_i,dense_Fmatrix,potential_perturbations,verbal);
 #ifdef USE_OPENMP
 	if (show_wtime) {
@@ -16169,7 +16185,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 			if (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,false,verbal)==false) { clear_pixel_matrices(); clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
 			if ((potential_perturbations) and (create_regularization_matrix(imggrid_i,include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { clear_pixel_matrices(); clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
 		}
-		if (inversion_method==DENSE) {
+		if (matrix_format==DENSE) {
 			PSF_convolution_Lmatrix_dense(imggrid_i,verbal);
 		} else {
 			PSF_convolution_Lmatrix(imggrid_i,verbal);
@@ -16186,8 +16202,8 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		}
 
 		if ((mpi_id==0) and (verbal)) cout << "Creating lensing matrices (with lum weighting)...\n" << flush;
-		bool dense_Fmatrix = ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) ? true : false;
-		if (inversion_method==DENSE) create_lensing_matrices_from_Lmatrix_dense(imggrid_i,potential_perturbations,verbal);
+		bool dense_Fmatrix = ((matrix_format==DENSE) or (matrix_format==DENSE_FMATRIX)) ? true : false;
+		if (matrix_format==DENSE) create_lensing_matrices_from_Lmatrix_dense(imggrid_i,potential_perturbations,verbal);
 		else create_lensing_matrices_from_Lmatrix(imggrid_i,dense_Fmatrix,potential_perturbations,verbal);
 #ifdef USE_OPENMP
 		if (show_wtime) {
@@ -16201,10 +16217,17 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		}
 	}
 	if ((!optimize_regparam) or (potential_perturbations)) {
-		if (inversion_method==MUMPS) invert_lens_mapping_MUMPS(imggrid_i,Fmatrix_log_determinant,verbal);
-		else if (inversion_method==UMFPACK) invert_lens_mapping_UMFPACK(imggrid_i,Fmatrix_log_determinant,verbal);
-		else if ((inversion_method==DENSE) or (inversion_method==DENSE_FMATRIX)) invert_lens_mapping_dense(imggrid_i,verbal);
-		else invert_lens_mapping_CG_method(imggrid_i,verbal);
+		if ((matrix_format==DENSE) or (matrix_format==DENSE_FMATRIX)) invert_lens_mapping_dense(imggrid_i,verbal);
+		else {
+			if (sparse_solver==MUMPS) invert_lens_mapping_MUMPS(imggrid_i,Fmatrix_log_determinant,verbal);
+			else if (sparse_solver==UMFPACK) invert_lens_mapping_UMFPACK(imggrid_i,Fmatrix_log_determinant,verbal);
+			else if (sparse_solver==EIGEN_SPARSE) invert_lens_mapping_EIGEN_sparse(imggrid_i,Fmatrix_log_determinant,verbal);
+			else if (sparse_solver==CG_Method) invert_lens_mapping_CG_method(imggrid_i,verbal);
+			else {
+				warn("no sparse solver has been chosen; cannot invert lensing F-matrix");
+				return false;
+			}
+		}
 	}
 	if (save_sb_gradient) image_pixel_grids[imggrid_i]->calculate_subpixel_source_gradient();
 
@@ -16230,11 +16253,11 @@ void QLens::add_outside_sb_prior_penalty(const int band_number, int* src_i_list,
 			image_pixel_grids[imggrid_i]->redo_lensing_calculations(false); // This shouldn't be necessary! FIX!!!
 			assign_pixel_mappings(imggrid_i,false,verbal);
 			//initialize_pixel_matrices(imggrid_i,false,verbal);
-			//if (inversion_method==DENSE) die("need to implement FFT convolution of emask for outside_sb_prior");
+			//if (matrix_format==DENSE) die("need to implement FFT convolution of emask for outside_sb_prior");
 			//else PSF_convolution_Lmatrix(imggrid_i,verbal);
 			//if (source_fit_mode==Cartesian_Source) image_pixel_grids[imggrid_i]->cartesian_srcgrid->fill_surface_brightness_vector();
 			//else image_pixel_grids[imggrid_i]->delaunay_srcgrid->fill_surface_brightness_vector();
-			//if (inversion_method==DENSE) calculate_image_pixel_surface_brightness_dense();
+			//if (matrix_format==DENSE) calculate_image_pixel_surface_brightness_dense();
 			//else calculate_image_pixel_surface_brightness();
 			image_pixel_grids[imggrid_i]->find_surface_brightness(false,true);
 			vectorize_image_pixel_surface_brightness(imggrid_i,true);

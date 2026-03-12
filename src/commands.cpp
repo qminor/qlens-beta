@@ -197,7 +197,7 @@ void QLens::process_commands(bool read_file)
 						"sb_ellipticity_components -- for sbprofiles, use components e=1-q instead of (q,theta)\n"
 						"\n"
 						"\033[4mSource pixel reconstruction settings\033[0m\n"
-						"inversion_method -- set method for lensing matrix inversion\n"
+						"matrix_format -- set matrix storage format\n"
 						"srcgrid_type -- source grid type (cartesian, adaptive_cartesian, adaptive)\n"
 						"auto_src_npixels -- automatically determine # of source pixels from lens model/data (on/off)\n"
 						"auto_srcgrid -- automatically choose source grid size/location from lens model/data (on/off)\n"
@@ -1405,10 +1405,11 @@ void QLens::process_commands(bool read_file)
 								"sbmap plotdata image.ps [-5:5][-4:4]\n";
 						else if (words[2]=="invert")
 							cout << "sbmap invert\n\n"
-								"Invert the image surface brightness map under the assumed lens model using linear inversion. The\n"
-								"method used for the linear inversion is specified in 'inversion_method', which can be set to either\n"
-								"'cg' (conjugate gradient method), 'mumps' or 'umfpack'. The latter two options require qlens to be\n"
-								"compiled with the MUMPS or UMFPACK software packages, respectively.\n";
+								"Invert the image surface brightness map under the assumed lens model using linear inversion. If\n"
+								"matrix_format is set to 'sparse', the method used for the linear inversion is specified in\n"
+								"'sparse_solver', which can be set to either 'cg' (conjugate gradient method), 'mumps', 'umfpack'\n"
+								"or 'eigen'. Otherwise, for dense matrix format, either EIGEN, MKL or native code is used, depending\n"
+								"on qlens has been compiled with.\n";
 						else if (words[2]=="set_all_pixels")
 							cout << "sbmap set_all_pixels\n\n"
 								"Activates all pixels in the image data so they are used in fitting and plotting. This command can only\n"
@@ -1978,14 +1979,20 @@ void QLens::process_commands(bool read_file)
 					cout << "rmin_frac <#>\n\n"
 						"Set minimum radius of innermost cells in grid (in terms of fraction of max radius);\n"
 						"this defaults to " << default_rmin_frac << ".\n";
-				else if (words[1]=="inversion_method")
-					cout << "inversion_method <method>\n\n"
-						"Set method for storing/inverting lensing matrices. Options are:\n\n"
-						"dense -- Lmatrix, Fmatrix constructed as dense matrices; inversion performed by native code or Intel MKL\n"
+				else if (words[1]=="matrix_format")
+					cout << "matrix_format <format>\n\n"
+						"Set method for storing lensing matrices. Options are:\n\n"
+						"dense -- Lmatrix, Fmatrix constructed as dense matrices; inversion performed by Eigen, MLK or native code\n"
 						"fdense -- Fmatrix constructed/inverted as a dense matrix; however, Lmatrix is constructed as sparse\n"
-						"mumps -- matrices are constructed/inverted as sparse matrices; inversion handled by MUMPS package\n"
-						"umfpack -- matrices are constructed/inverted as sparse matrices; inversion handled by UMFPACK package\n"
-						"cg -- matrices are constructed/inverted as sparse matrices; inversion done by conjugate gradient method\n\n";
+						"sparse -- Lmatrix, Fmatrix constructed as sparse matrices; inversion method specified in 'sparse_solver'\n\n";
+				else if (words[1]=="sparse_solver")
+					cout << "sparse_solver <solver>\n\n"
+						"Set method for solving sparse matrix equations. Options are:\n\n"
+						"mumps -- inversion handled by MUMPS package\n"
+						"umfpack -- inversion handled by UMFPACK package\n"
+						"eigen -- inversion handled by Eigen package\n"
+						"cg -- inversion by conjugate gradient method (may be unstable for more than a few hundred source pixels)\n"
+						"none -- this is the default if qlens has not been compiled by sparse solver package\n\n";
 				else if (words[1]=="galsubgrid")
 					cout << "galsubgrid <on/off>   (default=on)\n\n"
 						"When turned on, subgrids around perturbing galaxies (defined as galaxies with Einstein\n"
@@ -2187,7 +2194,8 @@ void QLens::process_commands(bool read_file)
 					//cout << "psf_mpi: " << display_switch(psf_convolution_mpi) << endl;
 					cout << endl;
 					cout << "\033[4mSource pixel reconstruction settings\033[0m\n";
-					cout << "inversion_method: " << ((inversion_method==MUMPS) ? "LDL factorization (MUMPS)\n" : (inversion_method==UMFPACK) ? "LU factorization (UMFPACK)\n" : (inversion_method==CG_Method) ? "conjugate gradient method\n" : "unknown\n");
+					cout << "matrix_format: " << ((matrix_format==DENSE) ? "dense\n" : (matrix_format==DENSE_FMATRIX) ? "fdense (dense Fmatrix but sparse Lmatrix)\n" : (matrix_format==SPARSE) ? "sparse\n" : "unknown\n");
+					cout << "sparse_solver: " << ((sparse_solver==MUMPS) ? "LDL factorization (MUMPS)\n" : (sparse_solver==UMFPACK) ? "LU factorization (UMFPACK)\n" : (sparse_solver==EIGEN_SPARSE) ? "Cholesky factorization (Eigen)\n" : (sparse_solver==CG_Method) ? "conjugate gradient method\n" : "unknown\n");
 					cout << "adaptive_subgrid: " << display_switch(adaptive_subgrid) << endl;
 					cout << "auto_src_npixels: " << display_switch(auto_srcgrid_npixels) << endl;
 					cout << "auto_srcgrid: " << display_switch(auto_sourcegrid) << endl;
@@ -15246,31 +15254,66 @@ void QLens::process_commands(bool read_file)
 				else Complain("invalid argument to 'interpolation_method'; must specify either '3pt' or 'nn'");
 			} else Complain("invalid number of arguments; can only specify one argument ('3pt' or 'nn')");
 		}
-		else if (words[0]=="inversion_method") {
+		else if ((words[0]=="matrix_format") or (words[0]=="inversion_method")) {
+			if (words[0]=="inversion_method") warn("NOTE: 'inversion_method' is deprecated; 'matrix_format' is now preferred");
 			if (nwords==1) {
 				if (mpi_id==0) {
-					if (inversion_method==MUMPS) cout << "Lensing inversion method: LDL factorization (MUMPS)" << endl;
-					else if (inversion_method==UMFPACK) cout << "Lensing inversion method: LU factorization (UMFPACK)" << endl;
-					else if (inversion_method==CG_Method) cout << "Lensing inversion method: conjugate gradient method" << endl;
-					else if (inversion_method==DENSE) cout << "Lensing inversion method: Dense Fmatrix inversion (w/ dense Lmatrix)" << endl;
-					else if (inversion_method==DENSE_FMATRIX) cout << "Lensing inversion method: Dense Fmatrix inversion (w/ sparse Lmatrix)" << endl;
-					else cout << "Unknown inversion method" << endl;
+					if (matrix_format==DENSE) cout << "Lensing matrix format: Dense" << endl;
+					else if (matrix_format==DENSE_FMATRIX) cout << "Lensing matrix format: Dense Fmatrix (w/ sparse Lmatrix)" << endl;
+					else if (matrix_format==SPARSE) cout << "Lensing matrix format: Sparse" << endl;
+					else cout << "Unknown matrix format" << endl;
 				}
 			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'inversion_method' command; must specify valid inversion method");
-				if (setword=="mumps") inversion_method = MUMPS;
-				else if (setword=="umfpack") inversion_method = UMFPACK;
-				else if (setword=="cg") inversion_method = CG_Method;
-				else if (setword=="dense") inversion_method = DENSE;
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'matrix_format' command; must specify valid dense, fdense, or sparse");
+				else if (setword=="dense") matrix_format = DENSE;
 				else if (setword=="fdense") {
-#ifdef USE_MKL
-					inversion_method = DENSE_FMATRIX;
+#if defined(USE_MKL) || defined(USE_EIGEN)
+					matrix_format = DENSE_FMATRIX;
 #else
-					Complain("currently 'fdense' matrix inversion mode is only supported with MKL");
+					Complain("currently 'fdense' matrix inversion mode is only supported with Eigen and/or MKL");
 #endif
 				}
-				else Complain("invalid argument to 'inversion_method' command; must specify valid inversion method");
-			} else Complain("invalid number of arguments; can only inversion method");
+				else if (setword=="sparse") matrix_format = SPARSE;
+				else Complain("invalid argument to 'matrix_format' command; must specify valid matrix format");
+			} else Complain("invalid number of arguments; can only enter matrix format");
+		}
+		else if (words[0]=="sparse_solver") {
+			if (nwords==1) {
+				if (mpi_id==0) {
+					if (sparse_solver==MUMPS) cout << "Sparse solver: LDL factorization (MUMPS)" << endl;
+					else if (sparse_solver==UMFPACK) cout << "Sparse solver: LU factorization (UMFPACK)" << endl;
+					else if (sparse_solver==EIGEN_SPARSE) cout << "Sparse solver: Cholesky factorization (Eigen)" << endl;
+					else if (sparse_solver==CG_Method) cout << "Sparse solver: conjugate gradient method" << endl;
+					else if (sparse_solver==NONE) cout << "Sparse solver: none" << endl;
+					else cout << "Unknown sparse solver" << endl;
+				}
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'sparse_solver' command; must specify valid mumps, umfpack, eigen, cg, or none");
+				if (setword=="mumps") {
+#ifdef USE_MUMPS
+					sparse_solver = MUMPS;
+#else
+					Complain("qlens must be compiled with MUMPS in order to set sparse solver to 'mumps'");
+#endif
+				}
+				else if (setword=="umfpack") {
+#ifdef USE_UMFPACK
+					sparse_solver = UMFPACK;
+#else
+					Complain("qlens must be compiled with UMFPACK in order to set sparse solver to 'umfpack'");
+#endif
+				}
+				else if (setword=="eigen") {
+#ifdef USE_EIGEN
+					sparse_solver = EIGEN_SPARSE;
+#else
+					Complain("qlens must be compiled with Eigen in order to set sparse solver to 'eigen'");
+#endif
+				}
+				else if (setword=="cg") sparse_solver = CG_Method;
+				else if (setword=="none") sparse_solver = NONE;
+				else Complain("invalid argument to 'sparse_solver' command; must specify valid sparse_solver");
+			} else Complain("invalid number of arguments; can only enter sparse solver");
 		}
 		else if (words[0]=="use_nnls")
 		{

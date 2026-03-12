@@ -4,7 +4,7 @@ conda create --name <environment_name> python=3.13 openmpi pybind11 cxx-compiler
 
 *NOTE*: if it complains, you might have to add '-c conda-forge' to the above, namely
 
-conda create --name <environment_name> python=3.13 -c conda-forge openmpi pybind11 cxx-compiler gfortran cfitsio fftw mkl mkl-include numpy matplotlib libumfpack armadillo
+conda create --name <environment_name> -c conda-forge python=3.13 openmpi pybind11 cxx-compiler gfortran cfitsio fftw mkl mkl-include numpy matplotlib libumfpack armadillo
 
 2. Now activate your environment ('conda activate <environment_name>').
 
