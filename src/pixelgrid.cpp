@@ -16,8 +16,10 @@
 #ifdef USE_MKL
 #define EIGEN_USE_MKL_ALL
 #endif
+#include "Eigen/Core"
 #include "Eigen/Cholesky"
 #include "Eigen/Dense"
+#include "Eigen/Sparse"
 #ifdef USE_EIGEN_NNLS
 #include "unsupported/Eigen/NNLS"
 #endif
