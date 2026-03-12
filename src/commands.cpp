@@ -8622,7 +8622,6 @@ void QLens::process_commands(bool read_file)
 					bool show_lensinfo = false;
 					bool temp_show_wtime = false;
 					bool show_total_wtime = false;
-					bool old_show_wtime = show_wtime;
 					bool init_fitmodel = true; // if set to false, will skip creating a separate "fitmodel" object and just use current qlens object as fitmodel
 					vector<string> args;
 					if (extract_word_starts_with('-',2,nwords-1,args)==true)
@@ -8641,10 +8640,8 @@ void QLens::process_commands(bool read_file)
 					if (nwords > 2) Complain("no arguments to 'fit chisq' allowed (except for flags using '-....')");
 					int np;
 					get_n_fit_parameters(np);
-					if ((temp_show_wtime) and (!show_wtime)) show_wtime = true;
-					chisq_single_evaluation(init_fitmodel,show_total_wtime,showdiag,true,show_lensinfo);
+					chisq_single_evaluation(init_fitmodel,show_total_wtime,temp_show_wtime,showdiag,true,show_lensinfo);
 					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
-					if ((temp_show_wtime) and (!old_show_wtime)) show_wtime = false;
 				}
 				else if (words[1]=="output_img_chivals") {
 					string filename = "img_chivals.dat";

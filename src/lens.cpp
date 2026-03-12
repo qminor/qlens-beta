@@ -9519,10 +9519,12 @@ void QLens::fit_restore_defaults()
 	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
 }
 
-double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime, bool show_diagnostics, bool show_status, bool show_lensinfo)
+double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime_temp, const bool show_diagnostics, const bool show_status, const bool show_lensinfo)
 {
 	if (fit_set_optimizations()==false) return -1e30;
 	if (fit_output_dir != ".") create_output_directory();
+	bool old_show_wtime = show_wtime;
+	if ((show_wtime_temp) and (!show_wtime)) show_wtime = true;
 #ifdef USE_OPENMP
 	if (show_wtime) {
 		wtime0 = omp_get_wtime();
@@ -9532,6 +9534,7 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 		if (!initialize_fitmodel(false)) {
 			raw_chisq = -1e30;
 			if ((mpi_id==0) and (show_status)) warn(warnings,"Warning: could not evaluate chi-square function");
+			if ((show_wtime_temp) and (!old_show_wtime)) show_wtime = false;
 			return -1e30;
 		}
 #ifdef USE_OPENMP
@@ -9615,6 +9618,7 @@ double QLens::chisq_single_evaluation(bool init_fitmodel, bool show_total_wtime,
 	fit_restore_defaults();
 	if (init_fitmodel) delete fitmodel;
 	fitmodel = NULL;
+	if ((show_wtime_temp) and (!old_show_wtime)) show_wtime = false;
 	return rawchisqval;
 }
 

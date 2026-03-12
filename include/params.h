@@ -291,7 +291,7 @@ struct DerivedParam
 					lens_in->lens_parent->LogLikeFunc(NULL); // If the chi-square has not already been evaluated, evaluate it here
 					chisq_out = lens_in->raw_chisq;
 				} else {
-					chisq_out = lens_in->chisq_single_evaluation(true,false,false,false);
+					chisq_out = lens_in->chisq_single_evaluation(true,false,false,false,false);
 				}
 			} else chisq_out = -1e30;
 			return chisq_out;
