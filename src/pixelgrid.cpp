@@ -19753,6 +19753,13 @@ double QLens::chisq_regparam(const double logreg)
 	return chisq;
 }
 
+template <typename T>
+T tryfunc(const T x)
+{
+	return x*2;
+}
+template double tryfunc<double>(const double);
+
 double QLens::chisq_regparam_dense(const double logreg)
 {
 	double chisq, logdet, cov_inverse, cov_inverse_bg; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later

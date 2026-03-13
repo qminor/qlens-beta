@@ -68,6 +68,7 @@ enum DerivedParamType {
 	Einstein_Mass,
 	Xi_Param,
 	CC_Xi_Param,
+	Xi_Phi_Param,
 	Kappa_Re,
 	LensParam,
 	AvgLogSlope,
@@ -1001,6 +1002,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void load_pixel_sbweights(const int imggrid_i=-1);
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
+	template <typename T>
+	T tryfunc(const T);
 	void calculate_lumreg_srcpixel_weights(const int imggrid_i, const bool use_sbweights=false);
 	void calculate_distreg_srcpixel_weights(const int imggrid_i, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
 	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
@@ -1567,6 +1570,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double get_xi_parameter(const double src_redshift, const int lensnum);
 	double get_total_xi_parameter(const double src_redshift);
 	double cc_xi_parameter(int cc_num=-1);
+	double get_xi_phi_parameter(const double phi, int cc_num=-1);
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac, double& reav);
 	double einstein_radius_root(const double r);
