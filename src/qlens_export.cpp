@@ -458,7 +458,7 @@ PYBIND11_MODULE(qlens, m) {
 	py::class_<LensList>(m, "LensList")
 		.def(py::init<>([](QLens_Wrap* qlens_in){return new LensList(qlens_in);}))
 		.def("print", &LensList::print)
-		.def("add", [](LensList &current, LensProfile* lens_in, py::kwargs &kwargs){
+		.def("add", [](LensList &current, LensProfile<double>* lens_in, py::kwargs &kwargs){
 			Shear *extshear = NULL;
 			int anchor_center_lensnum = -1;
 			for (auto item : kwargs) {
@@ -490,10 +490,10 @@ PYBIND11_MODULE(qlens, m) {
 			return lens_in;
 		})
 		.def("add", [](LensList &current, py::list list){
-			LensProfile* lens;
+			LensProfile<double>* lens;
 			for (auto item : list){
 				try {
-					lens = py::cast<LensProfile*>(item);
+					lens = py::cast<LensProfile<double>*>(item);
 				} catch (...) {
 					throw std::runtime_error("Error adding lenses. Input should be an array of lens objects. Ex: [<Lens1>, <Lens2>, <Lens3>]");
 				}
@@ -1187,7 +1187,7 @@ PYBIND11_MODULE(qlens, m) {
 					throw std::runtime_error("Keyword argument not recognized for ptimgdata.add");
 				}
 			}
-			lensvector pos;
+			lensvector<double> pos;
 			pos[0]=x;
 			pos[1]=y;
 			current.add_ptimgdata(pos,srcflux);
@@ -1492,7 +1492,7 @@ PYBIND11_MODULE(qlens, m) {
 					throw std::runtime_error("Keyword argument not recognized for ptsrc.add");
 				}
 			}
-			lensvector pos;
+			lensvector<double> pos;
 			pos[0]=x;
 			pos[1]=y;
 			current.add_ptsrc(zsrc,pos,false);
@@ -1558,36 +1558,36 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		;
 
-	py::class_<LensProfile>(m, "LensProfile")
-		.def(py::init<>([](){return new LensProfile();}))
-		.def(py::init<const LensProfile*>())
-		.def_readonly("indx",&LensProfile::lens_number)
-		.def_readonly("z",&LensProfile::zlens)
-		.def_readonly("zlens",&LensProfile::zlens)
-		.def_readonly("zsrc_ref",&LensProfile::zsrc_ref)
-		.def_readonly("sigma_cr",&LensProfile::sigma_cr)
-		.def_readonly("xc",&LensProfile::x_center)
-		.def_readonly("yc",&LensProfile::y_center)
-		.def_readonly("q",&LensProfile::q)
-		.def_readonly("theta",&LensProfile::theta)
-		.def("print_params", &LensProfile::print_parameters)
-		.def("print_vary_params", &LensProfile::print_vary_parameters)
-		.def("get_model_name", &LensProfile::get_model_name)
-		.def("update", [](LensProfile &current, py::dict dict){
+	py::class_<LensProfile<double>>(m, "LensProfile")
+		.def(py::init<>([](){return new LensProfile<double>();}))
+		.def(py::init<const LensProfile<double>*>())
+		.def_readonly("indx",&LensProfile<double>::lens_number)
+		.def_readonly("z",&LensProfile<double>::zlens)
+		.def_readonly("zlens",&LensProfile<double>::zlens)
+		.def_readonly("zsrc_ref",&LensProfile<double>::zsrc_ref)
+		.def_readonly("sigma_cr",&LensProfile<double>::sigma_cr)
+		.def_readonly("xc",&LensProfile<double>::x_center)
+		.def_readonly("yc",&LensProfile<double>::y_center)
+		.def_readonly("q",&LensProfile<double>::q)
+		.def_readonly("theta",&LensProfile<double>::theta)
+		.def("print_params", &LensProfile<double>::print_parameters)
+		.def("print_vary_params", &LensProfile<double>::print_vary_parameters)
+		.def("get_model_name", &LensProfile<double>::get_model_name)
+		.def("update", [](LensProfile<double> &current, py::dict dict){
 			for (auto item : dict) {
 				if(!current.update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second)))
 					return false;
 			}
 			return true;
 		})
-		.def("update", [](LensProfile &current, const string name, const double value){
+		.def("update", [](LensProfile<double> &current, const string name, const double value){
 			return current.update_specific_parameter(name, value);
 		})
-		.def("set_center", &LensProfile::set_center)
-		.def("cosmology_info", [](LensProfile &current){
+		.def("set_center", &LensProfile<double>::set_center)
+		.def("cosmology_info", [](LensProfile<double> &current){
 			return current.output_cosmology_info(-1);
 		})
-		.def("vary", [](LensProfile &current, py::list list){ 
+		.def("vary", [](LensProfile<double> &current, py::list list){ 
 			int np = list.size();
 			if (np==0) return;
 			bool string_input = false;
@@ -1619,7 +1619,7 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 		})
-		.def("fix", [](LensProfile &current, py::list list){ 
+		.def("fix", [](LensProfile<double> &current, py::list list){ 
 			int np = list.size();
 			if (np==0) return;
 			int nstrings = 0;
@@ -1636,24 +1636,24 @@ PYBIND11_MODULE(qlens, m) {
 				current.update_specific_varyflag(paramnames[i],false);
 			}
 		})
-		.def("vary_none", [](LensProfile &current){ 
+		.def("vary_none", [](LensProfile<double> &current){ 
 			int npar = current.get_n_params();
 			boolvector vary_flags(npar);
 			for (int i=0; i < npar; i++) vary_flags[i] = false;
 			current.vary_parameters(vary_flags);
 		})
-		.def("vary_all", [](LensProfile &current){ 
+		.def("vary_all", [](LensProfile<double> &current){ 
 			int npar = current.get_n_params();
 			boolvector vary_flags(npar);
 			for (int i=0; i < npar; i++) vary_flags[i] = true;
 			current.vary_parameters(vary_flags);
 		})
-		.def("set_limits", [](LensProfile &curr, const string &param, const double lower, const double upper){
+		.def("set_limits", [](LensProfile<double> &curr, const string &param, const double lower, const double upper){
 			if (curr.set_limits_specific_parameter(param,lower,upper)==false) {
 				throw std::runtime_error("could not set limits for given parameter " + param);
 			}
 		})
-		.def("set_limits", [](LensProfile &curr, py::list list){
+		.def("set_limits", [](LensProfile<double> &curr, py::list list){
 			string paramname;
 			double lower, upper;
 			for (auto arr : list){
@@ -1670,14 +1670,14 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 		})
-		//.def("get_prior_limits", [](LensProfile &curr){
+		//.def("get_prior_limits", [](LensProfile<double> &curr){
 			//int nparams = current.n_vary_params;
 			//dvector lower(nparams);
 			//dvector upper(nparams);
 			//current.get_limits(lower,upper);
 			//// I think it should return a list of tuples with lower limit and upper limit. Do this later
 		//})
-		.def("anchor_param", [](LensProfile &current, const string name, LensProfile* param_anchor_lens, const string anchor_param_name){
+		.def("anchor_param", [](LensProfile<double> &current, const string name, LensProfile<double>* param_anchor_lens, const string anchor_param_name){
 			int paramnum = -1;
 			int anchor_paramnum = -1;
 			if (!current.lookup_parameter_number(name,paramnum)) throw std::runtime_error("could not find parameter '" + name +"'");
@@ -1685,7 +1685,7 @@ PYBIND11_MODULE(qlens, m) {
 			if (!param_anchor_lens->lookup_parameter_number(anchor_param_name,anchor_paramnum)) throw std::runtime_error("could not find parameter '" + anchor_param_name +"'");
 			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,1.0,1.0,param_anchor_lens);
 		})
-		.def("anchor_param", [](LensProfile &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name){
+		.def("anchor_param", [](LensProfile<double> &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name){
 			int paramnum = -1;
 			int anchor_paramnum = -1;
 			if (!current.lookup_parameter_number(name,paramnum)) throw std::runtime_error("could not find parameter '" + name +"'");
@@ -1693,26 +1693,26 @@ PYBIND11_MODULE(qlens, m) {
 			if (!param_anchor_source->lookup_parameter_number(anchor_param_name,anchor_paramnum)) throw std::runtime_error("could not find parameter '" + anchor_param_name +"'");
 			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,1.0,1.0,param_anchor_source);
 		})
-		.def("anchor_center",&LensProfile::anchor_center_to_lens)
-		.def("__repr__", [](LensProfile &a) {
+		.def("anchor_center",&LensProfile<double>::anchor_center_to_lens)
+		.def("__repr__", [](LensProfile<double> &a) {
 				string outstring = a.get_parameters_string();
 				return("\n" + outstring);
 		})
-		.def("kappa", &LensProfile::kappa)
-		.def("potential", &LensProfile::potential)
-		.def("deflection", [](LensProfile &current, const double x, const double y){ 
+		.def("kappa", &LensProfile<double>::kappa)
+		.def("potential", &LensProfile<double>::potential)
+		.def("deflection", [](LensProfile<double> &current, const double x, const double y){ 
 			py::list def(2);
-			lensvector def_vec;
+			lensvector<double> def_vec;
 			current.deflection(x,y,def_vec);
 			def[0] = def_vec[0];
 			def[1] = def_vec[1];
 			return def;
 		})
-		.def("hessian", [](LensProfile &current, const double x, const double y){ 
+		.def("hessian", [](LensProfile<double> &current, const double x, const double y){ 
 			py::list hess(2);
 			py::list hess_row(2);
 			py::list hess_row2(2);
-			lensmatrix hessmat;
+			lensmatrix<double> hessmat;
 			current.hessian(x,y,hessmat);
 			hess_row[0] = hessmat[0][0];
 			hess_row[1] = hessmat[0][1];
@@ -1722,18 +1722,18 @@ PYBIND11_MODULE(qlens, m) {
 			hess[1] = hess_row2;
 			return hess;
 		})
-		.def("shear", [](LensProfile &current, const double x, const double y){ 
+		.def("shear", [](LensProfile<double> &current, const double x, const double y){ 
 			py::list shear(2);
-			lensmatrix hessmat;
+			lensmatrix<double> hessmat;
 			current.hessian(x,y,hessmat);
 			shear[0] = (hessmat[0][0]-hessmat[1][1])/2;
 			shear[1] = hessmat[0][1];
 			return shear;
 		})
-		.def("einstein_radius", &LensProfile::einstein_radius)
+		.def("einstein_radius", &LensProfile<double>::einstein_radius)
 		;
 
-	py::class_<SPLE_Lens, LensProfile, std::unique_ptr<SPLE_Lens, py::nodelete>>(m, "SPLE")
+	py::class_<SPLE_Lens, LensProfile<double>, std::unique_ptr<SPLE_Lens, py::nodelete>>(m, "SPLE")
 		//.def(py::init<>([](){return new SPLE_Lens();}))
 		.def(py::init<const SPLE_Lens*>())
 		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
@@ -1775,7 +1775,7 @@ PYBIND11_MODULE(qlens, m) {
 			} catch (...) {
 				s = 0.0;
 			}
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+			LensProfile<double>::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
 
 			SPLE_Lens* sple = new SPLE_Lens(zlens,zsrc_ref,b,p2,s,q1,q2,xc,yc,pmode,cosmo_in);
 			if (transform_to_pixsrc_frame) {
@@ -1800,7 +1800,7 @@ PYBIND11_MODULE(qlens, m) {
 		//})
 		;
 
-	py::class_<Shear, LensProfile, std::unique_ptr<Shear, py::nodelete>>(m, "Shear")
+	py::class_<Shear, LensProfile<double>, std::unique_ptr<Shear, py::nodelete>>(m, "Shear")
 		//.def(py::init<>([](){return new Shear();}))
 		.def(py::init<const Shear*>())
 		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
@@ -1850,7 +1850,7 @@ PYBIND11_MODULE(qlens, m) {
 		}))
 		;
 
-	py::class_<dPIE_Lens, LensProfile, std::unique_ptr<dPIE_Lens, py::nodelete>>(m, "dPIE")
+	py::class_<dPIE_Lens, LensProfile<double>, std::unique_ptr<dPIE_Lens, py::nodelete>>(m, "dPIE")
 		//.def(py::init<>([](){return new dPIE_Lens();}))
 		.def(py::init<const dPIE_Lens*>()) 
 		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
@@ -1897,7 +1897,7 @@ PYBIND11_MODULE(qlens, m) {
 					p3 = 0.0;
 				}
 			} else throw std::runtime_error("Can only choose pmode=0,1, or 2");
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+			LensProfile<double>::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
 
 			dPIE_Lens* dpie = new dPIE_Lens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
 			if (transform_to_pixsrc_frame) {
@@ -1915,7 +1915,7 @@ PYBIND11_MODULE(qlens, m) {
 		}))
 		;
 
-	py::class_<NFW, LensProfile, std::unique_ptr<NFW, py::nodelete>>(m, "NFW")
+	py::class_<NFW, LensProfile<double>, std::unique_ptr<NFW, py::nodelete>>(m, "NFW")
 		//.def(py::init<>([](){return new NFW();}))
 		.def(py::init<const NFW*>())
 		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
@@ -1968,7 +1968,7 @@ PYBIND11_MODULE(qlens, m) {
 				p1 = py::cast<double>(dict["mvir"]);
 				p2 = py::cast<double>(dict["rs_kpc"]);
 			} else throw std::runtime_error("Can only choose pmode=0, 1, or 2");
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+			LensProfile<double>::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
 
 			if (cosmo_in==NULL) throw std::runtime_error("NFW requires cosmology object to be passed in when initializing");
 
@@ -1992,7 +1992,7 @@ PYBIND11_MODULE(qlens, m) {
 		}))
 		;
 
-	py::class_<Truncated_NFW, LensProfile, std::unique_ptr<Truncated_NFW, py::nodelete>>(m, "tNFW")
+	py::class_<Truncated_NFW, LensProfile<double>, std::unique_ptr<Truncated_NFW, py::nodelete>>(m, "tNFW")
 		//.def(py::init<>([](){return new tNFW();}))
 		.def(py::init<const Truncated_NFW*>())
 		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
@@ -2064,7 +2064,7 @@ PYBIND11_MODULE(qlens, m) {
 				p2 = py::cast<double>(dict["rs_kpc"]);
 				p3 = py::cast<double>(dict["tau_s"]);
 			} else throw std::runtime_error("Can only choose pmode=0, 1, 2, 3, or 4");
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+			LensProfile<double>::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
 
 			if (cosmo_in==NULL) throw std::runtime_error("NFW requires cosmology object to be passed in when initializing");
 
@@ -2090,33 +2090,33 @@ PYBIND11_MODULE(qlens, m) {
 
 
 	/*
-	py::class_<Cored_NFW, LensProfile, std::unique_ptr<Cored_NFW, py::nodelete>>(m, "Cored_NFW")
+	py::class_<Cored_NFW, LensProfile<double>, std::unique_ptr<Cored_NFW, py::nodelete>>(m, "Cored_NFW")
 		.def(py::init<>([](){return new Cored_NFW();}))
 		.def(py::init<const Cored_NFW*>())
 		;
 
-	py::class_<Hernquist, LensProfile, std::unique_ptr<Hernquist, py::nodelete>>(m, "Hernquist")
+	py::class_<Hernquist, LensProfile<double>, std::unique_ptr<Hernquist, py::nodelete>>(m, "Hernquist")
 		.def(py::init<>([](){return new Hernquist();}))
 		.def(py::init<const Hernquist*>())
 		;
 
-	py::class_<ExpDisk, LensProfile, std::unique_ptr<ExpDisk, py::nodelete>>(m, "ExpDisk")
+	py::class_<ExpDisk, LensProfile<double>, std::unique_ptr<ExpDisk, py::nodelete>>(m, "ExpDisk")
 		.def(py::init<>([](){return new ExpDisk();}))
 		.def(py::init<const ExpDisk*>())
 		;
 
-	py::class_<Multipole, LensProfile, std::unique_ptr<Multipole, py::nodelete>>(m, "Multipole")
+	py::class_<Multipole, LensProfile<double>, std::unique_ptr<Multipole, py::nodelete>>(m, "Multipole")
 		.def(py::init<>([](){return new Multipole();}))
 		.def(py::init<const Multipole*>())
 		;
 
-	py::class_<CoreCusp, LensProfile, std::unique_ptr<CoreCusp, py::nodelete>>(m, "CoreCusp")
+	py::class_<CoreCusp, LensProfile<double>, std::unique_ptr<CoreCusp, py::nodelete>>(m, "CoreCusp")
 		.def(py::init<>([](){return new CoreCusp();}))
 		.def(py::init<const CoreCusp*>())
 		;
 	*/
 
-	py::class_<PointMass, LensProfile, std::unique_ptr<PointMass, py::nodelete>>(m, "PointMass")
+	py::class_<PointMass, LensProfile<double>, std::unique_ptr<PointMass, py::nodelete>>(m, "PointMass")
 		//.def(py::init<>([](){return new PointMass();}))
 		.def(py::init<const PointMass*>())
 		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
@@ -2157,7 +2157,7 @@ PYBIND11_MODULE(qlens, m) {
 		}))
 		;
 
-	py::class_<SersicLens, LensProfile, std::unique_ptr<SersicLens, py::nodelete>>(m, "SersicLens")
+	py::class_<SersicLens, LensProfile<double>, std::unique_ptr<SersicLens, py::nodelete>>(m, "SersicLens")
 		//.def(py::init<>([](){return new SersicLens();}))
 		.def(py::init<const SersicLens*>())
 		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
@@ -2188,7 +2188,7 @@ PYBIND11_MODULE(qlens, m) {
 			} else throw std::runtime_error("Can only choose pmode=0 or 1");
 			p2 = py::cast<double>(dict["R_eff"]);
 			p3 = py::cast<double>(dict["n"]);
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+			LensProfile<double>::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
 
 			SersicLens* sersic = new SersicLens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
 			if (transform_to_pixsrc_frame) {
@@ -2207,33 +2207,33 @@ PYBIND11_MODULE(qlens, m) {
 		;
 
 	/*
-	py::class_<DoubleSersicLens, LensProfile, std::unique_ptr<DoubleSersicLens, py::nodelete>>(m, "DoubleSersicLens")
+	py::class_<DoubleSersicLens, LensProfile<double>, std::unique_ptr<DoubleSersicLens, py::nodelete>>(m, "DoubleSersicLens")
 		.def(py::init<>([](){return new Cored_SersicLens();}))
 		.def(py::init<const Cored_SersicLens*>())
 		;
 
-	py::class_<Cored_SersicLens, LensProfile, std::unique_ptr<Cored_SersicLens, py::nodelete>>(m, "Cored_SersicLens")
+	py::class_<Cored_SersicLens, LensProfile<double>, std::unique_ptr<Cored_SersicLens, py::nodelete>>(m, "Cored_SersicLens")
 		.def(py::init<>([](){return new Cored_SersicLens();}))
 		.def(py::init<const Cored_SersicLens*>())
 		;
 
-	py::class_<MassSheet, LensProfile, std::unique_ptr<MassSheet, py::nodelete>>(m, "MassSheet")
+	py::class_<MassSheet, LensProfile<double>, std::unique_ptr<MassSheet, py::nodelete>>(m, "MassSheet")
 		.def(py::init<>([](){return new MassSheet();}))
 		.def(py::init<const MassSheet*>())
 		;
 
-	py::class_<Deflection, LensProfile, std::unique_ptr<Deflection, py::nodelete>>(m, "Deflection")
+	py::class_<Deflection, LensProfile<double>, std::unique_ptr<Deflection, py::nodelete>>(m, "Deflection")
 		.def(py::init<>([](){return new Deflection();}))
 		.def(py::init<const Deflection*>())
 		;
 
 
-	py::class_<Tabulated_Model, LensProfile, std::unique_ptr<Tabulated_Model, py::nodelete>>(m, "Tabulated_Model")
+	py::class_<Tabulated_Model, LensProfile<double>, std::unique_ptr<Tabulated_Model, py::nodelete>>(m, "Tabulated_Model")
 		.def(py::init<>([](){return new Tabulated_Model();}))
 		.def(py::init<const Tabulated_Model*>())
 		;
 
-	py::class_<QTabulated_Model, LensProfile, std::unique_ptr<QTabulated_Model, py::nodelete>>(m, "QTabulated_Model")
+	py::class_<QTabulated_Model, LensProfile<double>, std::unique_ptr<QTabulated_Model, py::nodelete>>(m, "QTabulated_Model")
 		.def(py::init<>([](){return new QTabulated_Model();}))
 		.def(py::init<const QTabulated_Model*>())
 		;
@@ -2739,6 +2739,8 @@ PYBIND11_MODULE(qlens, m) {
 				curr.chi_square_fit_simplex(show_errors);
 			} else if (fitmethod=="powell") {
 				curr.chi_square_fit_powell(show_errors);
+			} else if (fitmethod=="bfgs") {
+				curr.chi_square_fit_BFGS(show_errors);
 			} else if (fitmethod=="nest") {
 				curr.nested_sampling();
 				curr.adopt_model(curr.bestfitparams);
@@ -2752,7 +2754,7 @@ PYBIND11_MODULE(qlens, m) {
 				curr.chi_square_twalk();
 				curr.adopt_model(curr.bestfitparams);
 			} else {
-					throw std::runtime_error("Available fitmethods: simplex (default), powell, nest, multinest, polychord, twalk");
+					throw std::runtime_error("Available fitmethods: simplex (default), powell, bfgs, nest, multinest, polychord, twalk");
 			}
 			if ((adopt_bestfit) and (curr.adopt_model(curr.bestfitparams)==false)) throw std::runtime_error("could not adopt best-fit model");
 		})
@@ -2969,12 +2971,12 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("sigma_td", &image_data::sigma_td)
 		;
  
-	py::class_<lensvector>(m, "lensvector")
-		.def(py::init([](){ return new lensvector(); }))
-		.def_property("x", &lensvector::xval, &lensvector::set_xval)
-		.def_property("y", &lensvector::yval, &lensvector::set_yval)
-		.def("pos", [](lensvector &lens){ return std::make_tuple(lens.v[0], lens.v[1]); })
-		.def("__getitem__", [](lensvector &current, size_t index) {
+	py::class_<lensvector<double>>(m, "lensvector")
+		.def(py::init([](){ return new lensvector<double>(); }))
+		.def_property("x", &lensvector<double>::xval, &lensvector<double>::set_xval)
+		.def_property("y", &lensvector<double>::yval, &lensvector<double>::set_yval)
+		.def("pos", [](lensvector<double> &lens){ return std::make_tuple(lens.v[0], lens.v[1]); })
+		.def("__getitem__", [](lensvector<double> &current, size_t index) {
 			if (index > 1) throw std::runtime_error("lensvector has only two components (0 and 1 for x and y respectively)");
 			return current.v[index];
 		})

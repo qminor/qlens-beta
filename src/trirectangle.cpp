@@ -11,13 +11,13 @@ using namespace std;
 
 TriRectangleOverlap::TriRectangleOverlap()
 {
-	r01 = new lensvector;
-	r02 = new lensvector;
+	r01 = new lensvector<double>;
+	r02 = new lensvector<double>;
 	n_overlap_pts = 0;
 	for (int i=0; i < 7; i++) { overlap_pts[i][0] = 0; overlap_pts[i][1] = 0; }
 }
 
-double TriRectangleOverlap::find_overlap_area(lensvector& a, lensvector& b, lensvector& c, double xmin, double xmax, double ymin, double ymax)
+double TriRectangleOverlap::find_overlap_area(lensvector<double>& a, lensvector<double>& b, lensvector<double>& c, double xmin, double xmax, double ymin, double ymax)
 {
 	// The assignment of the rectangle corner and side indices will be as follows:
 	// 3-2-2
@@ -187,7 +187,7 @@ inline bool TriRectangleOverlap::test_if_in_yrange(const double& x, const double
 	else return false;
 }
 
-inline double TriRectangleOverlap::dif_cross_product(const double& x, const double& y, const lensvector* A, const lensvector* B)
+inline double TriRectangleOverlap::dif_cross_product(const double& x, const double& y, const lensvector<double>* A, const lensvector<double>* B)
 {
 	return (((*A)[0]-x)*((*B)[1]-y) - ((*A)[1]-y)*((*B)[0]-x));
 }
@@ -195,7 +195,7 @@ inline double TriRectangleOverlap::dif_cross_product(const double& x, const doub
 double TriRectangleOverlap::calculate_polygon_area(void)
 {
 	overlap_area = 0;
-	overlap_pts_list = new lensvector*[n_overlap_pts];
+	overlap_pts_list = new lensvector<double>*[n_overlap_pts];
 	for (i=0; i < n_overlap_pts; i++) overlap_pts_list[i] = &overlap_pts[i];
 	bool duplicate_pts;
 	int k;
@@ -211,7 +211,7 @@ double TriRectangleOverlap::calculate_polygon_area(void)
 			}
 		}
 		if (duplicate_pts) {
-			newlist = new lensvector*[n_overlap_pts-1];
+			newlist = new lensvector<double>*[n_overlap_pts-1];
 			for (i=0; i < k; i++) {
 				newlist[i] = overlap_pts_list[i];
 			}
@@ -272,7 +272,7 @@ double TriRectangleOverlap::calculate_polygon_area(void)
 			if (subtriangle_area < 0) die("shouldn't have the wrong orientation!"); // remove this later after testing
 		}
 		overlap_area += abs(subtriangle_area);
-		newlist = new lensvector*[n_overlap_pts-1];
+		newlist = new lensvector<double>*[n_overlap_pts-1];
 		for (i=0; i < n_overlap_pts-1; i++) {
 			newlist[i] = overlap_pts_list[i+1];
 		}
@@ -285,7 +285,7 @@ double TriRectangleOverlap::calculate_polygon_area(void)
 	return 0.5*overlap_area;
 }
 
-bool TriRectangleOverlap::determine_if_in_neighborhood(lensvector& a, lensvector& b, lensvector& c, lensvector& d, const double& xmin, const double& xmax, const double& ymin, const double& ymax, bool &inside)
+bool TriRectangleOverlap::determine_if_in_neighborhood(lensvector<double>& a, lensvector<double>& b, lensvector<double>& c, lensvector<double>& d, const double& xmin, const double& xmax, const double& ymin, const double& ymax, bool &inside)
 {
 	inside = false;
 	vertex[0] = &a; vertex[1] = &b; vertex[2] = &c; vertex[3] = &d;
@@ -321,7 +321,7 @@ bool TriRectangleOverlap::determine_if_in_neighborhood(lensvector& a, lensvector
 }
 
 
-bool TriRectangleOverlap::determine_if_overlap(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax)
+bool TriRectangleOverlap::determine_if_overlap(lensvector<double>& a, lensvector<double>& b, lensvector<double>& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax)
 {
 	// The assignment of the rectangle corner and side indices will be as follows:
 	// 3-2-2
@@ -407,7 +407,7 @@ bool TriRectangleOverlap::determine_if_overlap(lensvector& a, lensvector& b, len
 	return false;
 }
 
-bool TriRectangleOverlap::determine_if_in_neighborhood(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax, bool &inside)
+bool TriRectangleOverlap::determine_if_in_neighborhood(lensvector<double>& a, lensvector<double>& b, lensvector<double>& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax, bool &inside)
 {
 	inside = false;
 	vertex[0] = &a; vertex[1] = &b; vertex[2] = &c; 
@@ -442,7 +442,7 @@ bool TriRectangleOverlap::determine_if_in_neighborhood(lensvector& a, lensvector
 	return true;
 }
 
-bool TriRectangleOverlap::determine_if_overlap_rough(lensvector& a, lensvector& b, lensvector& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax)
+bool TriRectangleOverlap::determine_if_overlap_rough(lensvector<double>& a, lensvector<double>& b, lensvector<double>& c, const double& xmin, const double& xmax, const double& ymin, const double& ymax)
 {
 	// This version ignores overlap where triangles pierce through sides of the rectangle but do not contain any rectangle corners (saving time in the process)
 	// The assignment of the rectangle corner and side indices will be as follows:

@@ -141,24 +141,24 @@ void SPLE_Lens::set_auto_ranges()
 void SPLE_Lens::set_model_specific_integration_pointers()
 {
 	// Here, we direct the integration pointers to analytic formulas in special cases where analytic solutions are possible
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::kapavg_spherical_rsq);
-	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::potential_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&SPLE_Lens::kapavg_spherical_rsq);
+	potptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&SPLE_Lens::potential_spherical_rsq);
 	if (!ellipticity_gradient) {
 		if (alpha==1.0) {
-			kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::kapavg_spherical_rsq_iso);
-			potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::potential_spherical_rsq_iso);
+			kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&SPLE_Lens::kapavg_spherical_rsq_iso);
+			potptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&SPLE_Lens::potential_spherical_rsq_iso);
 			if (q != 1.0) {
-				defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&SPLE_Lens::deflection_elliptical_iso);
-				hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&SPLE_Lens::hessian_elliptical_iso);
-				potptr = static_cast<double (LensProfile::*)(const double,const double)> (&SPLE_Lens::potential_elliptical_iso);
+				defptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensvector<double>&)> (&SPLE_Lens::deflection_elliptical_iso);
+				hessptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensmatrix<double>&)> (&SPLE_Lens::hessian_elliptical_iso);
+				potptr = static_cast<double (LensProfile<double>::*)(const double,const double)> (&SPLE_Lens::potential_elliptical_iso);
 			}
 		} else if (s==0.0) {
-			potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::potential_spherical_rsq_nocore);
+			potptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&SPLE_Lens::potential_spherical_rsq_nocore);
 			if (q != 1.0) {
-				defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&SPLE_Lens::deflection_elliptical_nocore);
-				hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&SPLE_Lens::hessian_elliptical_nocore);
-				potptr = static_cast<double (LensProfile::*)(const double,const double)> (&SPLE_Lens::potential_elliptical_nocore);
-				def_and_hess_ptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&,lensmatrix&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore);
+				defptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensvector<double>&)> (&SPLE_Lens::deflection_elliptical_nocore);
+				hessptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensmatrix<double>&)> (&SPLE_Lens::hessian_elliptical_nocore);
+				potptr = static_cast<double (LensProfile<double>::*)(const double,const double)> (&SPLE_Lens::potential_elliptical_nocore);
+				def_and_hess_ptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensvector<double>&,lensmatrix<double>&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore);
 			}
 		}
 	}
@@ -213,7 +213,7 @@ double SPLE_Lens::potential_spherical_rsq_nocore(const double rsq) // only for s
 //  Note: although the elliptical formulas are expressed in terms of ellipticity mode 0, they use parameters
 //  (the prime versions b', a', etc.) transformed from the correct emode
 
-void SPLE_Lens::deflection_elliptical_iso(const double x, const double y, lensvector& def) // only for alpha=1
+void SPLE_Lens::deflection_elliptical_iso(const double x, const double y, lensvector<double>& def) // only for alpha=1
 {
 	double u, psi;
 	psi = sqrt(qsq*(ssq+x*x)+y*y);
@@ -223,7 +223,7 @@ void SPLE_Lens::deflection_elliptical_iso(const double x, const double y, lensve
 	def[1] = (bprime*q/u)*atanh(u*y/(psi+qsq*sprime));
 }
 
-void SPLE_Lens::hessian_elliptical_iso(const double x, const double y, lensmatrix& hess) // only for alpha=1
+void SPLE_Lens::hessian_elliptical_iso(const double x, const double y, lensmatrix<double>& hess) // only for alpha=1
 {
 	double xsq, ysq, psi, tmp;
 	xsq=x*x; ysq=y*y;
@@ -249,7 +249,7 @@ double SPLE_Lens::potential_elliptical_iso(const double x, const double y) // on
 	return tmp;
 }
 
-void SPLE_Lens::deflection_elliptical_nocore(const double x, const double y, lensvector& def)
+void SPLE_Lens::deflection_elliptical_nocore(const double x, const double y, lensvector<double>& def)
 {
 	// Formulas from Tessore et al. 2015
 	double phi, R = sqrt(x*x+y*y/qsq);
@@ -269,7 +269,7 @@ void SPLE_Lens::deflection_elliptical_nocore(const double x, const double y, len
 	def[1] = imag(def_complex);
 }
 
-void SPLE_Lens::hessian_elliptical_nocore(const double x, const double y, lensmatrix& hess)
+void SPLE_Lens::hessian_elliptical_nocore(const double x, const double y, lensmatrix<double>& hess)
 {
 	double R, phi, kap;
 	R = sqrt(x*x+y*y/qsq);
@@ -297,7 +297,7 @@ void SPLE_Lens::hessian_elliptical_nocore(const double x, const double y, lensma
 	hess[1][1] = real(hess_complex);
 }
 
-void SPLE_Lens::deflection_and_hessian_elliptical_nocore(const double x, const double y, lensvector& def, lensmatrix& hess)
+void SPLE_Lens::deflection_and_hessian_elliptical_nocore(const double x, const double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	double R, phi, kap;
 	R = sqrt(x*x+y*y/qsq);
@@ -374,7 +374,7 @@ void SPLE_Lens::get_einstein_radius(double& re_major_axis, double& re_average, c
 	} else {
 		rmin_einstein_radius = 0.01*b;
 		rmax_einstein_radius = 100*b;
-		LensProfile::get_einstein_radius(re_major_axis,re_average,zfactor);
+		LensProfile<double>::get_einstein_radius(re_major_axis,re_average,zfactor);
 	}
 }
 
@@ -537,7 +537,7 @@ void dPIE_Lens::update_meta_parameters()
 	qsq = q*q; asq = aprime*aprime; ssq = sprime*sprime;
 }
 
-void dPIE_Lens::assign_special_anchored_parameters(LensProfile *host_in, const double factor, const bool just_created)
+void dPIE_Lens::assign_special_anchored_parameters(LensProfile<double> *host_in, const double factor, const bool just_created)
 {
 	anchor_special_parameter = true;
 	special_anchor_lens = host_in;
@@ -631,13 +631,13 @@ void dPIE_Lens::set_auto_ranges()
 
 void dPIE_Lens::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&dPIE_Lens::kapavg_spherical_rsq);
-	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&dPIE_Lens::potential_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&dPIE_Lens::kapavg_spherical_rsq);
+	potptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&dPIE_Lens::potential_spherical_rsq);
 	if (!ellipticity_gradient) {
 		if (q != 1.0) {
-			defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&dPIE_Lens::deflection_elliptical);
-			hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&dPIE_Lens::hessian_elliptical);
-			potptr = static_cast<double (LensProfile::*)(const double,const double)> (&dPIE_Lens::potential_elliptical);
+			defptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensvector<double>&)> (&dPIE_Lens::deflection_elliptical);
+			hessptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensmatrix<double>&)> (&dPIE_Lens::hessian_elliptical);
+			potptr = static_cast<double (LensProfile<double>::*)(const double,const double)> (&dPIE_Lens::potential_elliptical);
 		}
 	}
 }
@@ -669,7 +669,7 @@ double dPIE_Lens::potential_spherical_rsq(const double rsq)
 //  Note: although the elliptical formulas are expressed in terms of ellipticity mode 0, they use parameters
 //  (the prime versions b', a', etc.) transformed from the correct emode
 
-void dPIE_Lens::deflection_elliptical(const double x, const double y, lensvector& def)
+void dPIE_Lens::deflection_elliptical(const double x, const double y, lensvector<double>& def)
 {
 	double psi, psi2, u;
 	psi = sqrt(qsq*(ssq+x*x)+y*y);
@@ -680,7 +680,7 @@ void dPIE_Lens::deflection_elliptical(const double x, const double y, lensvector
 	def[1] = (bprime*q/u)*(atanh(u*y/(psi+qsq*sprime)) - atanh(u*y/(psi2+qsq*aprime)));
 }
 
-void dPIE_Lens::hessian_elliptical(const double x, const double y, lensmatrix& hess)
+void dPIE_Lens::hessian_elliptical(const double x, const double y, lensmatrix<double>& hess)
 {
 	double xsq, ysq, psi, tmp1, psi2, tmp2;
 	xsq=x*x; ysq=y*y;
@@ -917,7 +917,7 @@ void NFW::update_meta_parameters()
 	rmin_einstein_radius = 1e-6*rs; // for determining the Einstein radius (sets lower bound of root finder)
 }
 
-void NFW::assign_special_anchored_parameters(LensProfile *host_in, const double factor, const bool just_created)
+void NFW::assign_special_anchored_parameters(LensProfile<double> *host_in, const double factor, const bool just_created)
 {
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
@@ -962,8 +962,8 @@ void NFW::set_auto_ranges()
 
 void NFW::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::kapavg_spherical_rsq);
-	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::potential_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&NFW::kapavg_spherical_rsq);
+	potptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&NFW::potential_spherical_rsq);
 }
 
 void NFW::set_ks_c200_from_m200_rs()
@@ -1295,7 +1295,7 @@ void Truncated_NFW::update_meta_parameters()
 	rmin_einstein_radius = 1e-6*rs;
 }
 
-void Truncated_NFW::assign_special_anchored_parameters(LensProfile *host_in, const double factor, const bool just_created)
+void Truncated_NFW::assign_special_anchored_parameters(LensProfile<double> *host_in, const double factor, const bool just_created)
 {
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
@@ -1353,7 +1353,7 @@ void Truncated_NFW::set_auto_ranges()
 
 void Truncated_NFW::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Truncated_NFW::kapavg_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&Truncated_NFW::kapavg_spherical_rsq);
 }
 
 void Truncated_NFW::set_ks_c200_from_m200_rs()
@@ -1646,7 +1646,7 @@ void Cored_NFW::update_meta_parameters()
 	//if (rs <= rc) die("scale radius a cannot be equal to or less than core radius s for Cored NFW model");
 }
 
-void Cored_NFW::assign_special_anchored_parameters(LensProfile *host_in, const double factor, const bool just_created)
+void Cored_NFW::assign_special_anchored_parameters(LensProfile<double> *host_in, const double factor, const bool just_created)
 {
 	// the following special anchoring is to enforce a mass-concentration relation
 	anchor_special_parameter = true;
@@ -1697,8 +1697,8 @@ void Cored_NFW::set_auto_ranges()
 
 void Cored_NFW::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Cored_NFW::kapavg_spherical_rsq);
-	//potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Cored_NFW::potential_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&Cored_NFW::kapavg_spherical_rsq);
+	//potptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&Cored_NFW::potential_spherical_rsq);
 }
 
 void Cored_NFW::set_ks_rs_from_m200_c200_beta()
@@ -2006,8 +2006,8 @@ void Hernquist::set_auto_ranges()
 
 void Hernquist::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Hernquist::kapavg_spherical_rsq);
-	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Hernquist::potential_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&Hernquist::kapavg_spherical_rsq);
+	potptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&Hernquist::potential_spherical_rsq);
 }
 
 double Hernquist::kappa_rsq(const double rsq)
@@ -2122,7 +2122,7 @@ void ExpDisk::set_auto_ranges()
 
 void ExpDisk::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&ExpDisk::kapavg_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&ExpDisk::kapavg_spherical_rsq);
 }
 
 double ExpDisk::kappa_rsq(const double rsq)
@@ -2284,7 +2284,7 @@ double Shear::potential(double x, double y)
 	return -0.5*(y*y-x*x)*shear1 + x*y*shear2;
 }
 
-void Shear::deflection(double x, double y, lensvector& def)
+void Shear::deflection(double x, double y, lensvector<double>& def)
 {
 	x -= x_center;
 	y -= y_center;
@@ -2292,7 +2292,7 @@ void Shear::deflection(double x, double y, lensvector& def)
 	def[1] = -y*shear1 + x*shear2;
 }
 
-void Shear::hessian(double x, double y, lensmatrix& hess)
+void Shear::hessian(double x, double y, lensmatrix<double>& hess)
 {
 	// Hessian does not depend on x or y
 	hess[0][0] = shear1;
@@ -2301,7 +2301,7 @@ void Shear::hessian(double x, double y, lensmatrix& hess)
 	hess[1][0] = hess[0][1];
 }
 
-void Shear::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+void Shear::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -2457,11 +2457,11 @@ void Multipole::set_auto_ranges()
 
 void Multipole::set_model_specific_integration_pointers()
 {
-	defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Multipole::deflection);
-	hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Multipole::hessian);
+	defptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensvector<double>&)> (&Multipole::deflection);
+	hessptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensmatrix<double>&)> (&Multipole::hessian);
 	kapavgptr_rsq_spherical = NULL;
 	potptr_rsq_spherical = NULL;
-	if (m==0) kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Multipole::deflection_m0_spherical_r);
+	if (m==0) kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&Multipole::deflection_m0_spherical_r);
 }
 
 double Multipole::kappa(double x, double y)
@@ -2531,7 +2531,7 @@ double Multipole::potential(double x, double y)
 	}
 }
 
-void Multipole::deflection(double x, double y, lensvector& def)
+void Multipole::deflection(double x, double y, lensvector<double>& def)
 {
 	x -= x_center;
 	y -= y_center;
@@ -2575,7 +2575,7 @@ double Multipole::deflection_m0_spherical_r(const double r)
 	return ans;
 }
 
-void Multipole::hessian(double x, double y, lensmatrix& hess)
+void Multipole::hessian(double x, double y, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -2618,7 +2618,7 @@ void Multipole::hessian(double x, double y, lensmatrix& hess)
 	hess[1][0] = hess[0][1];
 }
 
-void Multipole::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+void Multipole::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -2670,7 +2670,7 @@ void Multipole::potential_derivatives(double x, double y, lensvector& def, lensm
 	hess[1][0] = hess[0][1];
 }
 
-void Multipole::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+void Multipole::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	potential_derivatives(x,y,def,hess);
 	kap = kappa(x,y);
@@ -2799,8 +2799,8 @@ void PointMass::update_meta_parameters()
 
 void PointMass::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PointMass::kapavg_spherical_rsq);
-	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&PointMass::potential_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&PointMass::kapavg_spherical_rsq);
+	potptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&PointMass::potential_spherical_rsq);
 }
 
 double PointMass::potential(double x, double y)
@@ -2825,7 +2825,7 @@ double PointMass::potential_spherical_rsq(const double rsq)
 	return b*b*log(sqrt(rsq));
 }
 
-void PointMass::deflection(double x, double y, lensvector& def)
+void PointMass::deflection(double x, double y, lensvector<double>& def)
 {
 	x -= x_center;
 	y -= y_center;
@@ -2834,7 +2834,7 @@ void PointMass::deflection(double x, double y, lensvector& def)
 	def[1] = bsq*y/rsq;
 }
 
-void PointMass::hessian(double x, double y, lensmatrix& hess)
+void PointMass::hessian(double x, double y, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -2845,7 +2845,7 @@ void PointMass::hessian(double x, double y, lensmatrix& hess)
 	hess[0][1] = hess[1][0];
 }
 
-void PointMass::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+void PointMass::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -2981,7 +2981,7 @@ void CoreCusp::update_meta_parameters()
 }
 
 
-void CoreCusp::assign_special_anchored_parameters(LensProfile *host_in, const double factor, const bool just_created)
+void CoreCusp::assign_special_anchored_parameters(LensProfile<double> *host_in, const double factor, const bool just_created)
 {
 	anchor_special_parameter = true;
 	special_anchor_lens = host_in;
@@ -3042,7 +3042,7 @@ void CoreCusp::set_auto_ranges()
 
 void CoreCusp::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&CoreCusp::kapavg_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&CoreCusp::kapavg_spherical_rsq);
 }
 
 double CoreCusp::kappa_rsq(const double rsq)
@@ -3371,7 +3371,7 @@ void SersicLens::set_auto_ranges()
 
 void SersicLens::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::kapavg_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&SersicLens::kapavg_spherical_rsq);
 }
 
 double SersicLens::kappa_rsq(const double rsq)
@@ -3792,7 +3792,7 @@ void Cored_SersicLens::set_auto_ranges()
 
 void Cored_SersicLens::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Cored_SersicLens::kapavg_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&Cored_SersicLens::kapavg_spherical_rsq);
 }
 
 double Cored_SersicLens::kappa_rsq(const double rsq)
@@ -3916,8 +3916,8 @@ void MassSheet::set_auto_ranges()
 
 void MassSheet::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&MassSheet::kapavg_spherical_rsq);
-	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&MassSheet::potential_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&MassSheet::kapavg_spherical_rsq);
+	potptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&MassSheet::potential_spherical_rsq);
 }
 
 double MassSheet::potential(double x, double y)
@@ -3952,7 +3952,7 @@ double MassSheet::potential_spherical_rsq(const double rsq)
 	return kext*rsq/2.0;
 }
 
-void MassSheet::deflection(double x, double y, lensvector& def)
+void MassSheet::deflection(double x, double y, lensvector<double>& def)
 {
 	x -= x_center;
 	y -= y_center;
@@ -3960,7 +3960,7 @@ void MassSheet::deflection(double x, double y, lensvector& def)
 	def[1] = kext*y;
 }
 
-void MassSheet::hessian(double x, double y, lensmatrix& hess)
+void MassSheet::hessian(double x, double y, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -3970,7 +3970,7 @@ void MassSheet::hessian(double x, double y, lensmatrix& hess)
 	hess[0][1] = 0;
 }
 
-void MassSheet::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+void MassSheet::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -4025,8 +4025,8 @@ void Deflection::assign_paramnames()
 
 void Deflection::set_model_specific_integration_pointers()
 {
-	defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&Deflection::deflection);
-	hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&Deflection::hessian);
+	defptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensvector<double>&)> (&Deflection::deflection);
+	hessptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensmatrix<double>&)> (&Deflection::hessian);
 	kapavgptr_rsq_spherical = NULL;
 	potptr_rsq_spherical = NULL;
 }
@@ -4064,13 +4064,13 @@ double Deflection::kappa(double x, double y)
 	return 0; // really it's a delta function, but effectively zero for our purposes here
 }
 
-void Deflection::deflection(double x, double y, lensvector& def)
+void Deflection::deflection(double x, double y, lensvector<double>& def)
 {
 	def[0] = def_x;
 	def[1] = def_y;
 }
 
-void Deflection::hessian(double x, double y, lensmatrix& hess)
+void Deflection::hessian(double x, double y, lensmatrix<double>& hess)
 {
 	hess[0][0] = 0;
 	hess[1][1] = 0;
@@ -4078,7 +4078,7 @@ void Deflection::hessian(double x, double y, lensmatrix& hess)
 	hess[0][1] = 0;
 }
 
-void Deflection::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+void Deflection::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	def[0] = def_x;
 	def[1] = def_y;
@@ -4090,7 +4090,7 @@ void Deflection::potential_derivatives(double x, double y, lensvector& def, lens
 
 /******************************* Tabulated Model *******************************/
 
-Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, Cosmology* cosmo_in)
+Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &theta_in, const double xc, const double yc, LensProfile<double>* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, Cosmology* cosmo_in)
 {
 	lenstype = TABULATED;
 	model_name = "tab(" + lens_in->get_model_name() + ")";
@@ -4133,8 +4133,8 @@ Tabulated_Model::Tabulated_Model(const double zlens_in, const double zsrc_in, co
 		hess_xy[i] = new double[phi_N];
 	}
 
-	lensvector def_in;
-	lensmatrix hess_in;
+	lensvector<double> def_in;
+	lensmatrix<double> hess_in;
 	double r,x,y;
 	double logrstep = grid_logrlength/(logr_N-1);
 	double phistep = M_2PI/(phi_N-1); // the final phi value will be 2*pi, which is redundant (since it's equivalent to phi=0) but it's much simpler to do it this way
@@ -4468,7 +4468,7 @@ double Tabulated_Model::kappa_rsq(const double rsq)
 	return kappa_angular_avg;
 }
 
-void Tabulated_Model::deflection(double x, double y, lensvector& def)
+void Tabulated_Model::deflection(double x, double y, lensvector<double>& def)
 {
 	x -= x_center;
 	y -= y_center;
@@ -4509,7 +4509,7 @@ void Tabulated_Model::deflection(double x, double y, lensvector& def)
 	if (sintheta != 0) def.rotate_back(costheta,sintheta);
 }
 
-void Tabulated_Model::hessian(double x, double y, lensmatrix& hess)
+void Tabulated_Model::hessian(double x, double y, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -4554,7 +4554,7 @@ void Tabulated_Model::hessian(double x, double y, lensmatrix& hess)
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
-void Tabulated_Model::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+void Tabulated_Model::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -4611,7 +4611,7 @@ void Tabulated_Model::kappa_and_potential_derivatives(double x, double y, double
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
-void Tabulated_Model::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+void Tabulated_Model::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -4690,7 +4690,7 @@ Tabulated_Model::~Tabulated_Model() {
 
 
 /***************************** Tabulated Model that interpolates in q *****************************/
-QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin_in, const int q_N, Cosmology* cosmo_in)
+QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, const double &kscale_in, const double &rscale_in, const double &q_in, const double &theta_in, const double xc, const double yc, LensProfile<double>* lens_in, const double rmin, const double rmax, const int logr_N, const int phi_N, const double qmin_in, const int q_N, Cosmology* cosmo_in)
 {
 	lenstype = QTABULATED;
 	model_name = "qtab(" + lens_in->get_model_name() + ")";
@@ -4756,8 +4756,8 @@ QTabulated_Model::QTabulated_Model(const double zlens_in, const double zsrc_in, 
 		}
 	}
 
-	lensvector def_in;
-	lensmatrix hess_in;
+	lensvector<double> def_in;
+	lensmatrix<double> hess_in;
 	double r,x,y;
 	double logrstep = grid_logrlength/(logr_N-1);
 	double phistep = M_2PI/(phi_N-1); // the final phi value will be 2*pi, which is redundant (since it's equivalent to phi=0) but it's much simpler to do it this way
@@ -5148,7 +5148,7 @@ double QTabulated_Model::kappa_rsq(const double rsq)
 	return kappa_angular_avg;
 }
 
-void QTabulated_Model::deflection(double x, double y, lensvector& def)
+void QTabulated_Model::deflection(double x, double y, lensvector<double>& def)
 {
 	x -= x_center;
 	y -= y_center;
@@ -5190,7 +5190,7 @@ void QTabulated_Model::deflection(double x, double y, lensvector& def)
 	if (sintheta != 0) def.rotate_back(costheta,sintheta);
 }
 
-void QTabulated_Model::hessian(double x, double y, lensmatrix& hess)
+void QTabulated_Model::hessian(double x, double y, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -5238,7 +5238,7 @@ void QTabulated_Model::hessian(double x, double y, lensmatrix& hess)
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
-void QTabulated_Model::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+void QTabulated_Model::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -5301,7 +5301,7 @@ void QTabulated_Model::kappa_and_potential_derivatives(double x, double y, doubl
 	if (sintheta != 0) hess.rotate_back(costheta,sintheta);
 }
 
-void QTabulated_Model::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+void QTabulated_Model::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	x -= x_center;
 	y -= y_center;
@@ -5461,11 +5461,11 @@ void TopHatLens::set_auto_ranges()
 
 void TopHatLens::set_model_specific_integration_pointers()
 {
-	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&TopHatLens::kapavg_spherical_rsq);
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile<double>::*)(const double)> (&TopHatLens::kapavg_spherical_rsq);
 	if (!ellipticity_gradient) {
-		defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector&)> (&TopHatLens::deflection_analytic);
-		hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix&)> (&TopHatLens::hessian_analytic);
-		potptr = static_cast<double (LensProfile::*)(const double,const double)> (&TopHatLens::potential_analytic);
+		defptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensvector<double>&)> (&TopHatLens::deflection_analytic);
+		hessptr = static_cast<void (LensProfile<double>::*)(const double,const double,lensmatrix<double>&)> (&TopHatLens::hessian_analytic);
+		potptr = static_cast<double (LensProfile<double>::*)(const double,const double)> (&TopHatLens::potential_analytic);
 	}
 }
 
@@ -5486,7 +5486,7 @@ double TopHatLens::kapavg_spherical_rsq(const double rsq)
 	else return kap0*rsq/(xi0*xi0);
 }
 
-void TopHatLens::deflection_analytic(const double x, const double y, lensvector& def)
+void TopHatLens::deflection_analytic(const double x, const double y, lensvector<double>& def)
 {
 	double eps, xsqval, ysqval, xisq, qfac, u, qufactor, def_fac;
 	double fsqinv = 1/SQR(f_major_axis);
@@ -5511,7 +5511,7 @@ void TopHatLens::deflection_analytic(const double x, const double y, lensvector&
 	}
 }
 
-void TopHatLens::hessian_analytic(const double x, const double y, lensmatrix& hess)
+void TopHatLens::hessian_analytic(const double x, const double y, lensmatrix<double>& hess)
 {
 	double eps, xsqval, ysqval, xisq, qfac, u, qufactor, dxisq, hessfac, def_fac, def0, def1;
 	double fsqinv = 1.0/SQR(f_major_axis);
@@ -5583,13 +5583,13 @@ TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &
 }
 
 /*
-void TestModel::deflection(double x, double y, lensvector& def)
+void TestModel::deflection(double x, double y, lensvector<double>& def)
 {
 	def[0] = 0;
 	def[1] = 0;
 }
 
-void TestModel::hessian(double x, double y, lensmatrix& hess)
+void TestModel::hessian(double x, double y, lensmatrix<double>& hess)
 {
 	hess[0][0] = 0;
 	hess[1][1] = 0;

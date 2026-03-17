@@ -14,9 +14,9 @@ const unsigned char BI = 0x10;
 
 struct Triangle // the final triangulation will be stored in an array of triangle structs
 {
-	lensvector vertex[3];
-	lensvector midpoint[3];
-	lensvector circumcenter;
+	lensvector<double> vertex[3];
+	lensvector<double> midpoint[3];
+	lensvector<double> circumcenter;
 	double circumcircle_radsq;
 	double *sb[3]; // pointer to surface brightness values assigned to each vertex
 	double area; // this will be a signed quantity since it's given by the cross product of the side vectors
@@ -430,7 +430,7 @@ class Delaunay
 		{
 			// This stores the triangles in the final triangulation
 			botPtr = botTris;
-			lensvector side1, side2;
+			lensvector<double> side1, side2;
 			for (int i = 0; i < nTris; i++, botPtr++)
 			{
 				double a0, a1, c0, c1, det_inv, asq, csq, ctr0, ctr1;

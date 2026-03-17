@@ -153,11 +153,11 @@ class UCMC : public Minimize, private LevenMarq, private Derivative
 		int Count(double, double, int, char*, int);
 		double OutputParam(int i){return a[i];}
 		void SetRan(int n){rand = n;};
-		double (UCMC::*LogLikePtr)(double *);
+		double (UCMC::*LogLikePtr)(const double *);
 		void (UCMC::*DerivedParamPtr)(double *, double *);
 		void SetNDerivedParams(const int);
-		virtual double LogLike(double *);
-		virtual double LogPrior(double *);
+		virtual double LogLike(const double *);
+		virtual double LogPrior(const double *);
 		virtual double DLogLike(double *, const int);
 		virtual double DDLogLike(double *, const int, const int);
 		virtual double FindCof(double *, double *, double **);

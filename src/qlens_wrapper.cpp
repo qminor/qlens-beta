@@ -120,10 +120,10 @@ public:
 
 	/*
 	void batch_add_lenses(py::list list) {
-		LensProfile* curr;
+		LensProfile<double>* curr;
 		for (auto arr : list){
 			try {
-				curr = py::cast<LensProfile*>(arr);
+				curr = py::cast<LensProfile<double>*>(arr);
 			} catch (...) {
 				throw std::runtime_error("Error adding lenses. Input should be an array of lenses. Ex: [<Lens1>, <Lens2>]");
 			}
@@ -133,17 +133,17 @@ public:
 
 	void batch_add_lenses_tuple(py::list list) {
 		double zl, zs;
-		LensProfile* curr;
+		LensProfile<double>* curr;
 		for (auto arr : list){
 			try {
-				std::tuple<LensProfile*, double, double> extracted = py::cast<std::tuple<LensProfile*, double, double>>(arr);
+				std::tuple<LensProfile<double>*, double, double> extracted = py::cast<std::tuple<LensProfile<double>*, double, double>>(arr);
 				zl = std::get<1>(extracted);
 				zs = std::get<2>(extracted);
 				curr = std::get<0>(extracted);
 			} catch(std::runtime_error) {
 				zl = lens_redshift;
 				zs = reference_source_redshift;
-				curr = py::cast<LensProfile*>(arr);
+				curr = py::cast<LensProfile<double>*>(arr);
 			} catch (...) {
 				throw std::runtime_error("Error adding lenses. Input should be an array of tuples. Ex: [(<Lens1>, zl1, zs2), (<Lens2>, zl2, zs2)]");
 			}
@@ -151,22 +151,22 @@ public:
 		}
 	}
 
-	void add_lens_tuple(std::tuple<LensProfile*, double, double> lens_tuple) {
+	void add_lens_tuple(std::tuple<LensProfile<double>*, double, double> lens_tuple) {
 		double zl, zs;
-		LensProfile* curr;
+		LensProfile<double>* curr;
 			zl = std::get<1>(lens_tuple);
 			zs = std::get<2>(lens_tuple);
 			curr = std::get<0>(lens_tuple);
 		add_lens(curr);
 	}
 
-	void add_lens_extshear(LensProfile* lens_in, Shear* extshear) {
+	void add_lens_extshear(LensProfile<double>* lens_in, Shear* extshear) {
 		add_lens(lens_in);
-		add_lens((LensProfile*) extshear);
+		add_lens((LensProfile<double>*) extshear);
 		  lens_list[nlens-1]->anchor_center_to_lens(nlens-2);
 	}
 
-	//void add_lens_default(LensProfile* lens_in) {
+	//void add_lens_default(LensProfile<double>* lens_in) {
 		//add_lens(lens_in);
 	//}
 
@@ -226,7 +226,7 @@ public:
 	void imgdata_add(double x, double y) {
 		if(x<=-1 || y<=-1) { throw runtime_error("Please specify a proper coodinate"); }
 
-		lensvector src;
+		lensvector<double> src;
 		src[0] = x;
 		src[1] = y;
 		if(add_simulated_point_image_data(src)) update_parameter_list();
@@ -237,9 +237,9 @@ public:
 			Shear::use_shear_component_params = comp;
 			reassign_lensparam_pointers_and_names();
 	}
-	bool get_ellipticity_components_mode() { return LensProfile::use_ellipticity_components; }
+	bool get_ellipticity_components_mode() { return LensProfile<double>::use_ellipticity_components; }
 	void set_ellipticity_components_mode(const bool comp) {
-			LensProfile::use_ellipticity_components = comp;
+			LensProfile<double>::use_ellipticity_components = comp;
 			reassign_lensparam_pointers_and_names();
 	}
 

@@ -21,7 +21,7 @@ class Simplex : public Random
 	static const int max_iterations_anneal_default;
 
 	public:
-	double (Simplex::*func)(double*);
+	double (Simplex::*func)(const double*);
 	double ftol;
 	double yb;
 	int ndim;
@@ -31,7 +31,7 @@ class Simplex : public Random
 	double **p;
 	double tt;
 	double *disps;
-	int max_iterations, max_iterations_anneal;
+	int simplex_max_iterations, simplex_max_iterations_anneal;
 	double fmin, fmin_anneal;
 
 	bool simplex_exit_status;
@@ -84,7 +84,7 @@ class Simplex : public Random
 		initialize_simplex(point,ndim_in,disps_in,ftol_in);
 	}
 	void initialize_simplex(double* point, const int& ndim_in, double* vertex_displacements, const double& ftol_in);
-	void simplex_set_function(double (Simplex::*func_in)(double*)) { func = func_in; }
+	void simplex_set_function(double (Simplex::*func_in)(const double*)) { func = func_in; }
 	void simplex_set_fmin(double fmin_in) { fmin = fmin_in; }
 	void simplex_set_fmin_anneal(double fmin_in) { fmin_anneal = fmin_in; }
 	void simplex_set_display_bfpont(bool dispbf) { simplex_display_bestfit_point = dispbf; }
@@ -92,8 +92,8 @@ class Simplex : public Random
 		t0 = t0_in;
 		tfinal = tfinal_in;
 		tinc = tinc_in;
-		max_iterations = nmax_in;
-		max_iterations_anneal = nmax_anneal_in;
+		simplex_max_iterations = nmax_in;
+		simplex_max_iterations_anneal = nmax_anneal_in;
 	}
 	void simplex_minval(double x[], double &f)
 	{

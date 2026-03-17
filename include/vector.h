@@ -6,7 +6,7 @@
 #include <iostream>
 #include "errors.h"
 
-template <class T>
+template <typename T>
 class Vector
 {
 	int nn;

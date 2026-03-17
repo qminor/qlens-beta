@@ -235,8 +235,8 @@ class Derivative
 		//double err;
 	public:
 		Derivative(double, int);
-		double Ridders(double (Derivative::*f)(double), double, double);
-		double Ridders(double (Derivative::*f)(double *), double *, int, double);
+		double Ridders(double (Derivative::*f)(const double), double, double);
+		double Ridders(double (Derivative::*f)(const double *), double *, int, double);
 		double Ridders(double (Derivative::*f)(double *, int), double *, int, int, double);
 };
 

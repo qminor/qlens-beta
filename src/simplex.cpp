@@ -40,8 +40,8 @@ void Simplex::initialize_simplex(double* point, const int& ndim_in, double* vert
 	yb = 1e30;
 	ndim = ndim_in;
 	mpts = ndim+1;
-	max_iterations = max_iterations_default;
-	max_iterations_anneal = max_iterations_anneal_default;
+	simplex_max_iterations = max_iterations_default;
+	simplex_max_iterations_anneal = max_iterations_anneal_default;
 	fmin = -1e30;
 	pb = new double[ndim];
 	y = new double[mpts];
@@ -68,7 +68,7 @@ void Simplex::downhill_simplex(int &nfunk, const int& nmax, const double& temper
 	int i,j,ihi,ilo,inhi;
 	double rtol,ysave,yt,ytry;
 	double ylo,yhi,ynhi;
-	int itmax = (temperature==0) ? nmax : max_iterations_anneal;
+	int itmax = (temperature==0) ? nmax : simplex_max_iterations_anneal;
 
 	if (yb < 1e30) {
 		// reset simplex to start from the best-fit point from previous iterations
@@ -230,7 +230,7 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 		while (t >= tfinal) {
 			if (simplex_exit_status==false) break;
 			iterations=0;
-			downhill_simplex(iterations,max_iterations,t);
+			downhill_simplex(iterations,simplex_max_iterations,t);
 			if (simplex_exit_status==false) break;
 
 			if (yb < fmin_anneal) t = 0;
@@ -252,7 +252,7 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 		}
 		if (simplex_exit_status==false) return iterations;
 	}
-	downhill_simplex(iterations,max_iterations,0); // do final run with zero temperature
+	downhill_simplex(iterations,simplex_max_iterations,0); // do final run with zero temperature
 	return iterations;
 }
 

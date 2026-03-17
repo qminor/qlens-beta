@@ -26,6 +26,7 @@ MULTINEST_LIB := -L/Users/qminor/MultiNest/lib # enter in multinest library path
 POLYCHORD_LIB := -L/Users/qminor/PolyChordLite/lib # enter in polychord library path, and add the folder to LD_LIBRARY_PATH
 MLPACK_INC := -I./contrib/ # for k-means clustering
 JSONCPP_INC := -I/usr/local/Cellar/jsoncpp/1.9.5/include/json/
+BFGS_INC := -I./contrib/lbfgs/
 
 FITPACKDIR=./contrib/fitpack
 F77=gfortran
@@ -61,7 +62,7 @@ LINKLIBS = $(OTHERLIBS) $(MPILIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 ##OTHERLIBS =  -lm -lreadline -lcfitsio
 #LINKLIBS = $(MUMPSLIBS) $(OTHERLIBS)
 
-CC   := $(CCOMP) $(OPTS) $(INC) $(OPENMP_INC) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(MULTINEST_INC) $(POLYCHORD_INC) $(MLPACK_INC) $(JSONCPP_INC) $(EIGEN_INC) 
+CC   := $(CCOMP) $(OPTS) $(INC) $(OPENMP_INC) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(MULTINEST_INC) $(POLYCHORD_INC) $(MLPACK_INC) $(JSONCPP_INC) $(EIGEN_INC) $(BFGS_INC)
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(INC) $(UMFOPTS) $(FLAGS) -DUSE_READLINE $(CMUMPS) $(JSONCPP_INC) $(EIGEN_INC) 
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) 
 

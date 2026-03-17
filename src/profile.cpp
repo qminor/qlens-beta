@@ -17,17 +17,8 @@
 
 using namespace std;
 
-IntegrationMethod LensProfile::integral_method = Gauss_Patterson_Quadrature;
-bool LensProfile::orient_major_axis_north = true;
-bool LensProfile::use_ellipticity_components = false;
-int LensProfile::default_ellipticity_mode = 1;
-bool LensProfile::integration_warnings = true;
-int LensProfile::default_fejer_nlevels = 12;
-int LensProfile::fourier_spline_npoints = 336;
-int LensProfile::Gauss_NN = 60;
-double LensProfile::integral_tolerance = 1e-3;
-
-LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, Cosmology* cosmo_in)
+template<typename QScalar>
+LensProfile<QScalar>::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, Cosmology* cosmo_in)
 {
 	setup_lens_properties();
 	set_redshifts(zlens_in,zsrc_in);
@@ -41,15 +32,19 @@ LensProfile::LensProfile(const char *splinefile, const double zlens_in, const do
 
 	set_integration_pointers();
 }
+template LensProfile<double>::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, Cosmology* cosmo_in);
 
-void LensProfile::setup_lens_properties(const int parameter_mode, const int subclass)
+template<typename QScalar>
+void LensProfile<QScalar>::setup_lens_properties(const int parameter_mode, const int subclass)
 {
 	lenstype = KSPLINE;
 	model_name = "kspline";
 	setup_base_lens_properties(7,2,true); // number of parameters = 7, is_elliptical_lens = true
 }
+template void LensProfile<double>::setup_lens_properties(const int parameter_mode, const int subclass);
 
-void LensProfile::setup_base_lens_properties(const int np, const int lensprofile_np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
+template<typename QScalar>
+void LensProfile<QScalar>::setup_base_lens_properties(const int np, const int lensprofile_np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in)
 {
 	set_null_ptrs_and_values(); // sets pointers to NULL to make sure qlens doesn't try to delete them during setup
 	center_defined = true;
@@ -83,8 +78,10 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 	rmax_einstein_radius = 1e4;
 	set_integration_parameters();
 }
+template void LensProfile<double>::setup_base_lens_properties(const int np, const int lensprofile_np, const bool is_elliptical_lens, const int pmode_in, const int subclass_in);;
 
-void LensProfile::set_redshifts(const double zlens_in, const double zsrc_in)
+template<typename QScalar>
+void LensProfile<QScalar>::set_redshifts(const double zlens_in, const double zsrc_in)
 {
 	if (zlens==0) {
 		// only set zlens, etc. if they haven't been set before. After zlens is set, it should only be changed by doing update_parameters(...)
@@ -93,8 +90,10 @@ void LensProfile::set_redshifts(const double zlens_in, const double zsrc_in)
 		zsrc_ref = zsrc_in;
 	}
 }
+template void LensProfile<double>::set_redshifts(const double zlens_in, const double zsrc_in);
 
-void LensProfile::setup_cosmology(Cosmology* cosmo_in)
+template<typename QScalar>
+void LensProfile<QScalar>::setup_cosmology(Cosmology* cosmo_in)
 {
 	if (cosmo != cosmo_in) {
 		if (cosmo_in != NULL) {
@@ -104,8 +103,10 @@ void LensProfile::setup_cosmology(Cosmology* cosmo_in)
 		}
 	}
 }
+template void LensProfile<double>::setup_cosmology(Cosmology* cosmo_in);
 
-LensProfile::LensProfile(const LensProfile* lens_in)
+template<typename QScalar>
+LensProfile<QScalar>::LensProfile(const LensProfile<double>* lens_in)
 {
 	qx_parameter = lens_in->qx_parameter;
 	f_parameter = lens_in->f_parameter;
@@ -115,8 +116,10 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 	copy_base_lensdata(lens_in);
 	set_integration_pointers();
 }
+template LensProfile<double>::LensProfile(const LensProfile<double>* lens_in);
 
-void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *always* get called by any derived class when copying another lens object
+template<typename QScalar>
+void LensProfile<QScalar>::copy_base_lensdata(const LensProfile<double>* lens_in) // This must *always* get called by any derived class when copying another lens object
 {
 	cosmo = lens_in->cosmo;
 	qlens = lens_in->qlens;
@@ -251,8 +254,10 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
 }
+template void LensProfile<double>::copy_base_lensdata(const LensProfile<double>* lens_in); // This must *always* get called by any derived class when copying another lens object
 
-void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
+template<typename QScalar>
+void LensProfile<QScalar>::copy_source_data_to_lens(const SB_Profile* sb_in)
 {
 	zlens = sb_in->zsrc;
 	zlens_current = zlens;
@@ -342,8 +347,10 @@ void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 	assign_paramnames();
 	assign_param_pointers();
 }
+template void LensProfile<double>::copy_source_data_to_lens(const SB_Profile* sb_in);
 
-void LensProfile::copy_integration_tables(const LensProfile* lens_in)
+template<typename QScalar>
+void LensProfile<QScalar>::copy_integration_tables(const LensProfile<double>* lens_in)
 {
 	// It's a total waste of time to make copies of the integration tables. You should change it so the integration tables are static, or perhaps move them out of LensProfile, so it doesn't have to copy them for each lens every time a fit is run.
 	if (ellipticity_mode == -1) return; // non-elliptical lenses do not require doing numerical integrations
@@ -387,8 +394,10 @@ void LensProfile::copy_integration_tables(const LensProfile* lens_in)
 		cc_points[i] = *(pptr++);
 	}
 }
+template void LensProfile<double>::copy_integration_tables(const LensProfile<double>* lens_in);
 
-void LensProfile::set_nparams_and_anchordata(const int &n_params_in, const bool resize)
+template<typename QScalar>
+void LensProfile<QScalar>::set_nparams_and_anchordata(const int &n_params_in, const bool resize)
 {
 	int old_nparams = (resize) ? n_params : 0;
 	n_params = n_params_in;
@@ -413,7 +422,7 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in, const bool 
 	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
 
 	anchor_parameter_to_lens = new bool[n_params];
-	parameter_anchor_lens = new LensProfile*[n_params];
+	parameter_anchor_lens = new LensProfile<double>*[n_params];
 	anchor_parameter_to_source = new bool[n_params];
 	parameter_anchor_source = new SB_Profile*[n_params];
 	parameter_anchor_paramnum = new int[n_params];
@@ -441,8 +450,10 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in, const bool 
 		if (vary_params[i]) n_vary_params++;
 	}
 }
+template void LensProfile<double>::set_nparams_and_anchordata(const int &n_params_in, const bool resize);
 
-bool LensProfile::anchor_center_to_lens(const int &center_anchor_lens_number)
+template<typename QScalar>
+bool LensProfile<QScalar>::anchor_center_to_lens(const int &center_anchor_lens_number)
 {
 	if (qlens == NULL) return false;
 	if (!center_anchored) center_anchored = true;
@@ -451,21 +462,27 @@ bool LensProfile::anchor_center_to_lens(const int &center_anchor_lens_number)
 	y_center = center_anchor_lens->y_center;
 	return true;
 }
+template bool LensProfile<double>::anchor_center_to_lens(const int &center_anchor_lens_number);
 
-void LensProfile::delete_center_anchor()
+template<typename QScalar>
+void LensProfile<QScalar>::delete_center_anchor()
 {
 	if (center_anchored) {
 		center_anchored = false;
 		center_anchor_lens = NULL;
 	}
 }
+template void LensProfile<double>::delete_center_anchor();
 
-void LensProfile::delete_special_parameter_anchor()
+template<typename QScalar>
+void LensProfile<QScalar>::delete_special_parameter_anchor()
 {
 	if (anchor_special_parameter) anchor_special_parameter = false;
 }
+template void LensProfile<double>::delete_special_parameter_anchor();
 
-bool LensProfile::setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc, QLens* qlensptr_in)
+template<typename QScalar>
+bool LensProfile<QScalar>::setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc, QLens* qlensptr_in)
 {
 	QLens* qlensptr;
 	if (qlens == NULL) {
@@ -481,8 +498,10 @@ bool LensProfile::setup_transform_center_coords_to_pixsrc_frame(const double dxc
 	update_center_from_pixsrc_coords(qlensptr);
 	return true;
 }
+template bool LensProfile<double>::setup_transform_center_coords_to_pixsrc_frame(const double dxc, const double dyc, QLens* qlensptr_in);
 
-void LensProfile::set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
+template<typename QScalar>
+void LensProfile<QScalar>::set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
 {
 	if (vary_mass_parameter) {
 		vary_params[0] = true;
@@ -511,8 +530,10 @@ void LensProfile::set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, cons
 	}
 	update_anchored_parameters();
 }
+template void LensProfile<double>::set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
-bool LensProfile::set_vary_flags(boolvector &vary_flags)
+template<typename QScalar>
+bool LensProfile<QScalar>::set_vary_flags(boolvector &vary_flags)
 {
 	bool omitted_center = false;
 	if ((center_anchored) and vary_flags.size() == n_params-3) omitted_center = true;
@@ -528,8 +549,10 @@ bool LensProfile::set_vary_flags(boolvector &vary_flags)
 	if (vary_parameters(new_vary_flags)==false) return false;
 	return true;
 }
+template bool LensProfile<double>::set_vary_flags(boolvector &vary_flags);
 
-bool LensProfile::update_specific_varyflag(const string name_in, const bool flag)
+template<typename QScalar>
+bool LensProfile<QScalar>::update_specific_varyflag(const string name_in, const bool flag)
 {
 	int paramnum;
 	if (!lookup_parameter_number(name_in,paramnum)) return false;
@@ -538,22 +561,28 @@ bool LensProfile::update_specific_varyflag(const string name_in, const bool flag
 	if (vary_parameters(new_vary_flags)==false) return false;
 	return true;
 }
+template bool LensProfile<double>::update_specific_varyflag(const string name_in, const bool flag);
 
-void LensProfile::get_vary_flags(boolvector &vary_flags)
+template<typename QScalar>
+void LensProfile<QScalar>::get_vary_flags(boolvector &vary_flags)
 {
 	vary_flags.input(n_params);
 	for (int i=0; i < n_params; i++) vary_flags[i] = vary_params[i];
 }
+template void LensProfile<double>::get_vary_flags(boolvector &vary_flags);
 
-bool LensProfile::register_vary_flags()
+template<typename QScalar>
+bool LensProfile<QScalar>::register_vary_flags()
 {
 	// This function is called if there are already vary flags that have been set before adding the lens to the list
 	if ((n_vary_params > 0) and (qlens != NULL))
 		return qlens->register_lens_vary_parameters(lens_number);
 	else return false;
 }
+template bool LensProfile<double>::register_vary_flags();
 
-bool LensProfile::vary_parameters(const boolvector& vary_params_in)
+template<typename QScalar>
+bool LensProfile<QScalar>::vary_parameters(const boolvector& vary_params_in)
 {
 	int pi, pf;
 	if (qlens) qlens->get_lens_parameter_numbers(lens_number,pi,pf); // these are the old parameter numbers
@@ -566,8 +595,8 @@ bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 		else return false;
 	}
 	// Save the old limits, if they exist
-	dvector old_lower_limits(n_params);
-	dvector old_upper_limits(n_params);
+	Vector<double> old_lower_limits(n_params);
+	Vector<double> old_upper_limits(n_params);
 	int i=0,k=0;
 	for (i=0; i < n_params; i++) {
 		if (vary_params[i]) {
@@ -607,8 +636,10 @@ bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 	}
 	return true;
 }
+template bool LensProfile<double>::vary_parameters(const boolvector& vary_params_in);
 
-void LensProfile::set_limits(const dvector& lower, const dvector& upper)
+template<typename QScalar>
+void LensProfile<QScalar>::set_limits(const Vector<double>& lower, const Vector<double>& upper)
 {
 	include_limits = true;
 
@@ -618,8 +649,10 @@ void LensProfile::set_limits(const dvector& lower, const dvector& upper)
 	upper_limits = upper;
 	if (qlens != NULL) qlens->register_lens_prior_limits(lens_number);
 }
+template void LensProfile<double>::set_limits(const Vector<double>& lower, const Vector<double>& upper);
 
-bool LensProfile::set_limits_specific_parameter(const string name_in, const double& lower, const double& upper)
+template<typename QScalar>
+bool LensProfile<QScalar>::set_limits_specific_parameter(const string name_in, const double& lower, const double& upper)
 {
 	if (n_vary_params==0) return false;
 	int param_i = -1;
@@ -640,8 +673,10 @@ bool LensProfile::set_limits_specific_parameter(const string name_in, const doub
 	if (qlens != NULL) qlens->register_lens_prior_limits(lens_number);
 	return (param_i != -1);
 }
+template bool LensProfile<double>::set_limits_specific_parameter(const string name_in, const double& lower, const double& upper);
 
-void LensProfile::update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index)
+template<typename QScalar>
+void LensProfile<QScalar>::update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index)
 {
 	// in this case, the limits are being updated from the fitparams list, so there is no need to call register_lens_prior_limits
 	if (!include_limits) include_limits = true;
@@ -653,23 +688,29 @@ void LensProfile::update_limits(const double* lower, const double* upper, const 
 		index++;
 	}
 }
+template void LensProfile<double>::update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index);
 
-void LensProfile::get_parameters(double* params)
+template<typename QScalar>
+void LensProfile<QScalar>::get_parameters(double* params)
 {
 	for (int i=0; i < n_params; i++) {
 		if (angle_param[i]) params[i] = radians_to_degrees(*(param[i]));
 		else params[i] = *(param[i]);
 	}
 }
+template void LensProfile<double>::get_parameters(double* params);
 
-double LensProfile::get_parameter(const int i)
+template<typename QScalar>
+double LensProfile<QScalar>::get_parameter(const int i)
 {
 	if (i >= n_params) die("requested parameter with index greater than number of params");
 	if (angle_param[i]) return radians_to_degrees(*(param[i]));
 	else return *(param[i]);
 }
+template double LensProfile<double>::get_parameter(const int i);
 
-bool LensProfile::check_parameter_name(const string name_in)
+template<typename QScalar>
+bool LensProfile<QScalar>::check_parameter_name(const string name_in)
 {
 	bool found_match = false;
 	for (int i=0; i < n_params; i++) {
@@ -680,8 +721,10 @@ bool LensProfile::check_parameter_name(const string name_in)
 	}
 	return found_match;
 }
+template bool LensProfile<double>::check_parameter_name(const string name_in);
 
-bool LensProfile::lookup_parameter_number(const string name_in, int& paramnum)
+template<typename QScalar>
+bool LensProfile<QScalar>::lookup_parameter_number(const string name_in, int& paramnum)
 {
 	bool found_match = false;
 	for (int i=0; i < n_params; i++) {
@@ -693,8 +736,10 @@ bool LensProfile::lookup_parameter_number(const string name_in, int& paramnum)
 	}
 	return found_match;
 }
+template bool LensProfile<double>::lookup_parameter_number(const string name_in, int& paramnum);
 
-bool LensProfile::get_specific_parameter(const string name_in, double& value)
+template<typename QScalar>
+bool LensProfile<QScalar>::get_specific_parameter(const string name_in, double& value)
 {
 	bool found_match = false;
 	for (int i=0; i < n_params; i++) {
@@ -706,8 +751,10 @@ bool LensProfile::get_specific_parameter(const string name_in, double& value)
 	}
 	return found_match;
 }
+template bool LensProfile<double>::get_specific_parameter(const string name_in, double& value);
 
-bool LensProfile::get_specific_limit(const string name_in, double& lower, double& upper)
+template<typename QScalar>
+bool LensProfile<QScalar>::get_specific_limit(const string name_in, double& lower, double& upper)
 {
 	if (include_limits==false) return false;
 	bool found_match = false;
@@ -721,8 +768,10 @@ bool LensProfile::get_specific_limit(const string name_in, double& lower, double
 	}
 	return found_match;
 }
+template bool LensProfile<double>::get_specific_limit(const string name_in, double& lower, double& upper);
 
-void LensProfile::get_parameters_pmode(const int pmode_in, double* params)
+template<typename QScalar>
+void LensProfile<QScalar>::get_parameters_pmode(const int pmode_in, double* params)
 {
 	// overload this function for models that have different parameter modes; allows
 	// flexibility in obtaining parameters from different pmodes
@@ -732,8 +781,10 @@ void LensProfile::get_parameters_pmode(const int pmode_in, double* params)
 		params[n_params-2] = y_center;
 	}
 }
+template void LensProfile<double>::get_parameters_pmode(const int pmode_in, double* params);
 
-void LensProfile::update_parameters(const double* params)
+template<typename QScalar>
+void LensProfile<QScalar>::update_parameters(const double* params)
 {
 	for (int i=0; i < n_params; i++) {
 		if (angle_param[i]) *(param[i]) = degrees_to_radians(params[i]);
@@ -747,8 +798,10 @@ void LensProfile::update_parameters(const double* params)
 		qlens->update_lens_fitparams(lens_number);
 	}
 }
+template void LensProfile<double>::update_parameters(const double* params);
 
-bool LensProfile::update_specific_parameter(const string name_in, const double& value)
+template<typename QScalar>
+bool LensProfile<QScalar>::update_specific_parameter(const string name_in, const double& value)
 {
 	double* newparams = new double[n_params];
 	get_parameters(newparams);
@@ -770,8 +823,10 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 	}
 	return found_match;
 }
+template bool LensProfile<double>::update_specific_parameter(const string name_in, const double& value);
 
-bool LensProfile::update_specific_parameter(const int paramnum, const double& value)
+template<typename QScalar>
+bool LensProfile<QScalar>::update_specific_parameter(const int paramnum, const double& value)
 {
 	if (paramnum >= n_params) return false;
 	double* newparams = new double[n_params];
@@ -790,8 +845,10 @@ bool LensProfile::update_specific_parameter(const int paramnum, const double& va
 	}
 	return true;
 }
+template bool LensProfile<double>::update_specific_parameter(const int paramnum, const double& value);
 
-void LensProfile::update_ellipticity_parameter(const double eparam)
+template<typename QScalar>
+void LensProfile<QScalar>::update_ellipticity_parameter(const double eparam)
 {
 	// This function is only used by the "qtab" model at the moment
 	*(param[ellipticity_paramnum]) = eparam;
@@ -799,9 +856,11 @@ void LensProfile::update_ellipticity_parameter(const double eparam)
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
+template void LensProfile<double>::update_ellipticity_parameter(const double eparam);
 
 // Perhaps should have a function at the model level, called here that reports a "false" status if parameter values are crazy!
-void LensProfile::update_fit_parameters(const double* fitparams, int &index, bool& status)
+template<typename QScalar>
+void LensProfile<QScalar>::update_fit_parameters(const double* fitparams, int &index, bool& status)
 {
 	if (n_vary_params > 0) {
 		for (int i=0; i < n_params; i++) {
@@ -820,8 +879,10 @@ void LensProfile::update_fit_parameters(const double* fitparams, int &index, boo
 	}
 	// NOTE: to save time, we do not update the qlens->param_list here, since this function is only run during model fitting
 }
+template void LensProfile<double>::update_fit_parameters(const double* fitparams, int &index, bool& status);
 
-void LensProfile::update_anchored_parameters()
+template<typename QScalar>
+void LensProfile<QScalar>::update_anchored_parameters()
 {
 	if (at_least_one_param_anchored) {
 		for (int i=0; i < n_params; i++) {
@@ -838,16 +899,20 @@ void LensProfile::update_anchored_parameters()
 		set_model_specific_integration_pointers();
 	}
 }
+template void LensProfile<double>::update_anchored_parameters();
 
-void LensProfile::update_anchor_center()
+template<typename QScalar>
+void LensProfile<QScalar>::update_anchor_center()
 {
 	if (center_anchored) {
 		x_center = center_anchor_lens->x_center;
 		y_center = center_anchor_lens->y_center;
 	}
 }
+template void LensProfile<double>::update_anchor_center();
 
-void LensProfile::get_fit_parameters(double *fitparams, int &index)
+template<typename QScalar>
+void LensProfile<QScalar>::get_fit_parameters(double *fitparams, int &index)
 {
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]==true) {
@@ -856,16 +921,20 @@ void LensProfile::get_fit_parameters(double *fitparams, int &index)
 		}
 	}
 }
+template void LensProfile<double>::get_fit_parameters(double *fitparams, int &index);
 
-void LensProfile::set_auto_stepsizes()
+template<typename QScalar>
+void LensProfile<QScalar>::set_auto_stepsizes()
 {
 	int index = 0;
 	stepsizes[index++] = 0.1;
 	stepsizes[index++] = 0.1;
 	set_geometric_param_auto_stepsizes(index);
 }
+template void LensProfile<double>::set_auto_stepsizes();
 
-void LensProfile::set_geometric_param_auto_stepsizes(int &index)
+template<typename QScalar>
+void LensProfile<QScalar>::set_geometric_param_auto_stepsizes(int &index)
 {
 	if (!ellipticity_gradient) {
 		if (use_ellipticity_components) {
@@ -882,23 +951,29 @@ void LensProfile::set_geometric_param_auto_stepsizes(int &index)
 	}
 	stepsizes[index++] = 0.1; // z
 }
+template void LensProfile<double>::set_geometric_param_auto_stepsizes(int &index);
 
-void LensProfile::get_auto_stepsizes(dvector& stepsizes_in, int &index)
+template<typename QScalar>
+void LensProfile<QScalar>::get_auto_stepsizes(Vector<double>& stepsizes_in, int &index)
 {
 	set_auto_stepsizes();
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]) stepsizes_in[index++] = stepsizes[i];
 	}
 }
+template void LensProfile<double>::get_auto_stepsizes(Vector<double>& stepsizes_in, int &index);
 
-void LensProfile::set_auto_ranges()
+template<typename QScalar>
+void LensProfile<QScalar>::set_auto_ranges()
 {
 	set_auto_penalty_limits[0] = false;
 	set_auto_penalty_limits[1] = false;
 	set_geometric_param_auto_ranges(lensprofile_nparams);
 }
+template void LensProfile<double>::set_auto_ranges();
 
-void LensProfile::set_geometric_param_auto_ranges(int param_i)
+template<typename QScalar>
+void LensProfile<QScalar>::set_geometric_param_auto_ranges(int param_i)
 {
 	if (!ellipticity_gradient) {
 		if (use_ellipticity_components) {
@@ -927,8 +1002,10 @@ void LensProfile::set_geometric_param_auto_ranges(int param_i)
 	}
 	set_auto_penalty_limits[param_i] = true; penalty_lower_limits[param_i] = 0.01; penalty_upper_limits[param_i] = zsrc_ref; param_i++;
 }
+template void LensProfile<double>::set_geometric_param_auto_ranges(int param_i);
 
-void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+template<typename QScalar>
+void LensProfile<QScalar>::get_auto_ranges(boolvector& use_penalty_limits, Vector<double>& lower, Vector<double>& upper, int &index)
 {
 	set_auto_ranges();
 	for (int i=0; i < n_params; i++) {
@@ -944,8 +1021,10 @@ void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower
 		}
 	}
 }
+template void LensProfile<double>::get_auto_ranges(boolvector& use_penalty_limits, Vector<double>& lower, Vector<double>& upper, int &index);
 
-void LensProfile::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary)
+template<typename QScalar>
+void LensProfile<QScalar>::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary)
 {
 	int i;
 	//cout << "NPAR=" << n_params << endl;
@@ -959,8 +1038,10 @@ void LensProfile::get_fit_parameter_names(vector<string>& paramnames_vary, vecto
 		//else cout << "PAR " << i << "is NOT being varied" << endl;
 	}
 }
+template void LensProfile<double>::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary);
 
-bool LensProfile::get_limits(dvector& lower, dvector& upper)
+template<typename QScalar>
+bool LensProfile<QScalar>::get_limits(Vector<double>& lower, Vector<double>& upper)
 {
 	if ((include_limits==false) or (lower_limits.size() != n_vary_params) or (lower.size() != n_vary_params)) return false;
 	for (int i=0; i < n_vary_params; i++) {
@@ -969,8 +1050,10 @@ bool LensProfile::get_limits(dvector& lower, dvector& upper)
 	}
 	return true;
 }
+template bool LensProfile<double>::get_limits(Vector<double>& lower, Vector<double>& upper);
 
-bool LensProfile::get_limits(dvector& lower, dvector& upper, int &index)
+template<typename QScalar>
+bool LensProfile<QScalar>::get_limits(Vector<double>& lower, Vector<double>& upper, int &index)
 {
 	if ((include_limits==false) or (lower_limits.size() != n_vary_params)) return false;
 	for (int i=0; i < n_vary_params; i++) {
@@ -980,12 +1063,14 @@ bool LensProfile::get_limits(dvector& lower, dvector& upper, int &index)
 	}
 	return true;
 }
+template bool LensProfile<double>::get_limits(Vector<double>& lower, Vector<double>& upper, int &index);
 
-void LensProfile::copy_parameter_anchors(const LensProfile* lens_in)
+template<typename QScalar>
+void LensProfile<QScalar>::copy_parameter_anchors(const LensProfile<double>* lens_in)
 {
 	// n_params *must* already be set before running this
 	anchor_parameter_to_lens = new bool[n_params];
-	parameter_anchor_lens = new LensProfile*[n_params];
+	parameter_anchor_lens = new LensProfile<double>*[n_params];
 	anchor_parameter_to_source = new bool[n_params];
 	parameter_anchor_source = new SB_Profile*[n_params];
 	parameter_anchor_paramnum = new int[n_params];
@@ -1003,14 +1088,18 @@ void LensProfile::copy_parameter_anchors(const LensProfile* lens_in)
 	at_least_one_param_anchored = lens_in->at_least_one_param_anchored;
 	if (anchor_special_parameter) copy_special_parameter_anchor(lens_in);
 }
+template void LensProfile<double>::copy_parameter_anchors(const LensProfile<double>* lens_in);
 
-void LensProfile::copy_special_parameter_anchor(const LensProfile *lens_in)
+template<typename QScalar>
+void LensProfile<QScalar>::copy_special_parameter_anchor(const LensProfile<QScalar> *lens_in)
 {
 	special_anchor_lens = lens_in->special_anchor_lens;
 }
+template void LensProfile<double>::copy_special_parameter_anchor(const LensProfile<double> *lens_in);
 
 
-void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, LensProfile* param_anchor_lens)
+template<typename QScalar>
+void LensProfile<QScalar>::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, LensProfile<double>* param_anchor_lens)
 {
 	if (paramnum >= n_params) die("Parameter does not exist for this qlens");
 	if (anchor_paramnum >= param_anchor_lens->n_params) die("Parameter does not exist for lens you are anchoring to");
@@ -1038,8 +1127,10 @@ void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anch
 	at_least_one_param_anchored = true;
 	update_anchored_parameters();
 }
+template void LensProfile<double>::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, LensProfile<double>* param_anchor_lens);
 
-void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source)
+template<typename QScalar>
+void LensProfile<QScalar>::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source)
 {
 	if (paramnum >= n_params) die("Parameter does not exist for this source");
 	if (anchor_paramnum >= param_anchor_source->n_params) die("Parameter does not exist for source you are anchoring to");
@@ -1067,8 +1158,10 @@ void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anch
 	at_least_one_param_anchored = true;
 	update_anchored_parameters();
 }
+template void LensProfile<double>::assign_anchored_parameter(const int& paramnum, const int& anchor_paramnum, const bool use_implicit_ratio, const bool use_exponent, const double ratio, const double exponent, SB_Profile* param_anchor_source);
 
-void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)
+template<typename QScalar>
+void LensProfile<QScalar>::unanchor_parameter(LensProfile<double>* param_anchor_lens)
 {
 	// if any parameters are anchored to the lens in question, unanchor them (use this when you are deleting a lens, in case others are anchored to it)
 	bool removed_anchor = false;
@@ -1093,8 +1186,10 @@ void LensProfile::unanchor_parameter(LensProfile* param_anchor_lens)
 		}
 	}
 }
+template void LensProfile<double>::unanchor_parameter(LensProfile<double>* param_anchor_lens);
 
-void LensProfile::unanchor_parameter(SB_Profile* param_anchor_source)
+template<typename QScalar>
+void LensProfile<QScalar>::unanchor_parameter(SB_Profile* param_anchor_source)
 {
 	// if any parameters are anchored to the source in question, unanchor them (use this when you are deleting a source, in case others are anchored to it)
 	bool removed_anchor = false;
@@ -1120,8 +1215,10 @@ void LensProfile::unanchor_parameter(SB_Profile* param_anchor_source)
 	}
 
 }
+template void LensProfile<double>::unanchor_parameter(SB_Profile* param_anchor_source);
 
-void LensProfile::assign_paramnames()
+template<typename QScalar>
+void LensProfile<QScalar>::assign_paramnames()
 {
 	paramnames.resize(n_params);
 	latex_paramnames.resize(n_params);
@@ -1130,8 +1227,10 @@ void LensProfile::assign_paramnames()
 	paramnames[1] = "f"; latex_paramnames[1] = "f"; latex_param_subscripts[1] = "";
 	set_geometric_paramnames(lensprofile_nparams);
 }
+template void LensProfile<double>::assign_paramnames();
 
-void LensProfile::set_geometric_paramnames(int qi)
+template<typename QScalar>
+void LensProfile<QScalar>::set_geometric_paramnames(int qi)
 {
 	if (!ellipticity_gradient) {
 		if (use_ellipticity_components) {
@@ -1182,15 +1281,19 @@ void LensProfile::set_geometric_paramnames(int qi)
 	}
 	paramnames[qi] = "z"; latex_paramnames[qi] = "z"; latex_param_subscripts[qi] = "l"; qi++;
 }
+template void LensProfile<double>::set_geometric_paramnames(int qi);
 
-void LensProfile::assign_param_pointers()
+template<typename QScalar>
+void LensProfile<QScalar>::assign_param_pointers()
 {
 	param[0] = &qx_parameter;
 	param[1] = &f_parameter;
 	set_geometric_param_pointers(lensprofile_nparams);
 }
+template void LensProfile<double>::assign_param_pointers();
 
-void LensProfile::set_geometric_param_pointers(int qi)
+template<typename QScalar>
+void LensProfile<QScalar>::set_geometric_param_pointers(int qi)
 {
 	// Sets parameter pointers for ellipticity (or axis ratio) and angle
 	if (!ellipticity_gradient) {
@@ -1230,8 +1333,10 @@ void LensProfile::set_geometric_param_pointers(int qi)
 	}
 	param[qi++] = &zlens;
 }
+template void LensProfile<double>::set_geometric_param_pointers(int qi);
 
-void LensProfile::set_geometric_parameters(const double &par1_in, const double &par2_in, const double &xc_in, const double &yc_in)
+template<typename QScalar>
+void LensProfile<QScalar>::set_geometric_parameters(const double &par1_in, const double &par2_in, const double &xc_in, const double &yc_in)
 {
 	if (use_ellipticity_components) {
 		epsilon1 = par1_in;
@@ -1250,32 +1355,40 @@ void LensProfile::set_geometric_parameters(const double &par1_in, const double &
 	}
 	update_ellipticity_meta_parameters();
 }
+template void LensProfile<double>::set_geometric_parameters(const double &par1_in, const double &par2_in, const double &xc_in, const double &yc_in);
 
-void LensProfile::set_center_if_lensed_coords()
+template<typename QScalar>
+void LensProfile<QScalar>::set_center_if_lensed_coords()
 {
 	if (lensed_center_coords) {
 		if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
-		lensvector xl;
+		lensvector<double> xl;
 		qlens->map_to_lens_plane(qlens->lens_redshift_idx[lens_number],xc_prime,yc_prime,xl,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
 		x_center = xl[0];
 		y_center = xl[1];
 	}
 }
+template void LensProfile<double>::set_center_if_lensed_coords();
 
-double LensProfile::concentration_prior()
+template<typename QScalar>
+double LensProfile<QScalar>::concentration_prior()
 {
 	return 0; // this prior is only used in the NFW-like models
 }
+template double LensProfile<double>::concentration_prior();
 
-void LensProfile::change_pmode(const int pmode_in) // WARNING! This does not check whether pmode exists or not for given lens
+template<typename QScalar>
+void LensProfile<QScalar>::change_pmode(const int pmode_in) // WARNING! This does not check whether pmode exists or not for given lens
 {
 	parameter_mode = pmode_in;
 	assign_param_pointers();
 	assign_paramnames();
 	update_meta_parameters_and_pointers();
 }
+template void LensProfile<double>::change_pmode(const int pmode_in); // WARNING! This does not check whether pmode exists or not for given lens
 
-bool LensProfile::output_cosmology_info(const int lens_number)
+template<typename QScalar>
+bool LensProfile<QScalar>::output_cosmology_info(const int lens_number)
 {
 	bool mass_converged, rhalf_converged;
 	double sigma_cr, mtot, rhalf;
@@ -1292,16 +1405,20 @@ bool LensProfile::output_cosmology_info(const int lens_number)
 	}
 	return false; // no cosmology-dependent physical parameters to calculate for this model
 }
+template bool LensProfile<double>::output_cosmology_info(const int lens_number);
 
-double LensProfile::average_log_slope(const double rmin, const double rmax)
+template<typename QScalar>
+double LensProfile<QScalar>::average_log_slope(const double rmin, const double rmax)
 {
 	double k1, k2;
 	k1 = kappa_rsq(rmin*rmin);
 	k2 = kappa_rsq(rmax*rmax);
 	return log(k2/k1)/log(rmax/rmin);
 }
+template double LensProfile<double>::average_log_slope(const double rmin, const double rmax);
 
-double LensProfile::average_log_slope_3d(const double rmin, const double rmax)
+template<typename QScalar>
+double LensProfile<QScalar>::average_log_slope_3d(const double rmin, const double rmax)
 {
 	double rho1, rho2;
 	bool converged;
@@ -1309,8 +1426,10 @@ double LensProfile::average_log_slope_3d(const double rmin, const double rmax)
 	rho2 = calculate_scaled_density_3d(rmax*rmax,1e-5,converged);
 	return log(rho2/rho1)/log(rmax/rmin);
 }
+template double LensProfile<double>::average_log_slope_3d(const double rmin, const double rmax);
 
-bool LensProfile::calculate_total_scaled_mass(double& total_mass)
+template<typename QScalar>
+bool LensProfile<QScalar>::calculate_total_scaled_mass(double& total_mass)
 {
 	double u, mass_u, mass_u_prev;
 	double re_major_axis, re_average;
@@ -1332,24 +1451,32 @@ bool LensProfile::calculate_total_scaled_mass(double& total_mass)
 	if (n==nmax) return false;
 	else return true;
 }
+template bool LensProfile<double>::calculate_total_scaled_mass(double& total_mass);
 
-double LensProfile::mass_inverse_rsq(const double u)
+template<typename QScalar>
+double LensProfile<QScalar>::mass_inverse_rsq(const double u)
 {
 	return (this->*kapavgptr_rsq_spherical)(1.0/u)/u; // leaving out the M_PI here because it will be tacked on afterword
 }
+template double LensProfile<double>::mass_inverse_rsq(const double u);
 
-double LensProfile::mass_rsq(const double rsq)
+template<typename QScalar>
+double LensProfile<QScalar>::mass_rsq(const double rsq)
 {
 	if (this->kapavgptr_rsq_spherical==NULL) return 0;
 	return M_PI*rsq*(this->*kapavgptr_rsq_spherical)(rsq);
 }
+template double LensProfile<double>::mass_rsq(const double rsq);
 
-double LensProfile::half_mass_radius_root(const double r)
+template<typename QScalar>
+double LensProfile<QScalar>::half_mass_radius_root(const double r)
 {
 	return (mass_rsq(r*r)-mass_intval);
 }
+template double LensProfile<double>::half_mass_radius_root(const double r);
 
-bool LensProfile::calculate_half_mass_radius(double& half_mass_radius, const double mtot_in)
+template<typename QScalar>
+bool LensProfile<QScalar>::calculate_half_mass_radius(double& half_mass_radius, const double mtot_in)
 {
 	if (kapavgptr_rsq_spherical==NULL) {
 		return false;
@@ -1363,18 +1490,22 @@ bool LensProfile::calculate_half_mass_radius(double& half_mass_radius, const dou
 		return false;
 	}
 	double (Brent::*bptr)(const double);
-	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::half_mass_radius_root);
+	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile<QScalar>::half_mass_radius_root);
 	half_mass_radius = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
 	return true;
 }
+template bool LensProfile<double>::calculate_half_mass_radius(double& half_mass_radius, const double mtot_in);
 
-double LensProfile::calculate_scaled_mass_3d(const double r)
+template<typename QScalar>
+double LensProfile<QScalar>::calculate_scaled_mass_3d(const double r)
 {
 	if (analytic_3d_density) return calculate_scaled_mass_3d_from_analytic_rho3d(r);
 	else return calculate_scaled_mass_3d_from_kappa(r);
 }
+template double LensProfile<double>::calculate_scaled_mass_3d(const double r);
 
-double LensProfile::calculate_scaled_mass_3d_from_kappa(const double r)
+template<typename QScalar>
+double LensProfile<QScalar>::calculate_scaled_mass_3d_from_kappa(const double r)
 {
 	static const int max_iter = 6;
 	int rho3d_nn = 40; // starting value
@@ -1403,7 +1534,7 @@ double LensProfile::calculate_scaled_mass_3d_from_kappa(const double r)
 	convergence_everywhere = true;
 	converge_at_small_r = true;
 	first_convergence = false;
-	mptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile::mass3d_r_integrand);
+	mptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile<QScalar>::mass3d_r_integrand);
 	do {
 		convergence_beyond_radius = 0;
 		converged=true; // this refers to the individual integrals converging
@@ -1471,8 +1602,10 @@ double LensProfile::calculate_scaled_mass_3d_from_kappa(const double r)
 
 	return mass3d;
 }
+template double LensProfile<double>::calculate_scaled_mass_3d_from_kappa(const double r);
 
-double LensProfile::calculate_scaled_mass_3d_from_analytic_rho3d(const double r)
+template<typename QScalar>
+double LensProfile<QScalar>::calculate_scaled_mass_3d_from_analytic_rho3d(const double r)
 {
 	bool menc_converged;
 	double mass3d, tolerance = 1e-4;
@@ -1480,50 +1613,62 @@ double LensProfile::calculate_scaled_mass_3d_from_analytic_rho3d(const double r)
 	double temppat = pat_tolerance;
 	SetGaussPatterson(tolerance,false);
 	double (GaussPatterson::*mptr)(double);
-	mptr = static_cast<double (GaussPatterson::*)(const double)> (&LensProfile::mass3d_r_integrand_analytic);
+	mptr = static_cast<double (GaussPatterson::*)(const double)> (&LensProfile<QScalar>::mass3d_r_integrand_analytic);
 	mass3d = 4*M_PI*AdaptiveQuad(mptr,0,r,menc_converged);
 	SetGaussPatterson(temppat,integration_warnings);
 	if ((integration_warnings) and (menc_converged==false)) warn("Gauss-Patterson quadrature did not converge for enclosed mass integral (tol=%g) using NMAX=511 points",tolerance);
 	return mass3d;
 }
+template double LensProfile<double>::calculate_scaled_mass_3d_from_analytic_rho3d(const double r);
 
-double LensProfile::mass3d_r_integrand(const double r)
+template<typename QScalar>
+double LensProfile<QScalar>::mass3d_r_integrand(const double r)
 {
 	double logx = log(r/mass_intval)/ln10;
 	if (logx < rho3d_logx_spline->xmin()) return (r*r*rho3d_logx_spline->extend_inner_logslope(logx));
 	return r*r*rho3d_logx_spline->splint(logx);
 }
+template double LensProfile<double>::mass3d_r_integrand(const double r);
 
-double LensProfile::mass3d_r_integrand_analytic(const double r)
+template<typename QScalar>
+double LensProfile<QScalar>::mass3d_r_integrand_analytic(const double r)
 {
 	return r*r*rho3d_r_integrand_analytic(r);
 }
+template double LensProfile<double>::mass3d_r_integrand_analytic(const double r);
 
-double LensProfile::rho3d_r_integrand_analytic(const double r)
+template<typename QScalar>
+double LensProfile<QScalar>::rho3d_r_integrand_analytic(const double r)
 {
 	return 0; // This function must be overloaded in lens models where analytic_3d_density==true
 }
+template double LensProfile<double>::rho3d_r_integrand_analytic(const double r);
 
-double LensProfile::calculate_scaled_density_3d(const double r, const double tolerance, bool& converged)
+template<typename QScalar>
+double LensProfile<QScalar>::calculate_scaled_density_3d(const double r, const double tolerance, bool& converged)
 {
 	if (analytic_3d_density) return rho3d_r_integrand_analytic(r);
 	mass_intval = r*r;
 	double (GaussPatterson::*mptr)(double);
-	mptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile::rho3d_w_integrand);
+	mptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile<QScalar>::rho3d_w_integrand);
 	double temppat = pat_tolerance;
 	SetGaussPatterson(tolerance,false);
 	double ans = -(2*r/M_PI)*AdaptiveQuad(mptr,0,1,converged);
 	SetGaussPatterson(temppat,integration_warnings);
 	return ans;
 }
+template double LensProfile<double>::calculate_scaled_density_3d(const double r, const double tolerance, bool& converged);
 
-double LensProfile::rho3d_w_integrand(const double w)
+template<typename QScalar>
+double LensProfile<QScalar>::rho3d_w_integrand(const double w)
 {
 	double wsq = w*w;
 	return kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
 }
+template double LensProfile<double>::rho3d_w_integrand(const double w);
 
-void LensProfile::set_ellipticity_parameter(const double &param_in)
+template<typename QScalar>
+void LensProfile<QScalar>::set_ellipticity_parameter(const double &param_in)
 {
 	if (ellipticity_mode==0) {
 		q = param_in; // axis ratio q = b/a
@@ -1540,8 +1685,10 @@ void LensProfile::set_ellipticity_parameter(const double &param_in)
 	if (q > 1) q = 1.0; // don't allow q>1
 	if (q<=0) q = 0.001; // just to avoid catastrophe
 }
+template void LensProfile<double>::set_ellipticity_parameter(const double &param_in);
 
-void LensProfile::set_angle_from_components(const double &comp1, const double &comp2)
+template<typename QScalar>
+void LensProfile<QScalar>::set_angle_from_components(const double &comp1, const double &comp2)
 {
 	double angle;
 	if (comp1==0) {
@@ -1565,61 +1712,78 @@ void LensProfile::set_angle_from_components(const double &comp1, const double &c
 	while (angle <= -M_HALFPI) angle += M_PI;
 	set_angle_radians(angle);
 }
+template void LensProfile<double>::set_angle_from_components(const double &comp1, const double &comp2);
 
-void LensProfile::set_integration_parameters()
+template<typename QScalar>
+void LensProfile<QScalar>::set_integration_parameters()
 {
 	if (ellipticity_mode == -1) return; // non-elliptical lenses do not require doing numerical integrations
 	SetGaussLegendre(Gauss_NN);
 	SetGaussPatterson(integral_tolerance,integration_warnings);
 	SetClenshawCurtis(default_fejer_nlevels,integral_tolerance,false);
 }
+template void LensProfile<double>::set_integration_parameters();
 
-void LensProfile::set_integral_tolerance(const double acc) {
+template<typename QScalar>
+void LensProfile<QScalar>::set_integral_tolerance(const double acc)
+{
 	integral_tolerance = acc;
 	set_pat_tolerance_inner(acc);
 	set_cc_tolerance(acc);
 }
+template void LensProfile<double>::set_integral_tolerance(const double acc);
 
-void LensProfile::set_integral_warnings() {
+template<typename QScalar>
+void LensProfile<QScalar>::set_integral_warnings()
+{
 	// this is integration warnings for derived parameters etc.
 	set_pat_warnings(integration_warnings);
 	set_cc_warnings(integration_warnings);
 }
+template void LensProfile<double>::set_integral_warnings();
 
-void LensProfile::update_meta_parameters_and_pointers()
+template<typename QScalar>
+void LensProfile<QScalar>::update_meta_parameters_and_pointers()
 {
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 	update_meta_parameters();
 }
+template void LensProfile<double>::update_meta_parameters_and_pointers();
 
-void LensProfile::set_model_specific_integration_pointers() {} // gets overloaded by some models
+template<typename QScalar>
+void LensProfile<QScalar>::set_model_specific_integration_pointers() {} // gets overloaded by some models
 
-void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q has been defined before calling this
+template<typename QScalar>
+void LensProfile<QScalar>::set_integration_pointers() // Note: make sure the axis ratio q has been defined before calling this
 {
-	potptr = &LensProfile::potential_numerical;
-	kapavgptr_rsq_spherical = &LensProfile::kappa_avg_spherical_integral;
-	potptr_rsq_spherical = &LensProfile::potential_spherical_integral;
+	potptr = &LensProfile<QScalar>::potential_numerical;
+	kapavgptr_rsq_spherical = &LensProfile<QScalar>::kappa_avg_spherical_integral;
+	potptr_rsq_spherical = &LensProfile<QScalar>::potential_spherical_integral;
 	if ((q==1.0) and (!ellipticity_gradient)) {
-		potptr = &LensProfile::potential_spherical_default;
-		defptr = &LensProfile::deflection_spherical_default;
-		hessptr = &LensProfile::hessian_spherical_default;
+		potptr = &LensProfile<QScalar>::potential_spherical_default;
+		defptr = &LensProfile<QScalar>::deflection_spherical_default;
+		hessptr = &LensProfile<QScalar>::hessian_spherical_default;
 	} else {
-		defptr = &LensProfile::deflection_numerical;
-		hessptr = &LensProfile::hessian_numerical;
+		defptr = &LensProfile<QScalar>::deflection_numerical;
+		hessptr = &LensProfile<QScalar>::hessian_numerical;
 	}
-	def_and_hess_ptr = &LensProfile::deflection_and_hessian_together;
+	def_and_hess_ptr = &LensProfile<QScalar>::deflection_and_hessian_together;
 }
+template void LensProfile<double>::set_integration_pointers(); 
 
-double LensProfile::kappa_rsq(const double rsq) // this function should be redefined in all derived classes
+template<typename QScalar>
+double LensProfile<QScalar>::kappa_rsq(const double rsq) // this function should be redefined in all derived classes
 {
 	double r = sqrt(rsq);
 	if (r < qx_parameter*kspline.xmin()) return (f_parameter*kspline.extend_inner_logslope(r/qx_parameter));
 	if (r > qx_parameter*kspline.xmax()) return (f_parameter*kspline.extend_outer_logslope(r/qx_parameter));
 	return (f_parameter*kspline.splint(r/qx_parameter));
 }
+template double LensProfile<double>::kappa_rsq(const double rsq);
 
-void LensProfile::deflection_from_elliptical_potential(const double x, const double y, lensvector& def)
+template<typename QScalar>
+void LensProfile<QScalar>::deflection_from_elliptical_potential(const double x, const double y, lensvector<double>& def)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
 	double kapavg = (this->*kapavgptr_rsq_spherical)((1-epsilon)*x*x + (1+epsilon)*y*y);
@@ -1627,8 +1791,10 @@ void LensProfile::deflection_from_elliptical_potential(const double x, const dou
 	def[0] = kapavg*(1-epsilon)*x;
 	def[1] = kapavg*(1+epsilon)*y;
 }
+template void LensProfile<double>::deflection_from_elliptical_potential(const double x, const double y, lensvector<double>& def);
 
-void LensProfile::hessian_from_elliptical_potential(const double x, const double y, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::hessian_from_elliptical_potential(const double x, const double y, lensmatrix<double>& hess)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
 	double cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kap;
@@ -1648,8 +1814,10 @@ void LensProfile::hessian_from_elliptical_potential(const double x, const double
 	hess[1][0] = gamma2;
 	if ((shearmag * 0.0) != 0.0) die("die2");
 }
+template void LensProfile<double>::hessian_from_elliptical_potential(const double x, const double y, lensmatrix<double>& hess);
 
-double LensProfile::kappa_from_elliptical_potential(const double x, const double y)
+template<typename QScalar>
+double LensProfile<QScalar>::kappa_from_elliptical_potential(const double x, const double y)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
 	double cos2phi, exsq, eysq, rsq, kap_r, shearmag;
@@ -1663,8 +1831,10 @@ double LensProfile::kappa_from_elliptical_potential(const double x, const double
 
 	return (kap_r + epsilon*shearmag*cos2phi);
 }
+template double LensProfile<double>::kappa_from_elliptical_potential(const double x, const double y);
 
-void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector& def, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
 	double cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kapavg;
@@ -1689,28 +1859,36 @@ void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential(const d
 	hess[0][1] = gamma2;
 	hess[1][0] = gamma2;
 }
+template void LensProfile<double>::kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess);
 
-void LensProfile::shift_angle_90()
+template<typename QScalar>
+void LensProfile<QScalar>::shift_angle_90()
 {
 	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
 	theta += M_HALFPI;
 	while (theta > M_PI) theta -= M_PI;
 }
+template void LensProfile<double>::shift_angle_90();
 
-void LensProfile::shift_angle_minus_90()
+template<typename QScalar>
+void LensProfile<QScalar>::shift_angle_minus_90()
 {
 	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
 	theta -= M_HALFPI;
 	while (theta <= -M_PI) theta += M_PI;
 }
+template void LensProfile<double>::shift_angle_minus_90();
 
-void LensProfile::reset_angle_modulo_2pi()
+template<typename QScalar>
+void LensProfile<QScalar>::reset_angle_modulo_2pi()
 {
 	while (theta < -M_PI/2) theta += 2*M_PI;
 	while (theta > 2*M_PI) theta -= 2*M_PI;
 }
+template void LensProfile<double>::reset_angle_modulo_2pi();
 
-void LensProfile::set_angle(const double &theta_degrees)
+template<typename QScalar>
+void LensProfile<QScalar>::set_angle(const double &theta_degrees)
 {
 	theta = degrees_to_radians(theta_degrees);
 	// trig functions are stored to save computation time later
@@ -1723,8 +1901,10 @@ void LensProfile::set_angle(const double &theta_degrees)
 		costheta = -tmp;
 	}
 }
+template void LensProfile<double>::set_angle(const double &theta_degrees);
 
-void LensProfile::set_angle_radians(const double &theta_in)
+template<typename QScalar>
+void LensProfile<QScalar>::set_angle_radians(const double &theta_in)
 {
 	theta = theta_in;
 	// trig functions are stored to save computation time later
@@ -1737,8 +1917,10 @@ void LensProfile::set_angle_radians(const double &theta_in)
 		costheta = -tmp;
 	}
 }
+template void LensProfile<double>::set_angle_radians(const double &theta_in);
 
-void LensProfile::update_cosmology_meta_parameters(const bool force_update)
+template<typename QScalar>
+void LensProfile<QScalar>::update_cosmology_meta_parameters(const bool force_update)
 {
 	if ((cosmo != NULL) and ((force_update) or (zlens != zlens_current) or (cosmo->get_n_vary_params() > 0))) {
 		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
@@ -1746,8 +1928,10 @@ void LensProfile::update_cosmology_meta_parameters(const bool force_update)
 		if (zlens != zlens_current) zlens_current = zlens;
 	}
 }
+template void LensProfile<double>::update_cosmology_meta_parameters(const bool force_update);
 
-void LensProfile::calculate_ellipticity_components()
+template<typename QScalar>
+void LensProfile<QScalar>::calculate_ellipticity_components()
 {
 	if ((ellipticity_mode != -1) and (use_ellipticity_components)) {
 		theta_eff = (orient_major_axis_north) ? theta + M_HALFPI : theta;
@@ -1756,8 +1940,10 @@ void LensProfile::calculate_ellipticity_components()
 		epsilon2 = epsilon*sin(2*theta_eff);
 	}
 }
+template void LensProfile<double>::calculate_ellipticity_components();
 
-void LensProfile::update_ellipticity_meta_parameters()
+template<typename QScalar>
+void LensProfile<QScalar>::update_ellipticity_meta_parameters()
 {
 	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)
 	if (use_ellipticity_components) {
@@ -1803,8 +1989,10 @@ void LensProfile::update_ellipticity_meta_parameters()
 		}
 	}
 }
+template void LensProfile<double>::update_ellipticity_meta_parameters();
 
-void LensProfile::update_center_from_pixsrc_coords(QLens* qlensptr)
+template<typename QScalar>
+void LensProfile<QScalar>::update_center_from_pixsrc_coords(QLens* qlensptr)
 {
 	double xcs, ycs;
 	//cout << "lens " << lens_number << " finding approx source size... " << endl;
@@ -1814,9 +2002,11 @@ void LensProfile::update_center_from_pixsrc_coords(QLens* qlensptr)
 	x_center = xcs + xc_prime;
 	y_center = ycs + yc_prime;
 }
+template void LensProfile<double>::update_center_from_pixsrc_coords(QLens* qlensptr);
 
 
-void LensProfile::update_angle_meta_params()
+template<typename QScalar>
+void LensProfile<QScalar>::update_angle_meta_params()
 {
 	// trig functions are stored to save computation time later
 	costheta = cos(theta);
@@ -1828,24 +2018,30 @@ void LensProfile::update_angle_meta_params()
 		costheta = -tmp;
 	}
 }
+template void LensProfile<double>::update_angle_meta_params();
 
-void LensProfile::rotate(double &x, double &y)
+template<typename QScalar>
+void LensProfile<QScalar>::rotate(double &x, double &y)
 {
 	// perform a counter-clockwise rotation of the coordinate system to match the coordinate system of the rotated galaxy
 	double xp = x*costheta + y*sintheta;
 	y = -x*sintheta + y*costheta;
 	x = xp;
 }
+template void LensProfile<double>::rotate(double &x, double &y);
 
-void LensProfile::rotate_back(double &x, double &y)
+template<typename QScalar>
+void LensProfile<QScalar>::rotate_back(double &x, double &y)
 {
 	// perform a clockwise rotation of the coordinate system to transform from the coordinate system of the rotated galaxy
 	double xp = x*costheta - y*sintheta;
 	y = x*sintheta + y*costheta;
 	x = xp;
 }
+template void LensProfile<double>::rotate_back(double &x, double &y);
 
-double LensProfile::kappa(double x, double y)
+template<typename QScalar>
+double LensProfile<QScalar>::kappa(double x, double y)
 {
 	// switch to coordinate system centered on lens profile
 	x -= x_center;
@@ -1867,8 +2063,10 @@ double LensProfile::kappa(double x, double y)
 	if (n_fourier_modes > 0) ans += kappa_from_fourier_modes(x,y);
 	return ans;
 }
+template double LensProfile<double>::kappa(double x, double y);
 
-void LensProfile::deflection(double x, double y, lensvector& def)
+template<typename QScalar>
+void LensProfile<QScalar>::deflection(double x, double y, lensvector<double>& def)
 {
 	// switch to coordinate system centered on lens profile
 	//if (x*0.0 != 0.0) die("x is fucked going into def function");
@@ -1892,8 +2090,10 @@ void LensProfile::deflection(double x, double y, lensvector& def)
 	}
 	if ((!ellipticity_gradient) and (sintheta != 0)) def.rotate_back(costheta,sintheta);
 }
+template void LensProfile<double>::deflection(double x, double y, lensvector<double>& def);
 
-void LensProfile::hessian(double x, double y, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::hessian(double x, double y, lensmatrix<double>& hess)
 {
 	// switch to coordinate system centered on lens profile
 	x -= x_center;
@@ -1907,14 +2107,14 @@ void LensProfile::hessian(double x, double y, lensmatrix& hess)
 	if (n_fourier_modes > 0) {
 		add_hessian_from_fourier_modes(x, y, hess);
 		/*
-		lensmatrix hesscheck;
+		lensmatrix<double> hesscheck;
 		hesscheck[0][0] = 0;
 		hesscheck[1][1] = 0;
 		hesscheck[0][1] = 0;
 		hesscheck[1][0] = 0;
 		add_hessian_from_fourier_modes(x, y, hesscheck);
 		// Replace with actual formulae!!!
-		lensvector def0, defdx, defdy, defmdx, defmdy;
+		lensvector<double> def0, defdx, defdy, defmdx, defmdy;
 		def0[0] = 0;
 		def0[1] = 0;
 		defdx[0] = 0;
@@ -1954,8 +2154,10 @@ void LensProfile::hessian(double x, double y, lensmatrix& hess)
 	//double kapcheck2 = kappa(x,y);
 	//if (abs(kapcheck-kapcheck2) > 1e-3*abs(kapcheck2)) cout << "KAPPACHECK: " << kapcheck << " " << kapcheck2 << endl;
 }
+template void LensProfile<double>::hessian(double x, double y, lensmatrix<double>& hess);
 
-double LensProfile::potential(double x, double y)
+template<typename QScalar>
+double LensProfile<QScalar>::potential(double x, double y)
 {
 	// switch to coordinate system centered on lens profile
 	x -= x_center;
@@ -1967,8 +2169,10 @@ double LensProfile::potential(double x, double y)
 		return (this->*potptr)(x,y);
 	}
 }
+template double LensProfile<double>::potential(double x, double y);
 
-void LensProfile::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector& def, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	// switch to coordinate system centered on lens profile
 	x -= x_center;
@@ -1994,16 +2198,20 @@ void LensProfile::kappa_and_potential_derivatives(double x, double y, double& ka
 	//if (abs(kapcheck-kapcheck2) > 1e-3*abs(kapcheck2)) cout << "KAPPACHECK: " << kapcheck << " " << kapcheck2 << "(x=" << x << "," << y << ")" << endl;
 
 }
+template void LensProfile<double>::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess);
 
-void LensProfile::potential_derivatives(double x, double y, lensvector& def, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	double kap;
 	kappa_and_potential_derivatives(x,y,kap,def,hess); // including kappa has no noticeable extra overhead
 }
+template void LensProfile<double>::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
 
-void LensProfile::deflection_and_hessian_together(const double x, const double y, lensvector &def, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::deflection_and_hessian_together(const double x, const double y, lensvector<double> &def, lensmatrix<double>& hess)
 {
-	if ((defptr == &LensProfile::deflection_numerical) and (hessptr == &LensProfile::hessian_numerical)) {
+	if ((defptr == &LensProfile<QScalar>::deflection_numerical) and (hessptr == &LensProfile::hessian_numerical)) {
 		if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
 			def[0]=0;
 			def[1]=0;
@@ -2019,10 +2227,11 @@ void LensProfile::deflection_and_hessian_together(const double x, const double y
 		(this->*hessptr)(x,y,hess);
 	}
 	// /************ ADD HESSIAN FROM FOURIER MODES ************/ 
-
 }
+template void LensProfile<double>::deflection_and_hessian_together(const double x, const double y, lensvector<double> &def, lensmatrix<double>& hess);
 
-void LensProfile::kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap)
+template<typename QScalar>
+void LensProfile<QScalar>::kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap)
 {
 	if (lenstype==SHEET) {
 		kap = kappa_rsq(0); // since R doesn't matter for a mass sheet
@@ -2037,8 +2246,10 @@ void LensProfile::kappa_and_dkappa_dR(double x, double y, double& kap, double& d
 		dkap = 2*ell_radius_sq*kappa_rsq_deriv(ell_radius_sq)/sqrt(x*x+y*y); // this gives dkappa_dR where R is simply radius, not elliptical radius
 	}
 }
+template void LensProfile<double>::kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap);
 
-void LensProfile::add_fourier_mode(const int m_in, const double amp_in, const double amp2_in, const bool vary1, const bool vary2)
+template<typename QScalar>
+void LensProfile<QScalar>::add_fourier_mode(const int m_in, const double amp_in, const double amp2_in, const bool vary1, const bool vary2)
 {
 	n_fourier_modes++;
 	fourier_mode_mvals.resize(n_fourier_modes);
@@ -2074,8 +2285,10 @@ void LensProfile::add_fourier_mode(const int m_in, const double amp_in, const do
 	assign_param_pointers();
 	assign_paramnames();
 }
+template void LensProfile<double>::add_fourier_mode(const int m_in, const double amp_in, const double amp2_in, const bool vary1, const bool vary2);
 
-void LensProfile::remove_fourier_modes()
+template<typename QScalar>
+void LensProfile<QScalar>::remove_fourier_modes()
 {
 	// This is not well-written, because it assumes the last parameters (before the zlens parameter) are fourier modes. Have it actually check the parameter name
 	// before deleting it. FIX!
@@ -2105,8 +2318,10 @@ void LensProfile::remove_fourier_modes()
 	param = new double*[n_params];
 	assign_param_pointers();
 }
+template void LensProfile<double>::remove_fourier_modes();
 
-bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad)
+template<typename QScalar>
+bool LensProfile<QScalar>::enable_ellipticity_gradient(Vector<double>& efunc_params, const int egrad_mode, const int n_bspline_coefs, const Vector<double>& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad)
 {
 	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for lenses that have elliptical isodensity contours
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
@@ -2177,8 +2392,10 @@ bool LensProfile::enable_ellipticity_gradient(dvector& efunc_params, const int e
 	}
 	return true;
 }
+template bool LensProfile<double>::enable_ellipticity_gradient(Vector<double>& efunc_params, const int egrad_mode, const int n_bspline_coefs, const Vector<double>& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad);
 
-void LensProfile::reset_anchor_lists()
+template<typename QScalar>
+void LensProfile<QScalar>::reset_anchor_lists()
 {
 	if (anchor_parameter_to_lens != NULL) delete[] anchor_parameter_to_lens;
 	if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
@@ -2189,7 +2406,7 @@ void LensProfile::reset_anchor_lists()
 	if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
 
 	anchor_parameter_to_lens = new bool[n_params];
-	parameter_anchor_lens = new LensProfile*[n_params];
+	parameter_anchor_lens = new LensProfile<double>*[n_params];
 	anchor_parameter_to_source = new bool[n_params];
 	parameter_anchor_source = new SB_Profile*[n_params];
 	parameter_anchor_paramnum = new int[n_params];
@@ -2208,8 +2425,10 @@ void LensProfile::reset_anchor_lists()
 	}
 	at_least_one_param_anchored = false;
 }
+template void LensProfile<double>::reset_anchor_lists();
 
-bool LensProfile::enable_fourier_gradient(dvector& fourier_params, const dvector& knots, const bool copy_vary_settings, boolvector* vary_fgrad)
+template<typename QScalar>
+bool LensProfile<QScalar>::enable_fourier_gradient(Vector<double>& fourier_params, const Vector<double>& knots, const bool copy_vary_settings, boolvector* vary_fgrad)
 {
 	if (ellipticity_mode==-1) return false; // Fourier gradient only works for lenses that have elliptical isodensity contours
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
@@ -2277,8 +2496,10 @@ bool LensProfile::enable_fourier_gradient(dvector& fourier_params, const dvector
 	}
 	return true;
 }
+template bool LensProfile<double>::enable_fourier_gradient(Vector<double>& fourier_params, const Vector<double>& knots, const bool copy_vary_settings, boolvector* vary_fgrad);
 
-void LensProfile::find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f)
+template<typename QScalar>
+void LensProfile<QScalar>::find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f)
 {
 	qi = lensprofile_nparams;
 	qf = qi + n_egrad_params[0];
@@ -2293,24 +2514,32 @@ void LensProfile::find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& thet
 		}
 	}
 }
+template void LensProfile<double>::find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
 
-bool LensProfile::has_kapavg_profile()
+template<typename QScalar>
+bool LensProfile<QScalar>::has_kapavg_profile()
 {
 	if (this->kapavgptr_rsq_spherical==NULL) return false;
 	else return true;
 }
+template bool LensProfile<double>::has_kapavg_profile();
 
-double LensProfile::kappa_avg_r(const double r)
+template<typename QScalar>
+double LensProfile<QScalar>::kappa_avg_r(const double r)
 {
 	return (this->*kapavgptr_rsq_spherical)(r*r);
 }
+template double LensProfile<double>::kappa_avg_r(const double r);
 
-double LensProfile::einstein_radius_root(const double r)
+template<typename QScalar>
+double LensProfile<QScalar>::einstein_radius_root(const double r)
 {
 	return (zfac*(this->*kapavgptr_rsq_spherical)(r*r)-1);
 }
+template double LensProfile<double>::einstein_radius_root(const double r);
 
-void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)
+template<typename QScalar>
+void LensProfile<QScalar>::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)
 {
 	if (kapavgptr_rsq_spherical==NULL) {
 		re_major_axis=0;
@@ -2325,14 +2554,17 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 		return;
 	}
 	double (Brent::*bptr)(const double);
-	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
+	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile<QScalar>::einstein_radius_root);
 	re_major_axis = f_major_axis * BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
 	if (ellipticity_mode != -1) re_average = re_major_axis * sqrt(q);
 	else re_average = re_major_axis; // not an elliptical lens, so q has no meaning
 	zfac = 1.0;
 }
+template void LensProfile<double>::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 
-double LensProfile::einstein_radius() {
+template<typename QScalar>
+double LensProfile<QScalar>::einstein_radius()
+{
 	// uses qlens->reference_zfactors, and give re_average only
 	double re_maj, re_avg;
 	if (qlens==NULL) {
@@ -2342,8 +2574,10 @@ double LensProfile::einstein_radius() {
 	get_einstein_radius(re_maj,re_avg,qlens->reference_zfactors[qlens->lens_redshift_idx[lens_number]]);
 	return re_avg;
 }
+template double LensProfile<double>::einstein_radius();
 
-double LensProfile::get_xi_parameter(const double zfactor)
+template<typename QScalar>
+double LensProfile<QScalar>::get_xi_parameter(const double zfactor)
 {
 	double r_ein, re_sq, kappa_e, dkappa_e;
 	if (kapavgptr_rsq_spherical==NULL) {
@@ -2355,7 +2589,7 @@ double LensProfile::get_xi_parameter(const double zfactor)
 		return -1e30;
 	}
 	double (Brent::*bptr)(const double);
-	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
+	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile<QScalar>::einstein_radius_root);
 	r_ein = BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
 
 	re_sq = r_ein*r_ein;
@@ -2364,8 +2598,10 @@ double LensProfile::get_xi_parameter(const double zfactor)
 	zfac = 1.0;
 	return (2*r_ein*dkappa_e/(1-kappa_e)+2);
 }
+template double LensProfile<double>::get_xi_parameter(const double zfactor);
 
-double LensProfile::kappa_rsq_deriv(const double rsq)
+template<typename QScalar>
+double LensProfile<QScalar>::kappa_rsq_deriv(const double rsq)
 {
 	static const double precision = 1e-6;
 	double temp, h;
@@ -2374,16 +2610,20 @@ double LensProfile::kappa_rsq_deriv(const double rsq)
 	h = temp - rsq; // silly NR trick
 	return (kappa_rsq((rsq+h)/(qx_parameter*qx_parameter))-kappa_rsq((rsq-h)/(qx_parameter*qx_parameter)))/(2*h);
 }
+template double LensProfile<double>::kappa_rsq_deriv(const double rsq);
 
-double LensProfile::get_inner_logslope()
+template<typename QScalar>
+double LensProfile<QScalar>::get_inner_logslope()
 {
 	static const double h = 1e-6;
 	double dlogh;
 	dlogh = log(h);
 	return ((log(kappa_rsq(SQR(exp(2*dlogh)))) - log(kappa_rsq(h*h))) / dlogh);
 }
+template double LensProfile<double>::get_inner_logslope();
 
-void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, ofstream &kout, ofstream &kdout)
+template<typename QScalar>
+void LensProfile<QScalar>::plot_kappa_profile(double rmin, double rmax, int steps, ofstream &kout, ofstream &kdout)
 {
 	double r, rstep;
 	rstep = pow(rmax/rmin, 1.0/steps);
@@ -2404,8 +2644,10 @@ void LensProfile::plot_kappa_profile(double rmin, double rmax, int steps, ofstre
 		if (kdout.is_open()) kdout << r << " " << 2*r*kappa_rsq_deriv(rsq) << endl;
 	}
 }
+template void LensProfile<double>::plot_kappa_profile(double rmin, double rmax, int steps, ofstream &kout, ofstream &kdout);
 
-void LensProfile::plot_kappa_profile(const int n_rvals, double* rvals, double* kapvals, double* kapavgvals)
+template<typename QScalar>
+void LensProfile<QScalar>::plot_kappa_profile(const int n_rvals, double* rvals, double* kapvals, double* kapavgvals)
 {
 	double rsq;
 	for (int i=0; i < n_rvals; i++) {
@@ -2415,61 +2657,76 @@ void LensProfile::plot_kappa_profile(const int n_rvals, double* rvals, double* k
 		else kapavgvals[i] = (this->*kapavgptr_rsq_spherical)(rsq);
 	}
 }
+template void LensProfile<double>::plot_kappa_profile(const int n_rvals, double* rvals, double* kapvals, double* kapavgvals);
 
-void LensProfile::deflection_spherical_default(const double x, const double y, lensvector& def)
+template<typename QScalar>
+void LensProfile<QScalar>::deflection_spherical_default(const double x, const double y, lensvector<double>& def)
 {
 	double kapavg = (this->*kapavgptr_rsq_spherical)(x*x+y*y);
 
 	def[0] = kapavg*x;
 	def[1] = kapavg*y;
 }
+template void LensProfile<double>::deflection_spherical_default(const double x, const double y, lensvector<double>& def);
 
-double LensProfile::potential_spherical_default(const double x, const double y)
+template<typename QScalar>
+double LensProfile<QScalar>::potential_spherical_default(const double x, const double y)
 {
 	return (this->*potptr_rsq_spherical)(x*x+y*y); // ellipticity is put into the potential in this mode
 }
+template double LensProfile<double>::potential_spherical_default(const double x, const double y);
 
-double LensProfile::kapavg_spherical_generic(const double rsq)
+template<typename QScalar>
+double LensProfile<QScalar>::kapavg_spherical_generic(const double rsq)
 {
 	return (this->*kapavgptr_rsq_spherical)(rsq);
 }
+template double LensProfile<double>::kapavg_spherical_generic(const double rsq);
 
-double LensProfile::kappa_avg_spherical_integral(const double rsq)
+template<typename QScalar>
+double LensProfile<QScalar>::kappa_avg_spherical_integral(const double rsq)
 {
 	double ans;
 	if (integral_method == Romberg_Integration)
 	{
 		double (Romberg::*sptr)(const double);
-		sptr = static_cast<double (Romberg::*)(const double)> (&LensProfile::mass_enclosed_spherical_integrand);
+		sptr = static_cast<double (Romberg::*)(const double)> (&LensProfile<QScalar>::mass_enclosed_spherical_integrand);
 		ans = (2.0/rsq)*romberg_open(sptr, 0, sqrt(rsq), integral_tolerance, 5);
 	}
 	else if (integral_method == Gaussian_Quadrature)
 	{
 		double (GaussianIntegral::*sptr)(double);
-		sptr = static_cast<double (GaussianIntegral::*)(double)> (&LensProfile::mass_enclosed_spherical_integrand);
+		sptr = static_cast<double (GaussianIntegral::*)(double)> (&LensProfile<QScalar>::mass_enclosed_spherical_integrand);
 		ans = (2.0/rsq)*NIntegrate(sptr,0,sqrt(rsq));
 	}
 	else if (integral_method == Gauss_Patterson_Quadrature)
 	{
 		double (GaussPatterson::*sptr)(double);
-		sptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile::mass_enclosed_spherical_integrand);
+		sptr = static_cast<double (GaussPatterson::*)(double)> (&LensProfile<QScalar>::mass_enclosed_spherical_integrand);
 		bool converged;
 		ans = (2.0/rsq)*AdaptiveQuad(sptr,0,sqrt(rsq),converged);
 	}
 	else if (integral_method == Fejer_Quadrature)
 	{
 		double (ClenshawCurtis::*sptr)(double);
-		sptr = static_cast<double (ClenshawCurtis::*)(double)> (&LensProfile::mass_enclosed_spherical_integrand);
+		sptr = static_cast<double (ClenshawCurtis::*)(double)> (&LensProfile<QScalar>::mass_enclosed_spherical_integrand);
 		bool converged;
 		ans = (2.0/rsq)*AdaptiveQuadCC(sptr,0,sqrt(rsq),converged);
 	}
 	else die("unknown integral method");
 	return ans;
 }
+template double LensProfile<double>::kappa_avg_spherical_integral(const double rsq);
 
-double LensProfile::mass_enclosed_spherical_integrand(const double u) { return u*kappa_rsq(u*u); } // actually mass enclosed / (2*pi*sigma_cr)
+template<typename QScalar>
+double LensProfile<QScalar>::mass_enclosed_spherical_integrand(const double u)
+{
+	return u*kappa_rsq(u*u);
+} // actually mass enclosed / (2*pi*sigma_cr)
+template double LensProfile<double>::mass_enclosed_spherical_integrand(const double u);
 
-void LensProfile::hessian_spherical_default(const double x, const double y, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::hessian_spherical_default(const double x, const double y, lensmatrix<double>& hess)
 {
 	double rsq, kappa_avg, r_dfdr;
 	rsq = x*x+y*y;
@@ -2481,8 +2738,10 @@ void LensProfile::hessian_spherical_default(const double x, const double y, lens
 	hess[0][1] = x*y*r_dfdr;
 	hess[1][0] = hess[0][1];
 }
+template void LensProfile<double>::hessian_spherical_default(const double x, const double y, lensmatrix<double>& hess);
 
-double LensProfile::potential_spherical_integral(const double rsq)
+template<typename QScalar>
+double LensProfile<QScalar>::potential_spherical_integral(const double rsq)
 {
 	bool converged;
 	double ans;
@@ -2490,8 +2749,10 @@ double LensProfile::potential_spherical_integral(const double rsq)
 	ans = 0.5*lens_integral.i_integral(converged);
 	return ans;
 }
+template double LensProfile<double>::potential_spherical_integral(const double rsq);
 
-void LensProfile::deflection_numerical(const double x, const double y, lensvector& def)
+template<typename QScalar>
+void LensProfile<QScalar>::deflection_numerical(const double x, const double y, lensvector<double>& def)
 {
 	if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
 		// return zero deflection, since there's a risk of getting 'NaN' if the center of the profile is evaluated
@@ -2549,8 +2810,10 @@ void LensProfile::deflection_numerical(const double x, const double y, lensvecto
 		*/
 	}
 }
+template void LensProfile<double>::deflection_numerical(const double x, const double y, lensvector<double>& def);
 
-void LensProfile::hessian_numerical(const double x, const double y, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::hessian_numerical(const double x, const double y, lensmatrix<double>& hess)
 {
 	if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
 		hess[0][0]=0;
@@ -2663,8 +2926,10 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix& 
 	hess[1][0] = hess[0][1];
 
 }
+template void LensProfile<double>::hessian_numerical(const double x, const double y, lensmatrix<double>& hess);
 
-void LensProfile::deflection_and_hessian_numerical(const double x, const double y, lensvector& def, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::deflection_and_hessian_numerical(const double x, const double y, lensvector<double>& def, lensmatrix<double>& hess)
 {
 	// You should make it save the kappa and kappa' values evaluated during J0 and K0 so it doesn't have to evaluate them again for
 	// J1, K1 and K2 (unless higher order quadrature is required for convergence, in which case extra evaluations must be done). This
@@ -2756,8 +3021,10 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 	}
 	hess[1][0] = hess[0][1];
 }
+template void LensProfile<double>::deflection_and_hessian_numerical(const double x, const double y, lensvector<double>& def, lensmatrix<double>& hess);
 
-inline void LensProfile::warn_if_not_converged(const bool& converged, const double &x, const double &y)
+template<typename QScalar>
+void LensProfile<QScalar>::warn_if_not_converged(const bool& converged, const double &x, const double &y)
 {
 	if ((!converged) and (integration_warnings)) {
 		if ((integral_method==Gauss_Patterson_Quadrature) or (integral_method==Fejer_Quadrature)) {
@@ -2785,8 +3052,10 @@ inline void LensProfile::warn_if_not_converged(const bool& converged, const doub
 		}
 	}
 }
+template void LensProfile<double>::warn_if_not_converged(const bool& converged, const double &x, const double &y);
 
-double LensProfile::potential_numerical(const double x, const double y)
+template<typename QScalar>
+double LensProfile<QScalar>::potential_numerical(const double x, const double y)
 {
 	if ((!ellipticity_gradient) and (this->kapavgptr_rsq_spherical==NULL)) return 0.0; // for the integral without egrad, cannot calculate potential without a spherical deflection defined
 	bool converged;
@@ -2801,8 +3070,11 @@ double LensProfile::potential_numerical(const double x, const double y)
 	}
 	return ans;
 }
+template double LensProfile<double>::potential_numerical(const double x, const double y);
 
-bool LensProfile::core_present() { return false; }
+template<typename QScalar>
+bool LensProfile<QScalar>::core_present() { return false; }
+template bool LensProfile<double>::core_present();
 
 /*************************** Integrals when ellipticity is constant ***************************/
 
@@ -3543,7 +3815,8 @@ void LensIntegral::jprime_integrand_egrad_mult(const double xi, double* jint)
 }
 
 
-bool LensProfile::output_plates(const int n_plates)
+template<typename QScalar>
+bool LensProfile<QScalar>::output_plates(const int n_plates)
 {
 	if (!ellipticity_gradient) return false;
 	double xi, xistep, eps, theta, qval, kap;
@@ -3559,11 +3832,13 @@ bool LensProfile::output_plates(const int n_plates)
 	}
 	return true;
 }
+template bool LensProfile<double>::output_plates(const int n_plates);
 
 
 /************************************* Fourier perturbation algorithms *************************************/
 
-double LensProfile::kappa_from_fourier_modes(const double x, const double y)
+template<typename QScalar>
+double LensProfile<QScalar>::kappa_from_fourier_modes(const double x, const double y)
 {
 	double fourier_factor = 0;
 	double rsq = x*x + y*y;
@@ -3613,8 +3888,10 @@ double LensProfile::kappa_from_fourier_modes(const double x, const double y)
 	//NOTE: this doesn't work for emode=3 (can't use kappa_rsq_deriv). extend later?
 	return 2*fourier_factor*kappa_rsq_deriv(rsq)*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
 }
+template double LensProfile<double>::kappa_from_fourier_modes(const double x, const double y);
 
-void LensProfile::add_deflection_from_fourier_modes(const double x, const double y, lensvector& def)
+template<typename QScalar>
+void LensProfile<QScalar>::add_deflection_from_fourier_modes(const double x, const double y, lensvector<double>& def)
 {
 	if (n_fourier_modes==0) return;
 	double r = sqrt(x*x+y*y);
@@ -3672,8 +3949,10 @@ void LensProfile::add_deflection_from_fourier_modes(const double x, const double
 		delete[] lens_integral.sinamps;
 	}
 }
+template void LensProfile<double>::add_deflection_from_fourier_modes(const double x, const double y, lensvector<double>& def);
 
-void LensProfile::add_hessian_from_fourier_modes(const double x, const double y, lensmatrix& hess)
+template<typename QScalar>
+void LensProfile<QScalar>::add_hessian_from_fourier_modes(const double x, const double y, lensmatrix<double>& hess)
 {
 	if (n_fourier_modes==0) return;
 	double r = sqrt(x*x+y*y);
@@ -3748,8 +4027,10 @@ void LensProfile::add_hessian_from_fourier_modes(const double x, const double y,
 		delete[] lens_integral.sinamps;
 	}
 }
+template void LensProfile<double>::add_hessian_from_fourier_modes(const double x, const double y, lensmatrix<double>& hess);
 
-void LensProfile::spline_fourier_mode_integrals(const double rmin, const double rmax)
+template<typename QScalar>
+void LensProfile<QScalar>::spline_fourier_mode_integrals(const double rmin, const double rmax)
 {
 	if (n_fourier_modes==0) return;
 	if (!fourier_integrals_splined) {
@@ -3848,6 +4129,7 @@ void LensProfile::spline_fourier_mode_integrals(const double rmin, const double 
 	delete[] lens_integral;
 	fourier_integrals_splined = true;
 }
+template void LensProfile<double>::spline_fourier_mode_integrals(const double rmin, const double rmax);
 
 void LensIntegral::calculate_fourier_integrals(const int mval_in, const int fourier_ival_in, const bool cosmode_in, const double rval, double& ileft, double& iright, bool &converged)
 {
@@ -4258,7 +4540,8 @@ void LensIntegral::FejerIntegrate(void (LensIntegral::*func)(const double, doubl
 
 /*********************************** Functions for printing lens/parameter information *************************************/
 
-void LensProfile::print_parameters()
+template<typename QScalar>
+void LensProfile<QScalar>::print_parameters()
 {
 	ios_base::fmtflags current_flags = cout.flags();
 	if (current_flags & ios::scientific) cout << resetiosflags(ios::scientific);
@@ -4295,8 +4578,10 @@ void LensProfile::print_parameters()
 	cout << endl;
 	if (current_flags & ios::scientific) cout << setiosflags(ios::scientific);
 }
+template void LensProfile<double>::print_parameters();
 
-string LensProfile::mkstring_doub(const double db)
+template<typename QScalar>
+string LensProfile<QScalar>::mkstring_doub(const double db)
 {
 	stringstream dstr;
 	string dstring;
@@ -4304,8 +4589,10 @@ string LensProfile::mkstring_doub(const double db)
 	dstr >> dstring;
 	return dstring;
 }
+template string LensProfile<double>::mkstring_doub(const double db);
 
-string LensProfile::mkstring_int(const int i)
+template<typename QScalar>
+string LensProfile<QScalar>::mkstring_int(const int i)
 {
 	stringstream istr;
 	string istring;
@@ -4313,9 +4600,11 @@ string LensProfile::mkstring_int(const int i)
 	istr >> istring;
 	return istring;
 }
+template string LensProfile<double>::mkstring_int(const int i);
 
 // This function is used by the Python wrapper
-string LensProfile::get_parameters_string()
+template<typename QScalar>
+string LensProfile<QScalar>::get_parameters_string()
 {
 	string paramstring = "";
 	if (lens_number != -1) paramstring += mkstring_int(lens_number) + ". ";
@@ -4340,8 +4629,10 @@ string LensProfile::get_parameters_string()
 	if (aux_paramname != "") paramstring += " (" + aux_paramname + "=" + mkstring_doub(aux_param) + ")";
 	return paramstring;
 }
+template string LensProfile<double>::get_parameters_string();
 
-void LensProfile::print_vary_parameters()
+template<typename QScalar>
+void LensProfile<QScalar>::print_vary_parameters()
 {
 	ios_base::fmtflags current_flags = cout.flags();
 	if (current_flags & ios::scientific) cout << resetiosflags(ios::scientific);
@@ -4396,5 +4687,6 @@ void LensProfile::print_vary_parameters()
 	}
 	if (current_flags & ios::scientific) cout << setiosflags(ios::scientific);
 }
+template void LensProfile<double>::print_vary_parameters();
 
 

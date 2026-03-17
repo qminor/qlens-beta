@@ -30,7 +30,7 @@ using namespace std;
 #define Complain(errmsg) do { if (mpi_id==0) cerr << "Error: " << errmsg << endl; if ((read_from_file) and (quit_after_error)) die(); goto next_line; } while (false) // the while(false) is a trick to make the macro syntax behave like a function
 #define display_switch(setting) ((setting) ? "on" : "off")
 #define set_switch(setting,setword) do { if ((setword)=="on") setting = true; else if ((setword)=="off") setting = false; else Complain("invalid argument; must specify 'on' or 'off'"); } while (false)
-#define LENS_AXIS_DIR ((LensProfile::orient_major_axis_north==true) ? "y-axis" : "x-axis")
+#define LENS_AXIS_DIR ((LensProfile<double>::orient_major_axis_north==true) ? "y-axis" : "x-axis")
 
 void QLens::process_commands(bool read_file)
 {
@@ -502,7 +502,7 @@ void QLens::process_commands(bool read_file)
 								"perturber that generates the shear (counterclockwise, in degrees) about the center (defaults=0).\n"
 								"Note that theta is the angle of the perturber (assuming tangential shear), *NOT* the angle of the shear\n"
 								"itself (which differs from theta by 90 degrees).\n\n"
-								"Also note that for theta=0, the shear term has a phase shift " << ((LensProfile::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
+								"Also note that for theta=0, the shear term has a phase shift " << ((LensProfile<double>::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
 								"the the perturber along the " << LENS_AXIS_DIR << ". However, the direction (x vs. y) for theta=0\n"
 								"can be toggled by setting major_axis_along_y on/off.\n";
 					else if (words[2]=="deflection")
@@ -523,7 +523,7 @@ void QLens::process_commands(bool read_file)
 							"term with m=2, n=2 is equivalent to an external shear term with A_m = gamma.\n\n"
 							"Keep in mind that the order of the multiple (m) cannot be varied as a parameter, so only the\n"
 							"remaining five parameters can be varied during a fit or using the 'lens update' command.\n"
-							"Note that for theta=0, the sinusoidal term has a phase shift " << ((LensProfile::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
+							"Note that for theta=0, the sinusoidal term has a phase shift " << ((LensProfile<double>::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
 							"the major axis of the lens along the " << LENS_AXIS_DIR << " (the direction of the major axis (x/y) for theta=0\n"
 							"is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="kmpole")
@@ -539,7 +539,7 @@ void QLens::process_commands(bool read_file)
 							"An important caveat is that beta cannot be larger than 2-m (or else deflections become infinite).\n"
 							"Also keep in mind that the order of the multiple (m) cannot be varied as a parameter, so only the\n"
 							"remaining five parameters can be varied during a fit or using the 'lens update' command.\n"
-							"Note that for theta=0, the sinusoidal term has a phase shift " << ((LensProfile::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
+							"Note that for theta=0, the sinusoidal term has a phase shift " << ((LensProfile<double>::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
 							"the major axis of the lens along the " << LENS_AXIS_DIR << " (the direction of the major axis (x/y) for theta=0\n"
 							"is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="dpie")
@@ -861,6 +861,7 @@ void QLens::process_commands(bool read_file)
 								"sampling routine. Available fit methods are:\n\n"
 								"simplex -- minimize chi-square using downhill simplex method (+ optional simulated annealing)\n"
 								"powell -- minimize chi-square using Powell's method\n"
+								"bfgs -- minimize chi-square using BFGS method (downhill variable metric; uses gradient)\n"
 								"nest -- basic nested sampling\n"
 								"twalk -- T-Walk MCMC algorithm\n"
 #ifdef USE_POLYCHORD
@@ -2246,7 +2247,7 @@ void QLens::process_commands(bool read_file)
 					cout << "wl_shearfac = " << wl_shear_factor << endl;
 					cout << endl;
 					cout << "\033[4mOptimization and Monte Carlo sampler settings\033[0m\n";
-					cout << "fit method: " << ((fitmethod==POWELL) ? "powell\n" : (fitmethod==SIMPLEX) ? "simplex\n" : (fitmethod==NESTED_SAMPLING) ? "nest\n" : (fitmethod==TWALK) ? "twalk" : (fitmethod==POLYCHORD) ? "polychord" : (fitmethod==MULTINEST) ? "multinest" : "Unknown fitmethod\n");
+					cout << "fit method: " << ((fitmethod==POWELL) ? "powell\n" : (fitmethod==SIMPLEX) ? "simplex\n" : (fitmethod==BFGS) ? "bfgs\n" : (fitmethod==NESTED_SAMPLING) ? "nest\n" : (fitmethod==TWALK) ? "twalk" : (fitmethod==POLYCHORD) ? "polychord" : (fitmethod==MULTINEST) ? "multinest" : "Unknown fitmethod\n");
 					cout << "fit source_mode: " << ((source_fit_mode==Point_Source) ? "ptsource\n" : (source_fit_mode==Cartesian_Source) ? "cartesian\n" : (source_fit_mode==Delaunay_Source) ? "delaunay" : (source_fit_mode==Parameterized_Source) ? "sbprofile\n" : (source_fit_mode==Shapelet_Source) ? "shapelet\n" : "unknown\n");
 					cout << "nrepeat = " << n_repeats << endl;
 					cout << "find_errors: " << display_switch(calculate_parameter_errors) << endl;
@@ -2289,15 +2290,15 @@ void QLens::process_commands(bool read_file)
 				}
 				if (show_lens_settings) {
 					cout << "\033[4mLens model settings\033[0m\n";
-					cout << "emode = " << LensProfile::default_ellipticity_mode << endl;
+					cout << "emode = " << LensProfile<double>::default_ellipticity_mode << endl;
 					cout << "pmode = " << default_parameter_mode << endl;
 					cout << "primary_lens = " << primary_lens_number << ((auto_set_primary_lens==true) ? " (auto)": "") << endl;
-					if (LensProfile::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration" << endl;
-					else if (LensProfile::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature" << endl;
-					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << LensProfile::Gauss_NN << " points" << endl;
-					cout << "integral_tolerance = " << LensProfile::integral_tolerance << endl;
-					cout << "major_axis_along_y: " << display_switch(LensProfile::orient_major_axis_north) << endl;
-					cout << "ellipticity_components: " << display_switch(LensProfile::use_ellipticity_components) << endl;
+					if (LensProfile<double>::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration" << endl;
+					else if (LensProfile<double>::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature" << endl;
+					else if (LensProfile<double>::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << LensProfile<double>::Gauss_NN << " points" << endl;
+					cout << "integral_tolerance = " << LensProfile<double>::integral_tolerance << endl;
+					cout << "major_axis_along_y: " << display_switch(LensProfile<double>::orient_major_axis_north) << endl;
+					cout << "ellipticity_components: " << display_switch(LensProfile<double>::use_ellipticity_components) << endl;
 					cout << "shear_components: " << display_switch(Shear::use_shear_component_params) << endl;
 					cout << "tab_rmin = " << tabulate_rmin << endl;
 					cout << "tab_r_N = " << tabulate_logr_N << endl;
@@ -2369,11 +2370,11 @@ void QLens::process_commands(bool read_file)
 				set_integration_method(method);
 			} else if (nwords==1) {
 				if (mpi_id==0) {
-					method = LensProfile::integral_method;
-					if (method==Romberg_Integration) cout << "Integration method: Romberg integration with tolerance = " << LensProfile::integral_tolerance << endl;
-					else if (method==Gauss_Patterson_Quadrature) cout << "Integration method: Gauss-Patterson quadrature with tolerance = " << LensProfile::integral_tolerance << endl;
-					else if (method==Fejer_Quadrature) cout << "Integration method: Fejer quadrature with tolerance = " << LensProfile::integral_tolerance << endl;
-					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << LensProfile::Gauss_NN << " points" << endl;
+					method = LensProfile<double>::integral_method;
+					if (method==Romberg_Integration) cout << "Integration method: Romberg integration with tolerance = " << LensProfile<double>::integral_tolerance << endl;
+					else if (method==Gauss_Patterson_Quadrature) cout << "Integration method: Gauss-Patterson quadrature with tolerance = " << LensProfile<double>::integral_tolerance << endl;
+					else if (method==Fejer_Quadrature) cout << "Integration method: Fejer quadrature with tolerance = " << LensProfile<double>::integral_tolerance << endl;
+					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << LensProfile<double>::Gauss_NN << " points" << endl;
 				}
 			} else Complain("no more than two arguments are allowed for 'integral_method' (method,npoints)");
 		}
@@ -3114,7 +3115,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sple");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7; // this does not include redshift
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3224,7 +3225,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model dpie");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3432,7 +3433,7 @@ void QLens::process_commands(bool read_file)
 					}
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
-						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
+						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile<double> class; then you can check for different parametrizations directly
 					}
 					if ((pmode < 0) or (pmode > 2)) Complain("parameter mode must be either 0, 1, or 2");
 
@@ -3481,7 +3482,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model nfw");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3564,7 +3565,7 @@ void QLens::process_commands(bool read_file)
 					int tmode = 1;
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
-						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
+						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile<double> class; then you can check for different parametrizations directly
 					}
 					if ((pmode < 0) or (pmode > 4)) Complain("parameter mode must be either 0, 1, 2, 3, or 4");
 
@@ -3644,7 +3645,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model tnfw");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3768,7 +3769,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						//if (p3 >= p2) Complain("core radius (p3) must be smaller than scale radius (p2) for model cnfw");
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3867,7 +3868,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model expdisk");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3962,7 +3963,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model tophat");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4064,7 +4065,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[index] >> yc)) Complain("invalid y-center parameter for model kspline");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4159,7 +4160,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model hern");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4288,7 +4289,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[10] >> yc)) Complain("invalid y-center parameter for model corecusp");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 9;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4474,7 +4475,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sersic");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4582,7 +4583,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[11] >> yc)) Complain("invalid y-center parameter for model dsersic");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 10;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4687,7 +4688,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[9] >> yc)) Complain("invalid y-center parameter for model csersic");
 							}
 						}
-						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 8;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -5189,7 +5190,7 @@ void QLens::process_commands(bool read_file)
 					else Complain("testmodel requires 4 parameters (q, theta, xc, yc)");
 				}
 				else Complain("unrecognized lens model");
-				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST))) {
+				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS))) {
 					int nvary=0;
 					bool enter_limits = true;
 					if (vary_zl) nparams_to_vary++;
@@ -5250,7 +5251,7 @@ void QLens::process_commands(bool read_file)
 						shear_vary_flags_extended[2] = false;
 						lens_list[nlens-1]->vary_parameters(shear_vary_flags_extended);
 					}
-					if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST))) {
+					if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS))) {
 						int nvary_shear=0;
 						for (int i=0; i < 2; i++) if (shear_vary_flags[i]==true) nvary_shear++;
 						if (nvary_shear==0) continue;
@@ -5855,7 +5856,7 @@ void QLens::process_commands(bool read_file)
 				}
 				bool include_lims = false;
 				double minpar=-1e30, maxpar=1e30;
-				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST))) {
+				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS))) {
 					include_lims = true;
 					if (mpi_id==0) cout << "Prior limits for mass parameter of spawned lens:" << endl;
 					if (read_command(false)==false) Complain("could not read prior limits for mass parameter of spawned lens");
@@ -6929,7 +6930,7 @@ void QLens::process_commands(bool read_file)
 				else Complain("spline requires at least 2 parameters (filename, q)");
 			}
 			else Complain("source model not recognized");
-			if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST))) {
+			if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS))) {
 				int nvary=0;
 				bool enter_limits = true;
 				for (int i=0; i < nparams_to_vary; i++) if (vary_flags[i]==true) nvary++;
@@ -7185,7 +7186,7 @@ void QLens::process_commands(bool read_file)
 							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified pixsrc");
 						}
 					}
-					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST)) {
+					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS)) {
 						nvary = srcgrids[pixsrcnum]->n_vary_params;
 						srcgrids[pixsrcnum]->get_varyflags(vary_flags);
 						if (nvary != 0) {
@@ -7505,7 +7506,7 @@ void QLens::process_commands(bool read_file)
 							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified pixlens");
 						}
 					}
-					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST)) {
+					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS)) {
 						nvary = lensgrids[pixlensnum]->n_vary_params;
 						lensgrids[pixlensnum]->get_varyflags(vary_flags);
 						if (nvary != 0) {
@@ -7711,7 +7712,7 @@ void QLens::process_commands(bool read_file)
 					vary_parameters = false;
 				}
 				else if (words[1]=="add") {
-					lensvector srcpt;
+					lensvector<double> srcpt;
 					if (nwords==2) {
 					srcpt[0] = 0; // add options to put in arguments for srcx, srcy
 					srcpt[1] = 0; // likewise
@@ -7758,7 +7759,7 @@ void QLens::process_commands(bool read_file)
 							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified ptsrc");
 						}
 					}
-					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST)) {
+					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS)) {
 						nvary = ptsrc_list[ptsrcnum]->n_vary_params;
 						ptsrc_list[ptsrcnum]->get_varyflags(vary_flags);
 						if (nvary != 0) {
@@ -7961,7 +7962,7 @@ void QLens::process_commands(bool read_file)
 							Complain("number of vary flags does not match number of parameters (" << nparams_to_vary << ") for specified psf");
 						}
 					}
-					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST)) {
+					if ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS)) {
 						nvary = psf_list[psfnum]->n_vary_params;
 						psf_list[psfnum]->get_varyflags(vary_flags);
 						if (nvary != 0) {
@@ -8001,6 +8002,7 @@ void QLens::process_commands(bool read_file)
 						if (mpi_id==0) {
 							if (fitmethod==POWELL) cout << "Fit method: powell" << endl;
 							else if (fitmethod==SIMPLEX) cout << "Fit method: simplex" << endl;
+							else if (fitmethod==BFGS) cout << "Fit method: bfgs" << endl;
 							else if (fitmethod==NESTED_SAMPLING) cout << "Fit method: nest" << endl;
 							else if (fitmethod==POLYCHORD) cout << "Fit method: polychord" << endl;
 							else if (fitmethod==MULTINEST) cout << "Fit method: multinest" << endl;
@@ -8013,6 +8015,7 @@ void QLens::process_commands(bool read_file)
 						if (!(ws[2] >> setword)) Complain("invalid argument to 'fit method' command; must specify valid fit method");
 						if (setword=="powell") set_fitmethod(POWELL);
 						else if (setword=="simplex") set_fitmethod(SIMPLEX);
+						else if (setword=="bfgs") set_fitmethod(BFGS);
 						else if (setword=="nest") set_fitmethod(NESTED_SAMPLING);
 						else if (setword=="twalk") set_fitmethod(TWALK);
 						else if (setword=="polychord") {
@@ -8603,6 +8606,7 @@ void QLens::process_commands(bool read_file)
 					bool old_error_setting;
 					if (fitmethod==POWELL) chi_square_fit_powell(show_errors);
 					else if (fitmethod==SIMPLEX) chi_square_fit_simplex(show_errors);
+					else if (fitmethod==BFGS) chi_square_fit_BFGS(show_errors);
 					else if (fitmethod==NESTED_SAMPLING) nested_sampling();
 					else if (fitmethod==POLYCHORD) polychord(resume,skip_run);
 					else if (fitmethod==MULTINEST) multinest(resume,skip_run);
@@ -9250,7 +9254,7 @@ void QLens::process_commands(bool read_file)
 				if (words[1]=="add") {
 					if (nwords < 4) Complain("At least two arguments are required for 'imgdata add' (x,y coordinates of source pt.)");
 					// later, add option to include flux of source or measurement errors as extra arguments
-					lensvector src;
+					lensvector<double> src;
 					if (!(ws[2] >> src[0])) Complain("invalid x-coordinate of source point");
 					if (!(ws[3] >> src[1])) Complain("invalid y-coordinate of source point");
 					if (add_simulated_point_image_data(src))
@@ -9377,7 +9381,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}	
 					if (nwords != 4) Complain("Two arguments are required for 'wldata add' (x,y coordinates of source pt., plus optional 'z=' arg)");
-					lensvector src;
+					lensvector<double> src;
 					if (!(ws[2] >> src[0])) Complain("invalid x-coordinate of source point");
 					if (!(ws[3] >> src[1])) Complain("invalid y-coordinate of source point");
 					stringstream idstr;
@@ -9660,7 +9664,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> x_in)) Complain("invalid source x-position");
 				if (!(ws[2] >> y_in)) Complain("invalid source y-position");
 				if (use_imgpt) {
-					lensvector pos,src;
+					lensvector<double> pos,src;
 					pos[0] = x_in;
 					pos[1] = y_in;
 					find_sourcept(pos,src,0,reference_zfactors,default_zsrc_beta_factors);
@@ -9711,7 +9715,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> x_in)) Complain("invalid x-position");
 				if (!(ws[2] >> y_in)) Complain("invalid y-position");
 				if (plot_from_imgpt) {
-					lensvector pos,src;
+					lensvector<double> pos,src;
 					pos[0] = x_in;
 					pos[1] = y_in;
 					find_sourcept(pos,src,0,reference_zfactors,default_zsrc_beta_factors);
@@ -11922,7 +11926,7 @@ void QLens::process_commands(bool read_file)
 		else if ((words[0]=="integral_warnings") or (words[0]=="integration_warnings"))
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Warnings for integration convergence: " << display_switch(LensProfile::integration_warnings) << endl;
+				if (mpi_id==0) cout << "Warnings for integration convergence: " << display_switch(LensProfile<double>::integration_warnings) << endl;
 			} else if (nwords==2) {
 				string setword;
 				bool warn;
@@ -11950,7 +11954,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="major_axis_along_y")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Orient major axis along y-direction: " << display_switch(LensProfile::orient_major_axis_north) << endl;
+				if (mpi_id==0) cout << "Orient major axis along y-direction: " << display_switch(LensProfile<double>::orient_major_axis_north) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'major_axis_along_y' command; must specify 'on' or 'off'");
 				bool orient_north;
@@ -12004,12 +12008,12 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="ellipticity_components")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Use ellipticity components instead of (q,theta): " << display_switch(LensProfile::use_ellipticity_components) << endl;
+				if (mpi_id==0) cout << "Use ellipticity components instead of (q,theta): " << display_switch(LensProfile<double>::use_ellipticity_components) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'ellipticity_components' command; must specify 'on' or 'off'");
 				bool use_comps;
 				set_switch(use_comps,setword);
-				LensProfile::use_ellipticity_components = use_comps;
+				LensProfile<double>::use_ellipticity_components = use_comps;
 				reassign_lensparam_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -12081,12 +12085,12 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="emode")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Ellipticity mode: " << LensProfile::default_ellipticity_mode << endl;
+				if (mpi_id==0) cout << "Ellipticity mode: " << LensProfile<double>::default_ellipticity_mode << endl;
 			} else if (nwords==2) {
 				int elmode;
 				if (!(ws[1] >> elmode)) Complain("invalid argument to 'emode' command; must specify 0, 1, 2, or 3");
 				if (elmode > 3) Complain("ellipticity mode cannot be greater than 3");
-				LensProfile::default_ellipticity_mode = elmode;
+				LensProfile<double>::default_ellipticity_mode = elmode;
 				SB_Profile::default_ellipticity_mode = elmode;
 			} else Complain("invalid number of arguments; must specify 0, 1, 2, or 3");
 		}
@@ -13143,7 +13147,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> itolerance)) Complain("invalid value for integral_tolerance");
 				set_integral_tolerance(itolerance);
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Tolerance for numerical integration = " << LensProfile::integral_tolerance << endl;
+				if (mpi_id==0) cout << "Tolerance for numerical integration = " << LensProfile<double>::integral_tolerance << endl;
 			} else Complain("must specify either zero or one argument for integral_tolerance");
 		}
 		else if (words[0]=="nrepeat")
@@ -15617,7 +15621,7 @@ void QLens::process_commands(bool read_file)
 			if (!(output_egrad_values_and_knots(srcnum,suffix))) Complain("could not output egrad values"); // crude but hopefully works well enough
 		} else if (words[0]=="output_coolest") {
 			if (nwords != 2) Complain("one argument required: filename to output to <filename>.json");
-			if (LensProfile::use_ellipticity_components) Complain("ellipticity components must be turned off before generating COOLEST json file");
+			if (LensProfile<double>::use_ellipticity_components) Complain("ellipticity components must be turned off before generating COOLEST json file");
 			if (Shear::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
@@ -15713,7 +15717,7 @@ void QLens::process_commands(bool read_file)
 			if (!(ws[1] >> nstart)) Complain("wtf?");
 			if (!(ws[2] >> x)) Complain("wtf?");
 			if (!(ws[3] >> y)) Complain("wtf?");
-			lensvector input_pt;
+			lensvector<double> input_pt;
 			input_pt[0]=x; input_pt[1]=y;
 			bool inside_triangle;
 			int trinum = delaunay_srcgrid->search_grid(nstart,input_pt,inside_triangle);
@@ -15853,7 +15857,7 @@ void QLens::process_commands(bool read_file)
 					ws[1] >> x;
 					ws[2] >> y;
 					ws[3] >> pix0;
-					lensvector pt(x,y);
+					lensvector<double> pt(x,y);
 					bool inside_triangle;
 					int tri = delaunay_srcgrids[0]->search_grid(pix0,pt,inside_triangle);
 					cout << "Triangle number = " << tri << endl;
@@ -15874,10 +15878,10 @@ void QLens::process_commands(bool read_file)
 			plot_sbmap("test",xvals,yvals,zvals);
 			delaunay_grid.plot_voronoi_grid("test");
 			// For natural neighbor interpolation, there is a failure mode when points near the border of the grid are nearly colinear, resulting in sliver triangles. (Demonstrate in lines above.) Weird circles appear in the interpolated SB. Fix this at some point!!
-			//lensvector pt(3.4,8.8);
+			//lensvector<double> pt(3.4,8.8);
 			//bool inside;
 			//int trinum = delaunay_grid.search_grid(0,pt,inside);
-			//lensvector vertex[3];
+			//lensvector<double> vertex[3];
 			//vertex[0] = delaunay_grid.triangle[trinum].vertex[0];
 			//vertex[1] = delaunay_grid.triangle[trinum].vertex[1];
 			//vertex[2] = delaunay_grid.triangle[trinum].vertex[2];

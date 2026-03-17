@@ -145,7 +145,7 @@ class MyIterator {
 };
 
 struct image {
-	lensvector pos;
+	lensvector<double> pos;
 	double mag, flux, td;
 	int parity;
 	//image() {}
@@ -169,7 +169,7 @@ struct PtImageSet
 	QLens* qlens_ptr;
 	double zsrc;
 	int n_images;
-	lensvector srcpos;
+	lensvector<double> srcpos;
 	bool include_time_delays;
 	std::vector<image> images;
 
@@ -181,7 +181,7 @@ struct PtImageSet
 		images.resize(n_images);
 		include_time_delays = false;
 	}
-	void copy_imageset(const lensvector& srcpos_in, const double zsrc_in, image* images_in, const int nimg);
+	void copy_imageset(const lensvector<double>& srcpos_in, const double zsrc_in, image* images_in, const int nimg);
 	string output_images_string(const bool use_sci);
 
 	//MyIterator<image> begin() {
@@ -219,8 +219,8 @@ class PointSource : public ModelParams
 	int zsrc_paramnum; // just to keep track of which parameter number is zsrc (set when constructor is called)
 
 	public:
-	lensvector pos;
-	lensvector shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
+	lensvector<double> pos;
+	lensvector<double> shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
 	double zsrc, srcflux;
 	bool include_shift;
 	int n_images;
@@ -229,8 +229,8 @@ class PointSource : public ModelParams
 	public:
 	PointSource() { qlens = NULL; }
 	PointSource(QLens* lens_in);
-	PointSource(QLens* lens_in, const lensvector& sourcept, const double zsrc_in);
-	PointSource(lensvector& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
+	PointSource(QLens* lens_in, const lensvector<double>& sourcept, const double zsrc_in);
+	PointSource(lensvector<double>& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
 		copy_imageset(src_in, zsrc_in, images_in, nimg, srcflux_in);
 	}
 	void setup_parameters(const bool initial_setup);
@@ -241,9 +241,9 @@ class PointSource : public ModelParams
 	void update_fitparams_in_qlens();
 	void set_vary_source_coords();
 	void copy_ptsrc_data(PointSource* ptsrc_in);
-	void copy_imageset(const lensvector& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0);
+	void copy_imageset(const lensvector<double>& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0);
 	void set_images(image* images_in, const int nimg);
-	void update_srcpos(const lensvector& srcpt);
+	void update_srcpos(const lensvector<double>& srcpt);
 	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*srcflux); else return -1; }
 	void print(bool include_time_delays = false, bool show_labels = true) { print_to_file(include_time_delays,show_labels,NULL,NULL); }
 	void print_to_file(bool include_time_delays, bool show_labels, std::ofstream* srcfile, std::ofstream* imgfile);
@@ -254,7 +254,7 @@ class Grid : private Brent
 {
 	private:
 	// this constructor is only used by the top-level Grid to initialize the lower-level grids, so it's private
-	Grid(lensvector** xij, const int& i, const int& j, const int& level_in, Grid* parent_ptr);
+	Grid(lensvector<double>** xij, const int& i, const int& j, const int& level_in, Grid* parent_ptr);
 
 	Grid*** cell;
 	static QLens* lens;
@@ -277,25 +277,25 @@ class Grid : private Brent
 
 	int u_N, w_N;
 	int level;
-	lensvector center_imgplane;
+	lensvector<double> center_imgplane;
 	double cell_area;
-	lensvector corner_pt[4];
+	lensvector<double> corner_pt[4];
 
 	// cell lensing properties
-	lensvector *corner_sourcept[4];
+	lensvector<double> *corner_sourcept[4];
 	double *corner_invmag[4];
 	double *corner_kappa[4];
 	bool allocated_corner[4];
 
 	// all functions in class Grid are contained in imgsrch.cpp
 	bool image_test(const int& thread);
-	void add_image_to_list(const lensvector& imgpos);
+	void add_image_to_list(const lensvector<double>& imgpos);
 
-	bool run_newton(lensvector& xroot, const int& thread);
-	inside_cell test_if_inside_sourceplane_cell(lensvector* point, const int& thread);
-	bool test_if_sourcept_inside_triangle(lensvector* point1, lensvector* point2, lensvector* point3, const int& thread);
-	bool test_if_inside_cell(const lensvector& point, const int& thread);
-	bool test_if_galaxy_nearby(const lensvector& point, const double& distsq);
+	bool run_newton(lensvector<double>& xroot, const int& thread);
+	inside_cell test_if_inside_sourceplane_cell(lensvector<double>* point, const int& thread);
+	bool test_if_sourcept_inside_triangle(lensvector<double>* point1, lensvector<double>* point2, lensvector<double>* point3, const int& thread);
+	bool test_if_inside_cell(const lensvector<double>& point, const int& thread);
+	bool test_if_galaxy_nearby(const lensvector<double>& point, const double& distsq);
 
 	void assign_lensing_properties(const int& thread);
 	void assign_subcell_lensing_properties_firstlevel();
@@ -303,14 +303,14 @@ class Grid : private Brent
 	void assign_subcell_lensing_properties(const int& thread);
 
 	// Used for image searching. If you ever multi-thread the image search, be careful about making these static variables
-	static lensvector *d1, *d2, *d3, *d4;
+	static lensvector<double> *d1, *d2, *d3, *d4;
 	static double *product1, *product2, *product3;
 	static int *maxlevs;
-	static lensvector ***xvals_threads;
+	static lensvector<double> ***xvals_threads;
 
 	// Used for finding critical curves within a grid cell
 	static int corner_positive_mag[4], corner_negative_mag[4];
-	static lensvector ccsearch_initial_pt, ccsearch_interval;
+	static lensvector<double> ccsearch_initial_pt, ccsearch_interval;
 
 	bool cc_inside;
 	bool singular_pt_inside;
@@ -320,7 +320,7 @@ class Grid : private Brent
 	void check_if_central_image_region();
 
 	static double ccroot_t;
-	static lensvector ccroot;
+	static lensvector<double> ccroot;
 	static double cclength1, cclength2, long_diagonal_length;
 	double invmag_along_diagonal(const double t);
 
@@ -340,22 +340,22 @@ class Grid : private Brent
 	bool split_cells(const int& thread);
 	void grid_search(const int& searchlevel, const int& thread);
 	void grid_search_firstlevel(const int& searchlevel);
-	edge_sourcept_status check_subgrid_neighbor_boundaries(const int& neighbor_direction, Grid* neighbor_subcell, lensvector& centerpt, const int& thread);
-	void set_grid_xvals(lensvector** xv, const int& i, const int& j);
+	edge_sourcept_status check_subgrid_neighbor_boundaries(const int& neighbor_direction, Grid* neighbor_subcell, lensvector<double>& centerpt, const int& thread);
+	void set_grid_xvals(lensvector<double>** xv, const int& i, const int& j);
 	void find_cell_area(const int& thread);
 	void assign_firstlevel_neighbors();
 	void assign_neighborhood();
 	void assign_all_neighbors();
 	void assign_level_neighbors(int neighbor_level);
 
-	bool LineSearch(lensvector& xold, double fold, lensvector& g, lensvector& p, lensvector& x, double& f, double stpmax, bool &check, const int& thread);
-	bool NewtonsMethod(lensvector& x, bool &check, const int& thread);
-	void SolveLinearEqs(lensmatrix&, lensvector&);
-	bool redundancy(const lensvector&, double &);
-	double max_component(const lensvector&);
+	bool LineSearch(lensvector<double>& xold, double fold, lensvector<double>& g, lensvector<double>& p, lensvector<double>& x, double& f, double stpmax, bool &check, const int& thread);
+	bool NewtonsMethod(lensvector<double>& x, bool &check, const int& thread);
+	void SolveLinearEqs(lensmatrix<double>&, lensvector<double>&);
+	bool redundancy(const lensvector<double>&, double &);
+	double max_component(const lensvector<double>&);
 
 	static const int max_iterations, max_step_length;
-	static lensvector *fvec;
+	static lensvector<double> *fvec;
 	static bool *newton_check;
 
 	// make these multithread-safe if you decide to multithread the image searching
@@ -368,7 +368,7 @@ public:
 	Grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double* zfactor_in, double** betafactor_in);
 	void redraw_grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double* zfactor_in, double** betafactor_in);
 	void redraw_grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double* zfactor_in, double** betafactor_in);
-	void reassign_coordinates(lensvector** xij, const int& i, const int& j, const int& level_in, Grid* parent_ptr);
+	void reassign_coordinates(lensvector<double>** xij, const int& i, const int& j, const int& level_in, Grid* parent_ptr);
 
 	static void set_splitting(int rs0, int ts0, int sl, int ccsl, double max_cs, bool neighbor_split);
 	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
@@ -380,8 +380,8 @@ public:
 	static double image_pos_accuracy;
 	image* tree_search();
 	static void set_lens(QLens* lensptr) { lens = lensptr; }
-	void subgrid_around_galaxies(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool* subgrid);
-	void subgrid_around_galaxies_iteration(lensvector* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_split, bool cc_neighbor_splitting, bool *subgrid);
+	void subgrid_around_galaxies(lensvector<double>* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool* subgrid);
+	void subgrid_around_galaxies_iteration(lensvector<double>* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_split, bool cc_neighbor_splitting, bool *subgrid);
 
 	void galsubgrid();
 	void store_critical_curve_pts();
@@ -404,7 +404,7 @@ struct WeakLensingData
 {
 	int n_sources;
 	string *id;
-	lensvector *pos;
+	lensvector<double> *pos;
 	double *reduced_shear1;
 	double *reduced_shear2;
 	double *sigma_shear1, *sigma_shear2;
@@ -412,7 +412,7 @@ struct WeakLensingData
 	WeakLensingData() { n_sources = 0; }
 	void input(const int &nn);
 	void input(const WeakLensingData& wl_in);
-	void add_source(const string id_in, lensvector& pos_in, const double g1_in, const double g2_in, const double g1_err_in, const double g2_err_in, const double zsrc_in);
+	void add_source(const string id_in, lensvector<double>& pos_in, const double g1_in, const double g2_in, const double g1_err_in, const double g2_err_in, const double zsrc_in);
 	void print_list(bool use_sci);
 	void write_to_file(string filename);
 	void clear();
@@ -451,8 +451,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 {
 	private:
 	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
-	static lensvector *defs, **defs_subtot, *defs_i, *xvals_i;
-	static lensmatrix *jacs, *hesses, **hesses_subtot, *hesses_i, *Amats_i;
+	static lensvector<double> *defs, **defs_subtot, *defs_i, *xvals_i;
+	static lensmatrix<double> *jacs, *hesses, **hesses_subtot, *hesses_i, *Amats_i;
 	static int *indxs;
 
 	double raw_chisq;
@@ -511,7 +511,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	DerivedParamList *dparam_list;
 
 	int nlens;
-	LensProfile** lens_list;
+	LensProfile<double>** lens_list;
 	LensList *lenslist;
 	int *lens_redshift_idx;
 
@@ -545,7 +545,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int* ptsrc_redshift_idx;
 	std::vector<int> ptsrc_redshift_groups;
 
-	lensvector source;
+	lensvector<double> source;
 	image *images_found;
 	ImageSystemType system_type;
 
@@ -704,9 +704,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	bool fits_format;
 	double default_data_pixel_size;
-	bool add_simulated_point_image_data(const lensvector &sourcept, const double srcflux = 1);
+	bool add_simulated_point_image_data(const lensvector<double> &sourcept, const double srcflux = 1);
 	bool add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
-	//bool add_fit_sourcept(const lensvector &sourcept, const double zsrc);
+	//bool add_fit_sourcept(const lensvector<double> &sourcept, const double zsrc);
 	void write_point_image_data(string filename);
 	bool load_point_image_data(string filename);
 	void sort_image_data_into_redshift_groups();
@@ -715,7 +715,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	//std::vector<PtImageDataSet> export_to_ImageDataSet(); // for the Python wrapper
 
 	bool load_weak_lensing_data(string filename);
-	void add_simulated_weak_lensing_data(const string id, lensvector &sourcept, const double zsrc);
+	void add_simulated_weak_lensing_data(const string id, lensvector<double> &sourcept, const double zsrc);
 	void add_weak_lensing_data_from_random_sources(const int num_sources, const double xmin, const double xmax, const double ymin, const double ymax, const double zmin, const double zmax, const double r_exclude);
 
 	bool read_data_line(std::ifstream& infile, std::vector<string>& datawords, int &n_datawords);
@@ -757,7 +757,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	string fit_output_dir;
 	bool auto_fit_output_dir;
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
-	enum FitMethod { POWELL, SIMPLEX, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
+	enum FitMethod { POWELL, SIMPLEX, BFGS, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
 	RegularizationMethod regularization_method;
 	enum MatrixFormat { DENSE, DENSE_FMATRIX, SPARSE } matrix_format; // DENSE_FMATRIX means Lmatrix is stored as sparse even after PSF convolution, but Fmatrix is stored as dense
 	enum SparseSolver { CG_Method, MUMPS, UMFPACK, EIGEN_SPARSE, NONE } sparse_solver;
@@ -794,13 +794,13 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool subgrid_only_near_data_images; // if on, only subgrids around perturber galaxies if a data image is within the determined subgridding radius (dangerous if not all images are observed!)
 	static double galsubgrid_radius_fraction, galsubgrid_min_cellsize_fraction;
 	static int galsubgrid_cc_splittings;
-	void subgrid_around_perturber_galaxies(lensvector* centers, double *einstein_radii, const int ihost, double* zfacs, double** betafacs, const int redshift_index);
+	void subgrid_around_perturber_galaxies(lensvector<double>* centers, double *einstein_radii, const int ihost, double* zfacs, double** betafacs, const int redshift_index);
 	//void calculate_critical_curve_perturbation_radius(int lens_number, bool verbose, double &rmax, double& mass_enclosed);
 	bool calculate_critical_curve_perturbation_radius_numerical(int lens_number, bool verbose, double& rmax_numerical, double& avg_sigma_enclosed, double& mass_enclosed,  double &rmax_perturber_lensplane, double &mass_enclosed_lensing, bool subtract_unperturbed = false);
 	void get_perturber_avgkappa_scaled(int lens_number, const double r0, double &avgkap_scaled, double &menc_scaled, double &avgkap0, bool verbal = false);
-	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector& pos, double *zfacs, double **betafacs);
-	void find_effective_lens_centers_and_einstein_radii(lensvector *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal);
-	bool calculate_perturber_subgridding_scale(int lens_number, bool* perturber_list, int host_lens_number, bool verbose, lensvector& center, double& rmax_numerical, double *zfacs, double **betafacs);
+	bool find_lensed_position_of_background_perturber(bool verbal, int lens_number, lensvector<double>& pos, double *zfacs, double **betafacs);
+	void find_effective_lens_centers_and_einstein_radii(lensvector<double> *centers, double *einstein_radii, int& i_primary, double *zfacs, double **betafacs, bool verbal);
+	bool calculate_perturber_subgridding_scale(int lens_number, bool* perturber_list, int host_lens_number, bool verbose, lensvector<double>& center, double& rmax_numerical, double *zfacs, double **betafacs);
 	double galaxy_subgridding_scale_equation(const double r);
 
 	double subhalo_perturbation_radius_equation(const double r);
@@ -812,7 +812,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int perturber_lens_number;
 	bool* linked_perturber_list;
 	double theta_shear;
-	lensvector perturber_center;
+	lensvector<double> perturber_center;
 	int subgridding_parity_at_center;
 	bool subgridding_include_perturber;
 	double *subgridding_zfacs;
@@ -829,13 +829,13 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double average_def_residual(const int x_N, const int y_N, const int perturber_lensnum, double z, double mvir); // testing Despali et al (2017) procedure
 
 	struct critical_curve {
-		std::vector<lensvector> cc_pts;
-		std::vector<lensvector> caustic_pts;
+		std::vector<lensvector<double>> cc_pts;
+		std::vector<lensvector<double>> caustic_pts;
 		std::vector<double> length_of_cell; // just to make sure the critical curves are being separated out properly
 	};
 
-	std::vector<lensvector> critical_curve_pts;
-	std::vector<lensvector> caustic_pts;
+	std::vector<lensvector<double>> critical_curve_pts;
+	std::vector<lensvector<double>> caustic_pts;
 	std::vector<double> length_of_cc_cell;
 	std::vector<critical_curve> sorted_critical_curve;
 	std::vector<int> npoints_sorted_critical_curve;
@@ -843,7 +843,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void sort_critical_curves();
 	bool sorted_critical_curves;
 	static bool auto_store_cc_points;
-	std::vector<lensvector> singular_pts;
+	std::vector<lensvector<double>> singular_pts;
 	int n_singular_points;
 
 	Vector<dvector> find_critical_curves(bool&);
@@ -1006,7 +1006,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	T tryfunc(const T);
 	void calculate_lumreg_srcpixel_weights(const int imggrid_i, const bool use_sbweights=false);
 	void calculate_distreg_srcpixel_weights(const int imggrid_i, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
-	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
+	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector<double> **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
 	void calculate_mag_srcpixel_weights(const int imggrid_i);
 
 	//void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
@@ -1060,7 +1060,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void count_MGE_amplitudes(int& n_mge_objects, int& n_gaussians, const int imggrid_i=-1);
 	void clear_pixel_matrices();
 	void clear_sparse_lensing_matrices();
-	double find_sbprofile_surface_brightness(lensvector &pt);
+	double find_sbprofile_surface_brightness(lensvector<double> &pt);
 	void construct_Lmatrix(const int imggrid_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
 	void construct_Lmatrix_supersampled(const int imggrid_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
 	void PSF_convolution_Lmatrix(const int imggrid_i, bool verbal = false);
@@ -1149,7 +1149,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	friend class ImagePixelGrid;
 	friend struct ImageData;
 	friend struct DerivedParam;
-	friend class LensProfile;
+	friend class LensProfile<double>;
 	friend class SB_Profile;
 	friend class MGE;
 	friend class Cosmology;
@@ -1173,49 +1173,49 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	double kappa(const double& x, const double& y, double* zfacs, double** betafacs);
 	double potential(const double&, const double&, double* zfacs, double** betafacs);
-	void deflection(const double&, const double&, lensvector&, const int &thread, double* zfacs, double** betafacs);
+	void deflection(const double&, const double&, lensvector<double>&, const int &thread, double* zfacs, double** betafacs);
 	void deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs);
-	void map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector& xi, const int &thread, double* zfacs, double** betafacs);
-	void hessian(const double&, const double&, lensmatrix&, const int &thread, double* zfacs, double** betafacs);
-	void hessian_weak(const double&, const double&, lensmatrix&, const int &thread, double* zfacs);
-	void find_sourcept(const lensvector& x, lensvector& srcpt, const int &thread, double* zfacs, double** betafacs);
-	void find_sourcept(const lensvector& x, double& srcpt_x, double& srcpt_y, const int &thread, double* zfacs, double** betafacs);
-	void kappa_inverse_mag_sourcept(const lensvector& x, lensvector& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs);
-	void sourcept_jacobian(const lensvector& xvec, lensvector& srcpt, lensmatrix& jac_tot, const int &thread, double* zfacs, double** betafacs);
+	void map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector<double>& xi, const int &thread, double* zfacs, double** betafacs);
+	void hessian(const double&, const double&, lensmatrix<double>&, const int &thread, double* zfacs, double** betafacs);
+	void hessian_weak(const double&, const double&, lensmatrix<double>&, const int &thread, double* zfacs);
+	void find_sourcept(const lensvector<double>& x, lensvector<double>& srcpt, const int &thread, double* zfacs, double** betafacs);
+	void find_sourcept(const lensvector<double>& x, double& srcpt_x, double& srcpt_y, const int &thread, double* zfacs, double** betafacs);
+	void kappa_inverse_mag_sourcept(const lensvector<double>& x, lensvector<double>& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs);
+	void sourcept_jacobian(const lensvector<double>& xvec, lensvector<double>& srcpt, lensmatrix<double>& jac_tot, const int &thread, double* zfacs, double** betafacs);
 
-	// versions of the above functions that use lensvector for (x,y) coordinates
-	double kappa(const lensvector &x, double* zfacs, double** betafacs) { return kappa(x[0], x[1], zfacs, betafacs); }
-	double potential(const lensvector& x, double* zfacs, double** betafacs) { return potential(x[0],x[1], zfacs, betafacs); }
-	void deflection(const lensvector& x, lensvector& def, double* zfacs, double** betafacs) { deflection(x[0], x[1], def, 0, zfacs, betafacs); }
-	void hessian(const lensvector& x, lensmatrix& hess, double* zfacs, double** betafacs) { hessian(x[0], x[1], hess, 0, zfacs, betafacs); }
+	// versions of the above functions that use lensvector<double> for (x,y) coordinates
+	double kappa(const lensvector<double> &x, double* zfacs, double** betafacs) { return kappa(x[0], x[1], zfacs, betafacs); }
+	double potential(const lensvector<double>& x, double* zfacs, double** betafacs) { return potential(x[0],x[1], zfacs, betafacs); }
+	void deflection(const lensvector<double>& x, lensvector<double>& def, double* zfacs, double** betafacs) { deflection(x[0], x[1], def, 0, zfacs, betafacs); }
+	void hessian(const lensvector<double>& x, lensmatrix<double>& hess, double* zfacs, double** betafacs) { hessian(x[0], x[1], hess, 0, zfacs, betafacs); }
 
-	double inverse_magnification(const lensvector&, const int &thread, double* zfacs, double** betafacs);
-	double magnification(const lensvector &x, const int &thread, double* zfacs, double** betafacs);
-	double shear(const lensvector &x, const int &thread, double* zfacs, double** betafacs);
-	void shear(const lensvector &x, double& shear_tot, double& angle, const int &thread, double* zfacs, double** betafacs);
-	void reduced_shear_components(const lensvector &x, double& g1, double& g2, const int &thread, double* zfacs);
+	double inverse_magnification(const lensvector<double>&, const int &thread, double* zfacs, double** betafacs);
+	double magnification(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs);
+	double shear(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs);
+	void shear(const lensvector<double> &x, double& shear_tot, double& angle, const int &thread, double* zfacs, double** betafacs);
+	void reduced_shear_components(const lensvector<double> &x, double& g1, double& g2, const int &thread, double* zfacs);
 
 	// non-multithreaded versions
-	//double inverse_magnification(const lensvector& x, double* zfacs) { return inverse_magnification(x,0,zfacs); }
-	//double magnification(const lensvector &x, double* zfacs) { return magnification(x,0,zfacs); }
-	//double shear(const lensvector &x, double* zfacs) { return shear(x,0,zfacs); }
-	//void shear(const lensvector &x, double& shear_tot, double& angle, double* zfacs) { return shear(x,shear_tot,angle,0,zfacs); }
+	//double inverse_magnification(const lensvector<double>& x, double* zfacs) { return inverse_magnification(x,0,zfacs); }
+	//double magnification(const lensvector<double> &x, double* zfacs) { return magnification(x,0,zfacs); }
+	//double shear(const lensvector<double> &x, double* zfacs) { return shear(x,0,zfacs); }
+	//void shear(const lensvector<double> &x, double& shear_tot, double& angle, double* zfacs) { return shear(x,shear_tot,angle,0,zfacs); }
 
-	void hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix& hess_tot, const int& thread, double* zfacs, double** betafacs);
-	double magnification_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
-	double inverse_magnification_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
-	double shear_exclude(const lensvector &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
-	void shear_exclude(const lensvector &x, double& shear, double& angle, bool* exclude, const int& thread, double* zfacs, double** betafacs);
-	double kappa_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs);
+	void hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix<double>& hess_tot, const int& thread, double* zfacs, double** betafacs);
+	double magnification_exclude(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	double inverse_magnification_exclude(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	double shear_exclude(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	void shear_exclude(const lensvector<double> &x, double& shear, double& angle, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	double kappa_exclude(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs);
 	void deflection_exclude(const double& x, const double& y, bool* exclude, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs);
 
 	// non-multithreaded versions
-	void hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix& hess_tot, double* zfacs, double** betafacs) { hessian_exclude(x,y,exclude,hess_tot,0,zfacs,betafacs); }
-	double magnification_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs) { return magnification_exclude(x,exclude,0,zfacs,betafacs); }
-	double inverse_magnification_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs) { return inverse_magnification_exclude(x,exclude,0,zfacs,betafacs); }
-	double shear_exclude(const lensvector &x, bool* exclude, double* zfacs, double** betafacs) { return shear_exclude(x,exclude,0,zfacs,betafacs); }
-	void shear_exclude(const lensvector &x, double &shear, double &angle, bool* exclude, double* zfacs, double** betafacs) { shear_exclude(x,shear,angle,exclude,0,zfacs,betafacs); }
-	void deflection_exclude(const lensvector& x, bool* exclude, lensvector& def, double* zfacs, double** betafacs) { deflection_exclude(x[0], x[1], exclude, def[0], def[1], 0, zfacs, betafacs); }
+	void hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix<double>& hess_tot, double* zfacs, double** betafacs) { hessian_exclude(x,y,exclude,hess_tot,0,zfacs,betafacs); }
+	double magnification_exclude(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs) { return magnification_exclude(x,exclude,0,zfacs,betafacs); }
+	double inverse_magnification_exclude(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs) { return inverse_magnification_exclude(x,exclude,0,zfacs,betafacs); }
+	double shear_exclude(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs) { return shear_exclude(x,exclude,0,zfacs,betafacs); }
+	void shear_exclude(const lensvector<double> &x, double &shear, double &angle, bool* exclude, double* zfacs, double** betafacs) { shear_exclude(x,shear,angle,exclude,0,zfacs,betafacs); }
+	void deflection_exclude(const lensvector<double>& x, bool* exclude, lensvector<double>& def, double* zfacs, double** betafacs) { deflection_exclude(x[0], x[1], exclude, def[0], def[1], 0, zfacs, betafacs); }
 
 	void record_singular_points(double *zfacs);
 
@@ -1279,14 +1279,14 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 		return plot_images_single_source(x_source,y_source,verbal,imgfile,srcfile,flux,show_labels);
 	}
 	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, std::ofstream& imgfile, std::ofstream& srcfile, const double flux = -1.0, const bool show_labels = false);
-	image* get_images(const lensvector &source_in, int &n_images) { return get_images(source_in, n_images, true); }
-	image* get_images(const lensvector &source_in, int &n_images, bool verbal);
+	image* get_images(const lensvector<double> &source_in, int &n_images) { return get_images(source_in, n_images, true); }
+	image* get_images(const lensvector<double> &source_in, int &n_images, bool verbal);
 	bool get_imageset(const double src_x, const double src_y, PtImageSet& image_set, bool verbal = true); // used by Python wrapper
 
 	bool get_fit_imagesets(int min_dataset = 0, int max_dataset = -1, bool verbal = true); // defined in imgsrch.cpp
 
 	bool plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal);
-	void lens_equation(const lensvector&, lensvector&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
+	void lens_equation(const lensvector<double>&, lensvector<double>&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
 	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
@@ -1302,7 +1302,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
 	bool spawn_lens_from_source_object(const int src_number, const double zl, const double zs, const int pmode, const bool vary_mass_parameter, const bool include_limits, const double mass_param_lower, const double mass_param_upper);
 
-	void add_lens(LensProfile *new_lens);
+	void add_lens(LensProfile<double> *new_lens);
 	void add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx);
 	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);
 	void update_lens_redshift_data();
@@ -1393,7 +1393,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void reassign_lensparam_pointers_and_names(const bool reset_plimits = true);
 	void reassign_sb_param_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
-	LensProfile* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }
+	LensProfile<double>* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
 	bool output_mass_r(const double r_arcsec, const int lensnum, const bool use_kpc);
@@ -1425,7 +1425,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void remove_pixellated_lens(int pixlens_number);
 	void print_pixellated_lens_list(bool show_vary_params);
 
-	void add_point_source(const double zsrc, const lensvector& sourcept, const bool vary_source_coords = true);
+	void add_point_source(const double zsrc, const lensvector<double>& sourcept, const bool vary_source_coords = true);
 	void remove_point_source(int src_number);
 	void print_point_source_list(bool show_vary_params);
 
@@ -1465,6 +1465,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	public:
 	double chi_square_fit_simplex(const bool show_parameter_errors);
 	double chi_square_fit_powell(const bool show_parameter_errors);
+	double chi_square_fit_BFGS(const bool show_parameter_errors);
 	void output_fit_results(double* fitparams, dvector& stepsizes, const double chisq_bestfit, const int chisq_evals, const bool calculate_parameter_errors);
 	void nested_sampling();
 	void polychord(const bool resume_previous, const bool skip_run);
@@ -1515,15 +1516,15 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool initialize_fitmodel(const bool running_fit_in);
 	double update_model(const double* params);
 	void update_prior_limits(const double* lower, const double* upper, const bool* changed_limits);
-	double fitmodel_loglike_point_source(double* params);
-	double fitmodel_loglike_extended_source(double* params);
+	double fitmodel_loglike_point_source(const double* params);
+	double fitmodel_loglike_extended_source(const double* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
 	double LogLikeVecFunc(std::vector<double>& params) { return (this->*LogLikePtr)(params.data()); }
 	void DerivedParamFunc(double *params, double *dparams) { (this->*DerivedParamPtr)(params,dparams); }
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);
 	double get_lens_parameter_using_pmode(const int lensnum, const int paramnum, const int pmode = -1);
-	double loglike_point_source(double* params);
+	double loglike_point_source(const double* params);
 	bool calculate_fisher_matrix(double *params, const dvector &stepsizes);
 	double loglike_deriv(const dvector &params, const int index, const double step);
 	void output_bestfit_model(const bool show_parameter_errors = false);
@@ -1588,7 +1589,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	double chisq_weak_lensing();
 	bool output_weak_lensing_chivals(string filename);
 	void find_analytic_srcflux(double *bestfit_flux);
-	void find_analytic_srcpos(lensvector *beta_i);
+	void find_analytic_srcpos(lensvector<double> *beta_i);
 	void set_analytic_sourcepts(const bool verbal = false);
 	void set_analytic_srcflux(const bool verbal = false);
 	double get_avg_ptsrc_dist(const int ptsrc_i);
@@ -1615,7 +1616,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void set_integral_tolerance(const double& acc);
 	void set_integral_convergence_warnings(const bool warn);
 
-	void set_integration_method(IntegrationMethod method) { LensProfile::integral_method = method; }
+	void set_integration_method(IntegrationMethod method) { LensProfile<double>::integral_method = method; }
 	void set_analytic_bestfit_src(const bool setting) {
 		use_analytic_bestfit_src = setting;
 		bool vary_source_coords = (use_analytic_bestfit_src) ? false : true;
@@ -1721,8 +1722,14 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void set_mumps_mpi(const bool &setting) { use_mumps_subcomm = setting; }
 	double get_imgpixel_nsplit() { return default_imgpixel_nsplit; }
 	void set_imgpixel_nsplit(const int nsplit_in);
-	void set_fitmethod(FitMethod fitmethod_in)
+	bool set_fitmethod(FitMethod fitmethod_in)
 	{
+#ifndef USE_EIGEN
+		if (fitmethod_in==BFGS) {
+			warn("cannot set fit method to 'bfgs' unless qlens is compiled with the Eigen library");
+		}
+		return false;
+#endif
 		fitmethod = fitmethod_in;
 		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(false);
@@ -1735,6 +1742,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 			for (int i=0; i < n_sb; i++) sb_list[i]->set_include_limits(true);
 			for (int i=0; i < n_pixellated_src; i++) srcgrids[i]->set_include_limits(true);
 		}
+		return true;
 	}
 	void transform_cube(double* params, double* Cube);
 	bool get_einstein_radius(int lens_number, double& re_major_axis, double& re_average);
@@ -1765,19 +1773,19 @@ class LensList
 	public:
 	QLens* qlens;
 	int nlens;
-	LensProfile** lenslistptr;
+	LensProfile<double>** lenslistptr;
 	LensList(QLens* qlens_in) { lenslistptr = NULL; qlens = qlens_in; nlens = 0; }
-	void input_ptr(LensProfile** ptr_in, const int nlens_in) { lenslistptr = ptr_in; nlens = nlens_in; }
+	void input_ptr(LensProfile<double>** ptr_in, const int nlens_in) { lenslistptr = ptr_in; nlens = nlens_in; }
 	void clear_ptr() { lenslistptr = NULL; nlens = 0; }
 	void print() {
 		qlens->print_lens_list(true);
 	}
-	void add_lens(LensProfile* lens_in) {
+	void add_lens(LensProfile<double>* lens_in) {
 		qlens->add_lens(lens_in);
 	}
-	void add_lens_extshear(LensProfile* lens_in, Shear* extshear) {
+	void add_lens_extshear(LensProfile<double>* lens_in, Shear* extshear) {
 		qlens->add_lens(lens_in);
-		qlens->add_lens((LensProfile*) extshear);
+		qlens->add_lens((LensProfile<double>*) extshear);
 		  lenslistptr[nlens-1]->anchor_center_to_lens(nlens-2);
 	}
 	bool clear(const int min_loc=-1, const int max_loc=-1) {
@@ -1802,13 +1810,13 @@ class LensList
 		lenslistptr[lens_num1]->anchor_center_to_lens(lens_num2);
 		return true;
 	}
-	MyIterator<LensProfile*> begin() {
-		return MyIterator<LensProfile*>(lenslistptr);
+	MyIterator<LensProfile<double>*> begin() {
+		return MyIterator<LensProfile<double>*>(lenslistptr);
 	}
-	MyIterator<LensProfile*> end() {
-		return MyIterator<LensProfile*>(lenslistptr+nlens);
+	MyIterator<LensProfile<double>*> end() {
+		return MyIterator<LensProfile<double>*>(lenslistptr+nlens);
 	}
-	LensProfile* operator[](size_t i) { return lenslistptr[i]; }
+	LensProfile<double>* operator[](size_t i) { return lenslistptr[i]; }
 };
 
 class SourceList
@@ -1915,7 +1923,7 @@ class PtSrcList
 	}
 	void input_ptr(PointSource** ptr_in, const int n_ptsrc_in) { ptsrclist_ptr = ptr_in; n_ptsrc = n_ptsrc_in; }
 	void clear_ptr() { ptsrclist_ptr = NULL; n_ptsrc = 0; }
-	void add_ptsrc(const double zsrc, const lensvector &sourcept, const bool vary_source_coords = false) {
+	void add_ptsrc(const double zsrc, const lensvector<double> &sourcept, const bool vary_source_coords = false) {
 		qlens->add_point_source(zsrc,sourcept,vary_source_coords);
 	}
 	bool clear(const int min_loc=-1, const int max_loc=-1) {
@@ -2001,7 +2009,7 @@ class PointImageData
 		images.resize(n_images);
 	}
 
-	//lensvector *pos;
+	//lensvector<double> *pos;
 	//double *flux;
 	//double *time_delays;
 	//double *sigma_pos, *sigma_f, *sigma_t;
@@ -2014,7 +2022,7 @@ class PointImageData
 	void input(const PointImageData& imgs_in);
 	//void input(const int &nn, image* images, const double sigma_pos_in, const double sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays);
 	void input(const int &nn, image* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, const bool include_time_delays, const double zsrc);
-	void add_image(lensvector& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in);
+	void add_image(lensvector<double>& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in);
 	//string mkstring_doub(const double db, const bool use_sci);
 	//string mkstring_int(const int i);
 	string output_data_string(const bool print_errors, const bool use_sci);
@@ -2045,7 +2053,7 @@ class PtImgDataList
 		qlens->write_point_image_data(filename);
 	}
 
-	bool add_ptimgdata(const lensvector &sourcept, const double srcflux) {
+	bool add_ptimgdata(const lensvector<double> &sourcept, const double srcflux) {
 		return (qlens->add_simulated_point_image_data(sourcept, srcflux));
 	}
 

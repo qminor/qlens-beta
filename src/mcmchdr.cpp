@@ -112,14 +112,14 @@ void UCMC::SetNDerivedParams(const int nder)
 	dparam_list = new double[NDerivedParams];
 }
 
-double UCMC::LogLike(double *ain) {return 0.0;}
+double UCMC::LogLike(const double *ain) {return 0.0;}
 
-double UCMC::LogPrior(double *ain) {return 0.0;}
+double UCMC::LogPrior(const double *ain) {return 0.0;}
 
 double UCMC::DLogLike(double *a, const int i)
 {
 	double h = 0.002;
-	double tempp = Ridders(static_cast<double (Derivative::*)(double *)> (&UCMC::LogLike), a, i, h);
+	double tempp = Ridders(static_cast<double (Derivative::*)(const double *)> (&UCMC::LogLike), a, i, h);
 	return tempp;
 }
 

@@ -15,6 +15,7 @@
 #include <map>
 
 struct ImageData;
+template <typename Scalar>
 class LensProfile;
 class PointSource;
 class QLens;
@@ -24,7 +25,7 @@ enum SB_ProfileName { SB_SPLINE, GAUSSIAN, SERSIC, CORE_SERSIC, CORED_SERSIC, DO
 class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 {
 	friend class QLens;
-	friend class LensProfile;
+	friend class LensProfile<double>;
 	friend class SersicLens;
 	friend class DoubleSersicLens;
 	friend class Cored_SersicLens;
@@ -63,14 +64,14 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	std::vector<std::string> paramnames;
 	std::vector<std::string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;
-	dvector penalty_upper_limits, penalty_lower_limits;
-	dvector stepsizes;
+	Vector<double> penalty_upper_limits, penalty_lower_limits;
+	Vector<double> stepsizes;
 	bool include_limits;
-	dvector lower_limits, upper_limits;
+	Vector<double> lower_limits, upper_limits;
 
 	int n_fourier_modes; // Number of Fourier mode perturbations to elliptical isophotes (zero by default)
 	ivector fourier_mode_mvals, fourier_mode_paramnum;
-	dvector fourier_mode_cosamp, fourier_mode_sinamp;
+	Vector<double> fourier_mode_cosamp, fourier_mode_sinamp;
 
 	void set_nparams(const int &n_params_in, const bool resize = false);
 	void reset_anchor_lists();
@@ -114,7 +115,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	bool is_lensed; // Can be a lensed source, or a galaxy in the lens plane
 	bool zoom_subgridding; // Useful if pixels are large compared to profile--subgrids to prevent undersampling
 	bool center_anchored_to_lens, center_anchored_to_source, center_anchored_to_ptsrc;
-	LensProfile* center_anchor_lens;
+	LensProfile<double>* center_anchor_lens;
 	SB_Profile* center_anchor_source;
 	PointSource* center_anchor_ptsrc;
 	SB_Profile** parameter_anchor_source;
@@ -149,13 +150,13 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	}
 	void set_qlens_pointer(QLens* qlens_in) { qlens = qlens_in; }
 
-	void anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number);
+	void anchor_center_to_lens(LensProfile<double>** center_anchor_list, const int &center_anchor_lens_number);
 	void anchor_center_to_source(SB_Profile** center_anchor_list, const int &center_anchor_source_number);
 	void anchor_center_to_ptsrc(PointSource** center_anchor_list, const int &center_anchor_ptsrc_number);
 	void delete_center_anchor();
-	bool enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
+	bool enable_ellipticity_gradient(Vector<double>& efunc_params, const int egrad_mode, const int n_bspline_coefs, const Vector<double>& knots, const double ximin = 1e30, const double ximax = 1e30, const double xiref = 1.5, const bool linear_xivals = false, const bool copy_vary_setting = false, boolvector* vary_egrad = NULL);
 	void disable_ellipticity_gradient();
-	bool enable_fourier_gradient(dvector& fourier_params, const dvector& knots, const bool copy_vary_settings = false, boolvector* vary_egrad = NULL);
+	bool enable_fourier_gradient(Vector<double>& fourier_params, const Vector<double>& knots, const bool copy_vary_settings = false, boolvector* vary_egrad = NULL);
 
 	virtual void assign_param_pointers();
 	virtual void assign_paramnames();
@@ -185,11 +186,11 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	bool register_vary_flags();
 	bool set_vary_flags(boolvector &vary_flags);
 	void get_vary_flags(boolvector& vary_flags);
-	void set_limits(const dvector& lower, const dvector& upper);
+	void set_limits(const Vector<double>& lower, const Vector<double>& upper);
 	bool set_limits_specific_parameter(const std::string name_in, const double& lower, const double& upper);
 	void update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index);
-	bool get_limits(dvector& lower, dvector& upper, int &index);
-	bool get_limits(dvector& lower, dvector& upper);
+	bool get_limits(Vector<double>& lower, Vector<double>& upper, int &index);
+	bool get_limits(Vector<double>& lower, Vector<double>& upper);
 
 	void shift_angle_90();
 	void shift_angle_minus_90();
@@ -198,9 +199,9 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	virtual void set_auto_ranges(); // This *must* be redefined in all derived classes
 
 	void set_geometric_param_auto_stepsizes(int &index);
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
+	void get_auto_stepsizes(Vector<double>& stepsizes, int &index);
 	void set_geometric_param_auto_ranges(int param_i);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, Vector<double>& lower, Vector<double>& upper, int &index);
 
 	static void extract_geometric_params_from_map(double& q1, double& q2, double& xcp, double& ycp, std::map<std::string, double> dict)
 	{ 
@@ -258,10 +259,10 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	void unanchor_parameter(SB_Profile* param_anchor_source);
 
 	bool fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts=500, const int mpi_np=1, const int mpi_id=0, const std::string fit_output_dir = "."); // for fitting to isophote data
-	double sbprofile_loglike(double *params);
+	double sbprofile_loglike(const double *params);
 	bool fit_egrad_profile_data(IsophoteData& isophote_data, const int egrad_param, const int fit_mode, const int n_livepts=500, const bool optimize_knots=false, const int mpi_np=1, const int mpi_id=0, const std::string fit_output_dir = ".");
-	double profile_fit_loglike(double *params);
-	double profile_fit_loglike_bspline(double *params);
+	double profile_fit_loglike(const double *params);
+	double profile_fit_loglike_bspline(const double *params);
 	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
 
 	void plot_sb_profile(double rmin, double rmax, int steps, std::ofstream &sbout);
@@ -297,7 +298,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	virtual void update_scale_parameter(const double scale);
 
 	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
-	double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4, const double sb_noise);
+	double surface_brightness_zoom(lensvector<double> &centerpt, lensvector<double> &pt1, lensvector<double> &pt2, lensvector<double> &pt3, lensvector<double> &pt4, const double sb_noise);
 
 	std::string get_model_name() { return model_name; }
 	SB_ProfileName get_sbtype() { return sbtype; }
@@ -336,7 +337,7 @@ class Gaussian : public SB_Profile
 	~Gaussian() {}
 
 	//double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
-	//double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
+	//double surface_brightness_zoom(lensvector<double> &centerpt, lensvector<double> &pt1, lensvector<double> &pt2, lensvector<double> &pt3, lensvector<double> &pt4);
 
 	void update_meta_parameters();
 	void assign_paramnames();
@@ -551,7 +552,7 @@ class Shapelet : public SB_Profile
 	double hermite_polynomial(const double x, const int n);
 
 	//double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
-	//double surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4);
+	//double surface_brightness_zoom(lensvector<double> &centerpt, lensvector<double> &pt1, lensvector<double> &pt2, lensvector<double> &pt3, lensvector<double> &pt4);
 
 	void update_meta_parameters();
 	void assign_paramnames();

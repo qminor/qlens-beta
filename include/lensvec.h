@@ -4,101 +4,101 @@
 #include <cmath>
 #include "errors.h"
 
+template <typename QScalar>
 class lensvector
 {
-
 public:
-	double *v;
-	lensvector() : v(new double[2]) {}
-	lensvector(const double z) : v(new double[2]) { v[0] = v[1] = z; }
-	lensvector(const double &x, const double &y) : v(new double[2]) { v[0] = x; v[1] = y; }
-	lensvector(const lensvector& b) : v(new double[2]) { v[0] = b[0]; v[1] = b[1]; }
-	void input(const double &x, const double &y) { v[0] = x; v[1] = y; }
-	double* array(void) { return v; }
-	double* array(void) const { return v; }
-	double& xval() { return v[0]; }
-	double& yval() { return v[1]; }
-	void set_xval(const double xv) { v[0] = xv; }
-	void set_yval(const double yv) { v[1] = yv; }
+	QScalar *v;
+	lensvector() : v(new QScalar[2]) {}
+	lensvector(const QScalar z) : v(new QScalar[2]) { v[0] = v[1] = z; }
+	lensvector(const QScalar &x, const QScalar &y) : v(new QScalar[2]) { v[0] = x; v[1] = y; }
+	lensvector(const lensvector<QScalar>& b) : v(new QScalar[2]) { v[0] = b[0]; v[1] = b[1]; }
+	void input(const QScalar &x, const QScalar &y) { v[0] = x; v[1] = y; }
+	QScalar* array(void) { return v; }
+	QScalar* array(void) const { return v; }
+	QScalar& xval() { return v[0]; }
+	QScalar& yval() { return v[1]; }
+	void set_xval(const QScalar xv) { v[0] = xv; }
+	void set_yval(const QScalar yv) { v[1] = yv; }
 	~lensvector() { delete[] v; }
 
-	lensvector& operator = (const lensvector& b) { v[0] = b[0]; v[1] = b[1]; return *this; }
-	lensvector& operator = (const double b) { v[0] = b; v[1] = b; return *this; }
-	double& operator [] (const int n) { return v[n]; }
-	double& operator [] (const int n) const { return v[n]; }
+	lensvector<QScalar>& operator = (const lensvector<QScalar>& b) { v[0] = b[0]; v[1] = b[1]; return *this; }
+	lensvector<QScalar>& operator = (const QScalar b) { v[0] = b; v[1] = b; return *this; }
+	QScalar& operator [] (const int n) { return v[n]; }
+	QScalar& operator [] (const int n) const { return v[n]; }
 
-	lensvector operator + (const lensvector& b) {
-		lensvector ans;
+	lensvector<QScalar> operator + (const lensvector<QScalar>& b) {
+		lensvector<QScalar> ans;
 		ans[0] = v[0] + b[0];
 		ans[1] = v[1] + b[1];
 		return ans;
 	}
-	lensvector operator - (const lensvector& b) {
-		lensvector ans;
+	lensvector<QScalar> operator - (const lensvector<QScalar>& b) {
+		lensvector<QScalar> ans;
 		ans[0] = v[0] - b[0];
 		ans[1] = v[1] - b[1];
 		return ans;
 	}
-	lensvector& operator += (const lensvector& b) {
+	lensvector<QScalar>& operator += (const lensvector<QScalar>& b) {
 		v[0] += b[0];
 		v[1] += b[1];
 		return *this;
 	}
-	lensvector operator + (const lensvector& b) const {
-		lensvector ans;
+	lensvector<QScalar> operator + (const lensvector<QScalar>& b) const {
+		lensvector<QScalar> ans;
 		ans[0] = v[0] + b[0];
 		ans[1] = v[1] + b[1];
 		return ans;
 	}
-	lensvector operator - (const lensvector& b) const {
-		lensvector ans;
+	lensvector<QScalar> operator - (const lensvector<QScalar>& b) const {
+		lensvector<QScalar> ans;
 		ans[0] = v[0] - b[0];
 		ans[1] = v[1] - b[1];
 		return ans;
 	}
-	lensvector operator - (void) {
-		lensvector ans;
+	lensvector<QScalar> operator - (void) {
+		lensvector<QScalar> ans;
 		ans[0] = -v[0];
 		ans[1] = -v[1];
 		return ans;
 	}
-	lensvector& operator -= (const lensvector& b) {
+	lensvector<QScalar>& operator -= (const lensvector<QScalar>& b) {
 		v[0] -= b[0];
 		v[1] -= b[1];
 		return *this;
 	}
-	lensvector& operator *= (const double num) {
+	lensvector<QScalar>& operator *= (const double num) {
 		v[0] *= num;
 		v[1] *= num;
 		return *this;
 	}
-	lensvector& operator /= (const double num) {
+	lensvector<QScalar>& operator /= (const double num) {
 		v[0] /= num;
 		v[1] /= num;
 		return *this;
 	}
-	double operator * (const lensvector& b) { return (v[0]*b[0] + v[1]*b[1]); }
-	double operator ^ (const lensvector& b) { return (v[0]*b[1] - v[1]*b[0]); }
-	double norm(void) { return sqrt(v[0]*v[0]+v[1]*v[1]); }
-	double sqrnorm(void) { return (v[0]*v[0]+v[1]*v[1]); }
-	double angle(void) { return atan(v[1]/v[0]); }
-	void rotate(const double theta) {
-		double cs=cos(theta), ss=sin(theta);
-		double x_prime = v[0]*cs + v[1]*ss;
+	QScalar operator * (const lensvector<QScalar>& b) { return (v[0]*b[0] + v[1]*b[1]); }
+	QScalar operator ^ (const lensvector<QScalar>& b) { return (v[0]*b[1] - v[1]*b[0]); }
+	QScalar norm(void) { return sqrt(v[0]*v[0]+v[1]*v[1]); }
+	QScalar sqrnorm(void) { return (v[0]*v[0]+v[1]*v[1]); }
+	QScalar angle(void) { return atan(v[1]/v[0]); }
+	void rotate(const QScalar theta) {
+		QScalar cs=cos(theta), ss=sin(theta);
+		QScalar x_prime = v[0]*cs + v[1]*ss;
 		v[1] = -v[0]*ss + v[1]*cs;
 		v[0] = x_prime;
 		return;
 	}
 	// counter-clockwise rotation
-	void rotate(const double cs, const double ss) {
-		double x_prime = v[0]*cs + v[1]*ss;
+	void rotate(const QScalar cs, const QScalar ss) {
+		QScalar x_prime = v[0]*cs + v[1]*ss;
 		v[1] = -v[0]*ss + v[1]*cs;
 		v[0] = x_prime;
 		return;
 	}
 	// clockwise rotation
-	void rotate_back(const double cs, const double ss) {
-		double x_prime = v[0]*cs - v[1]*ss;
+	void rotate_back(const QScalar cs, const QScalar ss) {
+		QScalar x_prime = v[0]*cs - v[1]*ss;
 		v[1] = v[0]*ss + v[1]*cs;
 		v[0] = x_prime;
 		return;
@@ -107,124 +107,129 @@ public:
 
 // NOTE: the following operations cost a bit of overhead since an intermediate object (ans) is created; for better
 // (though less pretty) efficiency, do the operations on each component explicitly rather than calling these functions.
-inline lensvector operator + (const double a, const lensvector b)
+template <typename QScalar>
+lensvector<QScalar> operator + (const QScalar a, const lensvector<QScalar> b)
 {
-	lensvector ans;
+	lensvector<QScalar> ans;
 	ans[0] = a + b[0];
 	ans[1] = a + b[1];
 	return ans;
 }
 
-inline lensvector operator - (const double a, const lensvector b)
+template <typename QScalar>
+inline lensvector<QScalar> operator - (const QScalar a, const lensvector<QScalar> b)
 {
-	lensvector ans;
+	lensvector<QScalar> ans;
 	ans[0] = a - b[0];
 	ans[1] = a - b[1];
 	return ans;
 }
 
-inline lensvector operator * (const double num, const lensvector a)
+template <typename QScalar>
+inline lensvector<QScalar> operator * (const double num, const lensvector<QScalar> a)
 {
-	lensvector ans;
+	lensvector<QScalar> ans;
 	ans[0] = num * a[0];
 	ans[1] = num * a[1];
 	return ans;
 }
 
-inline lensvector operator / (const lensvector a, const double num)
+template <typename QScalar>
+inline lensvector<QScalar> operator / (const lensvector<QScalar> a, const double num)
 {
-	lensvector ans;
+	lensvector<QScalar> ans;
 	ans[0] = a[0] / num;
 	ans[1] = a[1] / num;
 	return ans;
 }
 
+template <typename QScalar>
 class lensmatrix
 {
-	double **j;
+	QScalar **j;
 
-public:
-	lensmatrix() : j(new double*[2]) { j[0] = new double[2]; j[1] = new double[2]; }
+	public:
+	lensmatrix() : j(new QScalar*[2]) { j[0] = new QScalar[2]; j[1] = new QScalar[2]; }
 	~lensmatrix() { delete[] j[0]; delete[] j[1]; delete[] j; }
-	lensmatrix(const double z) : j(new double*[2]) {
-		j[0] = new double[2];
-		j[1] = new double[2];
+	lensmatrix(const QScalar z) : j(new QScalar*[2]) {
+		j[0] = new QScalar[2];
+		j[1] = new QScalar[2];
 		j[0][0] = j[1][1] = z;
 		j[1][0] = j[0][1] = 0;
 	}
-	lensmatrix(const lensmatrix& b) : j(new double*[2]) {
-		j[0] = new double[2];
-		j[1] = new double[2];
+	lensmatrix(const lensmatrix<QScalar>& b) : j(new QScalar*[2]) {
+		j[0] = new QScalar[2];
+		j[1] = new QScalar[2];
 		j[0][0] = b[0][0]; j[0][1] = b[0][1];
 		j[1][0] = b[1][0]; j[1][1] = b[1][1];
 		return;
 	}
 
-	lensmatrix& operator = (const lensmatrix& b) {
+	lensmatrix<QScalar>& operator = (const lensmatrix<QScalar>& b) {
 		j[0][0] = b[0][0]; j[0][1] = b[0][1];
 		j[1][0] = b[1][0]; j[1][1] = b[1][1];
 		return *this;
 	}
-	lensmatrix& operator = (const double b) {
+	lensmatrix<QScalar>& operator = (const QScalar b) {
 		j[0][0] = b; j[0][1] = b;
 		j[1][0] = b; j[1][1] = b;
 		return *this;
 	}
-	double* operator [] (const int n) { return j[n]; }
-	double* operator [] (const int n) const { return j[n]; }
+	QScalar* operator [] (const int n) { return j[n]; }
+	QScalar* operator [] (const int n) const { return j[n]; }
 
-	lensmatrix& operator += (const lensmatrix& b) {
+	lensmatrix<QScalar>& operator += (const lensmatrix<QScalar>& b) {
 		j[0][0] += b[0][0]; j[1][0] += b[1][0];
 		j[0][1] += b[0][1]; j[1][1] += b[1][1];
 		return *this;
 	}
-	lensmatrix operator + (const lensmatrix& b) {
-		lensmatrix ans;
+	lensmatrix<QScalar> operator + (const lensmatrix<QScalar>& b) {
+		lensmatrix<QScalar> ans;
 		ans[0][0] = j[0][0] + b[0][0]; ans[1][0] = j[1][0] + b[1][0];
 		ans[0][1] = j[0][1] + b[0][1]; ans[1][1] = j[1][1] + b[1][1];
 		return ans;
 	}
-	lensmatrix operator + (const double z) {
-		lensmatrix ans;
+	lensmatrix<QScalar> operator + (const QScalar z) {
+		lensmatrix<QScalar> ans;
 		ans[0][0] = j[0][0] + z;
 		ans[1][1] = j[1][1] + z;
 		ans[1][0] = j[1][0];
 		ans[0][1] = j[0][1];
 		return ans;
 	}
-	lensmatrix operator - (const double z) {
-		lensmatrix ans;
+	lensmatrix<QScalar> operator - (const QScalar z) {
+		lensmatrix<QScalar> ans;
 		ans[0][0] = j[0][0] - z;
 		ans[1][1] = j[1][1] - z;
 		return ans;
 	}
-	lensmatrix& operator -= (const lensmatrix& b) {
+	lensmatrix<QScalar>& operator -= (const lensmatrix<QScalar>& b) {
 		j[0][0] -= b[0][0]; j[1][0] -= b[1][0];
 		j[0][1] -= b[0][1]; j[1][1] -= b[1][1];
 		return *this;
 	}
-	lensmatrix operator - (const lensmatrix& b) {
-		lensmatrix ans;
+	lensmatrix<QScalar> operator - (const lensmatrix<QScalar>& b) {
+		lensmatrix<QScalar> ans;
 		ans[0][0] = j[0][0] - b[0][0]; ans[1][0] = j[1][0] - b[1][0];
 		ans[0][1] = j[0][1] - b[0][1]; ans[1][1] = j[1][1] - b[1][1];
 		return ans;
 	}
-	lensmatrix operator - (void) {
-		lensmatrix ans;
+	lensmatrix<QScalar> operator - (void) {
+		lensmatrix<QScalar> ans;
 		ans[0][0] = -j[0][0]; ans[1][0] = -j[1][0];
 		ans[0][1] = -j[0][1]; ans[1][1] = -j[1][1];
 		return ans;
 	}
-	lensvector operator * (const lensvector& b) {
-		lensvector ans;
+	lensvector<QScalar> operator * (const lensvector<QScalar>& b) {
+		lensvector<QScalar> ans;
 		ans[0] = j[0][0] * b[0] + j[1][0] * b[1];
 		ans[1] = j[0][1] * b[0] + j[1][1] * b[1];
 		return ans;
 	}
 
-	void rotate(const double theta)
+	void rotate(const QScalar theta)
 	{
-		double x_prime, cs, ss;
+		QScalar x_prime, cs, ss;
 		cs=cos(theta); ss=sin(theta);
 
 		// Similarity transformation: J' = R*J*R^(-1) (where R = rotation matrix, J = jacobian)
@@ -248,7 +253,7 @@ public:
 	}
 	void rotate(const double cs, const double ss)
 	{
-		double x_prime;
+		QScalar x_prime;
 
 		// Similarity transformation: J' = R*J*R^(-1) (where R = rotation matrix, J = jacobian)
 		x_prime = j[0][0]*cs + j[0][1]*ss;
@@ -271,7 +276,7 @@ public:
 	}
 	void rotate_back(const double cs, const double ss)
 	{
-		double x_prime;
+		QScalar x_prime;
 		if (cs==0) {
 			if (ss==1) {
 				x_prime = j[1][1];
@@ -310,10 +315,10 @@ public:
 
 		return;
 	}
-	lensmatrix inverse(void)
+	lensmatrix<QScalar> inverse(void)
 	{
-		lensmatrix ans;
-		double det = j[0][0]*j[1][1] - j[0][1]*j[1][0];
+		lensmatrix<QScalar> ans;
+		QScalar det = j[0][0]*j[1][1] - j[0][1]*j[1][0];
 		if (det==0.0) die("singular matrix--cannot invert Jacobian matrix");
 		ans[0][0] = j[1][1]/det;
 		ans[1][0] = -j[1][0]/det;
@@ -321,9 +326,9 @@ public:
 		ans[1][1] = j[0][0]/det;
 		return ans;
 	}
-	bool invert(lensmatrix& ans)
+	bool invert(lensmatrix<QScalar>& ans)
 	{
-		double det = j[0][0]*j[1][1] - j[0][1]*j[1][0];
+		QScalar det = j[0][0]*j[1][1] - j[0][1]*j[1][0];
 		if (det==0.0) { warn("singular matrix--cannot invert Jacobian matrix"); return false; }
 		ans[0][0] = j[1][1]/det;
 		ans[1][0] = -j[1][0]/det;
@@ -334,35 +339,43 @@ public:
 
 };
 
-inline double determinant(const lensmatrix b) { return (b[0][0]*b[1][1] - b[1][0]*b[0][1]); }
-inline lensmatrix operator + (const double a, const lensmatrix b)
+template <typename QScalar>
+inline QScalar determinant(const lensmatrix<QScalar> b) { return (b[0][0]*b[1][1] - b[1][0]*b[0][1]); }
+template <typename QScalar>
+inline lensmatrix<QScalar> operator + (const QScalar a, const lensmatrix<QScalar> b)
 {
-	lensmatrix ans;
+	lensmatrix<QScalar> ans;
 	ans[0][0] = a + b[0][0];
 	ans[1][1] = a + b[1][1];
 	ans[1][0] = b[1][0];
 	ans[0][1] = b[0][1];
 	return ans;
 }
-inline lensmatrix operator - (const double a, const lensmatrix b)
+
+template <typename QScalar>
+inline lensmatrix<QScalar> operator - (const QScalar a, const lensmatrix<QScalar> b)
 {
-	lensmatrix ans;
+	lensmatrix<QScalar> ans;
 	ans[0][0] = a - b[0][0];
 	ans[1][1] = a - b[1][1];
 	ans[1][0] = -b[1][0];
 	ans[0][1] = -b[0][1];
 	return ans;
 }
-inline void lensmatsqr(const lensmatrix a, lensmatrix& b)
+
+template <typename QScalar>
+inline void lensmatsqr(const lensmatrix<QScalar> a, lensmatrix<QScalar>& b)
 {
 	b[0][0] = a[0][0]*a[0][0] + a[0][1]*a[0][1];
 	b[0][1] = a[0][0]*a[1][0] + a[0][1]*a[1][1];
 	b[1][0] = b[0][1];
 	b[1][1] = a[1][1]*a[1][1] + a[1][0]*a[1][0];
 }
-inline lensmatrix operator * (const double num, const lensmatrix a)
+
+template <typename QScalar>
+inline lensmatrix<QScalar> operator * (const double num, const lensmatrix<QScalar> a)
 {
-	lensmatrix ans;
+	lensmatrix<QScalar> ans;
 	ans[0][0] = num * a[0][0];
 	ans[1][1] = num * a[1][1];
 	ans[1][0] = num * a[1][0];
@@ -370,9 +383,10 @@ inline lensmatrix operator * (const double num, const lensmatrix a)
 	return ans;
 }
 
-inline lensmatrix operator * (const lensmatrix a, const lensmatrix b)
+template <typename QScalar>
+inline lensmatrix<QScalar> operator * (const lensmatrix<QScalar> a, const lensmatrix<QScalar> b)
 {
-	lensmatrix ans;
+	lensmatrix<QScalar> ans;
 	ans[0][0] = a[0][0]*b[0][0] + a[1][0]*b[0][1];
 	ans[1][0] = a[0][0]*b[1][0] + a[1][0]*b[1][1];
 	ans[0][1] = a[0][1]*b[0][0] + a[1][1]*b[0][1];

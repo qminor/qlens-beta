@@ -15,7 +15,7 @@ class Powell
 	double ftol;
 	int n;
 	double *xt;
-	double (Powell::*func)(double*);
+	double (Powell::*func)(const double*);
 	static const int ITMAX;
 	static const double CGOLD;
 	static const double ZEPS;
@@ -27,8 +27,8 @@ class Powell
 
 	public:
 	Powell() { ftol = 3.0e-8; }
-	Powell(double (Powell::*funcc)(double*), const double ftoll=3.0e-8) : ftol(ftoll) { func = funcc; }
-	void initialize_powell(double (Powell::*funcc)(double*), const double ftoll)
+	Powell(double (Powell::*funcc)(const double*), const double ftoll=3.0e-8) : ftol(ftoll) { func = funcc; }
+	void initialize_powell(double (Powell::*funcc)(const double*), const double ftoll)
 	{
 		func = funcc;
 		ftol = ftoll;

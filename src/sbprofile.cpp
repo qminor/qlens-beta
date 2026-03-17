@@ -261,7 +261,7 @@ void SB_Profile::set_nparams(const int &n_params_in, const bool resize)
 	}
 }
 
-void SB_Profile::anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number)
+void SB_Profile::anchor_center_to_lens(LensProfile<double>** center_anchor_list, const int &center_anchor_lens_number)
 {
 	if (!center_anchored_to_lens) center_anchored_to_lens = true;
 	center_anchor_lens = center_anchor_list[center_anchor_lens_number];
@@ -457,7 +457,7 @@ void SB_Profile::remove_fourier_modes()
 	assign_param_pointers();
 }
 
-bool SB_Profile::enable_ellipticity_gradient(dvector& efunc_params, const int egrad_mode, const int n_bspline_coefs, const dvector& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad)
+bool SB_Profile::enable_ellipticity_gradient(Vector<double>& efunc_params, const int egrad_mode, const int n_bspline_coefs, const Vector<double>& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad)
 {
 	if (ellipticity_mode==-1) return false; // ellipticity gradient only works for sources that have elliptical isophotes
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
@@ -577,7 +577,7 @@ void SB_Profile::reset_anchor_lists()
 	}
 }
 
-bool SB_Profile::enable_fourier_gradient(dvector& fourier_params, const dvector& knots, const bool copy_vary_settings, boolvector* vary_fgrad)
+bool SB_Profile::enable_fourier_gradient(Vector<double>& fourier_params, const Vector<double>& knots, const bool copy_vary_settings, boolvector* vary_fgrad)
 {
 	if (ellipticity_mode==-1) return false; // Fourier gradient only works for sources that have elliptical isophotes
 	if (ellipticity_mode > 1) return false; // only emode=0 or 1 is supported right now
@@ -701,8 +701,8 @@ bool SB_Profile::vary_parameters(const boolvector& vary_params_in)
 	if (qlens) qlens->get_sb_parameter_numbers(sb_number,pi,pf); // these are the old parameter numbers
 
 	// Save the old limits, if they exist
-	dvector old_lower_limits(n_params);
-	dvector old_upper_limits(n_params);
+	Vector<double> old_lower_limits(n_params);
+	Vector<double> old_upper_limits(n_params);
 	int i=0,k=0;
 	for (i=0; i < n_params; i++) {
 		if (vary_params[i]) {
@@ -781,7 +781,7 @@ bool SB_Profile::register_vary_flags()
 	else return false;
 }
 
-void SB_Profile::set_limits(const dvector& lower, const dvector& upper)
+void SB_Profile::set_limits(const Vector<double>& lower, const Vector<double>& upper)
 {
 	include_limits = true;
 	if (lower.size() != n_vary_params) die("number of parameters with lower limits does not match number of variable parameters");
@@ -1053,7 +1053,7 @@ void SB_Profile::set_geometric_param_auto_stepsizes(int &index)
 	}
 }
 
-void SB_Profile::get_auto_stepsizes(dvector& stepsizes_in, int &index)
+void SB_Profile::get_auto_stepsizes(Vector<double>& stepsizes_in, int &index)
 {
 	set_auto_stepsizes();
 	for (int i=0; i < n_params; i++) {
@@ -1091,7 +1091,7 @@ void SB_Profile::set_geometric_param_auto_ranges(int param_i)
 	}
 }
 
-void SB_Profile::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+void SB_Profile::get_auto_ranges(boolvector& use_penalty_limits, Vector<double>& lower, Vector<double>& upper, int &index)
 {
 	set_auto_ranges();
 	for (int i=0; i < n_params; i++) {
@@ -1125,7 +1125,7 @@ void SB_Profile::get_fit_parameter_names(vector<string>& paramnames_vary, vector
 	}
 }
 
-bool SB_Profile::get_limits(dvector& lower, dvector& upper, int &index)
+bool SB_Profile::get_limits(Vector<double>& lower, Vector<double>& upper, int &index)
 {
 	if ((include_limits==false) or (lower_limits.size() != n_vary_params)) return false;
 	for (int i=0; i < n_vary_params; i++) {
@@ -1136,7 +1136,7 @@ bool SB_Profile::get_limits(dvector& lower, dvector& upper, int &index)
 	return true;
 }
 
-bool SB_Profile::get_limits(dvector& lower, dvector& upper)
+bool SB_Profile::get_limits(Vector<double>& lower, Vector<double>& upper)
 {
 	if ((include_limits==false) or (lower.size() != n_vary_params)) return false;
 	for (int i=0; i < n_vary_params; i++) {
@@ -1295,7 +1295,7 @@ void SB_Profile::set_center_if_lensed_coords()
 {
 	if (lensed_center_coords) {
 		if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
-		lensvector xl;
+		lensvector<double> xl;
 		xl[0] = x_center_lensed;
 		xl[1] = y_center_lensed;
 		qlens->find_sourcept(xl,x_center,y_center,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
@@ -1578,17 +1578,17 @@ double SB_Profile::surface_brightness(double x, double y)
 	return sb;
 }
 
-double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1, lensvector &pt2, lensvector &pt3, lensvector &pt4, const double sb_noise)
+double SB_Profile::surface_brightness_zoom(lensvector<double> &centerpt, lensvector<double> &pt1, lensvector<double> &pt2, lensvector<double> &pt3, lensvector<double> &pt4, const double sb_noise)
 {
 	bool subgrid = false;
 	bool contains_sbcenter = false;
 	int xsplit, ysplit;
 
-	lensvector sbcenter;
+	lensvector<double> sbcenter;
 	sbcenter[0] = x_center;
 	sbcenter[1] = y_center;
 
-	lensvector d1, d2, d3;
+	lensvector<double> d1, d2, d3;
 	double product1, product2, product3;
 	double r[4];
 	d1[0] = sbcenter[0]-pt1[0];
@@ -1672,7 +1672,7 @@ double SB_Profile::surface_brightness_zoom(lensvector &centerpt, lensvector &pt1
 		// The following algorithm is for source pixels that are large compared to the half-light radius of the SB profile
 		// Revisit this later? Seems a bit shoddy, and not very trustworthy for lensed sources, but maybe good enough for unlensed sources.
 		double scale = zoom_scale*length_scale();
-		lensvector scpt1, scpt2, scpt3, scpt4;
+		lensvector<double> scpt1, scpt2, scpt3, scpt4;
 		d1[0] = pt1[0]-centerpt[0];
 		d1[1] = pt1[1]-centerpt[1];
 		d2[0] = d1[0] * (scale/d1.norm()); // vector along d1 with length given by scale
@@ -1817,7 +1817,7 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 #ifdef USE_MPI
 		Set_MCMC_MPI(mpi_np,mpi_id);
 #endif
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&SB_Profile::sbprofile_loglike);
+		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&SB_Profile::sbprofile_loglike);
 		InputPoint(fitparams,lower_limits.array(),upper_limits.array(),sbprofile_nparams);
 		double lnZ;
 		string filename = fit_output_dir + "/" + "sbprofile";
@@ -1844,8 +1844,8 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 		MonoSample(filename.c_str(),n_livepts,lnZ,fitparams,param_errors,false);
 		double chisq_bestfit = 2*(this->*LogLikePtr)(fitparams);
 	} else {
-		double (Simplex::*loglikeptr)(double*);
-		loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::sbprofile_loglike);
+		double (Simplex::*loglikeptr)(const double*);
+		loglikeptr = static_cast<double (Simplex::*)(const double*)> (&SB_Profile::sbprofile_loglike);
 		double *stepsizes = new double [sbprofile_nparams];
 		for (int i=0; i < sbprofile_nparams; i++) {
 			stepsizes[i] = 0.1; // arbitrary
@@ -1872,7 +1872,7 @@ bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_m
 	return true;
 }
 
-double SB_Profile::sbprofile_loglike(double *params)
+double SB_Profile::sbprofile_loglike(const double *params)
 {
 	int i;
 	double loglike=0;
@@ -2048,7 +2048,7 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 #ifdef USE_MPI
 		Set_MCMC_MPI(mpi_np,mpi_id);
 #endif
-		LogLikePtr = static_cast<double (UCMC::*)(double*)> (&SB_Profile::profile_fit_loglike);
+		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&SB_Profile::profile_fit_loglike);
 		double *lower = new double[profile_fit_nparams];
 		double *upper = new double[profile_fit_nparams];
 		for (i=0,j=0,k=0; i < n_params; i++) {
@@ -2110,9 +2110,9 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 			profile_fit_loglike_bspline(fitparams); // just fit B-spline with same knots as before; no need to call Simplex
 		} else {
 			double *stepsizes = new double [profile_fit_nparams];
-			double (Simplex::*loglikeptr)(double*);
+			double (Simplex::*loglikeptr)(const double*);
 			if (egrad_mode==0) {
-				loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::profile_fit_loglike_bspline);
+				loglikeptr = static_cast<double (Simplex::*)(const double*)> (&SB_Profile::profile_fit_loglike_bspline);
 				//cout << "Fitting " << profile_fit_nparams << " independent knot intervals" << endl;
 				for (i=0; i < profile_fit_nparams; i++) {
 					stepsizes[i] = fitparams[i]/4.0; // arbitrary
@@ -2125,7 +2125,7 @@ bool SB_Profile::fit_egrad_profile_data(IsophoteData& isophote_data, const int e
 				profile_fit_min_knot_interval = min_data_interval;
 				if (mpi_id==0) cout << "min knot interval: " << profile_fit_min_knot_interval << endl;
 			} else {
-				loglikeptr = static_cast<double (Simplex::*)(double*)> (&SB_Profile::profile_fit_loglike);
+				loglikeptr = static_cast<double (Simplex::*)(const double*)> (&SB_Profile::profile_fit_loglike);
 				for (i=profile_fit_istart, j=0; j < profile_fit_nparams; i++, j++) {
 					if (angle_param[i]) stepsizes[j] = 20;
 					else stepsizes[j] = 0.1;
@@ -2190,7 +2190,7 @@ void SB_Profile::find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta
 	}
 }
 
-double SB_Profile::profile_fit_loglike(double *params)
+double SB_Profile::profile_fit_loglike(const double *params)
 {
 	int i,j;
 	double loglike=0;
@@ -2213,7 +2213,7 @@ double SB_Profile::profile_fit_loglike(double *params)
 	return loglike;
 }
 
-double SB_Profile::profile_fit_loglike_bspline(double *params)
+double SB_Profile::profile_fit_loglike_bspline(const double *params)
 {
 	// here, the nonlinear parameters are the knots that are being optimized
 	int i;

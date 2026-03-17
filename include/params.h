@@ -9,7 +9,7 @@ struct ParamPrior
 {
 	double gaussian_pos, gaussian_sig;
 	dmatrix covariance_matrix, inv_covariance_matrix;
-	dvector gauss_meanvals;
+	Vector<double> gauss_meanvals;
 	ivector gauss_paramnums;
 	Prior prior;
 	ParamPrior() { prior = UNIFORM_PRIOR; }
@@ -684,7 +684,7 @@ struct ParamList
 		if ((paramnum < 0) or (paramnum >= nparams)) return false;
 		return update_param_value(paramnum,value_in);
 	}
-	void get_untransformed_prior_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
+	void get_untransformed_prior_limits(boolvector& use_plimits, Vector<double>& lower, Vector<double>& upper)
 	{
 		use_plimits.input(nparams);
 		lower.input(nparams);
@@ -695,7 +695,7 @@ struct ParamList
 			upper[i] = untransformed_prior_limits_hi[i];
 		}
 	}
-	void get_prior_limits(boolvector& use_plimits, dvector& lower, dvector& upper)
+	void get_prior_limits(boolvector& use_plimits, Vector<double>& lower, Vector<double>& upper)
 	{
 		use_plimits.input(nparams);
 		lower.input(nparams);
@@ -727,7 +727,7 @@ struct ParamList
 		if ((paramnum < 0) or (paramnum >= nparams)) return false;
 		return set_prior_limit(paramnum,lo,hi);
 	}
-	void set_untransformed_prior_limits(const int pi, const int pf, dvector& lower, dvector& upper, const bool update_model = false)
+	void set_untransformed_prior_limits(const int pi, const int pf, Vector<double>& lower, Vector<double>& upper, const bool update_model = false)
 	{
 		int i,j;
 		for (i=pi,j=0; i < pf; i++,j++) {
@@ -763,7 +763,7 @@ struct ParamList
 			delete[] changed_limit;
 		}
 	}
-	void update_untransformed_prior_limits_from_auto_ranges(const int pi, const int pf, boolvector& use_plimits, dvector& lower, dvector& upper)
+	void update_untransformed_prior_limits_from_auto_ranges(const int pi, const int pf, boolvector& use_plimits, Vector<double>& lower, Vector<double>& upper)
 	{
 		int i,j;
 		for (i=pi,j=0; i < pf; i++,j++) {
@@ -923,7 +923,7 @@ struct ParamList
 	{
 		inverse_transform_prior_limits(paramnum,paramnum+1);
 	}
-	void inverse_transform_parameters(double *params, double *inverse_transformed_params, const int pi = 0, int pf = -1)
+	void inverse_transform_parameters(const double *params, double *inverse_transformed_params, const int pi = 0, int pf = -1)
 	{
 		if (pf==-1) pf = nparams;
 		bool apply_ratio_transform_afterwards = false;
@@ -1029,7 +1029,7 @@ struct ParamList
 	{
 		for (int i=0; i < nparams; i++) transform_stepsize(i);
 	}
-	void add_prior_terms_to_loglike(double *params, double& loglike)
+	void add_prior_terms_to_loglike(const double *params, double& loglike)
 	{
 		double dloglike,dloglike_tot=0;
 		for (int i=0; i < nparams; i++) {
@@ -1045,7 +1045,7 @@ struct ParamList
 				}
 				else if (priors[i]->prior==GAUSS2_PRIOR) {
 					int j = priors[i]->gauss_paramnums[1];
-					dvector bvec, cvec;
+					Vector<double> bvec, cvec;
 					bvec.input(2);
 					cvec.input(2);
 					bvec[0] = params[i] - priors[i]->gauss_meanvals[0];
@@ -1103,7 +1103,7 @@ struct ParamList
 	{
 		set_prior_norms(paramnum,paramnum+1);
 	}
-	void add_jacobian_terms_to_loglike(double *params, double& loglike)
+	void add_jacobian_terms_to_loglike(const double *params, double& loglike)
 	{
 		for (int i=0; i < nparams; i++) {
 			if (transforms[i]->include_jacobian==true) {

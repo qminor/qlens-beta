@@ -24,11 +24,11 @@ class ModelParams
 	std::vector<std::string> paramnames;
 	std::vector<std::string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;
-	dvector penalty_upper_limits, penalty_lower_limits;
-	dvector stepsizes;
+	Vector<double> penalty_upper_limits, penalty_lower_limits;
+	Vector<double> stepsizes;
 	boolvector scale_stepsize_by_param_value;
 	bool include_limits;
-	dvector lower_limits, upper_limits;
+	Vector<double> lower_limits, upper_limits;
 
 	ModelParams() { param = NULL; qlens = NULL; entry_number = -1; }
 	void set_qlens(QLens* qlensptr) { qlens = qlensptr; }
@@ -65,13 +65,13 @@ class ModelParams
 	bool update_specific_parameter(const std::string name_in, const double& value);
 	bool set_varyflags(const boolvector& vary_in);
 	bool update_specific_varyflag(const std::string name_in, const bool& vary_in);
-	void set_limits(const dvector& lower, const dvector& upper);
+	void set_limits(const Vector<double>& lower, const Vector<double>& upper);
 	bool set_limits_specific_parameter(const std::string name_in, const double& lower, const double& upper);
 	void update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index);
-	bool get_limits(dvector& lower, dvector& upper);
-	bool get_limits(dvector& lower, dvector& upper, int &index);
-	void get_auto_stepsizes(dvector& stepsizes, int &index);
-	void get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index);
+	bool get_limits(Vector<double>& lower, Vector<double>& upper);
+	bool get_limits(Vector<double>& lower, Vector<double>& upper, int &index);
+	void get_auto_stepsizes(Vector<double>& stepsizes, int &index);
+	void get_auto_ranges(boolvector& use_penalty_limits, Vector<double>& lower, Vector<double>& upper, int &index);
 
 	void get_fit_parameters(double *fitparams, int &index);
 	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL);

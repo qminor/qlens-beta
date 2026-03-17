@@ -694,7 +694,7 @@ void LevenMarq::LMFindMin(double *a0, const int main, double (LevenMarq::*fin)(d
 
 Derivative::Derivative(const double errin, const int tabin) : NTAB(tabin) {}
 
-double Derivative::Ridders(double (Derivative::*func)(double), const double x, const double h)
+double Derivative::Ridders(double (Derivative::*func)(const double), const double x, const double h)
 {
 	const double CON=1.4, CON2=(CON*CON);
 	const double BIG=1.0e100;
@@ -725,7 +725,7 @@ double Derivative::Ridders(double (Derivative::*func)(double), const double x, c
 	return ans;
 }
 
-double Derivative::Ridders(double (Derivative::*func)(double *), double *x, const int in, const double h)
+double Derivative::Ridders(double (Derivative::*func)(const double *), double *x, const int in, const double h)
 {
 	const double CON=1.4, CON2=(CON*CON);
 	const double BIG=1.0e100;
