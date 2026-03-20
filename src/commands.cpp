@@ -5191,6 +5191,7 @@ void QLens::process_commands(bool read_file)
 				}
 				else Complain("unrecognized lens model");
 				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS))) {
+					cout << "YO?" << endl;
 					int nvary=0;
 					bool enter_limits = true;
 					if (vary_zl) nparams_to_vary++;
@@ -7707,8 +7708,8 @@ void QLens::process_commands(bool read_file)
 				}
 				else if (words[1]=="auto") {
 					if (nwords > 2) Complain("no arguments allowed to 'ptsrc auto'");
-					set_analytic_sourcepts(true);
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(true);
+					set_analytic_sourcepts<double>(true);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(true);
 					vary_parameters = false;
 				}
 				else if (words[1]=="add") {
@@ -8139,8 +8140,8 @@ void QLens::process_commands(bool read_file)
 						show_all = false;
 					} else if (nwords > 3) Complain("invalid number of arguments; can only specify sourcept number");
 
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
-					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
 
 					if (mpi_id==0) cout << endl;
 					if (show_all) {
@@ -8177,7 +8178,7 @@ void QLens::process_commands(bool read_file)
 					// You would have to handle the output from here, and do away with the output_images_single_source(...) function which is a bad
 					// way to do it anyway.
 					// MAKE THIS UPGRADE LATER!!!!!!!!!!!
-					chisq_pos_image_plane_diagnostic(false,false,rms_err,nmatched);
+					chisq_pos_image_plane_diagnostic<double>(false,false,rms_err,nmatched);
 					if (mpi_id==0) cout << "# matched image pairs = " << nmatched << ", rms_imgpos_error = " << rms_err << endl << endl;
 				}
 				else if (words[1]=="data_imginfo")
@@ -8187,8 +8188,8 @@ void QLens::process_commands(bool read_file)
 					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves");
 					if (nwords != 2) Complain("command 'fit imginfo' does not require any arguments");
 
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
-					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
 					for (int i=0; i < n_ptsrc; i++) {
 						plot_srcpts_from_image_data(i,NULL,ptsrc_list[i]->pos[0],ptsrc_list[i]->pos[1],ptsrc_list[i]->srcflux);
 					}
@@ -8246,8 +8247,8 @@ void QLens::process_commands(bool read_file)
 					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves and caustics");
 					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotsrc' requires either zero or one argument (source_filename)");
 
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
-					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
 
 					if (mpi_id==0) cout << endl;
 					string srcname="srcs.dat";
@@ -8399,8 +8400,8 @@ void QLens::process_commands(bool read_file)
 						create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[min_dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[min_dataset]]);
 					}
 					if ((nwords != 4) and (nwords != 2)) Complain("command 'fit plotimg' requires either zero or two arguments (source_filename, image_filename)");
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
-					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
 					if (mpi_id==0) cout << endl;
 					string imgname="imgs.dat", srcname="srcs.dat";
 					bool output_to_text_files = false;
@@ -8618,7 +8619,7 @@ void QLens::process_commands(bool read_file)
 						get_n_fit_parameters(npar);
 						param_num = lensmodel_fit_parameters + srcmodel_fit_parameters;
 						add_ptimage_data_from_unlensed_sourcepts(true,param_num,2);
-						if (nlens > 0) set_analytic_sourcepts(); // just to have a starting guess for the source point
+						if (nlens > 0) set_analytic_sourcepts<double>(); // just to have a starting guess for the source point
 					}
 				}
 				else if (words[1]=="chisq")
@@ -8657,7 +8658,7 @@ void QLens::process_commands(bool read_file)
 					if (group_num==0) {
 						double rms_err;
 						int nmatched;
-						chisq_pos_image_plane_diagnostic(false,true,rms_err,nmatched,filename);
+						chisq_pos_image_plane_diagnostic<double>(false,true,rms_err,nmatched,filename);
 					}
 				}
 				else if (words[1]=="output_wl_chivals") {
@@ -8727,13 +8728,21 @@ void QLens::process_commands(bool read_file)
 						}
 
 						if (n_updates > 0) {
-							int paramnum_list[n_updates];
 							if (nwords != 3) Complain("parameters must be updated using '<param_name>=<val>' arguments or else using '<param_num> <val>'");
+							int *paramnum_list = new int[n_updates];
 							for (int i=0; i < n_updates; i++) {
-								if ((paramnum_list[i] = param_list->lookup_param_number(update_param_list[i])) == -1) Complain("Invalid parameter name '" << update_param_list[i] << "'");
+								if ((paramnum_list[i] = param_list->lookup_param_number(update_param_list[i])) == -1) {
+									delete[] paramnum_list;
+									Complain("Invalid parameter name '" << update_param_list[i] << "'");
+								}
 							}
-							for (int i=0; i < n_updates; i++)
-								if (param_list->update_param_value(paramnum_list[i],update_param_vals[i])==false) Complain("could not update parameter " << paramnum_list[i]);
+							for (int i=0; i < n_updates; i++) {
+								if (param_list->update_param_value(paramnum_list[i],update_param_vals[i])==false) {
+									delete[] paramnum_list;
+									Complain("could not update parameter " << paramnum_list[i]);
+								}
+							}
+							delete[] paramnum_list;
 						} else {
 							if (nwords != 5) Complain("two arguments required for 'fit params update' (param#, value)");
 							int param_num;
@@ -16512,10 +16521,10 @@ void QLens::process_commands(bool read_file)
 						sbptr->update_specific_parameter("yc",yc_avg);
 					}
 
-					IsophoteData isodata_mock[nn_q];
 					//ImageData mockdata[nn_q];
 
 					if (n_sb==0) Complain("No surface brightness profiles have been defined"); 
+					//IsophoteData isodata_mock[nn_q];
 					double *q0vals = new double[nn_q];
 
 					/*
@@ -17553,7 +17562,7 @@ bool QLens::open_script_file(const string filename)
 			envstring.replace(pos,1," ");
 		}
 		istringstream dirstream(envstring);
-		string dirstring[ndirs];
+		string *dirstring = new string[ndirs];
 		ndirs=0;
 		while (dirstream >> dirstring[ndirs]) ndirs++; // it's possible ndirs will be zero, which is why we recount it here
 		for (i=0; i < ndirs; i++) {
@@ -17564,6 +17573,7 @@ bool QLens::open_script_file(const string filename)
 				if (infile->is_open()) break;
 			}
 		}
+		delete[] dirstring;
 	}
 	if (infile->is_open()) {
 		if ((n_infiles > 0) and (!read_from_file)) paused_while_reading_file = true;

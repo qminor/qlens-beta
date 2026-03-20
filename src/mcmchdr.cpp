@@ -607,7 +607,7 @@ inline double PDFRatio(double **cov, double **cov0, double *a, double *a0, const
 
 inline void TakeCov(double **a, const int dim, const int N, double **cov)
 {
-	double avg[dim];
+	double* avg = new double[dim];
 	int t, i, j, k, l;
 	
 	for (i = 0; i < dim; i++)
@@ -641,6 +641,7 @@ inline void TakeCov(double **a, const int dim, const int N, double **cov)
 			cov[k][l] = cov[k][l]/N - avg[k]*avg[l];
 		}
 	}
+	delete[] avg;
 }
 
 void UCMC::MetHasAdapt(const char *name, const double tol, const int Threads, const int cut, double *best_fit_params, const char flag)
@@ -651,10 +652,10 @@ void UCMC::MetHasAdapt(const char *name, const double tol, const int Threads, co
 	double **a0 = matrix <double> (NThreads, ma);
 	double ans, chisqnext;
 	int mult = 1;
-	int totN[NThreads];
+	//int totN = new int[NThreads];
 	int count = 0, totall = 0;
 	int i, j, l, k, t;
-	MultiNormDev *gDev[NThreads];
+	MultiNormDev **gDev = new MultiNormDev*[NThreads];
 	
 	double **coVar = matrix <double> (ma, ma), **coVarNext = matrix <double> (ma, ma);
 	double *avg = matrix <double> (ma);
@@ -667,7 +668,7 @@ void UCMC::MetHasAdapt(const char *name, const double tol, const int Threads, co
 	double *avgTot = matrix <double> (ma, 0.0);
 	int *total = new int[NThreads];
 	bool cont;
-	bool contin[NThreads];
+	//bool contin[NThreads];
 	ofstream *out = new ofstream[NThreads];
 	double minchisq = 1e30;
 	double Bn, R, Ravg;
@@ -687,7 +688,7 @@ void UCMC::MetHasAdapt(const char *name, const double tol, const int Threads, co
 
 	for (t = 0; t < NThreads; t++)
 	{
-		totN[t] = 0;
+		//totN[t] = 0;
 		do for (j = 0; j < ma; j++)
 			aNext[t][j] = a0[t][j] = lowerLimits_initial[j] + (gDev[0]->Doub())*(upperLimits_initial[j] - lowerLimits_initial[j]);
 		while (0.0*LOGLIKE(a0[t]));
@@ -794,6 +795,7 @@ void UCMC::MetHasAdapt(const char *name, const double tol, const int Threads, co
 	while(cont || count < NThreads*2e4);
 
 	delete[] out;
+	delete[] gDev;
 	del <double> (aNext, NThreads);
 	del <double> (a0, NThreads);
 	del <double> (covT, NThreads);
@@ -2722,7 +2724,7 @@ class Points : public Group
 		void GetPoint(double *ptr)
 		{
 			Points *pointptr;
-			double tempptr[dim];
+			double* tempptr = new double[dim];
 			do
 			{
 				pointptr = this;
@@ -2749,6 +2751,7 @@ class Points : public Group
 				}
 			}
 			while (1.0/double(this->Member(ptr)) < random->Doub());
+			delete[] tempptr;
 		}
 		
 		void GetPoint2(double *ptr)

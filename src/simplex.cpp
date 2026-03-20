@@ -184,7 +184,7 @@ double Simplex::amotry(double* psum, const int &ihi, double& yhi, const double& 
 	// the following code is from Numerical Recipes in C
 	int j;
 	double fac1,fac2,yflu,ytry;
-	double ptry[ndim];
+	double *ptry = new double[ndim];
 	fac1=(1.0-fac)/ndim;
 	fac2=fac1-fac;
 	for (j=0; j < ndim; j++) {
@@ -209,6 +209,7 @@ double Simplex::amotry(double* psum, const int &ihi, double& yhi, const double& 
 			p[ihi][j] = ptry[j];
 		}
 	}
+	delete[] ptry;
 	signal(SIGABRT, &simplex_sighandler);
 	signal(SIGTERM, &simplex_sighandler);
 	signal(SIGINT, &simplex_sighandler);

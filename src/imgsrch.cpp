@@ -2043,8 +2043,8 @@ bool QLens::get_fit_imagesets(int min_dataset, int max_dataset, bool verbal)
 	if (max_dataset < 0) max_dataset = n_ptsrc - 1;
 	if ((min_dataset < 0) or (min_dataset > max_dataset)) return false;
 
-	if (analytic_source_flux) set_analytic_srcflux(false);
-	if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
+	if (analytic_source_flux) set_analytic_srcflux<double>(false);
+	if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
 
 	int redshift_idx;
 	for (int i=min_dataset; i <= max_dataset; i++) {

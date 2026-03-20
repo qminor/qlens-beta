@@ -8,7 +8,7 @@
 
 void die(const std::string sstring, ...)
 {
-	char s[sstring.length() + 1];
+	char *s = new char[sstring.length() + 1];
 	std::strcpy(s, sstring.c_str());
 	va_list ap;
 	char *p, *sval;
@@ -34,6 +34,7 @@ void die(const std::string sstring, ...)
 	fprintf(stderr, "\n");
 	va_end(ap);
 	//getc(stdin);
+	delete[] s;
 	exit(1);
 }
 
@@ -41,7 +42,7 @@ void die(void) { exit(1); }
 
 void warn(const std::string sstring, ...)
 {
-	char s[sstring.length() + 1];
+	char *s = new char[sstring.length() + 1];
 	std::strcpy(s, sstring.c_str());
 	va_list ap;
 	char *p, *sval;
@@ -66,13 +67,14 @@ void warn(const std::string sstring, ...)
 	}
 	fprintf(stderr, "\n");
 
+	delete[] s;
 	return;
 }
 
 void warn(const bool warnings_on, const std::string sstring, ...)
 {
 	if (warnings_on==false) return;
-	char s[sstring.length() + 1];
+	char *s = new char[sstring.length() + 1];
 	std::strcpy(s, sstring.c_str());
 
 	va_list ap;
@@ -98,6 +100,7 @@ void warn(const bool warnings_on, const std::string sstring, ...)
 	}
 	fprintf(stderr, "\n");
 
+	delete[] s;
 	return;
 }
 

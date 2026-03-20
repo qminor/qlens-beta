@@ -7106,9 +7106,9 @@ bool QLens::add_simulated_point_image_data(const lensvector<double> &sourcept, c
 		//set_sourcept_vary_parameters(n_sourcepts_fit-1,true,true);
 	//}
 
-	bool include_image[n_images];
-	double err_pos[n_images];
-	double err_flux[n_images];
+	bool *include_image = new bool[n_images];
+	double *err_pos = new double[n_images];
+	double *err_flux = new double[n_images];
 
 	double min_td=1e30;
 	for (i=0; i < n_images; i++) {
@@ -7135,6 +7135,9 @@ bool QLens::add_simulated_point_image_data(const lensvector<double> &sourcept, c
 
 	sort_image_data_into_redshift_groups();
 	include_imgpos_chisq = true;
+	delete[] include_image;
+	delete[] err_pos;
+	delete[] err_flux;
 	return true;
 }
 
@@ -7142,7 +7145,7 @@ bool QLens::add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_f
 {
 	int i,n_images = n_ptsrc;
 	if (n_images==0) { warn("could not find any images; no data added"); return false; }
-	image imgs[n_images];
+	image* imgs = new image[n_images];
 	for (i=0; i < n_images; i++) {
 		imgs[i].pos[0] = ptsrc_list[i]->pos[0];
 		imgs[i].pos[1] = ptsrc_list[i]->pos[1];
@@ -7158,9 +7161,9 @@ bool QLens::add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_f
 		//set_sourcept_vary_parameters(n_sourcepts_fit-1,true,true);
 	//}
 
-	bool include[n_images];
-	double err_pos[n_images];
-	double err_flux[n_images];
+	bool *include = new bool[n_images];
+	double *err_pos = new double[n_images];
+	double *err_flux = new double[n_images];
 
 	double err_xsq, err_ysq;
 	int indx=0;
@@ -7182,6 +7185,10 @@ bool QLens::add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_f
 
 	sort_image_data_into_redshift_groups();
 	include_imgpos_chisq = true;
+	delete[] include;
+	delete[] err_pos;
+	delete[] err_flux;
+	delete[] imgs;
 	return true;
 }
 
@@ -7220,7 +7227,7 @@ bool QLens::load_point_image_data(string filename)
 			envstring.replace(pos,1," ");
 		}
 		istringstream dirstream(envstring);
-		string dirstring[ndirs];
+		string* dirstring = new string[ndirs];
 		ndirs=0;
 		while (dirstream >> dirstring[ndirs]) ndirs++; // it's possible ndirs will be zero, which is why we recount it here
 		for (i=0; i < ndirs; i++) {
@@ -7231,6 +7238,7 @@ bool QLens::load_point_image_data(string filename)
 				if (data_infile.is_open()) break;
 			}
 		}
+		delete[] dirstring;
 	}
 
 	if (!data_infile.is_open()) { warn("Error: input file '%s' could not be opened",filename.c_str()); return false; }
@@ -8666,9 +8674,8 @@ void QLens::update_prior_limits(const double* lower, const double* upper, const 
 	if (index != param_list->nparams) die("Index (%i) didn't go through all the fit parameters (ntot=%i) when updating prior limits, indicating a lens model mismatch",index,param_list->nparams);
 }
 
-
-
-void QLens::find_analytic_srcpos(lensvector<double> *beta_i)
+template<typename QScalar>
+void QLens::find_analytic_srcpos(lensvector<QScalar> *beta_i)
 {
 	if (nlens==0) {
 		warn("no lens models have been defined; cannot find analytic best-fit source point");
@@ -8676,13 +8683,13 @@ void QLens::find_analytic_srcpos(lensvector<double> *beta_i)
 	}
 	// Note: beta_i needs to have the same size as the number of image sets being fit, or else a segmentation fault will occur
 	int i,j;
-	lensvector<double> beta_ji;
-	lensmatrix<double> mag, magsqr;
-	lensmatrix<double> amatrix, ainv;
-	lensvector<double> bvec;
-	lensmatrix<double> jac;
+	lensvector<QScalar> beta_ji;
+	lensmatrix<QScalar> mag, magsqr;
+	lensmatrix<QScalar> amatrix, ainv;
+	lensvector<QScalar> bvec;
+	lensmatrix<QScalar> jac;
 
-	double siginv, src_norm;
+	QScalar siginv, src_norm;
 	double *specific_zfacs;
 	double **specific_betafacs;
 	for (i=0; i < n_ptsrc; i++) {
@@ -8695,7 +8702,7 @@ void QLens::find_analytic_srcpos(lensvector<double> *beta_i)
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].use_in_chisq) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian<double>(point_image_data[i].images[j].pos,beta_ji,jac,0,specific_zfacs,specific_betafacs);
+					sourcept_jacobian<QScalar>(point_image_data[i].images[j].pos,beta_ji,jac,0,specific_zfacs,specific_betafacs);
 					mag = jac.inverse();
 					lensmatsqr(mag,magsqr);
 					siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
@@ -8706,7 +8713,7 @@ void QLens::find_analytic_srcpos(lensvector<double> *beta_i)
 					bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
 					bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
 				} else {
-					find_sourcept<double>(point_image_data[i].images[j].pos,beta_ji,0,specific_zfacs,specific_betafacs);
+					find_sourcept<QScalar>(point_image_data[i].images[j].pos,beta_ji,0,specific_zfacs,specific_betafacs);
 					siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 					beta_i[i][0] += beta_ji[0]*siginv;
 					beta_i[i][1] += beta_ji[1]*siginv;
@@ -8727,7 +8734,9 @@ void QLens::find_analytic_srcpos(lensvector<double> *beta_i)
 	}
 	return;
 }
+template void QLens::find_analytic_srcpos<double>(lensvector<double> *beta_i);
 
+template<typename QScalar>
 void QLens::set_analytic_sourcepts(const bool verbal)
 {
 	lensvector<double> *srcpts = new lensvector<double>[n_ptsrc];
@@ -8743,29 +8752,31 @@ void QLens::set_analytic_sourcepts(const bool verbal)
 	delete[] srcpts;
 	update_parameter_list();
 }
+template void QLens::set_analytic_sourcepts<double>(const bool verbal);
 
-double QLens::chisq_pos_source_plane()
+template<typename QScalar>
+QScalar QLens::chisq_pos_source_plane()
 {
 	int i,j;
-	double chisq=0;
+	QScalar chisq=0;
 	int n_images_hi=0;
-	lensvector<double> delta_beta, delta_theta;
-	lensmatrix<double> mag, magsqr;
-	lensmatrix<double> amatrix, ainv;
-	lensvector<double> bvec;
-	lensmatrix<double> jac;
-	lensvector<double> src_bf;
-	lensvector<double> *beta;
+	lensvector<QScalar> delta_beta, delta_theta;
+	lensmatrix<QScalar> mag, magsqr;
+	lensmatrix<QScalar> amatrix, ainv;
+	lensvector<QScalar> bvec;
+	lensmatrix<QScalar> jac;
+	lensvector<QScalar> src_bf;
+	lensvector<QScalar> *beta;
 
 	for (i=0; i < n_ptsrc; i++) {
 		if (point_image_data[i].n_images > n_images_hi) n_images_hi = point_image_data[i].n_images;
 	}
-	double* mag00 = new double[n_images_hi];
-	double* mag11 = new double[n_images_hi];
-	double* mag01 = new double[n_images_hi];
-	lensvector<double>* beta_ji = new lensvector<double>[n_images_hi];
+	QScalar* mag00 = new QScalar[n_images_hi];
+	QScalar* mag11 = new QScalar[n_images_hi];
+	QScalar* mag01 = new QScalar[n_images_hi];
+	lensvector<QScalar>* beta_ji = new lensvector<QScalar>[n_images_hi];
 
-	double sigsq, signormfac, siginv, src_norm;
+	QScalar sigsq, signormfac, siginv, src_norm;
 	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	int redshift_idx;
 	for (i=0; i < n_ptsrc; i++) {
@@ -8777,7 +8788,7 @@ double QLens::chisq_pos_source_plane()
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].use_in_chisq) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian<double>(point_image_data[i].images[j].pos,beta_ji[j],jac,0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					sourcept_jacobian<QScalar>(point_image_data[i].images[j].pos,beta_ji[j],jac,0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					mag = jac.inverse();
 					mag00[j] = mag[0][0];
 					mag01[j] = mag[0][1];
@@ -8794,7 +8805,7 @@ double QLens::chisq_pos_source_plane()
 						bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
 					}
 				} else {
-					find_sourcept<double>(point_image_data[i].images[j].pos,beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					find_sourcept<QScalar>(point_image_data[i].images[j].pos,beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					if (use_analytic_bestfit_src) {
 						siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 						src_bf[0] += beta_ji[j][0]*siginv;
@@ -8845,8 +8856,10 @@ double QLens::chisq_pos_source_plane()
 	if ((group_id==0) and (logfile.is_open())) logfile << "it=" << chisq_it << " chisq=" << chisq << endl;
 	return chisq;
 }
+template double QLens::chisq_pos_source_plane<double>();
 
-double QLens::chisq_pos_image_plane()
+template<typename QScalar>
+QScalar QLens::chisq_pos_image_plane()
 {
 	int n_redshift_groups = ptsrc_redshift_groups.size()-1;
 	if (n_redshift_groups != n_ptsrc_redshifts) die("wrong number of ptsrc redshift groups");
@@ -8863,12 +8876,12 @@ double QLens::chisq_pos_image_plane()
 		if (group_id == group_np-1) mpi_chunk += (n_redshift_groups % group_np); // assign the remainder elements to the last mpi process
 	}
 
-	if (use_analytic_bestfit_src) set_analytic_sourcepts();
+	if (use_analytic_bestfit_src) set_analytic_sourcepts<double>();
 
-	double chisq=0, chisq_part=0;
+	QScalar chisq=0, chisq_part=0;
 
 	int n_images, n_tot_images=0, n_tot_images_part=0;
-	double sigsq, signormfac, chisq_each_srcpt, dist;
+	QScalar sigsq, signormfac, chisq_each_srcpt, dist;
 	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	int i,j,k,m,n;
 	int redshift_idx;
@@ -8908,7 +8921,7 @@ double QLens::chisq_pos_image_plane()
 			}
 
 			int n_dists = n_visible_images*point_image_data[i].n_images;
-			double *distsqrs = new double[n_dists];
+			QScalar *distsqrs = new QScalar[n_dists];
 			int *data_k = new int[n_dists];
 			int *model_j = new int[n_dists];
 			n=0;
@@ -8926,7 +8939,7 @@ double QLens::chisq_pos_image_plane()
 			sort(n_dists,distsqrs,data_k,model_j);
 			int *closest_image_j = new int[point_image_data[i].n_images];
 			int *closest_image_k = new int[n_images];
-			double *closest_distsqrs = new double[point_image_data[i].n_images];
+			QScalar *closest_distsqrs = new QScalar[point_image_data[i].n_images];
 			for (k=0; k < point_image_data[i].n_images; k++) closest_image_j[k] = -1;
 			for (j=0; j < n_images; j++) closest_image_k[j] = -1;
 			int m=0;
@@ -8980,8 +8993,10 @@ double QLens::chisq_pos_image_plane()
 	n_visible_images = n_tot_images; // save the total number of visible images produced
 	return chisq;
 }
+template double QLens::chisq_pos_image_plane<double>();
 
-double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double &rms_imgpos_err, int &n_matched_images, const string output_filename)
+template<typename QScalar>
+QScalar QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double &rms_imgpos_err, int &n_matched_images, const string output_filename)
 {
 	int n_redshift_groups = ptsrc_redshift_groups.size()-1;
 	int mpi_chunk=n_redshift_groups, mpi_start=0;
@@ -8997,14 +9012,14 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 		if (group_id == group_np-1) mpi_chunk += (n_redshift_groups % group_np); // assign the remainder elements to the last mpi process
 	}
 
-	if (use_analytic_bestfit_src) set_analytic_sourcepts(verbose);
+	if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(verbose);
 
-	double chisq=0, chisq_part=0, rms_part=0;
+	QScalar chisq=0, chisq_part=0, rms_part=0;
 	int n_images, n_tot_images=0, n_tot_images_part=0, n_matched_images_part=0;
-	double sigsq, signormfac, chisq_each_srcpt, n_matched_images_each_srcpt, rms_err_each_srcpt, dist;
+	QScalar sigsq, signormfac, chisq_each_srcpt, n_matched_images_each_srcpt, rms_err_each_srcpt, dist;
 	rms_imgpos_err = 0;
 	n_matched_images = 0;
-	vector<double> closest_chivals, closest_xvals_model, closest_yvals_model, closest_xvals_data, closest_yvals_data;
+	vector<QScalar> closest_chivals, closest_xvals_model, closest_yvals_model, closest_xvals_data, closest_yvals_data;
 
 	if (syserr_pos == 0.0) signormfac = 0.0; // signormfac is the correction to chi-square to account for unknown systematic error
 	int i,j,k,m,n;
@@ -9047,7 +9062,7 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 			}
 
 			int n_dists = n_visible_images*point_image_data[i].n_images;
-			double *distsqrs = new double[n_dists];
+			QScalar *distsqrs = new QScalar[n_dists];
 			int *data_k = new int[n_dists];
 			int *model_j = new int[n_dists];
 			n=0;
@@ -9064,7 +9079,7 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 			sort(n_dists,distsqrs,data_k,model_j);
 			int *closest_image_j = new int[point_image_data[i].n_images];
 			int *closest_image_k = new int[n_images];
-			double *closest_distsqrs = new double[point_image_data[i].n_images];
+			QScalar *closest_distsqrs = new QScalar[point_image_data[i].n_images];
 			for (k=0; k < point_image_data[i].n_images; k++) closest_image_j[k] = -1;
 			for (j=0; j < n_images; j++) closest_image_k[j] = -1;
 			int m=0;
@@ -9079,7 +9094,7 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 				}
 			}
 
-			double chisq_this_img, chi_x, chi_y;
+			QScalar chisq_this_img, chi_x, chi_y;
 			int this_src_nimgs = point_image_data[i].n_images;
 			for (k=0; k < point_image_data[i].n_images; k++) {
 				sigsq = SQR(point_image_data[i].images[k].sigma_pos);
@@ -9148,11 +9163,11 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 	rms_imgpos_err = rms_part;
 #endif
 	rms_imgpos_err = sqrt(rms_imgpos_err/n_matched_images);
-	double *chi_all_images = new double[2*n_matched_images];
-	double *model_xvals_all_images = new double[2*n_matched_images];
-	double *model_yvals_all_images = new double[2*n_matched_images];
-	double *data_xvals_all_images = new double[2*n_matched_images];
-	double *data_yvals_all_images = new double[2*n_matched_images];
+	QScalar *chi_all_images = new QScalar[2*n_matched_images];
+	QScalar *model_xvals_all_images = new QScalar[2*n_matched_images];
+	QScalar *model_yvals_all_images = new QScalar[2*n_matched_images];
+	QScalar *data_xvals_all_images = new QScalar[2*n_matched_images];
+	QScalar *data_yvals_all_images = new QScalar[2*n_matched_images];
 	int *nmatched_parts = new int[group_np];
 
 #ifdef USE_MPI
@@ -9196,12 +9211,12 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 #endif
 	if ((group_id==0) and (output_residuals_to_file)) {
 		sort(2*n_matched_images,chi_all_images,model_xvals_all_images,model_yvals_all_images,data_xvals_all_images,data_yvals_all_images);
-		double frac;
+		QScalar frac;
 		ofstream outfile(output_filename.c_str());
 		outfile << "#chi fraction(>chi) model_x model_y data_x data_y" << endl;
 		for (i=0; i < 2*n_matched_images; i++) {
 			j = 2*n_matched_images-i-1;
-			frac = ((double) j)/(2.0*n_matched_images);
+			frac = ((QScalar) j)/(2.0*n_matched_images);
 			outfile << chi_all_images[i] << " " << frac << " " << model_xvals_all_images[i] << " " << model_yvals_all_images[i] << " " << data_xvals_all_images[i] << " " << data_yvals_all_images[i] << endl;
 		}
 	}
@@ -9217,23 +9232,25 @@ double QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool ou
 	delete[] data_yvals_all_images;
 	return chisq;
 }
+template double QLens::chisq_pos_image_plane_diagnostic<double>(const bool verbose, const bool output_residuals_to_file, double &rms_imgpos_err, int &n_matched_images, const string output_filename);
 
-void QLens::find_analytic_srcflux(double *bestfit_flux)
+template<typename QScalar>
+void QLens::find_analytic_srcflux(QScalar *bestfit_flux)
 {
-	double chisq=0;
+	QScalar chisq=0;
 	int n_total_images=0;
 	int i,j,k=0;
 
 	for (i=0; i < n_ptsrc; i++)
 		for (j=0; j < point_image_data[i].n_images; j++) n_total_images++;
-	double image_mag;
+	QScalar image_mag;
 
-	lensmatrix<double> jac;
+	lensmatrix<QScalar> jac;
 	for (i=0; i < n_ptsrc; i++) {
-		double num=0, denom=0;
+		QScalar num=0, denom=0;
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].sigma_flux==0) { k++; continue; }
-			hessian<double>(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
+			hessian<QScalar>(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
@@ -9251,10 +9268,12 @@ void QLens::find_analytic_srcflux(double *bestfit_flux)
 		else bestfit_flux[i] = num/denom;
 	}
 }
+template void QLens::find_analytic_srcflux<double>(double *bestfit_flux);
 
+template<typename QScalar>
 void QLens::set_analytic_srcflux(const bool verbal)
 {
-	double *srcflux = new double[n_ptsrc];
+	QScalar *srcflux = new QScalar[n_ptsrc];
 	find_analytic_srcflux(srcflux);
 	for (int i=0; i < n_ptsrc; i++) {
 		ptsrc_list[i]->srcflux = srcflux[i];
@@ -9266,25 +9285,27 @@ void QLens::set_analytic_srcflux(const bool verbal)
 	}
 	delete[] srcflux;
 }
+template void QLens::set_analytic_srcflux<double>(const bool verbal);
 
-double QLens::chisq_flux()
+template<typename QScalar>
+QScalar QLens::chisq_flux()
 {
-	double chisq=0;
+	QScalar chisq=0;
 	int n_images_hi=0;
 	int i,j,k;
 
 	for (i=0; i < n_ptsrc; i++) {
 		if (point_image_data[i].n_images > n_images_hi) n_images_hi = point_image_data[i].n_images;
 	}
-	double* image_mags = new double[n_images_hi];
+	QScalar* image_mags = new QScalar[n_images_hi];
 
-	lensmatrix<double> jac;
-	double flux_src, num, denom;
+	lensmatrix<QScalar> jac;
+	QScalar flux_src, num, denom;
 	for (i=0; i < n_ptsrc; i++) {
 		k=0; num=0; denom=0;
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].sigma_flux==0) { k++; continue; }
-			hessian<double>(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
+			hessian<QScalar>(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
@@ -9326,10 +9347,12 @@ double QLens::chisq_flux()
 	delete[] image_mags;
 	return chisq;
 }
+template double QLens::chisq_flux<double>();
 
-double QLens::chisq_time_delays()
+template<typename QScalar>
+QScalar QLens::chisq_time_delays()
 {
-	double chisq=0;
+	QScalar chisq=0;
 	int n_images_hi=0;
 	int i,j,k;
 
@@ -9337,12 +9360,12 @@ double QLens::chisq_time_delays()
 		if (point_image_data[i].n_images > n_images_hi) n_images_hi = point_image_data[i].n_images;
 	}
 
-	double td_factor;
-	double* time_delays_obs = new double[n_images_hi];
-	double* time_delays_mod = new double[n_images_hi];
-	double min_td_obs, min_td_mod;
-	double pot;
-	lensvector<double> beta_ij;
+	QScalar td_factor;
+	QScalar* time_delays_obs = new QScalar[n_images_hi];
+	QScalar* time_delays_mod = new QScalar[n_images_hi];
+	QScalar min_td_obs, min_td_mod;
+	QScalar pot;
+	lensvector<QScalar> beta_ij;
 	double *specific_zfacs;
 	double **specific_betafacs;
 	for (k=0, i=0; i < n_ptsrc; i++) {
@@ -9353,8 +9376,8 @@ double QLens::chisq_time_delays()
 		min_td_mod=1e30;
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].sigma_td==0) continue;
-			find_sourcept<double>(point_image_data[i].images[j].pos,beta_ij,0,specific_zfacs,specific_betafacs);
-			pot = potential<double>(point_image_data[i].images[j].pos,specific_zfacs,specific_betafacs);
+			find_sourcept<QScalar>(point_image_data[i].images[j].pos,beta_ij,0,specific_zfacs,specific_betafacs);
+			pot = potential<QScalar>(point_image_data[i].images[j].pos,specific_zfacs,specific_betafacs);
 			time_delays_mod[j] = 0.5*(SQR(point_image_data[i].images[j].pos[0] - beta_ij[0]) + SQR(point_image_data[i].images[j].pos[1] - beta_ij[1])) - pot;
 			if (time_delays_mod[j] < min_td_mod) min_td_mod = time_delays_mod[j];
 
@@ -9379,25 +9402,27 @@ double QLens::chisq_time_delays()
 	delete[] time_delays_mod;
 	return chisq;
 }
+template double QLens::chisq_time_delays<double>();
 
-double QLens::chisq_time_delays_from_model_imgs()
+template<typename QScalar>
+QScalar QLens::chisq_time_delays_from_model_imgs()
 {
 	// this version evaluates the time delay at the position of the model images (useful if doing pixel modeling)
 	// currently this chisq only works when doing image pixel modeling
 
-	double chisq=0;
+	QScalar chisq=0;
 	int n_images_hi = 0;
 	int i,j,k,n;
 	for (i=0; i < n_ptsrc; i++) {
 		if (ptsrc_list[i]->images.size() > n_images_hi) n_images_hi = ptsrc_list[i]->images.size();
 	}
-	double* time_delays_mod = new double[n_images_hi];
+	QScalar* time_delays_mod = new QScalar[n_images_hi];
 	bool zero_td_exists; // if true, then one of the data images has time delay of zero, so model time delays should subtract the TD of the corresponding model image to reproduce this zero point
 	int zero_td_indx;
-	double td_offset;
+	QScalar td_offset;
 
 	int n_images, n_tot_images=0;
-	double sigsq, chisq_each_srcpt, dist;
+	QScalar sigsq, chisq_each_srcpt, dist;
 	bool skip;
 	for (i=0; i < n_ptsrc; i++) {
 		n_images = ptsrc_list[i]->images.size();
@@ -9428,7 +9453,7 @@ double QLens::chisq_time_delays_from_model_imgs()
 		}
 
 		int n_dists = n_images*point_image_data[i].n_images;
-		double *distsqrs = new double[n_dists];
+		QScalar *distsqrs = new QScalar[n_dists];
 		int *data_k = new int[n_dists];
 		int *model_j = new int[n_dists];
 		n=0;
@@ -9498,13 +9523,15 @@ double QLens::chisq_time_delays_from_model_imgs()
 	delete[] time_delays_mod;
 	return chisq;
 }
+template double QLens::chisq_time_delays_from_model_imgs<double>();
 
-double QLens::chisq_weak_lensing()
+template<typename QScalar>
+QScalar QLens::chisq_weak_lensing()
 {
 	int i,j,nsrc = weak_lensing_data.n_sources;
 	if (nsrc==0) return 0;
-	double chisq=0;
-	double g1,g2;
+	QScalar chisq=0;
+	QScalar g1,g2;
 	double **zfacs = new double*[nsrc];
 	for (i=0; i < nsrc; i++) {
 		zfacs[i] = new double[n_lens_redshifts];
@@ -9523,7 +9550,7 @@ double QLens::chisq_weak_lensing()
 			for (j=0; j < n_lens_redshifts; j++) {
 				zfacs[i][j] = cosmo->kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
 			}
-			reduced_shear_components<double>(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
+			reduced_shear_components<QScalar>(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
 			chisq += SQR((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]) + SQR((wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i]);
 
 		}
@@ -9532,6 +9559,7 @@ double QLens::chisq_weak_lensing()
 	delete[] zfacs;
 	return chisq;
 }
+template double QLens::chisq_weak_lensing<double>();
 
 bool QLens::output_weak_lensing_chivals(string filename)
 {
@@ -10262,9 +10290,10 @@ void QLens::output_fit_results(double *fitparams, Vector<double> &stepsizes, con
 	}
 
 	int n_fitparams = param_list->nparams;
-	double transformed_params[n_fitparams];
+	double* transformed_params = new double[n_fitparams];
 	fitmodel->param_list->inverse_transform_parameters(fitparams,transformed_params);
 	fitmodel->update_model(transformed_params);
+	delete[] transformed_params;
 	for (int i=0; i < nlens; i++) {
 		fitmodel->lens_list[i]->reset_angle_modulo_2pi();
 	}
@@ -11137,7 +11166,7 @@ bool QLens::adopt_model(Vector<double> &fitpars)
 		}
 		return false;
 	}
-	double transformed_params[n_fitparams];
+	//double *transformed_params = new double[n_fitparams];
 	param_list->update_param_values(fitpars.array());
 	param_list->inverse_transform_parameters();
 	double log_penalty_prior = update_model(param_list->untransformed_values); // the model is adopted here
@@ -11168,8 +11197,8 @@ bool QLens::adopt_model(Vector<double> &fitpars)
 	for (i=0; i < n_sb; i++) {
 		sb_list[i]->reset_angle_modulo_2pi();
 	}
-	if ((n_ptsrc > 0) and (use_analytic_bestfit_src)) set_analytic_sourcepts(false);
-	if ((n_ptsrc > 0) and (include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
+	if ((n_ptsrc > 0) and (use_analytic_bestfit_src)) set_analytic_sourcepts<double>(false);
+	if ((n_ptsrc > 0) and (include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(false);
 	reset_grid(); // this will force it to redraw the critical curves if needed
 	if (log_penalty_prior > 0) warn(warnings,"adopted parameters are generating a penalty prior; this may be due to parameters being out of plimit ranges");
 
@@ -12655,7 +12684,7 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const int srcnum, const do
 	int n_profile_params = 3;
 	if (include_m3_fmode) n_profile_params += 2;
 	if (include_m4_fmode) n_profile_params += 2;
-	string label[n_profile_params];
+	string *label = new string[n_profile_params];
 	label[0] = "sbprofile"; // SB profile 
 	label[1] = "egrad_profile0"; // axis ratio q
 	label[2] = "egrad_profile1"; // angle theta
@@ -12783,6 +12812,7 @@ bool QLens::output_scaled_percentiles_from_egrad_fits(const int srcnum, const do
 		delete[] priorlo;
 		delete[] priorhi;
 	}
+	delete[] label;
 	scriptout << "source update 0 xc=" << xcavg << " yc=" << ycavg << endl << endl;
 
 	return true;
@@ -13197,7 +13227,7 @@ double QLens::fitmodel_loglike_point_source(const double* params)
 	double loglike=0, chisq_total=0, chisq;
 	double log_penalty_prior;
 	int n_fitparams = param_list->nparams;
-	double transformed_params[n_fitparams];
+	double* transformed_params = new double[n_fitparams];
 	if (params != NULL) {
 		fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
 		//fitmodel->param_list->print_penalty_limits();
@@ -13209,8 +13239,9 @@ double QLens::fitmodel_loglike_point_source(const double* params)
 			}
 		}
 		//fitmodel->param_list->print_penalty_limits();
-		if (penalty_incurred) return 1e30;
+		if (penalty_incurred) { delete[] transformed_params; return 1e30; }
 		log_penalty_prior = fitmodel->update_model(transformed_params);
+		delete[] transformed_params;
 		if (log_penalty_prior >= 1e30) return log_penalty_prior; // don't bother to evaluate chi-square if there is huge prior penalty; wastes time
 		else if (log_penalty_prior > 0) loglike += log_penalty_prior;
 
@@ -13230,20 +13261,20 @@ double QLens::fitmodel_loglike_point_source(const double* params)
 			used_imgplane_chisq = true;
 			double* remember_grid_zfac = Grid::grid_zfactors;
 			double** remember_grid_betafac = Grid::grid_betafactors;
-			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,false,rms_err,n_matched_imgs);
-			else chisq = fitmodel->chisq_pos_image_plane();
+			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic<double>(true,false,rms_err,n_matched_imgs);
+			else chisq = fitmodel->chisq_pos_image_plane<double>();
 			// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. This is has already been done for CartesianSourceGrid (versus CartesianSourcePixel), so just copy what you did there. DO THIS BEFORE RELEASING PUBLICLY!!!!
 			Grid::grid_zfactors = remember_grid_zfac;
 			Grid::grid_betafactors = remember_grid_betafac;
 		}
 		else {
 			used_imgplane_chisq = false;
-			chisq = fitmodel->chisq_pos_source_plane();
+			chisq = fitmodel->chisq_pos_source_plane<double>();
 			if (chisq < chisq_imgplane_substitute_threshold) {
 				double* remember_grid_zfac = Grid::grid_zfactors;
 				double** remember_grid_betafac = Grid::grid_betafactors;
-				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic(true,false,rms_err,n_matched_imgs);
-				else chisq = fitmodel->chisq_pos_image_plane();
+				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic<double>(true,false,rms_err,n_matched_imgs);
+				else chisq = fitmodel->chisq_pos_image_plane<double>();
 			// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. This is has already been done for CartesianSourceGrid (versus CartesianSourcePixel), so just copy what you did there. DO THIS BEFORE RELEASING PUBLICLY!!!!
 				Grid::grid_zfactors = remember_grid_zfac;
 				Grid::grid_betafactors = remember_grid_betafac;
@@ -13306,7 +13337,7 @@ double QLens::fitmodel_loglike_point_source(const double* params)
 	}
 	chisq_total += chisq;
 	if (include_flux_chisq) {
-		chisq = fitmodel->chisq_flux();
+		chisq = fitmodel->chisq_flux<double>();
 		chisq_total += chisq;
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (showed_first_chisq) cout << ", ";
@@ -13315,7 +13346,7 @@ double QLens::fitmodel_loglike_point_source(const double* params)
 		}
 	}
 	if (include_time_delay_chisq) {
-		chisq = fitmodel->chisq_time_delays();
+		chisq = fitmodel->chisq_time_delays<double>();
 		chisq_total += chisq;
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (showed_first_chisq) cout << ", ";
@@ -13324,7 +13355,7 @@ double QLens::fitmodel_loglike_point_source(const double* params)
 		}
 	}
 	if (include_weak_lensing_chisq) {
-		chisq = fitmodel->chisq_weak_lensing();
+		chisq = fitmodel->chisq_weak_lensing<double>();
 		chisq_total += chisq;
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (showed_first_chisq) cout << ", ";
@@ -13367,7 +13398,7 @@ double QLens::fitmodel_loglike_extended_source(const double* params)
 		update_wtime0 = omp_get_wtime();
 	}
 #endif
-	double transformed_params[param_list->nparams];
+	double *transformed_params = new double[param_list->nparams];
 	double loglike=0, chisq=0, chisq0, chisq_td;
 	double log_penalty_prior;
 	int n_fitparams = param_list->nparams;
@@ -13378,6 +13409,7 @@ double QLens::fitmodel_loglike_extended_source(const double* params)
 				//cout << "parameter " << i << ": plimits " << fitmodel->param_list->penalty_limits_lo[i] << fitmodel->param_list->penalty_limits_hi[i] << endl;
 				if ((transformed_params[i] < fitmodel->param_list->untransformed_prior_limits_lo[i]) or (transformed_params[i] > fitmodel->param_list->untransformed_prior_limits_hi[i])) {
 					//cout << "RUHROH parameter " << i << ": " << transformed_params[i] << endl;
+					delete[] transformed_params;
 					return 1e30;
 				}
 			}
@@ -13386,7 +13418,10 @@ double QLens::fitmodel_loglike_extended_source(const double* params)
 		//cout << "updaing model" << endl;
 		log_penalty_prior = fitmodel->update_model(transformed_params);
 		//cout << "done updating model" << endl;
-		if (log_penalty_prior >= 1e30) return log_penalty_prior; // don't bother to evaluate chi-square if there is huge prior penalty; wastes time
+		if (log_penalty_prior >= 1e30) {
+			delete[] transformed_params;
+			return log_penalty_prior; // don't bother to evaluate chi-square if there is huge prior penalty; wastes time
+		}
 		else if (log_penalty_prior > 0) loglike += log_penalty_prior;
 
 		if (group_id==0) {
@@ -13422,7 +13457,7 @@ double QLens::fitmodel_loglike_extended_source(const double* params)
 	fitmodel->raw_chisq = chisq0;
 	loglike += chisq/2;
 	if (include_time_delay_chisq) {
-		chisq_td = fitmodel->chisq_time_delays_from_model_imgs();
+		chisq_td = fitmodel->chisq_time_delays_from_model_imgs<double>();
 		loglike += chisq_td/2;
 	}
 	if (params != NULL) {
@@ -13435,6 +13470,7 @@ double QLens::fitmodel_loglike_extended_source(const double* params)
 		}
 		if (use_custom_prior) loglike += fitmodel_custom_prior();
 	}
+	delete[] transformed_params;
 	if ((display_chisq_status) and (mpi_id==0)) {
 		if (use_ansi_characters) cout << "\033[2A" << flush;
 		cout << "chisq0=" << chisq0;
@@ -13454,7 +13490,7 @@ double QLens::fitmodel_loglike_extended_source(const double* params)
 double QLens::loglike_point_source(const double* params)
 {
 	// can use this version for testing purposes in case there is any doubt about whether the fitmodel version is faithfully reproducing the original
-	double transformed_params[param_list->nparams];
+	double *transformed_params = new double[param_list->nparams];
 	param_list->inverse_transform_parameters(params,transformed_params);
 	for (int i=0; i < param_list->nparams; i++) {
 		if (param_list->defined_prior_limits[i]==true) {
@@ -13462,7 +13498,10 @@ double QLens::loglike_point_source(const double* params)
 		}
 	}
 	//if (update_fitmodel(transformed_params)==false) return 1e30;
-	if (fitmodel->update_model(transformed_params) != 0.0) return 1e30;
+	if (fitmodel->update_model(transformed_params) != 0.0) {
+		delete[] transformed_params;
+		return 1e30;
+	}
 	if (group_id==0) {
 		if (logfile.is_open()) {
 			for (int i=0; i < param_list->nparams; i++) logfile << params[i] << " ";
@@ -13472,7 +13511,7 @@ double QLens::loglike_point_source(const double* params)
 
 	double loglike, chisq_total=0, chisq;
 	if (imgplane_chisq) {
-		chisq = chisq_pos_image_plane();
+		chisq = chisq_pos_image_plane<double>();
 		if ((display_chisq_status) and (mpi_id==0)) {
 			int tot_data_images = 0;
 			for (int i=0; i < n_ptsrc; i++) tot_data_images += point_image_data[i].n_images;
@@ -13481,21 +13520,21 @@ double QLens::loglike_point_source(const double* params)
 		}
 	}
 	else {
-		chisq = chisq_pos_source_plane();
+		chisq = chisq_pos_source_plane<double>();
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (chisq_it % chisq_display_frequency == 0) cout << "chisq_pos=" << chisq;
 		}
 	}
 	chisq_total += chisq;
 	if (include_flux_chisq) {
-		chisq = chisq_flux();
+		chisq = chisq_flux<double>();
 		chisq_total += chisq;
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (chisq_it % chisq_display_frequency == 0) cout << ", chisq_flux=" << chisq;
 		}
 	}
 	if (include_time_delay_chisq) {
-		chisq = chisq_time_delays();
+		chisq = chisq_time_delays<double>();
 		chisq_total += chisq;
 		if ((display_chisq_status) and (mpi_id==0)) {
 			if (chisq_it % chisq_display_frequency == 0) cout << ", chisq_td=" << chisq;
@@ -13511,6 +13550,7 @@ double QLens::loglike_point_source(const double* params)
 
 	param_list->add_prior_terms_to_loglike(params,loglike);
 	param_list->add_jacobian_terms_to_loglike(transformed_params,loglike);
+	delete[] transformed_params;
 	if (use_custom_prior) loglike = fitmodel_custom_prior();
 	chisq_it++;
 	return loglike;
@@ -13520,9 +13560,10 @@ void QLens::fitmodel_calculate_derived_params(double* params, double* derived_pa
 {
 	if (dparam_list->n_dparams==0) return;
 	//fitmodel->param_list->update_untransformed_values(params);
-	double transformed_params[param_list->nparams];
+	double *transformed_params = new double[param_list->nparams];
 	fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
 	if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
+	delete[] transformed_params;
 	fitmodel->dparam_list->get_dparams(derived_params);
 	//for (int i=0; i < dparam_list->n_dparams; i++) derived_params[i] = dparam_list->dparams[i]->get_derived_param(fitmodel);
 	clear_raw_chisq();
@@ -15329,8 +15370,8 @@ const bool QLens::output_lensed_surface_brightness(Vector<double>& xvals, Vector
 
 			if ((n_ptsrc > 0) and (!exclude_ptimgs)) {
 				if (zsrc_i==0) {
-					if (use_analytic_bestfit_src) set_analytic_sourcepts(verbose);
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(verbose);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(verbose);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(verbose);
 					bool is_lensed;
 					for (i=0; i < n_ptsrc; i++) {
 						is_lensed = true;
@@ -16275,8 +16316,8 @@ void QLens::setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bo
 		}
 		if (imggrid_i==0) {
 			if (n_ptsrc > 0) {
-				if (use_analytic_bestfit_src) set_analytic_sourcepts(verbal);
-				if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(verbal);
+				if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(verbal);
+				if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(verbal);
 				bool is_lensed;
 				for (i=0; i < n_ptsrc; i++) {
 					is_lensed = true;

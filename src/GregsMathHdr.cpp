@@ -701,8 +701,8 @@ double Derivative::Ridders(double (Derivative::*func)(const double), const doubl
 	const double SAFE=2.0;
 	int i,j;
 	double errt,fac,hh,ans=0.0;
-	double a[NTAB][NTAB];
-	//double **a = matrix <double> (NTAB, NTAB);
+	//double a[NTAB][NTAB];
+	double **a = matrix <double> (NTAB, NTAB);
 
 	hh=h;
 	a[0][0]=((this->*func)(x+hh)-(this->*func)(x-hh))/(2.0*hh);
@@ -722,6 +722,7 @@ double Derivative::Ridders(double (Derivative::*func)(const double), const doubl
 		}
 		if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
 	}
+	del <double> (a, NTAB);
 	return ans;
 }
 
@@ -733,8 +734,8 @@ double Derivative::Ridders(double (Derivative::*func)(const double *), double *x
 	int i,j;
 	double errt,fac,hh,ans=0.0;
 	double x0 = x[in];
-	double a[NTAB][NTAB];
-	//double **a = matrix <double> (NTAB, NTAB);
+	//double a[NTAB][NTAB];
+	double **a = matrix <double> (NTAB, NTAB);
 
 	hh=h;
 	x[in] = x0 + hh;
@@ -763,6 +764,7 @@ double Derivative::Ridders(double (Derivative::*func)(const double *), double *x
 		if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
 	}
 	x[in] = x0;
+	del <double> (a, NTAB);
 	return ans;
 }
 
@@ -774,8 +776,8 @@ double Derivative::Ridders(double (Derivative::*func)(double *, int), double *x,
 	int i,j;
 	double errt,fac,hh,ans=0.0;
 	double x0 = x[jn];
-	double a[NTAB][NTAB];
-	//double **a = matrix <double> (NTAB, NTAB);
+	//double a[NTAB][NTAB];
+	double **a = matrix <double> (NTAB, NTAB);
 
 	hh=h;
 	x[jn] = x0 + hh;
@@ -804,6 +806,7 @@ double Derivative::Ridders(double (Derivative::*func)(double *, int), double *x,
 		if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
 	}
 	x[jn] = x0;
+	del <double> (a, NTAB);
 	return ans;
 }
 

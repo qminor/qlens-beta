@@ -169,8 +169,8 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 	if (a <= 0) die("no parameters found in input file");
 	minvals = new double[a];
 	maxvals = new double[a];
-	double lowcut[a];
-	double highcut[a];
+	double *lowcut = new double[a];
+	double *highcut = new double[a];
 	int k;
 	for (k=0; k < a; k++) {
 		lowcut[k] = minvals[k] = 1e30;
@@ -378,6 +378,8 @@ void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, dou
 	derived_mults = new double[totPts];
 
 	FindMinChisq();
+	delete[] lowcut;
+	delete[] highcut;
 }
 
 void McmcEval::OutputChainHeader()

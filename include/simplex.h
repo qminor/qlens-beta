@@ -52,7 +52,7 @@ class Simplex : public Random
 		tfinal = tfinal_default;
 		tinc = tinc_default;
 		initialized = false;
-		double disps_in[ndim_in];
+		double *disps_in = new double[ndim_in];
 		for (int i=0; i < ndim_in; i++) disps_in[i] = vertex_displacement;
 		set_random_seed(seed_in);
 		initialize_simplex(point,ndim_in,disps_in,ftol_in);
@@ -60,6 +60,7 @@ class Simplex : public Random
 		simplex_display_bestfit_point = false;
 		fmin = -1e30;
 		fmin_anneal = -1e30;
+		delete[] disps_in;
 	}
 	Simplex(double* point, const int& ndim_in, double* vertex_displacements, const double& ftol_in, const int seed_in)
 	{
@@ -79,9 +80,10 @@ class Simplex : public Random
 	void initialize_simplex(double* point, const int& ndim_in, const double& vertex_displacement, const double& ftol_in)
 	{
 		// Here we assign the same initial displacement amount for each vertex
-		double disps_in[ndim_in];
+		double *disps_in = new double[ndim_in];
 		for (int i=0; i < ndim_in; i++) disps_in[i] = vertex_displacement;
 		initialize_simplex(point,ndim_in,disps_in,ftol_in);
+		delete[] disps_in;
 	}
 	void initialize_simplex(double* point, const int& ndim_in, double* vertex_displacements, const double& ftol_in);
 	void simplex_set_function(double (Simplex::*func_in)(const double*)) { func = func_in; }

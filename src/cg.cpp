@@ -228,14 +228,24 @@ void CG_sparse::solve(double* b, double* x)
 	static const double EPS=1.0e-14;
 	int j,k;
 
-	double p[n];
-	double r[n];
-	double z[n];
-	double y[n];
-	double y2[n];
-	double alpha[n];
-	double beta[n];
-	double akk[n], bkk[n];
+	//double p[n];
+	//double r[n];
+	//double z[n];
+	//double y[n];
+	//double y2[n];
+	//double alpha[n];
+	//double beta[n];
+	//double akk[n], bkk[n];
+
+	double *p = new double[n];
+	double *r = new double[n];
+	double *z = new double[n];
+	double *y = new double[n];
+	double *y2 = new double[n];
+	double *alpha = new double[n];
+	double *beta = new double[n];
+	double *akk = new double[n];
+	double *bkk = new double[n];
 
 	double log_pre_det, log_pre_det_last, log_predet_temp;
 	double errnorm;
@@ -244,7 +254,10 @@ void CG_sparse::solve(double* b, double* x)
 
 	iterations=0;
 	k=0;
-	double rho[n], sigma[n], gamma[n]; // used to find determinant after solution has already converged
+	double *rho = new double[n]; 
+	double *sigma = new double[n];
+	double *gamma = new double[n];
+
 	double rnrm, old_rnrm=1.0, older_rnrm, signorm, old_signorm=1.0;
 
 #ifdef USE_OPENMP
@@ -473,6 +486,18 @@ void CG_sparse::solve(double* b, double* x)
 		//cout << "Determinant: " << det << endl;
 	}
 	ratio_mode = false;
+	delete[] p;
+	delete[] r;
+	delete[] z;
+	delete[] y;
+	delete[] y2;
+	delete[] alpha;
+	delete[] beta;
+	delete[] akk;
+	delete[] bkk;
+	delete[] rho; 
+	delete[] sigma;
+	delete[] gamma;
 }
 
 double CG_sparse::calculate_log_determinant()
@@ -482,17 +507,25 @@ double CG_sparse::calculate_log_determinant()
 	static const double EPS=1.0e-14;
 	int j,k;
 
-	double y[n];
-	double alpha[n];
-	double beta[n];
-	double akk[n], bkk[n];
+	//double y[n];
+	//double alpha[n];
+	//double beta[n];
+	//double akk[n], bkk[n];
+
+	double* y = new double[n];
+	double* alpha = new double[n];
+	double* beta = new double[n];
+	double* akk = new double[n];
+	double* bkk = new double[n];
 
 	double log_pre_det, log_pre_det_last, log_predet_temp;
 	log_pre_det_last = 0;
 	log_pre_det = 0;
 
 	k=0;
-	double rho[n], sigma[n], gamma[n];
+	double *rho = new double[n]; 
+	double *sigma = new double[n];
+	double *gamma = new double[n];
 	double signorm, old_signorm=1.0;
 
 #ifdef USE_OPENMP
@@ -577,6 +610,14 @@ double CG_sparse::calculate_log_determinant()
 	double log_preconditioner_det = 0;
 	for (int i=0; i < n; i++) log_preconditioner_det += log(A_sparse[i]);
 	log_determinant = log_pre_det + log_preconditioner_det; // determinant of preconditioned matrix times determinant of the preconditioner itself
+	delete[] y;
+	delete[] alpha;
+	delete[] beta;
+	delete[] akk;
+	delete[] bkk;
+	delete[] rho; 
+	delete[] sigma;
+	delete[] gamma;
 	return log_determinant;
 }
 

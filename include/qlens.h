@@ -1002,8 +1002,6 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void load_pixel_sbweights(const int imggrid_i=-1);
 	double chisq_regparam_dense(const double logreg);
 	double chisq_regparam(const double logreg);
-	template <typename T>
-	T tryfunc(const T);
 	void calculate_lumreg_srcpixel_weights(const int imggrid_i, const bool use_sbweights=false);
 	void calculate_distreg_srcpixel_weights(const int imggrid_i, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
 	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector<double> **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
@@ -1614,19 +1612,31 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void plot_mass_profile(double rmin, double rmax, int steps, const char *massname);
 	void print_lensing_info_at_point(const double x, const double y);
 
-	double chisq_pos_source_plane();
-	double chisq_pos_image_plane();
-	double chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double& rms_imgpos_err, int& n_matched_images, const string output_filename = "fit_chivals.dat");
+	template<typename QScalar>
+	QScalar chisq_pos_source_plane();
+	template<typename QScalar>
+	QScalar chisq_pos_image_plane();
+	template<typename QScalar>
+	QScalar chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double& rms_imgpos_err, int& n_matched_images, const string output_filename = "fit_chivals.dat");
 
-	double chisq_flux();
-	double chisq_time_delays();
-	double chisq_time_delays_from_model_imgs();
-	double chisq_weak_lensing();
-	bool output_weak_lensing_chivals(string filename);
-	void find_analytic_srcflux(double *bestfit_flux);
-	void find_analytic_srcpos(lensvector<double> *beta_i);
+	template<typename QScalar>
+	QScalar chisq_flux();
+	template<typename QScalar>
+	QScalar chisq_time_delays();
+	template<typename QScalar>
+	QScalar chisq_time_delays_from_model_imgs();
+	template<typename QScalar>
+	QScalar chisq_weak_lensing();
+	template<typename QScalar>
+	void find_analytic_srcflux(QScalar *bestfit_flux);
+	template<typename QScalar>
+	void find_analytic_srcpos(lensvector<QScalar> *beta_i);
+	template<typename QScalar>
 	void set_analytic_sourcepts(const bool verbal = false);
+	template<typename QScalar>
 	void set_analytic_srcflux(const bool verbal = false);
+
+	bool output_weak_lensing_chivals(string filename);
 	double get_avg_ptsrc_dist(const int ptsrc_i);
 
 	//static bool respline_at_end;
@@ -1762,8 +1772,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 #ifndef USE_EIGEN
 		if (fitmethod_in==BFGS) {
 			warn("cannot set fit method to 'bfgs' unless qlens is compiled with the Eigen library");
+			return false;
 		}
-		return false;
 #endif
 		fitmethod = fitmethod_in;
 		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
