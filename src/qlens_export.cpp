@@ -2852,7 +2852,7 @@ PYBIND11_MODULE(qlens, m) {
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		.def_property("optimize_regparam", &QLens_Wrap::get_optimize_regparam, &QLens_Wrap::set_optimize_regparam)
-		.def("set_sourcepts_auto",&QLens_Wrap::set_analytic_sourcepts, py::arg("verbal") = true)
+		.def("set_sourcepts_auto",&QLens_Wrap::set_analytic_sourcepts<double>, py::arg("verbal") = true)
 		.def("fitmodel", &QLens_Wrap::print_fit_model)
 		.def_readonly("sorted_critical_curve", &QLens_Wrap::sorted_critical_curve)
 		.def_readonly("nlens", &QLens_Wrap::nlens)

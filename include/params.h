@@ -112,6 +112,7 @@ struct DerivedParam
 			name = "re_zsrc"; latex_name = "R_{e}";
 		} else if (derived_param_type == Einstein_Mass) {
 			name = "mass_re"; latex_name = "M_{Re}";
+			if (int_param < 0) int_param = 0;
 		} else if (derived_param_type == Xi_Param) {
 			name = "xi"; latex_name = "\\xi";
 		} else if (derived_param_type == CC_Xi_Param) {
@@ -1279,6 +1280,7 @@ struct DerivedParamList
 					istr << i;
 					istr >> istring;
 					outstring += istring + ". ";
+					//std::cout << "GETTING PARAM DESCRIPTION!" << std::endl;
 					string description = dparams[i]->get_param_description(qlens);
 					outstring += description;
 				}
