@@ -272,7 +272,8 @@ def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, colo
             cc_x = []
             cc_y = []
 
-        plt.legend(loc="upper right")
+        if len(q.sorted_critical_curve) > 0:
+            plt.legend(loc="upper right")
 
     if srcplane_fig is not None:
         plt.figure(srcplane_fig.number)
@@ -297,7 +298,8 @@ def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, colo
                 label='Caustic ($z_{src}$=' + str(q.zsrc) + ')'
             srcplane_ax.plot(caustic_x, caustic_y, lw=_line_width, color=color, label=label)
             
-        plt.legend(loc="upper right")
+        if len(q.sorted_critical_curve) > 0:
+            plt.legend(loc="upper right")
 
 def add_crit_to_imgplot(QLens_Object, imgplane_fig, color='gray'):
     if(QLens_Object is None or imgplane_fig is None):

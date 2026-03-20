@@ -1298,7 +1298,7 @@ void SB_Profile::set_center_if_lensed_coords()
 		lensvector<double> xl;
 		xl[0] = x_center_lensed;
 		xl[1] = y_center_lensed;
-		qlens->find_sourcept(xl,x_center,y_center,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
+		qlens->find_sourcept<double>(xl,x_center,y_center,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
 	}
 }
 

@@ -5,7 +5,7 @@
 #include "spline.h"
 #include "egrad.h"
 #include "lensvec.h"
-//#include "profile.h"
+#include "profile.h"
 //#include "GregsMathHdr.h"
 #include "mcmchdr.h"
 #include "simplex.h"
@@ -29,8 +29,8 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	friend class SersicLens;
 	friend class DoubleSersicLens;
 	friend class Cored_SersicLens;
-	friend class SPLE_Lens;
-	friend class dPIE_Lens;
+	friend SPLE_Lens<double>;
+	friend dPIE_Lens<double>;
 	friend class NFW;
 	friend class ImagePixelGrid;
 	friend struct ImageData;
@@ -452,7 +452,7 @@ class DoubleSersic : public SB_Profile
 
 class SPLE : public SB_Profile
 {
-	friend class SPLE_Lens;
+	friend SPLE_Lens<double>;
 
 	private:
 	double bs, s, alpha;
@@ -477,7 +477,7 @@ class SPLE : public SB_Profile
 
 class dPIE : public SB_Profile
 {
-	friend class dPIE_Lens;
+	friend dPIE_Lens<double>;
 
 	private:
 	double bs, s, a;

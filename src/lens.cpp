@@ -1074,7 +1074,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 	int old_emode = LensProfile<double>::default_ellipticity_mode;
 	if (emode != -1) LensProfile<double>::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
-	SPLE_Lens* alphaptr;
+	SPLE_Lens<double>* alphaptr;
 	//Shear* shearptr;
 	//Truncated_NFW* tnfwptr;
 	switch (name) {
@@ -1085,19 +1085,19 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 		case DEFLECTION:
 			new_lens = new Deflection(zl, zs, scale1, scale2, this->cosmo); break;
 		case sple_LENS:
-			//new_lens = new SPLE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, this->cosmo); break; // the old way
+			//new_lens = new SPLE_Lens<double>(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, this->cosmo); break; // the old way
 			
-			//alphaptr = new SPLE_Lens();
+			//alphaptr = new SPLE_Lens<double>();
 			//alphaptr->initialize_parameters(mass_parameter, scale1, scale2, eparam, theta, xc, yc);
 
-			new_lens = new SPLE_Lens(zl, zs, mass_parameter, logslope_param, scale1, eparam, theta, xc, yc, pmode, this->cosmo); // an alternative constructor to use; in this->cosmo case you don't need to call initialize_parameters
+			new_lens = new SPLE_Lens<double>(zl, zs, mass_parameter, logslope_param, scale1, eparam, theta, xc, yc, pmode, this->cosmo); // an alternative constructor to use; in this->cosmo case you don't need to call initialize_parameters
 			break;
 		case SHEAR:
 			//shearptr = new Shear();
 			//shearptr->initialize_parameters(eparam,theta,xc,yc);
 			//new_lens = shearptr;
 			//break;
-			new_lens = new Shear(zl, zs, eparam, theta, xc, yc, this->cosmo); break;
+			new_lens = new Shear<double>(zl, zs, eparam, theta, xc, yc, this->cosmo); break;
 		// Note: the Multipole profile is added using the function add_multipole_lens(..., this->cosmo) because one of the input parameters is an int
 		case nfw:
 			new_lens = new NFW(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, pmode, this->cosmo); break;
@@ -1111,7 +1111,7 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 		case CORED_nfw:
 			new_lens = new Cored_NFW(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case dpie_LENS:
-			new_lens = new dPIE_Lens(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
+			new_lens = new dPIE_Lens<double>(zl, zs, mass_parameter, scale1, scale2, eparam, theta, xc, yc, pmode, this->cosmo); break;
 		case EXPDISK:
 			new_lens = new ExpDisk(zl, zs, mass_parameter, scale1, eparam, theta, xc, yc, this->cosmo); break;
 		case HERNQUIST:
@@ -1164,9 +1164,9 @@ bool QLens::spawn_lens_from_source_object(const int src_number, const double zl,
 		case DOUBLE_SERSIC:
 			new_lens = new DoubleSersicLens((DoubleSersic*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case sple:
-			new_lens = new SPLE_Lens((SPLE*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
+			new_lens = new SPLE_Lens<double>((SPLE*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case dpie:
-			new_lens = new dPIE_Lens((dPIE*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
+			new_lens = new dPIE_Lens<double>((dPIE*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case nfw_SOURCE:
 			new_lens = new NFW((NFW_Source*) sb_list[src_number], pmode, vary_mass_parameter, include_limits, mass_param_lower, mass_param_upper); break;
 		case SB_MULTIPOLE:
@@ -5009,8 +5009,8 @@ void QLens::subgrid_around_perturber_galaxies(lensvector<double> *centers, doubl
 								excluded.push_back(k);
 							}
 						}
-						kappas[i] = kappa_exclude(center,exclude,zfacs,betafacs);
-						parities[i] = sign(magnification_exclude(center,exclude,zfacs,betafacs)); // use the parity to help determine approx. size of critical curves
+						kappas[i] = kappa_exclude<double>(center,exclude,zfacs,betafacs);
+						parities[i] = sign(magnification_exclude<double>(center,exclude,zfacs,betafacs)); // use the parity to help determine approx. size of critical curves
 						// galaxies in positive-parity regions where kappa > 1 will form no critical curves, so don't subgrid around these
 						exclude[i] = false;
 						for (k=0; k < excluded.size(); k++) exclude[excluded[k]] = false; // reset the exclude flags
@@ -5129,7 +5129,7 @@ bool QLens::calculate_perturber_subgridding_scale(int lens_number, bool* perturb
 	lens_list[host_lens_number]->get_einstein_radius(dum,b,zfacs[lens_redshift_idx[host_lens_number]]);
 
 	double shear_angle, shear_tot;
-	shear_exclude(perturber_center,shear_tot,shear_angle,linked_perturber_list,zfacs,betafacs);
+	shear_exclude<double>(perturber_center,shear_tot,shear_angle,linked_perturber_list,zfacs,betafacs);
 	if (shear_angle*0.0 != 0.0) return false;
 	theta_shear = degrees_to_radians(shear_angle);
 	theta_shear -= M_PI/2.0;
@@ -5194,12 +5194,12 @@ double QLens::galaxy_subgridding_scale_equation(const double r)
 	x[0] = perturber_center[0] + r*cos(theta_shear);
 	x[1] = perturber_center[1] + r*sin(theta_shear);
 	if (subgridding_parity_at_center < 0) {
-		kappa0 = kappa_exclude(perturber_center,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
-		shear_exclude(perturber_center,shear0,shear_angle,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
+		kappa0 = kappa_exclude<double>(perturber_center,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
+		shear_exclude<double>(perturber_center,shear0,shear_angle,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
 		lambda0 = 1 - kappa0 + shear0;
 	} else {
-		kappa0 = kappa_exclude(x,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
-		shear_exclude(x,shear0,shear_angle,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
+		kappa0 = kappa_exclude<double>(x,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
+		shear_exclude<double>(x,shear0,shear_angle,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
 		lambda0 = 1 - kappa0 - shear0;
 	}
 	double r_eff = r;
@@ -5218,7 +5218,7 @@ double QLens::galaxy_subgridding_scale_equation(const double r)
 			set_source_redshift(zlsub);
 			lensvector<double> alpha;
 			// BUG!!!!!!! subgridding_zfacs is not updated by set_source_redshift
-			deflection(x,alpha,subgridding_zfacs,subgridding_betafacs);
+			deflection<double>(x,alpha,subgridding_zfacs,subgridding_betafacs);
 			set_source_redshift(zsrc0);
 			xp[0] = x[0] - alpha[0];
 			xp[1] = x[1] - alpha[1];
@@ -5240,8 +5240,8 @@ double QLens::galaxy_subgridding_scale_equation(const double r)
 				lensvector<double> xp;
 				xp[0] = perturber_center[0] + (r+dr)*cos(theta_shear);
 				xp[1] = perturber_center[1] + (r+dr)*sin(theta_shear);
-				kappa0_p = kappa_exclude(xp,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
-				shear_exclude(xp,shear0_p,shear_angle,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
+				kappa0_p = kappa_exclude<double>(xp,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
+				shear_exclude<double>(xp,shear0_p,shear_angle,linked_perturber_list,subgridding_zfacs,subgridding_betafacs);
 				double k0deriv = (kappa0_p+shear0_p-kappa0-shear0)/dr;
 				double fac = 1 - beta*(kappa0 + shear0 + r*k0deriv);
 				perturber_avg_kappa *= 1 - beta*(kappa0 + shear0 + r*k0deriv);
@@ -5274,8 +5274,8 @@ void QLens::plot_shear_field(double xmin, double xmax, int nx, double ymin, doub
 	for (i=0, x=xmin; i < nx; i++, x += xstep) {
 		for (j=0, y=ymin; j < ny; j++, y += ystep) {
 			pos[0]=x; pos[1]=y;
-			shear(pos,shearval,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
-			kapval = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
+			shear<double>(pos,shearval,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+			kapval = kappa<double>(pos,reference_zfactors,default_zsrc_beta_factors);
 			shearval /= (1-kapval); // reduced shear
 			shear_angle *= M_PI/180.0;
 			for (k=-compass_steps+1; k < compass_steps; k++)
@@ -5347,7 +5347,7 @@ void QLens::plot_weak_lensing_shear_data(const bool include_model_shear, const s
 
 		if (include_model_shear) {
 			lensvector<double> xvec(x,y);
-			reduced_shear_components(xvec,model_shear1,model_shear2,0,zfacs);
+			reduced_shear_components<double>(xvec,model_shear1,model_shear2,0,zfacs);
 			model_shearval = sqrt(model_shear1*model_shear1 + model_shear2*model_shear2);
 			model_shear_angle = atan(abs(model_shear2/model_shear1));
 			if (model_shear1 < 0) {
@@ -5660,7 +5660,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 	}
 
 	double shear_angle, shear_tot;
-	shear_exclude(perturber_center,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	shear_exclude<double>(perturber_center,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 	if (shear_angle*0.0 != 0.0) {
 		warn("could not calculate shear at position of perturber");
 		rmax_numerical = 0.0;
@@ -5692,7 +5692,7 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		double zsrc0 = source_redshift;
 		set_source_redshift(zlsub);
 		lensvector<double> defp;
-		deflection(x,defp,reference_zfactors,default_zsrc_beta_factors);
+		deflection<double>(x,defp,reference_zfactors,default_zsrc_beta_factors);
 		set_source_redshift(zsrc0);
 		xp[0] = x[0] - defp[0];
 		xp[1] = x[1] - defp[1];
@@ -5740,8 +5740,8 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 		lensvector<double> x;
 		x[0] = perturber_center[0] + rmax_numerical*cos(theta_shear);
 		x[1] = perturber_center[1] + rmax_numerical*sin(theta_shear);
-		kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		kappa0 = kappa_exclude<double>(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude<double>(x,shear_tot,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 		if (zlsub < zlprim) {
 			int i1,i2;
 			i1 = lens_redshift_idx[primary_lens_number];
@@ -5752,14 +5752,14 @@ bool QLens::calculate_critical_curve_perturbation_radius_numerical(int lens_numb
 			lensvector<double> xp;
 			xp[0] = perturber_center[0] + (rmax_numerical+dr)*cos(theta_shear);
 			xp[1] = perturber_center[1] + (rmax_numerical+dr)*sin(theta_shear);
-			kappa0_p = kappa_exclude(xp,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-			shear_exclude(xp,shear_tot_p,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			kappa0_p = kappa_exclude<double>(xp,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude<double>(xp,shear_tot_p,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			double kappa0_m, shear_tot_m;
 			lensvector<double> xm;
 			xm[0] = perturber_center[0] + (rmax_numerical-dr)*cos(theta_shear);
 			xm[1] = perturber_center[1] + (rmax_numerical-dr)*sin(theta_shear);
-			kappa0_m = kappa_exclude(xm,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-			shear_exclude(xm,shear_tot_m,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			kappa0_m = kappa_exclude<double>(xm,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude<double>(xm,shear_tot_m,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
 			double mass_scale_factor = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(rmax_numerical/rmax_perturber_z)*(1 - beta*(kappa0 + shear_tot + rmax_numerical*k0deriv));
 			//double fac1 = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift));
@@ -5869,8 +5869,8 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 	lensvector<double> x;
 	x[0] = perturber_center[0] + r0*cos(theta_shear);
 	x[1] = perturber_center[1] + r0*sin(theta_shear);
-	kappa0 = kappa_exclude(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-	shear_exclude(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	kappa0 = kappa_exclude<double>(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	shear_exclude<double>(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 	avgkap0 = 1 - kappa0 - shear_tot;
 
 	double r;
@@ -5883,7 +5883,7 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 		double zsrc0 = source_redshift;
 		set_source_redshift(zlsub);
 		lensvector<double> defp;
-		deflection(x,defp,reference_zfactors,default_zsrc_beta_factors);
+		deflection<double>(x,defp,reference_zfactors,default_zsrc_beta_factors);
 		set_source_redshift(zsrc0);
 		xp[0] = x[0] - defp[0];
 		xp[1] = x[1] - defp[1];
@@ -5916,14 +5916,14 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 			lensvector<double> xp;
 			xp[0] = perturber_center[0] + (r0+dr)*cos(theta_shear);
 			xp[1] = perturber_center[1] + (r0+dr)*sin(theta_shear);
-			kappa0_p = kappa_exclude(xp,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-			shear_exclude(xp,shear_tot_p,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			kappa0_p = kappa_exclude<double>(xp,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude<double>(xp,shear_tot_p,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			double kappa0_m, shear_tot_m;
 			lensvector<double> xm;
 			xm[0] = perturber_center[0] + (r0-dr)*cos(theta_shear);
 			xm[1] = perturber_center[1] + (r0-dr)*sin(theta_shear);
-			kappa0_m = kappa_exclude(xm,perturber_list,reference_zfactors,default_zsrc_beta_factors);
-			shear_exclude(xm,shear_tot_m,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			kappa0_m = kappa_exclude<double>(xm,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			shear_exclude<double>(xm,shear_tot_m,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			k0deriv = (kappa0_p+shear_tot_p-kappa0_m-shear_tot_m)/(2*dr);
 			double mass_scale_factor = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift))*SQR(r0/r)*(1 - beta*(kappa0 + shear_tot + r0*k0deriv));
 			//double fac1 = (cosmo->sigma_crit_kpc(zlprim,reference_source_redshift) / cosmo->sigma_crit_kpc(zlsub,reference_source_redshift));
@@ -5936,7 +5936,7 @@ void QLens::get_perturber_avgkappa_scaled(int lens_number, const double r0, doub
 			//lensvector<double> x;
 			//x[0] = perturber_center[0] + r0*cos(theta_shear);
 			//x[1] = perturber_center[1] + r0*sin(theta_shear);
-			//kappa0 = kappa_exclude(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
+			//kappa0 = kappa_exclude<double>(x,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			//shear_exclude(x,shear_tot,shear_angle,perturber_list,reference_zfactors,default_zsrc_beta_factors);
 			int i1,i2;
 			i1 = lens_redshift_idx[primary_lens_number];
@@ -5963,8 +5963,8 @@ double QLens::subhalo_perturbation_radius_equation(const double r)
 	lensvector<double> x;
 	x[0] = perturber_center[0] + r*cos(theta_shear);
 	x[1] = perturber_center[1] + r*sin(theta_shear);
-	kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-	shear_exclude(x,shear0,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	kappa0 = kappa_exclude<double>(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	shear_exclude<double>(x,shear0,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 
 	double zlsub, zlprim;
 	zlsub = lens_list[perturber_lens_number]->zlens;
@@ -5977,7 +5977,7 @@ double QLens::subhalo_perturbation_radius_equation(const double r)
 		double zsrc0 = source_redshift;
 		set_source_redshift(zlsub);
 		lensvector<double> alpha;
-		deflection(x,alpha,reference_zfactors,default_zsrc_beta_factors);
+		deflection<double>(x,alpha,reference_zfactors,default_zsrc_beta_factors);
 		set_source_redshift(zsrc0);
 		xp[0] = x[0] - alpha[0];
 		xp[1] = x[1] - alpha[1];
@@ -5999,14 +5999,14 @@ double QLens::subhalo_perturbation_radius_equation(const double r)
 		lensvector<double> xp;
 		xp[0] = perturber_center[0] + (r+dr)*cos(theta_shear);
 		xp[1] = perturber_center[1] + (r+dr)*sin(theta_shear);
-		kappa0_p = kappa_exclude(xp,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(xp,shear0_p,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		kappa0_p = kappa_exclude<double>(xp,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude<double>(xp,shear0_p,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 		double kappa0_m, shear0_m;
 		lensvector<double> xm;
 		xm[0] = perturber_center[0] + (r-dr)*cos(theta_shear);
 		xm[1] = perturber_center[1] + (r-dr)*sin(theta_shear);
-		kappa0_m = kappa_exclude(xm,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-		shear_exclude(xm,shear0_m,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		kappa0_m = kappa_exclude<double>(xm,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+		shear_exclude<double>(xm,shear0_m,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 		double k0deriv = (kappa0_p+shear0_p-kappa0_m-shear0_m)/(2*dr);
 		subhalo_avg_kappa *= 1 - beta*(kappa0 + shear0 + r*k0deriv);
 	} else if (zlsub > zlprim) {
@@ -6025,8 +6025,8 @@ double QLens::perturbation_radius_equation_nosub(const double r)
 	lensvector<double> x;
 	x[0] = perturber_center[0] + r*cos(theta_shear);
 	x[1] = perturber_center[1] + r*sin(theta_shear);
-	kappa0 = kappa_exclude(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
-	shear_exclude(x,shear0,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	kappa0 = kappa_exclude<double>(x,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
+	shear_exclude<double>(x,shear0,shear_angle,linked_perturber_list,reference_zfactors,default_zsrc_beta_factors);
 	return (1 - kappa0 - shear0);
 }
 
@@ -6040,7 +6040,7 @@ bool QLens::get_einstein_radius(int lens_number, double& re_major_axis, double& 
 double QLens::inverse_magnification_r(const double r)
 {
 	lensmatrix<double> jac;
-	hessian(grid_xcenter + r*cos(theta_crit), grid_ycenter + r*sin(theta_crit), jac, 0, reference_zfactors, default_zsrc_beta_factors);
+	hessian<double>(grid_xcenter + r*cos(theta_crit), grid_ycenter + r*sin(theta_crit), jac, 0, reference_zfactors, default_zsrc_beta_factors);
 	jac[0][0] = 1 - jac[0][0];
 	jac[1][1] = 1 - jac[1][1];
 	jac[0][1] = -jac[0][1];
@@ -6293,20 +6293,6 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 {
 	if (!sorted_critical_curves) sort_critical_curves();
 
-	auto get_angle_from_components = [](const double &comp1, const double &comp2)
-	{
-		double angle = atan(abs(comp2/comp1));
-		if (comp1 < 0) {
-			if (comp2 < 0)
-				angle = angle - M_PI;
-			else
-				angle = M_PI - angle;
-		} else if (comp2 < 0) {
-			angle = -angle;
-		}
-		return angle;
-	};
-
 	int n_cc = sorted_critical_curve.size();
 	if (n_cc==0) return false;
 
@@ -6319,7 +6305,7 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 			for (j=0; j < n_cc; j++) {
 				kappa_averaged_over_cc = 0;
 				for (k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
-					kappa_averaged_over_cc += kappa(sorted_critical_curve[j].cc_pts[k][0],sorted_critical_curve[j].cc_pts[k][1],reference_zfactors,default_zsrc_beta_factors);
+					kappa_averaged_over_cc += kappa<double>(sorted_critical_curve[j].cc_pts[k][0],sorted_critical_curve[j].cc_pts[k][1],reference_zfactors,default_zsrc_beta_factors);
 				}
 				kappa_averaged_over_cc /= sorted_critical_curve[j].cc_pts.size();
 				if (kappa_averaged_over_cc < 1.0) {
@@ -6353,7 +6339,7 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 		rsq = SQR(critical_curve->caustic_pts[k][0]-x_avg) + SQR(critical_curve->caustic_pts[k][1]-y_avg);
 		if (rsq > rsqmax) {
 			rsqmax = rsq;
-			theta_rmax = get_angle_from_components(critical_curve->caustic_pts[k][0]-x_avg,critical_curve->caustic_pts[k][1]-y_avg);
+			theta_rmax = get_angle(critical_curve->caustic_pts[k][0]-x_avg,critical_curve->caustic_pts[k][1]-y_avg);
 		}
 		if (rsq < rsqmin) rsqmin = rsq;
 	}
@@ -6364,7 +6350,7 @@ bool QLens::find_caustic_minmax(double& min, double& max, double& max_minor_axis
 	theta_minor_axis_max = theta_rmax + M_HALFPI + 0.1;
 	double rsqmax_minor_axis = 0;
 	for (int k=0; k < npts; k++) {
-		theta = get_angle_from_components(critical_curve->caustic_pts[k][0]-x_avg,critical_curve->caustic_pts[k][1]-y_avg);
+		theta = get_angle(critical_curve->caustic_pts[k][0]-x_avg,critical_curve->caustic_pts[k][1]-y_avg);
 		//cout << theta << endl;
 		if ((theta > theta_minor_axis_min) and (theta < theta_minor_axis_max)) {
 			rsq = SQR(critical_curve->caustic_pts[k][0]-x_avg) + SQR(critical_curve->caustic_pts[k][1]-y_avg);
@@ -6502,8 +6488,8 @@ void QLens::output_total_kappa(const double rmin, const double rmax, const int s
 			y = grid_ycenter + r*sin(theta);
 			x2 = (r+dr)*cos(theta);
 			y2 = (r+dr)*sin(theta);
-			kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
-			kap2 = kappa(x2,y2,onezfac,default_zsrc_beta_factors);
+			kap = kappa<double>(x,y,onezfac,default_zsrc_beta_factors);
+			kap2 = kappa<double>(x2,y2,onezfac,default_zsrc_beta_factors);
 			total_kappa += kap;
 			total_dkappa += (kap2 - kap)/dr;
 		}
@@ -6607,6 +6593,72 @@ double QLens::get_total_xi_parameter(const double src_redshift)
 	return (2*r_ein*xifac_avg+2);
 }
 
+bool QLens::find_tangential_critical_curve(int &cc_num)
+{
+	if (!create_grid_from_default_redshift_and_store_cc()) {
+		warn("could not generate grid find c.c. to calculate xi; calculating spherically averaged xi instead");
+		return false;
+	}
+	if (!sorted_critical_curves) sort_critical_curves(); // sort critical curves
+	int n_cc = sorted_critical_curve.size();
+	//for (int i=0; i < n_cc; i++) {
+		//cout << "cc " << i << ": " << sorted_critical_curve[i].cc_pts.size() << " points " << endl;
+	//}
+	if (n_cc==0) {
+		warn("could not find critical curves to calculate xi; calculating spherically averaged xi instead");
+		return false;
+	}
+
+	// ensures tangential critical curve 
+	// if cc_num is unspecified, catalogue all the tangential critical curve we come across
+	// we'll end up using the one with the most points (usually there will only be one anyway)
+	vector<int> tangential_cc_list;
+	int maxpts,nn;
+	if (cc_num < 0) {
+		if (n_cc==1) cc_num = 0;
+		else {
+			// look for the first tangential critical curve we come across
+			int j,k;
+			double kappa_averaged_over_cc;
+			for (j=0; j < n_cc; j++) {
+				kappa_averaged_over_cc = 0;
+				for (k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
+					kappa_averaged_over_cc += kappa<double>(sorted_critical_curve[j].cc_pts[k][0],sorted_critical_curve[j].cc_pts[k][1],reference_zfactors,default_zsrc_beta_factors);
+				}
+				kappa_averaged_over_cc /= sorted_critical_curve[j].cc_pts.size();
+				if (kappa_averaged_over_cc < 1.0) {
+					// this is a tangential critical curve
+					tangential_cc_list.push_back(j);
+					//cc_num = j;
+					//cout << "Found tangential critical curve! cc_num=" << cc_num << endl;
+				}
+			}
+			maxpts=0;
+			for (j=0; j < tangential_cc_list.size(); j++) {
+				nn = sorted_critical_curve[tangential_cc_list[j]].cc_pts.size();
+				if (nn > maxpts) {
+					maxpts = nn;
+					cc_num = tangential_cc_list[j];
+				}
+			}
+			if (cc_num < 0) {
+				warn("could not find a tangential critical curve; calculating spherically averaged xi instead");
+				return false;
+			}
+		}
+	} else {
+		if (cc_num >= n_cc) die("specified critical curve not found");
+	}
+
+	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
+	int npts = critical_curve->cc_pts.size();
+	if (npts==0) {
+		warn("Didn't get any critical curve points; calculating spherically averaged xi instead");
+		return false;
+	}
+	return true;
+}
+
 double QLens::cc_xi_parameter(int cc_num)
 {
 	double r_ein,zfac,xi_param;
@@ -6638,57 +6690,13 @@ double QLens::cc_xi_parameter(int cc_num)
 	}
 
 	// get critical curve points
-
-	if (!create_grid_from_default_redshift_and_store_cc()) {
-		warn("could not generate grid find c.c. to calculate xi; calculating spherically averaged xi instead");
+	if (find_tangential_critical_curve(cc_num)==false) {
 		delete[] include_lens;
 		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
-	}
-	if (!sorted_critical_curves) sort_critical_curves(); // sort critical curves
-	int n_cc = sorted_critical_curve.size();
-	if (n_cc==0) {
-		warn("could not find critical curves to calculate xi; calculating spherically averaged xi instead");
-		delete[] include_lens;
-		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
-	}
-
-	// ensures tangential critical curve 
-	// look for the first tangential critical curve we come across
-	// ensures tangential critical curve -- can just copy and paste 
-	if (cc_num < 0) {
-		if (n_cc==1) cc_num = 0;
-		else {
-			// look for the first tangential critical curve we come across
-			int j,k;
-			double kappa_averaged_over_cc;
-			for (j=0; j < n_cc; j++) {
-				kappa_averaged_over_cc = 0;
-				for (k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
-					kappa_averaged_over_cc += kappa(sorted_critical_curve[j].cc_pts[k][0],sorted_critical_curve[j].cc_pts[k][1],reference_zfactors,default_zsrc_beta_factors);
-				}
-				kappa_averaged_over_cc /= sorted_critical_curve[j].cc_pts.size();
-				if (kappa_averaged_over_cc < 1.0) {
-					// this is a tangential critical curve
-					cc_num = j;
-					//cout << "Found tangential critical curve! cc_num=" << cc_num << endl;
-					break;
-				}
-			}
-			if (cc_num < 0) {
-				warn("could not find a tangential critical curve; calculating spherically averaged xi instead");
-				delete[] include_lens;
-				return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
-			}
-		}
 	}
 
 	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
 	int npts = critical_curve->cc_pts.size();
-	if (npts==0) {
-		warn("Didn't get any critical curve points; calculating spherically averaged xi instead");
-		delete[] include_lens;
-		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
-	}
 
 	// rather than spherical averaging, let's average along the critical curve
 	int m, n;
@@ -6719,20 +6727,6 @@ double QLens::cc_xi_parameter(int cc_num)
 
 double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 {
-	auto get_angle_from_components = [](const double &comp1, const double &comp2)
-	{
-		double angle = atan(abs(comp2/comp1));
-		if (comp1 < 0) {
-			if (comp2 < 0)
-				angle = angle - M_PI;
-			else
-				angle = M_PI - angle;
-		} else if (comp2 < 0) {
-			angle = -angle;
-		}
-		return angle;
-	};
-
 	double r_ein,zfac,xi_param;
 	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->zlens,source_redshift,reference_source_redshift);
@@ -6762,100 +6756,59 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	}
 
 	// get critical curve points
-
-	if (!create_grid_from_default_redshift_and_store_cc()) {
-		warn("could not generate grid find c.c. to calculate xi; calculating spherically averaged xi instead");
+	if (find_tangential_critical_curve(cc_num)==false) {
 		delete[] include_lens;
 		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
-	}
-	if (!sorted_critical_curves) sort_critical_curves(); // sort critical curves
-	int n_cc = sorted_critical_curve.size();
-	if (n_cc==0) {
-		warn("could not find critical curves to calculate xi; calculating spherically averaged xi instead");
-		delete[] include_lens;
-		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
-	}
-
-	// ensures tangential critical curve 
-	// look for the first tangential critical curve we come across
-	// ensures tangential critical curve -- can just copy and paste 
-	if (cc_num < 0) {
-		if (n_cc==1) cc_num = 0;
-		else {
-			// look for the first tangential critical curve we come across
-			int j,k;
-			double kappa_averaged_over_cc;
-			for (j=0; j < n_cc; j++) {
-				kappa_averaged_over_cc = 0;
-				for (k=0; k < sorted_critical_curve[j].cc_pts.size(); k++) {
-					kappa_averaged_over_cc += kappa(sorted_critical_curve[j].cc_pts[k][0],sorted_critical_curve[j].cc_pts[k][1],reference_zfactors,default_zsrc_beta_factors);
-				}
-				kappa_averaged_over_cc /= sorted_critical_curve[j].cc_pts.size();
-				if (kappa_averaged_over_cc < 1.0) {
-					// this is a tangential critical curve
-					cc_num = j;
-					//cout << "Found tangential critical curve! cc_num=" << cc_num << endl;
-					break;
-				}
-			}
-			if (cc_num < 0) {
-				warn("could not find a tangential critical curve; calculating spherically averaged xi instead");
-				delete[] include_lens;
-				return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
-			}
-		}
-	} else {
-		if (cc_num >= n_cc) die("specified critical curve not found");
 	}
 
 	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
 	int npts = critical_curve->cc_pts.size();
-	if (npts==0) {
-		warn("Didn't get any critical curve points; calculating spherically averaged xi instead");
-		delete[] include_lens;
-		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
-	}
 
 	// now we'll need to interpolate in the critical curve at angle phi...code this up!!
-	int m, n;
-	double x,y;
-	double *rvals = new double[npts];
-	double *phivals = new double[npts];
+	int m;
+	double *rvals, *phivals;
+	double x, y, r_phi, x_phi, y_phi;
+	double kappaval, sheartot, shear_angle, theta_shear;
+	double x_phi2, y_phi2, r_phi2;
+	double new_kappaval, new_sheartot, new_shear_angle, shear_deriv, kappa_deriv;
+	const double increment = 1e-4;
+
+	rvals = new double[npts];
+	phivals = new double[npts];
 
 	// incrementing through number of critical curve points
 	for (m=0; m < npts; m++) {
 		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
 		y = critical_curve->cc_pts[m][1];
-		rvals[m] = sqrt(x*x+y*y);
-		phivals[m] = get_angle_from_components(x,y);
+		//cout << x << " " << y << endl;
+		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
+		phivals[m] = get_angle(x,y);
 	}
-	sort(n,phivals,rvals);
-	Spline rspline(phivals,rvals,n);
-	double r_phi = rspline.splint(phi);
-	double x_phi, y_phi;
-	x_phi = r_phi*cos(phi);
-	y_phi = r_phi*sin(phi);
+	sort(npts,phivals,rvals);
+	//for (int i=0; i < npts; i++) {
+		//cout << phivals[i] << " " << rvals[i] << endl;
+	//}
+	Spline rspline(phivals,rvals,npts);
+	r_phi = rspline.splint(phi);
+	x_phi = xc+r_phi*cos(phi);
+	y_phi = yc+r_phi*sin(phi);
+	lensvector<double> point(x_phi,y_phi);
 	// get kappa and derivative of kappa for each lens that is included
 	kappa_cc_tot = 0;
 	dkappa_cc_tot = 0;
-	for (n=0; n < nlens; n++) {
-		if (include_lens[n]) {
-			lens_list[n]->kappa_and_dkappa_dR(x,y,kap,dkap); // where do we get kappa and dkappa from?
-			kappa_cc_tot += zfac*kap; // why do we multiply by zfac here?
-			dkappa_cc_tot += zfac*dkap; // we express xi in terms of derivative of kappa, rather than second derivative of the deflection
-			//cout << "K=" << kap << " " << kappa_e_tot << endl;
-			//cout << "dK=" << dkap << " " << dkappa_e_tot << endl;
-		}
-	}
-	xifac += dkappa_cc_tot/(1-kappa_cc_tot); // sum up the values
+	kappaval = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+	shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+	theta_shear = degrees_to_radians(shear_angle-90);
+
+	// calculate xi from here, taking numerical derivatives?
+
 	delete[] include_lens;
 	delete[] rvals;
 	delete[] phivals;
+	return xifac;
 
-	return (2*r_ein*xifac+2); // full equation 
+	//return (2*r_ein*xifac+2); // full equation 
 }
-
-
 
 double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 {
@@ -6882,7 +6835,7 @@ double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 	for (j=0, theta=0; j < thetasteps; j++, theta += thetastep) {
 		x = grid_xcenter + r_arcsec*cos(theta);
 		y = grid_ycenter + r_arcsec*sin(theta);
-		if (lensnum==-1) kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
+		if (lensnum==-1) kap = kappa<double>(x,y,onezfac,default_zsrc_beta_factors);
 		else kap = lens_list[lensnum]->kappa(x,y);
 		total_kappa += kap;
 	}
@@ -6920,8 +6873,8 @@ double QLens::total_dlogkappa(const double r, const int lensnum, const bool use_
 		x2 = (r_arcsec*rfac)*cos(theta);
 		y2 = (r_arcsec*rfac)*sin(theta);
 		if (lensnum==-1) {
-			kap = kappa(x,y,onezfac,default_zsrc_beta_factors);
-			kap2 = kappa(x2,y2,onezfac,default_zsrc_beta_factors);
+			kap = kappa<double>(x,y,onezfac,default_zsrc_beta_factors);
+			kap2 = kappa<double>(x2,y2,onezfac,default_zsrc_beta_factors);
 		} else {
 			kap = lens_list[lensnum]->kappa(x,y);
 			kap2 = lens_list[lensnum]->kappa(x2,y2);
@@ -7016,21 +6969,41 @@ void QLens::print_lensing_info_at_point(const double x, const double y)
 	lensvector<double> point, alpha, beta;
 	double sheartot, shear_angle;
 	point[0] = x; point[1] = y;
-	deflection(point,alpha,reference_zfactors,default_zsrc_beta_factors);
+	deflection<double>(point,alpha,reference_zfactors,default_zsrc_beta_factors);
 	//lensvector<double> alpha2;
 	//custom_deflection(point[0],point[1],alpha2);
-	shear(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+	lensvector<double> newpoint;
+	const double inc = 1e-4;
+	double r0 = sqrt(x*x+y*y);
+	double rp = r0+inc;
+	double phi = get_angle(x,y);
+	double xp = rp*cos(phi);
+	double yp = rp*sin(phi);
+	double new_sheartot, new_shear_angle;
+	newpoint[0] = xp; newpoint[1] = yp;
+	//double r_ell = lens_list[primary_lens_number]->elliptical_radius(x,y);
+	shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+	shear<double>(newpoint,new_sheartot,new_shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+	double shear_deriv = (new_sheartot-sheartot)/inc;
 	beta[0] = point[0] - alpha[0];
 	beta[1] = point[1] - alpha[1];
-	double kappaval = kappa(point,reference_zfactors,default_zsrc_beta_factors);
+	double kappaval = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+	double new_kappaval = kappa<double>(newpoint,reference_zfactors,default_zsrc_beta_factors);
+	double kappa_deriv = (new_kappaval-kappaval)/inc;
+	//double shear_deriv_approx = sheartot*kappa_deriv/kappaval;
+	double shear_deriv_approx = -kappa_deriv - 2/r0 + 2*kappaval/r0;
+	double shear_deriv_err = (shear_deriv_approx-shear_deriv)/shear_deriv;
 	if (mpi_id==0) {
 		cout << "kappa = " << kappaval << endl;
 		cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
 		//cout << "custom deflection = (" << alpha2[0] << "," << alpha2[1] << ")\n";
-		cout << "potential = " << potential(point,reference_zfactors,default_zsrc_beta_factors) << endl;
-		cout << "magnification = " << magnification(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
+		cout << "potential = " << potential<double>(point,reference_zfactors,default_zsrc_beta_factors) << endl;
+		cout << "magnification = " << magnification<double>(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
 		cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
 		cout << "reduced_shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0)/(1-kappaval) << " reduced_shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0)/(1-kappaval) << endl;
+		cout << "shear_deriv = " << shear_deriv << endl;
+		cout << "shear_deriv_approx = " << shear_deriv_approx << endl;
+		//cout << "shear_deriv_error = " << shear_deriv_err << endl;
 		cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n";
 
 		/*
@@ -7089,7 +7062,7 @@ void QLens::make_source_ellipse(const double xcenter, const double ycenter, cons
 			pt[0] = xcenter + x*cos(angle) - y*sin(angle);
 			pt[1] = ycenter + x*sin(angle) + y*cos(angle);
 			if (draw_in_imgplane) {
-				find_sourcept(pt,source,0,reference_zfactors,default_zsrc_beta_factors);
+				find_sourcept<double>(pt,source,0,reference_zfactors,default_zsrc_beta_factors);
 			} else {
 				source[0] = pt[0];
 				source[1] = pt[1];
@@ -7110,7 +7083,7 @@ void QLens::raytrace_image_rectangle(const double xmin, const double xmax, const
 	for (i=0, x=xmin; i < xsteps; i++, x += xstep) {
 		for (j=0, y=ymin; j < ysteps; j++, y += ystep) {
 			point[0] = x; point[1] = y;
-			deflection(point,alpha,reference_zfactors,default_zsrc_beta_factors);
+			deflection<double>(point,alpha,reference_zfactors,default_zsrc_beta_factors);
 			xs = point[0] - alpha[0];
 			ys = point[1] - alpha[1];
 			sourcetab << xs << " " << ys << endl;
@@ -7140,7 +7113,7 @@ bool QLens::add_simulated_point_image_data(const lensvector<double> &sourcept, c
 	double min_td=1e30;
 	for (i=0; i < n_images; i++) {
 		// central maxima images have positive parity and kappa > 1, so use this to exclude them if desired
-		if ((include_central_image==false) and (imgs[i].parity == 1) and (kappa(imgs[i].pos,reference_zfactors,default_zsrc_beta_factors) > 1)) include_image[i] = false;
+		if ((include_central_image==false) and (imgs[i].parity == 1) and (kappa<double>(imgs[i].pos,reference_zfactors,default_zsrc_beta_factors) > 1)) include_image[i] = false;
 		else include_image[i] = true;
 		err_pos[i] = sim_err_pos;
 		err_flux[i] = sim_err_flux;
@@ -7544,7 +7517,7 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 	double *specific_zfacs = ptsrc_zfactors[ptsrc_redshift_idx[dataset_number]];
 	double **specific_betafacs = ptsrc_beta_factors[ptsrc_redshift_idx[dataset_number]];
 	for (i=0; i < n_srcpts; i++) {
-		find_sourcept(point_image_data[dataset_number].images[i].pos,srcpts[i],0,specific_zfacs,specific_betafacs);
+		find_sourcept<double>(point_image_data[dataset_number].images[i].pos,srcpts[i],0,specific_zfacs,specific_betafacs);
 	}
 
 	if (use_scientific_notation==false) {
@@ -7562,7 +7535,7 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (i=0; i < n_srcpts; i++) {
-			pot = potential(point_image_data[dataset_number].images[i].pos,specific_zfacs,specific_betafacs);
+			pot = potential<double>(point_image_data[dataset_number].images[i].pos,specific_zfacs,specific_betafacs);
 			time_delays_mod[i] = 0.5*(SQR(point_image_data[dataset_number].images[i].pos[0] - srcpts[i][0]) + SQR(point_image_data[dataset_number].images[i].pos[1] - srcpts[i][1])) - pot;
 			if (time_delays_mod[i] < min_td_mod) min_td_mod = time_delays_mod[i];
 		}
@@ -7583,7 +7556,7 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 			cout << point_image_data[dataset_number].images[i].pos[0] << "\t" << point_image_data[dataset_number].images[i].pos[1] << "\t" << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (srcfile != NULL) (*srcfile) << srcpts[i][0] << "\t" << srcpts[i][1];
 			if (flux != -1) {
-				imgflux = flux/inverse_magnification(point_image_data[dataset_number].images[i].pos,0,specific_zfacs,specific_betafacs);
+				imgflux = flux/inverse_magnification<double>(point_image_data[dataset_number].images[i].pos,0,specific_zfacs,specific_betafacs);
 				cout << "\t" << imgflux;
 			}
 			if (include_time_delays) {
@@ -7699,7 +7672,7 @@ void QLens::add_simulated_weak_lensing_data(const string id, lensvector<double> 
 		zfacs[i] = cosmo->kappa_ratio(lens_redshifts[i],zsrc,reference_source_redshift);
 	}
 	double shear1, shear2;
-	reduced_shear_components(sourcept,shear1,shear2,0,zfacs);
+	reduced_shear_components<double>(sourcept,shear1,shear2,0,zfacs);
 	shear1 += sim_err_shear*NormalDeviate();
 	shear2 += sim_err_shear*NormalDeviate();
 	weak_lensing_data.add_source(id,sourcept,shear1,shear2,sim_err_shear,sim_err_shear,zsrc);
@@ -8264,9 +8237,9 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			case KSPLINE:
 				fitmodel->lens_list[i] = new LensProfile<double>(lens_list[i]); break;
 			case sple_LENS:
-				fitmodel->lens_list[i] = new SPLE_Lens((SPLE_Lens*) lens_list[i]); break;
+				fitmodel->lens_list[i] = new SPLE_Lens<double>((SPLE_Lens<double>*) lens_list[i]); break;
 			case dpie_LENS:
-				fitmodel->lens_list[i] = new dPIE_Lens((dPIE_Lens*) lens_list[i]); break;
+				fitmodel->lens_list[i] = new dPIE_Lens<double>((dPIE_Lens<double>*) lens_list[i]); break;
 			case nfw:
 				fitmodel->lens_list[i] = new NFW((NFW*) lens_list[i]); break;
 			case TRUNCATED_nfw:
@@ -8278,7 +8251,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 			case EXPDISK:
 				fitmodel->lens_list[i] = new ExpDisk((ExpDisk*) lens_list[i]); break;
 			case SHEAR:
-				fitmodel->lens_list[i] = new Shear((Shear*) lens_list[i]); break;
+				fitmodel->lens_list[i] = new Shear<double>((Shear<double>*) lens_list[i]); break;
 			case MULTIPOLE:
 				fitmodel->lens_list[i] = new Multipole((Multipole*) lens_list[i]); break;
 			case CORECUSP:
@@ -8722,7 +8695,7 @@ void QLens::find_analytic_srcpos(lensvector<double> *beta_i)
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].use_in_chisq) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(point_image_data[i].images[j].pos,beta_ji,jac,0,specific_zfacs,specific_betafacs);
+					sourcept_jacobian<double>(point_image_data[i].images[j].pos,beta_ji,jac,0,specific_zfacs,specific_betafacs);
 					mag = jac.inverse();
 					lensmatsqr(mag,magsqr);
 					siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
@@ -8733,7 +8706,7 @@ void QLens::find_analytic_srcpos(lensvector<double> *beta_i)
 					bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
 					bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
 				} else {
-					find_sourcept(point_image_data[i].images[j].pos,beta_ji,0,specific_zfacs,specific_betafacs);
+					find_sourcept<double>(point_image_data[i].images[j].pos,beta_ji,0,specific_zfacs,specific_betafacs);
 					siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 					beta_i[i][0] += beta_ji[0]*siginv;
 					beta_i[i][1] += beta_ji[1]*siginv;
@@ -8804,7 +8777,7 @@ double QLens::chisq_pos_source_plane()
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].use_in_chisq) {
 				if (use_magnification_in_chisq) {
-					sourcept_jacobian(point_image_data[i].images[j].pos,beta_ji[j],jac,0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					sourcept_jacobian<double>(point_image_data[i].images[j].pos,beta_ji[j],jac,0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					mag = jac.inverse();
 					mag00[j] = mag[0][0];
 					mag01[j] = mag[0][1];
@@ -8821,7 +8794,7 @@ double QLens::chisq_pos_source_plane()
 						bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
 					}
 				} else {
-					find_sourcept(point_image_data[i].images[j].pos,beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					find_sourcept<double>(point_image_data[i].images[j].pos,beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					if (use_analytic_bestfit_src) {
 						siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 						src_bf[0] += beta_ji[j][0]*siginv;
@@ -9260,7 +9233,7 @@ void QLens::find_analytic_srcflux(double *bestfit_flux)
 		double num=0, denom=0;
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].sigma_flux==0) { k++; continue; }
-			hessian(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
+			hessian<double>(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
@@ -9311,7 +9284,7 @@ double QLens::chisq_flux()
 		k=0; num=0; denom=0;
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].sigma_flux==0) { k++; continue; }
-			hessian(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
+			hessian<double>(point_image_data[i].images[j].pos,jac,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 			jac[0][0] = 1 - jac[0][0];
 			jac[1][1] = 1 - jac[1][1];
 			jac[0][1] = -jac[0][1];
@@ -9380,8 +9353,8 @@ double QLens::chisq_time_delays()
 		min_td_mod=1e30;
 		for (j=0; j < point_image_data[i].n_images; j++) {
 			if (point_image_data[i].images[j].sigma_td==0) continue;
-			find_sourcept(point_image_data[i].images[j].pos,beta_ij,0,specific_zfacs,specific_betafacs);
-			pot = potential(point_image_data[i].images[j].pos,specific_zfacs,specific_betafacs);
+			find_sourcept<double>(point_image_data[i].images[j].pos,beta_ij,0,specific_zfacs,specific_betafacs);
+			pot = potential<double>(point_image_data[i].images[j].pos,specific_zfacs,specific_betafacs);
 			time_delays_mod[j] = 0.5*(SQR(point_image_data[i].images[j].pos[0] - beta_ij[0]) + SQR(point_image_data[i].images[j].pos[1] - beta_ij[1])) - pot;
 			if (time_delays_mod[j] < min_td_mod) min_td_mod = time_delays_mod[j];
 
@@ -9550,7 +9523,7 @@ double QLens::chisq_weak_lensing()
 			for (j=0; j < n_lens_redshifts; j++) {
 				zfacs[i][j] = cosmo->kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
 			}
-			reduced_shear_components(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
+			reduced_shear_components<double>(weak_lensing_data.pos[i],g1,g2,thread,zfacs[i]);
 			chisq += SQR((wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i]) + SQR((wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i]);
 
 		}
@@ -9575,7 +9548,7 @@ bool QLens::output_weak_lensing_chivals(string filename)
 		for (j=0; j < n_lens_redshifts; j++) {
 			zfacs[i][j] = cosmo->kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
 		}
-		reduced_shear_components(weak_lensing_data.pos[i],g1,g2,0,zfacs[i]);
+		reduced_shear_components<double>(weak_lensing_data.pos[i],g1,g2,0,zfacs[i]);
 		chi1 = (wl_shear_factor*g1-weak_lensing_data.reduced_shear1[i])/weak_lensing_data.sigma_shear1[i];
 		chi2 = (wl_shear_factor*g2-weak_lensing_data.reduced_shear2[i])/weak_lensing_data.sigma_shear2[i];
 		chifile << chi1 << " " << chi2 << endl;
@@ -9596,7 +9569,7 @@ double QLens::get_avg_ptsrc_dist(const int ptsrc_i)
 		n_srcpts = point_image_data[ptsrc_i].n_images;
 		lensvector<double> *srcpts = new lensvector<double>[n_srcpts];
 		for (j=0; j < n_srcpts; j++) {
-			find_sourcept(point_image_data[ptsrc_i].images[j].pos,srcpts[j],0,ptsrc_zfactors[ptsrc_redshift_idx[ptsrc_i]],ptsrc_beta_factors[ptsrc_redshift_idx[ptsrc_i]]);
+			find_sourcept<double>(point_image_data[ptsrc_i].images[j].pos,srcpts[j],0,ptsrc_zfactors[ptsrc_redshift_idx[ptsrc_i]],ptsrc_beta_factors[ptsrc_redshift_idx[ptsrc_i]]);
 			for (k=0; k < j; k++) {
 				avg_srcdist += sqrt(SQR(srcpts[j][0] - srcpts[k][0]) + SQR(srcpts[j][1] - srcpts[k][1]));
 				n_src_pairs++;
@@ -13815,7 +13788,7 @@ void QLens::plot_ray_tracing_grid(double xmin, double xmax, double ymin, double 
 		for (i=0, x=xmin; i < x_N; i++, x += pixel_xlength) {
 			corner_pts[i][j][0] = x;
 			corner_pts[i][j][1] = y;
-			find_sourcept(corner_pts[i][j],corner_sourcepts[i][j],0,reference_zfactors,default_zsrc_beta_factors);
+			find_sourcept<double>(corner_pts[i][j],corner_sourcepts[i][j],0,reference_zfactors,default_zsrc_beta_factors);
 		}
 	}
 	ofstream outfile(filename.c_str());
@@ -13871,8 +13844,8 @@ void QLens::plot_logkappa_map(const int x_N, const int y_N, const string filenam
 			pos[0] = x;
 			if ((!ignore_mask) and (imgdata_list[0] != NULL) and (!imgdata_list[0]->inside_mask(x,y))) logkapout << "NaN ";
 			else {
-				kap = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
-				//kap = kappa_exclude(pos,0,reference_zfactors,default_zsrc_beta_factors); // for looking at convergence of perturber
+				kap = kappa<double>(pos,reference_zfactors,default_zsrc_beta_factors);
+				//kap = kappa_exclude<double>(pos,0,reference_zfactors,default_zsrc_beta_factors); // for looking at convergence of perturber
 				if (kap < 0) {
 					negkap = true;
 					kap = abs(kap);
@@ -13917,7 +13890,7 @@ void QLens::plot_logpot_map(const int x_N, const int y_N, const string filename)
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			pot = potential(pos,reference_zfactors,default_zsrc_beta_factors);
+			pot = potential<double>(pos,reference_zfactors,default_zsrc_beta_factors);
 			logpotout << log(abs(pot))/log(10) << " ";
 		}
 		logpotout << endl;
@@ -13955,7 +13928,7 @@ void QLens::plot_logmag_map(const int x_N, const int y_N, const string filename)
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			mag = magnification(pos,0,reference_zfactors,default_zsrc_beta_factors);
+			mag = magnification<double>(pos,0,reference_zfactors,default_zsrc_beta_factors);
 			logmagout << log(abs(mag))/log(10) << " ";
 		}
 		logmagout << endl;
@@ -14021,20 +13994,20 @@ void QLens::plot_lensinfo_maps(string file_root, const int x_N, const int y_N, c
 		pos[1] = y;
 		for (i=0, x=xmin+0.5*xstep; i < x_N; i++, x += xstep) {
 			pos[0] = x;
-			kap = kappa(pos,reference_zfactors,default_zsrc_beta_factors);
-			mag = magnification(pos,0,reference_zfactors,default_zsrc_beta_factors);
-			invmag = inverse_magnification(pos,0,reference_zfactors,default_zsrc_beta_factors);
-			shearval = shear(pos,0,reference_zfactors,default_zsrc_beta_factors);
+			kap = kappa<double>(pos,reference_zfactors,default_zsrc_beta_factors);
+			mag = magnification<double>(pos,0,reference_zfactors,default_zsrc_beta_factors);
+			invmag = inverse_magnification<double>(pos,0,reference_zfactors,default_zsrc_beta_factors);
+			shearval = shear<double>(pos,0,reference_zfactors,default_zsrc_beta_factors);
 			//pot = lens->potential(pos);
-			deflection(pos,alpha,reference_zfactors,default_zsrc_beta_factors);
+			deflection<double>(pos,alpha,reference_zfactors,default_zsrc_beta_factors);
 			if (pert_residual >= 0) {
-				kap -= kappa_exclude(pos,exclude,reference_zfactors,default_zsrc_beta_factors);
-				mag -= magnification_exclude(pos,exclude,0,reference_zfactors,default_zsrc_beta_factors);
-				invmag -= inverse_magnification_exclude(pos,exclude,0,reference_zfactors,default_zsrc_beta_factors);
-				shearval -= shear_exclude(pos,exclude,0,reference_zfactors,default_zsrc_beta_factors);
+				kap -= kappa_exclude<double>(pos,exclude,reference_zfactors,default_zsrc_beta_factors);
+				mag -= magnification_exclude<double>(pos,exclude,0,reference_zfactors,default_zsrc_beta_factors);
+				invmag -= inverse_magnification_exclude<double>(pos,exclude,0,reference_zfactors,default_zsrc_beta_factors);
+				shearval -= shear_exclude<double>(pos,exclude,0,reference_zfactors,default_zsrc_beta_factors);
 				//pot = lens->potential(pos);
 				lensvector<double> alpha_r;
-				deflection_exclude(pos,exclude,alpha_r,reference_zfactors,default_zsrc_beta_factors);
+				deflection_exclude<double>(pos,exclude,alpha_r,reference_zfactors,default_zsrc_beta_factors);
 				alpha[0] -= alpha_r[0];
 				alpha[1] -= alpha_r[1];
 			}
@@ -17041,7 +17014,7 @@ void QLens::test_lens_functions()
 
 	//
 	/*
-	SPLE_Lens *A = new SPLE_Lens();
+	SPLE_Lens<double> *A = new SPLE_Lens<double>();
 	A->initialize_parameters(4.5,1,0,0.8,30,0.7,0.3);
 	boolvector flags(7);
 	flags[0] = true;

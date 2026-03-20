@@ -2,9 +2,10 @@
 #include "mathexpr.h"
 #include "pixelgrid.h"
 
-double QLens::kappa(const double& x, const double& y, double* zfacs, double** betafacs)
+template<typename QScalar>
+QScalar QLens::kappa(const QScalar& x, const QScalar& y, double* zfacs, double** betafacs)
 {
-	double kappa;
+	QScalar kappa;
 	if (n_lens_redshifts==1) {
 		int j;
 		kappa=0;
@@ -16,18 +17,19 @@ double QLens::kappa(const double& x, const double& y, double* zfacs, double** be
 		}
 		kappa *= zfacs[0];
 	} else {
-		lensmatrix<double> *jac = &jacs[0];
-		hessian(x,y,(*jac),0,zfacs,betafacs);
+		lensmatrix<QScalar> *jac = &jacs[0];
+		hessian<QScalar>(x,y,(*jac),0,zfacs,betafacs);
 		kappa = ((*jac)[0][0] + (*jac)[1][1])/2;
 	}
 
 	return kappa;
 }
+template double QLens::kappa<double>(const double& x, const double& y, double* zfacs, double** betafacs);
 
-
-double QLens::potential(const double& x, const double& y, double* zfacs, double** betafacs)
+template<typename QScalar>
+QScalar QLens::potential(const QScalar& x, const QScalar& y, double* zfacs, double** betafacs)
 {
-	double pot=0, pot_subtot;
+	QScalar pot=0, pot_subtot;
 	// This is not really sensical for multiplane lensing, and time delays need to be treated as in Schneider's textbook. Fix later
 	int i,j;
 	for (i=0; i < n_lens_redshifts; i++) {
@@ -44,12 +46,14 @@ double QLens::potential(const double& x, const double& y, double* zfacs, double*
 	}
 	return pot;
 }
+template double QLens::potential<double>(const double& x, const double& y, double* zfacs, double** betafacs);
 
-void QLens::deflection(const double& x, const double& y, lensvector<double>& def_tot, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::deflection(const QScalar& x, const QScalar& y, lensvector<QScalar>& def_tot, const int &thread, double* zfacs, double** betafacs)
 {
-	lensvector<double> *x_i = &xvals_i[thread];
-	lensvector<double> *def = &defs_i[thread];
-	lensvector<double> **def_i = &defs_subtot[thread];
+	lensvector<QScalar> *x_i = &xvals_i[thread];
+	lensvector<QScalar> *def = &defs_i[thread];
+	lensvector<QScalar> **def_i = &defs_subtot[thread];
 
 	int i,j;
 	def_tot[0] = 0;
@@ -91,12 +95,14 @@ void QLens::deflection(const double& x, const double& y, lensvector<double>& def
 		}
 	}
 }
+template void QLens::deflection<double>(const double& x, const double& y, lensvector<double>& def_tot, const int &thread, double* zfacs, double** betafacs);
 
-void QLens::deflection(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::deflection(const QScalar& x, const QScalar& y, QScalar& def_tot_x, QScalar& def_tot_y, const int &thread, double* zfacs, double** betafacs)
 {
-	lensvector<double> *x_i = &xvals_i[thread];
-	lensvector<double> *def = &defs_i[thread];
-	lensvector<double> **def_i = &defs_subtot[thread];
+	lensvector<QScalar> *x_i = &xvals_i[thread];
+	lensvector<QScalar> *def = &defs_i[thread];
+	lensvector<QScalar> **def_i = &defs_subtot[thread];
 	int i,j;
 	def_tot_x = 0;
 	def_tot_y = 0;
@@ -132,14 +138,16 @@ void QLens::deflection(const double& x, const double& y, double& def_tot_x, doub
 		}
 	}
 }
+template void QLens::deflection<double>(const double& x, const double& y, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs);
 
-void QLens::deflection_exclude(const double& x, const double& y, bool* exclude, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::deflection_exclude(const QScalar& x, const QScalar& y, bool* exclude, QScalar& def_tot_x, QScalar& def_tot_y, const int &thread, double* zfacs, double** betafacs)
 {
 	bool skip_lens_plane = false;
 	int skip_i = -1;
-	lensvector<double> *x_i = &xvals_i[thread];
-	lensvector<double> *def = &defs_i[thread];
-	lensvector<double> **def_i = &defs_subtot[thread];
+	lensvector<QScalar> *x_i = &xvals_i[thread];
+	lensvector<QScalar> *def = &defs_i[thread];
+	lensvector<QScalar> **def_i = &defs_subtot[thread];
 	int i,j;
 	def_tot_x = 0;
 	def_tot_y = 0;
@@ -189,20 +197,24 @@ void QLens::deflection_exclude(const double& x, const double& y, bool* exclude, 
 		}
 	}
 }
+template void QLens::deflection_exclude<double>(const double& x, const double& y, bool* exclude, double& def_tot_x, double& def_tot_y, const int &thread, double* zfacs, double** betafacs);
 
-void QLens::lens_equation(const lensvector<double>& x, lensvector<double>& f, const int& thread, double *zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::lens_equation(const lensvector<QScalar>& x, lensvector<QScalar>& f, const int& thread, double *zfacs, double** betafacs)
 {
-	deflection(x[0],x[1],f,thread,zfacs,betafacs);
+	deflection<QScalar>(x[0],x[1],f,thread,zfacs,betafacs);
 	f[0] = source[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
 	f[1] = source[1] - x[1] + f[1];
 }
+template void QLens::lens_equation<double>(const lensvector<double>& x, lensvector<double>& f, const int& thread, double *zfacs, double** betafacs);
 
-void QLens::map_to_lens_plane(const int& redshift_i, const double& x, const double& y, lensvector<double>& xi, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::map_to_lens_plane(const int& redshift_i, const QScalar& x, const QScalar& y, lensvector<QScalar>& xi, const int &thread, double* zfacs, double** betafacs)
 {
 	if (redshift_i >= n_lens_redshifts) die("lens redshift index does not exist");
-	lensvector<double> *x_i = &xvals_i[thread];
-	lensvector<double> *def = &defs_i[thread];
-	lensvector<double> **def_i = &defs_subtot[thread];
+	lensvector<QScalar> *x_i = &xvals_i[thread];
+	lensvector<QScalar> *def = &defs_i[thread];
+	lensvector<QScalar> **def_i = &defs_subtot[thread];
 
 	int i,j;
 	//std::cout << "n_redshifts=" << n_lens_redshifts << std::endl;
@@ -236,16 +248,18 @@ void QLens::map_to_lens_plane(const int& redshift_i, const double& x, const doub
 	xi[0] = (*x_i)[0];
 	xi[1] = (*x_i)[1];
 }
+template void QLens::map_to_lens_plane<double>(const int& redshift_i, const double& x, const double& y, lensvector<double>& xi, const int &thread, double* zfacs, double** betafacs);
 
-void QLens::hessian(const double& x, const double& y, lensmatrix<double>& hess_tot, const int &thread, double* zfacs, double** betafacs) // calculates the Hessian of the lensing potential
+template<typename QScalar>
+void QLens::hessian(const QScalar& x, const QScalar& y, lensmatrix<QScalar>& hess_tot, const int &thread, double* zfacs, double** betafacs) // calculates the Hessian of the lensing potential
 {
 	if (n_lens_redshifts > 1) {
-		lensvector<double> *x_i = &xvals_i[thread];
-		lensmatrix<double> *A_i = &Amats_i[thread];
-		lensvector<double> *def = &defs_i[thread];
-		lensvector<double> **def_i = &defs_subtot[thread];
-		lensmatrix<double> *hess = &hesses_i[thread];
-		lensmatrix<double> **hess_i = &hesses_subtot[thread];
+		lensvector<QScalar> *x_i = &xvals_i[thread];
+		lensmatrix<QScalar> *A_i = &Amats_i[thread];
+		lensvector<QScalar> *def = &defs_i[thread];
+		lensvector<QScalar> **def_i = &defs_subtot[thread];
+		lensmatrix<QScalar> *hess = &hesses_i[thread];
+		lensmatrix<QScalar> **hess_i = &hesses_subtot[thread];
 
 		int i,j;
 		hess_tot[0][0] = 0;
@@ -324,7 +338,7 @@ void QLens::hessian(const double& x, const double& y, lensmatrix<double>& hess_t
 			}
 		}
 	} else {
-		lensmatrix<double> *hess = &hesses_i[thread];
+		lensmatrix<QScalar> *hess = &hesses_i[thread];
 		int j;
 		hess_tot[0][0] = 0;
 		hess_tot[1][1] = 0;
@@ -353,10 +367,12 @@ void QLens::hessian(const double& x, const double& y, lensmatrix<double>& hess_t
 		hess_tot[1][0] *= zfacs[0];
 	}
 }
+template void QLens::hessian<double>(const double& x, const double& y, lensmatrix<double>& hess_tot, const int &thread, double* zfacs, double** betafacs);
 
-void QLens::hessian_weak(const double& x, const double& y, lensmatrix<double>& hess_tot, const int &thread, double* zfacs) // calculates the Hessian of the lensing potential, but ignores multiplane recursive lensing since it's assumed we're in the weak regime
+template<typename QScalar>
+void QLens::hessian_weak(const QScalar& x, const QScalar& y, lensmatrix<QScalar>& hess_tot, const int &thread, double* zfacs) // calculates the Hessian of the lensing potential, but ignores multiplane recursive lensing since it's assumed we're in the weak regime
 {
-	lensmatrix<double> *hess = &hesses_i[thread];
+	lensmatrix<QScalar> *hess = &hesses_i[thread];
 	int j;
 	hess_tot[0][0] = 0;
 	hess_tot[1][1] = 0;
@@ -383,58 +399,70 @@ void QLens::hessian_weak(const double& x, const double& y, lensmatrix<double>& h
 	hess_tot[0][1] *= zfacs[0];
 	hess_tot[1][0] *= zfacs[0];
 }
+template void QLens::hessian_weak<double>(const double& x, const double& y, lensmatrix<double>& hess_tot, const int &thread, double* zfacs);
 
-void QLens::find_sourcept(const lensvector<double>& x, lensvector<double>& srcpt, const int& thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::find_sourcept(const lensvector<QScalar>& x, lensvector<QScalar>& srcpt, const int& thread, double* zfacs, double** betafacs)
 {
-	deflection(x[0],x[1],srcpt,thread,zfacs,betafacs);
+	deflection<QScalar>(x[0],x[1],srcpt,thread,zfacs,betafacs);
 	srcpt[0] = x[0] - srcpt[0]; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector<double> alpha, which would be an extra memory operation)
 	srcpt[1] = x[1] - srcpt[1];
 }
+template void QLens::find_sourcept<double>(const lensvector<double>& x, lensvector<double>& srcpt, const int& thread, double* zfacs, double** betafacs);
 
-void QLens::find_sourcept(const lensvector<double>& x, double& srcpt_x, double& srcpt_y, const int& thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::find_sourcept(const lensvector<QScalar>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int& thread, double* zfacs, double** betafacs)
 {
-	deflection(x[0],x[1],srcpt_x,srcpt_y,thread,zfacs,betafacs);
+	deflection<QScalar>(x[0],x[1],srcpt_x,srcpt_y,thread,zfacs,betafacs);
 	srcpt_x = x[0] - srcpt_x; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector<double> alpha, which would be an extra memory operation)
 	srcpt_y = x[1] - srcpt_y;
 }
+template void QLens::find_sourcept<double>(const lensvector<double>& x, double& srcpt_x, double& srcpt_y, const int& thread, double* zfacs, double** betafacs);
 
-double QLens::inverse_magnification(const lensvector<double>& x, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+QScalar QLens::inverse_magnification(const lensvector<QScalar>& x, const int &thread, double* zfacs, double** betafacs)
 {
-	lensmatrix<double> *jac = &jacs[thread];
-	hessian(x[0],x[1],(*jac),thread,zfacs,betafacs);
+	lensmatrix<QScalar> *jac = &jacs[thread];
+	hessian<QScalar>(x[0],x[1],(*jac),thread,zfacs,betafacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
 	(*jac)[1][0] = -(*jac)[1][0];
 	return determinant((*jac));
 }
+template double QLens::inverse_magnification<double>(const lensvector<double>& x, const int &thread, double* zfacs, double** betafacs);
 
-double QLens::magnification(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+QScalar QLens::magnification(const lensvector<QScalar> &x, const int &thread, double* zfacs, double** betafacs)
 {
-	lensmatrix<double> *jac = &jacs[thread];
-	hessian(x[0],x[1],(*jac),thread,zfacs,betafacs);
+	lensmatrix<QScalar> *jac = &jacs[thread];
+	hessian<QScalar>(x[0],x[1],(*jac),thread,zfacs,betafacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
 	(*jac)[1][0] = -(*jac)[1][0];
 	return 1.0/determinant((*jac));
 }
+template double QLens::magnification<double>(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs);
 
-double QLens::shear(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+QScalar QLens::shear(const lensvector<QScalar> &x, const int &thread, double* zfacs, double** betafacs)
 {
-	lensmatrix<double> *hess = &hesses[thread];
-	hessian(x[0],x[1],(*hess),thread,zfacs,betafacs);
-	double shear1, shear2;
+	lensmatrix<QScalar> *hess = &hesses[thread];
+	hessian<QScalar>(x[0],x[1],(*hess),thread,zfacs,betafacs);
+	QScalar shear1, shear2;
 	shear1 = 0.5*((*hess)[0][0]-(*hess)[1][1]);
 	shear2 = (*hess)[0][1];
 	return sqrt(shear1*shear1+shear2*shear2);
 }
+template double QLens::shear<double>(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs);
 
-void QLens::shear(const lensvector<double> &x, double& shear_tot, double& angle, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::shear(const lensvector<QScalar> &x, QScalar& shear_tot, QScalar& angle, const int &thread, double* zfacs, double** betafacs)
 {
-	lensmatrix<double> *hess = &hesses[thread];
-	hessian(x[0],x[1],(*hess),thread,zfacs,betafacs);
-	double shear1, shear2;
+	lensmatrix<QScalar> *hess = &hesses[thread];
+	hessian<QScalar>(x[0],x[1],(*hess),thread,zfacs,betafacs);
+	QScalar shear1, shear2;
 	shear1 = 0.5*((*hess)[0][0]-(*hess)[1][1]);
 	shear2 = (*hess)[0][1];
 	shear_tot = sqrt(shear1*shear1+shear2*shear2);
@@ -454,29 +482,33 @@ void QLens::shear(const lensvector<double> &x, double& shear_tot, double& angle,
 	}
 	angle = 0.5*radians_to_degrees(angle);
 }
+template void QLens::shear<double>(const lensvector<double> &x, double& shear_tot, double& angle, const int &thread, double* zfacs, double** betafacs);
 
-void QLens::reduced_shear_components(const lensvector<double> &x, double& g1, double& g2, const int &thread, double* zfacs)
+template<typename QScalar>
+void QLens::reduced_shear_components(const lensvector<QScalar> &x, QScalar& g1, QScalar& g2, const int &thread, double* zfacs)
 {
-	lensmatrix<double> *hess = &hesses[thread];
-	hessian_weak(x[0],x[1],(*hess),thread,zfacs);
-	double kap_denom = 1 - ((*hess)[0][0] + (*hess)[1][1])/2;
+	lensmatrix<QScalar> *hess = &hesses[thread];
+	hessian_weak<QScalar>(x[0],x[1],(*hess),thread,zfacs);
+	QScalar kap_denom = 1 - ((*hess)[0][0] + (*hess)[1][1])/2;
 	g1 = 0.5*((*hess)[0][0]-(*hess)[1][1]) / kap_denom;
 	g2 = (*hess)[0][1] / kap_denom;
 }
+template void QLens::reduced_shear_components<double>(const lensvector<double> &x, double& g1, double& g2, const int &thread, double* zfacs);
 
 // the following functions find the shear, kappa and magnification at the position where a perturber is placed;
 // this information is used to determine the optimal subgrid size and resolution
 
-void QLens::hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix<double>& hess_tot, const int& thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::hessian_exclude(const QScalar& x, const QScalar& y, bool* exclude, lensmatrix<QScalar>& hess_tot, const int& thread, double* zfacs, double** betafacs)
 {
 	bool skip_lens_plane = false;
 	int skip_i = -1;
-	lensvector<double> *x_i = &xvals_i[thread];
-	lensmatrix<double> *A_i = &Amats_i[thread];
-	lensvector<double> *def = &defs_i[thread];
-	lensvector<double> **def_i = &defs_subtot[thread];
-	lensmatrix<double> *hess = &hesses_i[thread];
-	lensmatrix<double> **hess_i = &hesses_subtot[thread];
+	lensvector<QScalar> *x_i = &xvals_i[thread];
+	lensmatrix<QScalar> *A_i = &Amats_i[thread];
+	lensvector<QScalar> *def = &defs_i[thread];
+	lensvector<QScalar> **def_i = &defs_subtot[thread];
+	lensmatrix<QScalar> *hess = &hesses_i[thread];
+	lensmatrix<QScalar> **hess_i = &hesses_subtot[thread];
 
 	int i,j;
 	for (i=0; i < n_lens_redshifts; i++) {
@@ -603,11 +635,13 @@ void QLens::hessian_exclude(const double& x, const double& y, bool* exclude, len
 		hess_tot[1][0] *= zfacs[0];
 	}
 }
+template void QLens::hessian_exclude<double>(const double& x, const double& y, bool* exclude, lensmatrix<double>& hess_tot, const int& thread, double* zfacs, double** betafacs);
 
-double QLens::magnification_exclude(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+QScalar QLens::magnification_exclude(const lensvector<QScalar> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
 {
-	lensmatrix<double> *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
+	lensmatrix<QScalar> *jac = &jacs[thread];
+	hessian_exclude<QScalar>(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
@@ -615,11 +649,13 @@ double QLens::magnification_exclude(const lensvector<double> &x, bool* exclude, 
 
 	return 1.0/determinant((*jac));
 }
+template double QLens::magnification_exclude<double>(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
 
-double QLens::inverse_magnification_exclude(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+QScalar QLens::inverse_magnification_exclude(const lensvector<QScalar> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
 {
-	lensmatrix<double> *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
+	lensmatrix<QScalar> *jac = &jacs[thread];
+	hessian_exclude<QScalar>(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
@@ -627,30 +663,34 @@ double QLens::inverse_magnification_exclude(const lensvector<double> &x, bool* e
 
 	return determinant((*jac));
 }
+template double QLens::inverse_magnification_exclude<double>(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
 
-double QLens::shear_exclude(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+QScalar QLens::shear_exclude(const lensvector<QScalar> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs)
 {
-	lensmatrix<double> *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
+	lensmatrix<QScalar> *jac = &jacs[thread];
+	hessian_exclude<QScalar>(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
 	(*jac)[1][0] = -(*jac)[1][0];
-	double shear1, shear2;
+	QScalar shear1, shear2;
 	shear1 = 0.5*((*jac)[1][1]-(*jac)[0][0]);
 	shear2 = -(*jac)[0][1];
 	return sqrt(shear1*shear1+shear2*shear2);
 }
+template double QLens::shear_exclude<double>(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
 
-void QLens::shear_exclude(const lensvector<double> &x, double &shear, double &angle, bool* exclude, const int& thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::shear_exclude(const lensvector<QScalar> &x, QScalar &shear, QScalar &angle, bool* exclude, const int& thread, double* zfacs, double** betafacs)
 {
-	lensmatrix<double> *jac = &jacs[thread];
-	hessian_exclude(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
+	lensmatrix<QScalar> *jac = &jacs[thread];
+	hessian_exclude<QScalar>(x[0],x[1],exclude,(*jac),thread,zfacs,betafacs);
 	(*jac)[0][0] = 1 - (*jac)[0][0];
 	(*jac)[1][1] = 1 - (*jac)[1][1];
 	(*jac)[0][1] = -(*jac)[0][1];
 	(*jac)[1][0] = -(*jac)[1][0];
-	double shear1, shear2;
+	QScalar shear1, shear2;
 	shear1 = 0.5*((*jac)[1][1]-(*jac)[0][0]);
 	shear2 = -(*jac)[0][1];
 	shear = sqrt(shear1*shear1+shear2*shear2);
@@ -670,11 +710,12 @@ void QLens::shear_exclude(const lensvector<double> &x, double &shear, double &an
 	}
 	angle = 0.5*radians_to_degrees(angle);
 }
+template void QLens::shear_exclude<double>(const lensvector<double> &x, double &shear, double &angle, bool* exclude, const int& thread, double* zfacs, double** betafacs);
 
-double QLens::kappa_exclude(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs)
+template<typename QScalar>
+QScalar QLens::kappa_exclude(const lensvector<QScalar> &x, bool* exclude, double* zfacs, double** betafacs)
 {
-
-	double kappa;
+	QScalar kappa;
 	if (n_lens_redshifts==1) {
 		int j;
 		kappa=0;
@@ -694,26 +735,28 @@ double QLens::kappa_exclude(const lensvector<double> &x, bool* exclude, double* 
 		}
 		kappa *= zfacs[0];
 	} else {
-		lensmatrix<double> *jac = &jacs[0];
-		hessian_exclude(x[0],x[1],exclude,(*jac),0,zfacs,betafacs);
+		lensmatrix<QScalar> *jac = &jacs[0];
+		hessian_exclude<QScalar>(x[0],x[1],exclude,(*jac),0,zfacs,betafacs);
 		kappa = ((*jac)[0][0] + (*jac)[1][1])/2;
 	}
 	return kappa;
 }
+template double QLens::kappa_exclude<double>(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs);
 
-void QLens::kappa_inverse_mag_sourcept(const lensvector<double>& xvec, lensvector<double>& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::kappa_inverse_mag_sourcept(const lensvector<QScalar>& xvec, lensvector<QScalar>& srcpt, QScalar &kap_tot, QScalar &invmag, const int &thread, double* zfacs, double** betafacs)
 {
-	double x = xvec[0], y = xvec[1];
-	lensmatrix<double> *jac = &jacs[thread];
-	lensvector<double> *def_tot = &defs[thread];
+	QScalar x = xvec[0], y = xvec[1];
+	lensmatrix<QScalar> *jac = &jacs[thread];
+	lensvector<QScalar> *def_tot = &defs[thread];
 
 	if (n_lens_redshifts > 1) {
-		lensvector<double> *x_i = &xvals_i[thread];
-		lensmatrix<double> *A_i = &Amats_i[thread];
-		lensvector<double> *def = &defs_i[thread];
-		lensvector<double> **def_i = &defs_subtot[thread];
-		lensmatrix<double> *hess = &hesses_i[thread];
-		lensmatrix<double> **hess_i = &hesses_subtot[thread];
+		lensvector<QScalar> *x_i = &xvals_i[thread];
+		lensmatrix<QScalar> *A_i = &Amats_i[thread];
+		lensvector<QScalar> *def = &defs_i[thread];
+		lensvector<QScalar> **def_i = &defs_subtot[thread];
+		lensmatrix<QScalar> *hess = &hesses_i[thread];
+		lensmatrix<QScalar> **hess_i = &hesses_subtot[thread];
 
 		int i,j;
 		(*jac)[0][0] = 0;
@@ -802,7 +845,7 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector<double>& xvec, lensvecto
 
 		if ((nthreads==1) or (!multithread_perturber_deflections)) {
 			int j;
-			double kap;
+			QScalar kap;
 			(*jac)[0][0] = 0;
 			(*jac)[1][1] = 0;
 			(*jac)[0][1] = 0;
@@ -810,8 +853,8 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector<double>& xvec, lensvecto
 			(*def_tot)[0] = 0;
 			(*def_tot)[1] = 0;
 			kap_tot = 0;
-			lensvector<double> *def = &defs_i[0];
-			lensmatrix<double> *hess = &hesses_i[0];
+			lensvector<QScalar> *def = &defs_i[0];
+			lensmatrix<QScalar> *hess = &hesses_i[0];
 			for (j=0; j < nlens; j++) {
 				lens_list[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess));
 				(*jac)[0][0] += (*hess)[0][0];
@@ -836,12 +879,12 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector<double>& xvec, lensvecto
 			}
 		} else {
 			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-			double *hess00 = new double[nthreads];
-			double *hess11 = new double[nthreads];
-			double *hess01 = new double[nthreads];
-			double *def0 = new double[nthreads];
-			double *def1 = new double[nthreads];
-			double *kapi = new double[nthreads];
+			QScalar *hess00 = new QScalar[nthreads];
+			QScalar *hess11 = new QScalar[nthreads];
+			QScalar *hess01 = new QScalar[nthreads];
+			QScalar *def0 = new QScalar[nthreads];
+			QScalar *def1 = new QScalar[nthreads];
+			QScalar *kapi = new QScalar[nthreads];
 
 			//cout << "Starting new deflection calculation..." << endl << flush;
 			#pragma omp parallel
@@ -852,11 +895,11 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector<double>& xvec, lensvecto
 #else
 				thread2 = 0;
 #endif
-				lensvector<double> *def = &defs_i[thread2];
-				lensmatrix<double> *hess = &hesses_i[thread2];
-				//double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
+				lensvector<QScalar> *def = &defs_i[thread2];
+				lensmatrix<QScalar> *hess = &hesses_i[thread2];
+				//QScalar hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
 				int j;
-				double kap;
+				QScalar kap;
 				hess00[thread2] = 0;
 				hess11[thread2] = 0;
 				hess01[thread2] = 0;
@@ -906,9 +949,9 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector<double>& xvec, lensvecto
 			delete[] def1;
 			delete[] kapi;
 			if (n_pixellated_lens > 0) {
-				double kap;
-				lensvector<double> *def = &defs_i[thread];
-				lensmatrix<double> *hess = &hesses_i[thread];
+				QScalar kap;
+				lensvector<QScalar> *def = &defs_i[thread];
+				lensmatrix<QScalar> *hess = &hesses_i[thread];
 				for (int j=0; j < n_pixellated_lens; j++) {
 					if (lensgrids[j]->include_in_lensing_calculations) {
 						lensgrids[j]->kappa_and_potential_derivatives(x,y,kap,(*def),(*hess),thread);
@@ -946,19 +989,21 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector<double>& xvec, lensvecto
 	invmag = determinant((*jac));
 	//cout << "Finished def calc for real; invmag = " << invmag << ", srcpt0=" << srcpt[0] << " srcpt1=" << srcpt[1] << " kap=" << kap_tot << " " << endl << flush;
 }
+template void QLens::kappa_inverse_mag_sourcept<double>(const lensvector<double>& xvec, lensvector<double>& srcpt, double &kap_tot, double &invmag, const int &thread, double* zfacs, double** betafacs);
 
-void QLens::sourcept_jacobian(const lensvector<double>& xvec, lensvector<double>& srcpt, lensmatrix<double>& jac_tot, const int &thread, double* zfacs, double** betafacs)
+template<typename QScalar>
+void QLens::sourcept_jacobian(const lensvector<QScalar>& xvec, lensvector<QScalar>& srcpt, lensmatrix<QScalar>& jac_tot, const int &thread, double* zfacs, double** betafacs)
 {
-	double x = xvec[0], y = xvec[1];
-	lensvector<double> *def_tot = &defs[thread];
+	QScalar x = xvec[0], y = xvec[1];
+	lensvector<QScalar> *def_tot = &defs[thread];
 
 	if (n_lens_redshifts > 1) {
-		lensvector<double> *x_i = &xvals_i[thread];
-		lensmatrix<double> *A_i = &Amats_i[thread];
-		lensvector<double> *def = &defs_i[thread];
-		lensvector<double> **def_i = &defs_subtot[thread];
-		lensmatrix<double> *hess = &hesses_i[thread];
-		lensmatrix<double> **hess_i = &hesses_subtot[thread];
+		lensvector<QScalar> *x_i = &xvals_i[thread];
+		lensmatrix<QScalar> *A_i = &Amats_i[thread];
+		lensvector<QScalar> *def = &defs_i[thread];
+		lensvector<QScalar> **def_i = &defs_subtot[thread];
+		lensmatrix<QScalar> *hess = &hesses_i[thread];
+		lensmatrix<QScalar> **hess_i = &hesses_subtot[thread];
 
 		int i,j;
 		jac_tot[0][0] = 0;
@@ -1041,8 +1086,8 @@ void QLens::sourcept_jacobian(const lensvector<double>& xvec, lensvector<double>
 		(*def_tot)[1] = 0;
 
 		if ((nthreads==1) or (!multithread_perturber_deflections)) {
-			lensvector<double> *def = &defs_i[0];
-			lensmatrix<double> *hess = &hesses_i[0];
+			lensvector<QScalar> *def = &defs_i[0];
+			lensmatrix<QScalar> *hess = &hesses_i[0];
 			int j;
 			jac_tot[0][0] = 0;
 			jac_tot[1][1] = 0;
@@ -1072,11 +1117,11 @@ void QLens::sourcept_jacobian(const lensvector<double>& xvec, lensvector<double>
 			}
 		} else {
 			// The following parallel scheme is useful for clusters when LOTS of perturbers are present
-			double *hess00 = new double[nthreads];
-			double *hess11 = new double[nthreads];
-			double *hess01 = new double[nthreads];
-			double *def0 = new double[nthreads];
-			double *def1 = new double[nthreads];
+			QScalar *hess00 = new QScalar[nthreads];
+			QScalar *hess11 = new QScalar[nthreads];
+			QScalar *hess01 = new QScalar[nthreads];
+			QScalar *def0 = new QScalar[nthreads];
+			QScalar *def1 = new QScalar[nthreads];
 
 			#pragma omp parallel
 			{
@@ -1086,11 +1131,11 @@ void QLens::sourcept_jacobian(const lensvector<double>& xvec, lensvector<double>
 #else
 				thread2 = 0;
 #endif
-				lensvector<double> *def = &defs_i[thread2];
-				lensmatrix<double> *hess = &hesses_i[thread2];
-				//double hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
+				lensvector<QScalar> *def = &defs_i[thread2];
+				lensmatrix<QScalar> *hess = &hesses_i[thread2];
+				//QScalar hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
 				int j;
-				//double kap;
+				//QScalar kap;
 					hess00[thread2] = 0;
 					hess11[thread2] = 0;
 					hess01[thread2] = 0;
@@ -1130,9 +1175,9 @@ void QLens::sourcept_jacobian(const lensvector<double>& xvec, lensvector<double>
 			delete[] def0;
 			delete[] def1;
 			if (n_pixellated_lens > 0) {
-				double kap;
-				lensvector<double> *def = &defs_i[thread];
-				lensmatrix<double> *hess = &hesses_i[thread];
+				QScalar kap;
+				lensvector<QScalar> *def = &defs_i[thread];
+				lensmatrix<QScalar> *hess = &hesses_i[thread];
 				for (int j=0; j < n_pixellated_lens; j++) {
 					if (lensgrids[j]->include_in_lensing_calculations) {
 						lensgrids[j]->potential_derivatives(x,y,(*def),(*hess),thread);
@@ -1161,4 +1206,5 @@ void QLens::sourcept_jacobian(const lensvector<double>& xvec, lensvector<double>
 	jac_tot[0][1] = -jac_tot[0][1];
 	jac_tot[1][0] = -jac_tot[1][0];
 }
+template void QLens::sourcept_jacobian<double>(const lensvector<double>& xvec, lensvector<double>& srcpt, lensmatrix<double>& jac_tot, const int &thread, double* zfacs, double** betafacs);
 

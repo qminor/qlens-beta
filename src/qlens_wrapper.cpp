@@ -232,15 +232,15 @@ public:
 		if(add_simulated_point_image_data(src)) update_parameter_list();
 	}
 
-	bool get_shear_components_mode() { return Shear::use_shear_component_params; }
+	bool get_shear_components_mode() { return Shear<double>::use_shear_component_params; }
 	void set_shear_components_mode(const bool comp) {
-			Shear::use_shear_component_params = comp;
-			reassign_lensparam_pointers_and_names();
+		Shear<double>::use_shear_component_params = comp;
+		reassign_lensparam_pointers_and_names();
 	}
 	bool get_ellipticity_components_mode() { return LensProfile<double>::use_ellipticity_components; }
 	void set_ellipticity_components_mode(const bool comp) {
-			LensProfile<double>::use_ellipticity_components = comp;
-			reassign_lensparam_pointers_and_names();
+		LensProfile<double>::use_ellipticity_components = comp;
+		reassign_lensparam_pointers_and_names();
 	}
 
 	bool get_split_imgpixels() { return split_imgpixels; }

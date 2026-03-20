@@ -493,7 +493,7 @@ void QLens::process_commands(bool read_file)
 							"offcenter from the critical curves. If center coordinates are not specified, the lens is centered at\n"
 							"the origin by default.\n";
 					else if (words[2]=="shear")
-						if (Shear::use_shear_component_params)
+						if (Shear<double>::use_shear_component_params)
 							cout << "lens shear <shear_1> <shear_2> [x-center] [y-center]\n\n"
 								"where <shear_1> and <shear_2> are the components of the shear.\n";
 						else
@@ -760,7 +760,7 @@ void QLens::process_commands(bool read_file)
 							"This is similar to the above example, except that this lens is anchored to lens 0\n"
 							"so that their centers will always coincide when the parameters are varied.\n\n"
 							"Since it is common to anchor external shear to a lens model, this can be done in\n" <<
-							((Shear::use_shear_component_params) ?
+							((Shear<double>::use_shear_component_params) ?
 								"one line by adding 'shear=<shear_1> <shear_2>' to the end of the line. For example,\n"
 								"to add external shear with shear_1=0.1 and shear_2=0.05, one can enter:\n\n"
 								"fit lens sple 10 1 0 0.9 0 0.3 0.5 shear=0.1 0.05\n" :
@@ -2299,7 +2299,7 @@ void QLens::process_commands(bool read_file)
 					cout << "integral_tolerance = " << LensProfile<double>::integral_tolerance << endl;
 					cout << "major_axis_along_y: " << display_switch(LensProfile<double>::orient_major_axis_north) << endl;
 					cout << "ellipticity_components: " << display_switch(LensProfile<double>::use_ellipticity_components) << endl;
-					cout << "shear_components: " << display_switch(Shear::use_shear_component_params) << endl;
+					cout << "shear_components: " << display_switch(Shear<double>::use_shear_component_params) << endl;
 					cout << "tab_rmin = " << tabulate_rmin << endl;
 					cout << "tab_r_N = " << tabulate_logr_N << endl;
 					cout << "tab_phi_N = " << tabulate_phi_N << endl;
@@ -2797,11 +2797,11 @@ void QLens::process_commands(bool read_file)
 						stringstream shearstream;
 						shearstream << shearstr;
 						if (!(shearstream >> shear_param_vals[0])) {
-							if (Shear::use_shear_component_params) Complain("invalid shear_1 value");
+							if (Shear<double>::use_shear_component_params) Complain("invalid shear_1 value");
 							Complain("invalid shear value");
 						}
 						if (!(ws[i+1] >> shear_param_vals[1])) {
-							if (Shear::use_shear_component_params) Complain("invalid shear_2 value");
+							if (Shear<double>::use_shear_component_params) Complain("invalid shear_2 value");
 							Complain("invalid shear angle");
 						}
 						remove_word(i+1);
@@ -3140,7 +3140,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (b,slope,s,q,theta,xc,yc) in model sple";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3250,7 +3250,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (b,a,s,q,theta,xc,yc) in model dpie";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3388,7 +3388,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (A_m,n,theta,xc,yc) in model " + words[1];
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3507,7 +3507,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (p1,p2,q,theta,xc,yc) in model nfw";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3670,7 +3670,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (p1,p2,p3,q,theta,xc,yc) in model tnfw";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3794,7 +3794,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (p1,p2,p3,q,theta,xc,yc) in model cnfw";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3893,7 +3893,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (k0,R_d,q,theta,xc,yc) in model expdisk";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3988,7 +3988,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (k0,rad,q,theta,xc,yc) in model tophat";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4090,7 +4090,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (qx,f,q,theta,xc,yc) in model kspline";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4185,7 +4185,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (ks,rs,q,theta,xc,yc) in model hern";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4314,7 +4314,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for nine parameters (k0,gamma,n,a,s,q,theta,xc,yc) in model corecusp";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4411,7 +4411,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for three parameters (b,xc,yc) in model ptmass";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4500,7 +4500,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (kappa_e,R_eff,n,q,theta,xc,yc) in model sersic (plus optional Fourier modes)";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4608,7 +4608,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model dsersic (plus optional Fourier modes)";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4714,7 +4714,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for eight parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model csersic (plus optional Fourier modes)";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4804,7 +4804,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for three parameters (kappa,xc,yc) in model sheet";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4852,7 +4852,7 @@ void QLens::process_commands(bool read_file)
 								complain_str = "Must specify vary flags for three parameters (kappa,xc,yc) in model deflection";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4883,12 +4883,12 @@ void QLens::process_commands(bool read_file)
 					if (nwords >= 3) {
 						double shear_p1, shear_p2 = 0, xc = 0, yc = 0;
 						if (!(ws[2] >> shear_p1)) {
-							if (Shear::use_shear_component_params) Complain("invalid shear_1 parameter for model shear");
+							if (Shear<double>::use_shear_component_params) Complain("invalid shear_1 parameter for model shear");
 							else Complain("invalid shear parameter for model shear");
 						}
 						if (nwords >= 4) {
 							if (!(ws[3] >> shear_p2)) {
-								if (Shear::use_shear_component_params) Complain("invalid shear_2 parameter for model shear");
+								if (Shear<double>::use_shear_component_params) Complain("invalid shear_2 parameter for model shear");
 								else Complain("invalid theta parameter for model shear");
 							}
 							if (nwords == 5) {
@@ -4944,7 +4944,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 					else {
-						if (Shear::use_shear_component_params) Complain("shear requires 4 parameters (shear_1, shear_2, xc, yc)");
+						if (Shear<double>::use_shear_component_params) Complain("shear requires 4 parameters (shear_1, shear_2, xc, yc)");
 						else Complain("shear requires 4 parameters (shear, q, xc, yc)");
 					}
 				}
@@ -5021,7 +5021,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for five parameters (kscale,rscale,theta,xc,yc) in model tab";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -5126,7 +5126,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for five parameters (kscale,rscale,theta,xc,yc) in model qtab";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -5864,7 +5864,7 @@ void QLens::process_commands(bool read_file)
 					if (!(ws[0] >> minpar)) Complain("invalid lower limit");
 					if (!(ws[1] >> maxpar)) Complain("invalid upper limit");
 				}
-				if (!spawn_lens_from_source_object(src_number,lens_redshift,source_redshift,pmode,vary_parameters,include_lims,minpar,maxpar)) Complain("Lens spawning failed");
+				if (!spawn_lens_from_source_object(src_number,lens_redshift,reference_source_redshift,pmode,vary_parameters,include_lims,minpar,maxpar)) Complain("Lens spawning failed");
 				if (mass_param > 0) lens_list[nlens-1]->update_specific_parameter(0,mass_param);
 				vary_parameters = false; // This is so it doesn't try to set limits later down in the code, like it does for regular source models
 			}
@@ -9667,7 +9667,7 @@ void QLens::process_commands(bool read_file)
 					lensvector<double> pos,src;
 					pos[0] = x_in;
 					pos[1] = y_in;
-					find_sourcept(pos,src,0,reference_zfactors,default_zsrc_beta_factors);
+					find_sourcept<double>(pos,src,0,reference_zfactors,default_zsrc_beta_factors);
 					xsource_in = src[0];
 					ysource_in = src[1];
 				} else {
@@ -9718,7 +9718,7 @@ void QLens::process_commands(bool read_file)
 					lensvector<double> pos,src;
 					pos[0] = x_in;
 					pos[1] = y_in;
-					find_sourcept(pos,src,0,reference_zfactors,default_zsrc_beta_factors);
+					find_sourcept<double>(pos,src,0,reference_zfactors,default_zsrc_beta_factors);
 					xsource_in = src[0];
 					ysource_in = src[1];
 				} else {
@@ -11380,116 +11380,122 @@ void QLens::process_commands(bool read_file)
 				}
 
 				dvector xvals, yvals, zvals;
-				if ((!show_cc) or (plot_fits) or ((foundcc = plot_critical_curves("crit.dat"))==true)) {
-					string contstring;
-					if (plot_contours) contstring = "ncont=" + ncontstring2; else contstring = "";
-					if (set_title) plot_title = temp_title;
-					if (nwords == 2) {
-						if (plot_fits) Complain("file name for FITS file must be specified");
-						if ((replot) or (output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
-							plot_sbmap("img_pixel",xvals,yvals,zvals,plot_fits);
-							//if ((subcomp) and (show_cc)) {
-								//if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
-							//}
-							if (!offload_to_data) {
-								if (!replot) {
-									if ((source_fit_mode==Cartesian_Source) and (src_i >= 0)) {
-										if (cartesian_srcgrids[src_i] != NULL) {
-											dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
-											cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
-											plot_sbmap("src_pixel",xvals,yvals,zvals);
-											plotted_src = true;
-										}
-									} else if ((source_fit_mode==Delaunay_Source) and (src_i >= 0)) {
-										if (delaunay_srcgrids[src_i] != NULL) {
-											delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,1,600,false);
-											delaunay_srcgrids[src_i]->plot_voronoi_grid("src_pixel");
-											plot_sbmap("src_pixel",xvals,yvals,zvals);
-											plotted_src = true;
-										}
-									}
-								}
-								if (show_cc) {
-									if ((plot_srcplane) and (plotted_src)) {
-										if (source_fit_mode==Delaunay_Source) {
-											if (include_imgpts) run_plotter_range("srcpixel_delaunay_srcpts_plural",range1);
-											else run_plotter_range("srcpixel_delaunay",range1);
-										}
-										else run_plotter_range("srcpixel",range1);
-									}
-									if (subcomp) run_plotter_range("imgpixel_comp",range2,contstring,cbstring);
-									else if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural",range2,contstring,cbstring);
-									else run_plotter_range("imgpixel",range2,contstring,cbstring);
-								} else {
-									if ((plot_srcplane) and (plotted_src)) {
-										if (source_fit_mode==Delaunay_Source) {
-											if (include_imgpts) run_plotter_range("srcpixel_delaunay_srcpts_plural_nocc",range1);
-											else run_plotter_range("srcpixel_delaunay_nocc",range1);
-										}
-										else run_plotter_range("srcpixel_nocc",range1);
-									}
-									if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural_nocc",range2,contstring,cbstring);
-									else run_plotter_range("imgpixel_nocc",range2,contstring,cbstring);
-								}
-							}
-						} else {
-							Complain("Plotting failed");
-						}
-					} else if (nwords == 3) {
-						if ((terminal==TEXT) or (plot_fits)) {
+				if (show_cc) {
+					foundcc = plot_critical_curves("crit.dat");
+					if (!foundcc) {
+						omit_cc = true;
+						show_cc = false;
+						warn("could not find critical curves; will try plotting without critical curves");
+					}
+				}
+				string contstring;
+				if (plot_contours) contstring = "ncont=" + ncontstring2; else contstring = "";
+				if (set_title) plot_title = temp_title;
+				if (nwords == 2) {
+					if (plot_fits) Complain("file name for FITS file must be specified");
+					if ((replot) or (output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
+						plot_sbmap("img_pixel",xvals,yvals,zvals,plot_fits);
+						//if ((subcomp) and (show_cc)) {
+							//if (plotcrit_exclude_subhalo("crit0.dat",nlens-1)==false) Complain("could not generate critical curves without subhalo");
+						//}
+						if (!offload_to_data) {
 							if (!replot) {
-								output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
-								plot_sbmap(words[2],xvals,yvals,zvals,plot_fits);
-							}
-						}
-						else if ((replot) or (output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
-							if (!replot) plot_sbmap("img_pixel",xvals,yvals,zvals,plot_fits);
-							if (show_cc) {
-								if (subcomp) run_plotter_file("imgpixel_comp",words[2],range2,contstring,cbstring);
-								else if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural",words[2],range2,contstring,cbstring);
-								else run_plotter_file("imgpixel",words[2],range2,contstring,cbstring);
-							} else {
-								if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural_nocc",words[2],range2,contstring,cbstring);
-								else run_plotter_file("imgpixel_nocc",words[2],range2,contstring,cbstring);
-							}
-						} else Complain("Plotting failed");
-					} else if (nwords == 4) {
-						if ((terminal==TEXT) or (plot_fits)) {
-							if (!replot) {
-								output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
-								if ((plotted_src) and (mpi_id==0) and (src_i >= 0)) {
+								if ((source_fit_mode==Cartesian_Source) and (src_i >= 0)) {
 									if (cartesian_srcgrids[src_i] != NULL) {
 										dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
 										cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
-										plot_sbmap(words[2],xvals,yvals,zvals);
+										plot_sbmap("src_pixel",xvals,yvals,zvals);
+										plotted_src = true;
+									}
+								} else if ((source_fit_mode==Delaunay_Source) and (src_i >= 0)) {
+									if (delaunay_srcgrids[src_i] != NULL) {
+										delaunay_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,1,600,false);
+										delaunay_srcgrids[src_i]->plot_voronoi_grid("src_pixel");
+										plot_sbmap("src_pixel",xvals,yvals,zvals);
+										plotted_src = true;
 									}
 								}
-								plot_sbmap(words[3],xvals,yvals,zvals,plot_fits);
+							}
+							if (show_cc) {
+								if ((plot_srcplane) and (plotted_src)) {
+									if (source_fit_mode==Delaunay_Source) {
+										if (include_imgpts) run_plotter_range("srcpixel_delaunay_srcpts_plural",range1);
+										else run_plotter_range("srcpixel_delaunay",range1);
+									}
+									else run_plotter_range("srcpixel",range1);
+								}
+								if (subcomp) run_plotter_range("imgpixel_comp",range2,contstring,cbstring);
+								else if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural",range2,contstring,cbstring);
+								else run_plotter_range("imgpixel",range2,contstring,cbstring);
+							} else {
+								if ((plot_srcplane) and (plotted_src)) {
+									if (source_fit_mode==Delaunay_Source) {
+										if (include_imgpts) run_plotter_range("srcpixel_delaunay_srcpts_plural_nocc",range1);
+										else run_plotter_range("srcpixel_delaunay_nocc",range1);
+									}
+									else run_plotter_range("srcpixel_nocc",range1);
+								}
+								if (include_imgpts) run_plotter_range("imgpixel_imgpts_plural_nocc",range2,contstring,cbstring);
+								else run_plotter_range("imgpixel_nocc",range2,contstring,cbstring);
 							}
 						}
-						else if ((replot) or (output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
-							if (!replot) plot_sbmap("img_pixel",xvals,yvals,zvals,plot_fits);
-							if ((!replot) and (plotted_src) and (mpi_id==0) and (src_i >= 0)) { 
+					} else {
+						Complain("Plotting failed");
+					}
+				} else if (nwords == 3) {
+					if ((terminal==TEXT) or (plot_fits)) {
+						if (!replot) {
+							output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
+							plot_sbmap(words[2],xvals,yvals,zvals,plot_fits);
+						}
+					}
+					else if ((replot) or (output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
+						if (!replot) plot_sbmap("img_pixel",xvals,yvals,zvals,plot_fits);
+						if (show_cc) {
+							if (subcomp) run_plotter_file("imgpixel_comp",words[2],range2,contstring,cbstring);
+							else if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural",words[2],range2,contstring,cbstring);
+							else run_plotter_file("imgpixel",words[2],range2,contstring,cbstring);
+						} else {
+							if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural_nocc",words[2],range2,contstring,cbstring);
+							else run_plotter_file("imgpixel_nocc",words[2],range2,contstring,cbstring);
+						}
+					} else Complain("Plotting failed");
+				} else if (nwords == 4) {
+					if ((terminal==TEXT) or (plot_fits)) {
+						if (!replot) {
+							output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb);
+							if ((plotted_src) and (mpi_id==0) and (src_i >= 0)) {
 								if (cartesian_srcgrids[src_i] != NULL) {
 									dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
 									cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
-									plot_sbmap("src_pixel",xvals,yvals,zvals);
+									plot_sbmap(words[2],xvals,yvals,zvals);
 								}
 							}
-
-							if (show_cc) {
-								if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring,cbstring);
-								else if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural",words[3],range2,contstring,cbstring);
-								else run_plotter_file("imgpixel",words[3],range2,contstring,cbstring);
-								if ((plot_srcplane) and (plotted_src)) run_plotter_file("srcpixel",words[2],range1,contstring,cbstring);
-							} else {
-								if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural_nocc",words[3],range2,contstring,cbstring);
-								else run_plotter_file("imgpixel_nocc",words[3],range2,contstring,cbstring);
-								if ((plot_srcplane) and (plotted_src)) run_plotter_file("srcpixel_nocc",words[2],range1);
+							plot_sbmap(words[3],xvals,yvals,zvals,plot_fits);
+						}
+					}
+					else if ((replot) or (output_lensed_surface_brightness(xvals,yvals,zvals,band_i,plot_fits,plot_residual,plot_foreground_only,omit_foreground,show_all_pixels,normalize_sb,offload_to_data,show_extended_mask,show_foreground_mask,show_noise_thresh,exclude_ptimgs,show_only_ptimgs,zsrc_i,show_only_first_order,plot_log,show_current_sb)==true)) {
+						if (!replot) plot_sbmap("img_pixel",xvals,yvals,zvals,plot_fits);
+						if ((!replot) and (plotted_src) and (mpi_id==0) and (src_i >= 0)) { 
+							if (cartesian_srcgrids[src_i] != NULL) {
+								dvector maglogvals,nimgvals; //not used here, but still an output from cartesian srcgrids
+								cartesian_srcgrids[src_i]->output_surface_brightness(xvals,yvals,zvals,maglogvals,nimgvals);
+								plot_sbmap("src_pixel",xvals,yvals,zvals);
 							}
-						} else Complain("Plotting failed");
-					} else Complain("invalid number of arguments to 'sbmap plotimg'");
-				} else if (!foundcc) Complain("could not find critical curves");
+						}
+
+						if (show_cc) {
+							if (subcomp) run_plotter_file("imgpixel_comp",words[3],range2,contstring,cbstring);
+							else if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural",words[3],range2,contstring,cbstring);
+							else run_plotter_file("imgpixel",words[3],range2,contstring,cbstring);
+							if ((plot_srcplane) and (plotted_src)) run_plotter_file("srcpixel",words[2],range1,contstring,cbstring);
+						} else {
+							if (include_imgpts) run_plotter_file("imgpixel_imgpts_plural_nocc",words[3],range2,contstring,cbstring);
+							else run_plotter_file("imgpixel_nocc",words[3],range2,contstring,cbstring);
+							if ((plot_srcplane) and (plotted_src)) run_plotter_file("srcpixel_nocc",words[2],range1);
+						}
+					} else Complain("Plotting failed");
+				} else Complain("invalid number of arguments to 'sbmap plotimg'");
 				reset_grid();
 				if (add_specific_noise) {
 					background_pixel_noise = old_pnoise;
@@ -11976,30 +11982,30 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="shear_components")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Use shear components as parameters: " << display_switch(Shear::use_shear_component_params) << endl;
+				if (mpi_id==0) cout << "Use shear components as parameters: " << display_switch(Shear<double>::use_shear_component_params) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'shear_components' command; must specify 'on' or 'off'");
 				bool use_comps;
 				set_switch(use_comps,setword);
-				Shear::use_shear_component_params = use_comps;
+				Shear<double>::use_shear_component_params = use_comps;
 				reassign_lensparam_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="shear_angle_towards_perturber")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Shear angle points towards (hypothetical) perturber: " << display_switch(Shear::angle_points_towards_perturber) << endl;
+				if (mpi_id==0) cout << "Shear angle points towards (hypothetical) perturber: " << display_switch(Shear<double>::angle_points_towards_perturber) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'shear_angle_towards_perturber' command; must specify 'on' or 'off'");
 				bool towards_perturber;
 				set_switch(towards_perturber,setword);
-				if (Shear::angle_points_towards_perturber != towards_perturber) {
-					Shear::angle_points_towards_perturber = towards_perturber;
-					if (Shear::use_shear_component_params==false) {
+				if (Shear<double>::angle_points_towards_perturber != towards_perturber) {
+					Shear<double>::angle_points_towards_perturber = towards_perturber;
+					if (Shear<double>::use_shear_component_params==false) {
 						// awkward, but otherwise it doesn't change the actual theta_shear parameter
-						Shear::use_shear_component_params = true;
+						Shear<double>::use_shear_component_params = true;
 						reassign_lensparam_pointers_and_names(false);
-						Shear::use_shear_component_params = false;
+						Shear<double>::use_shear_component_params = false;
 						reassign_lensparam_pointers_and_names(false);
 					}
 				}
@@ -15622,7 +15628,7 @@ void QLens::process_commands(bool read_file)
 		} else if (words[0]=="output_coolest") {
 			if (nwords != 2) Complain("one argument required: filename to output to <filename>.json");
 			if (LensProfile<double>::use_ellipticity_components) Complain("ellipticity components must be turned off before generating COOLEST json file");
-			if (Shear::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
+			if (Shear<double>::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
 			/*

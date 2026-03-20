@@ -17,13 +17,13 @@
 
 # Version without MUMPS
 #default: qlens mkdist cosmocalc 
-default: qlens mkdist cosmocalc 
+default: qlens mkdist 
 CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
-OPTS = -Wno-write-strings -O3 -std=c++11
-OPTS_NO_OPT = -Wno-write-strings -std=c++11
+OPTS = -Wno-write-strings -O0 -std=c++17
+OPTS_NO_OPT = -Wno-write-strings -O0 -std=c++17
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FITPACK
 FLAGS = -DUSE_READLINE
@@ -54,17 +54,12 @@ objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o params.o mod
 
 mkdist_objects = mkdist.o
 mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
-cosmocalc_objects = cosmocalc.o
-cosmocalc_shared_objects = errors.o spline.o romberg.o modelparams.o cosmo.o brent.o
 
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
 
 mkdist: $(mkdist_objects) $(mkdist_shared_objects)
 	$(CC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
-
-cosmocalc: $(cosmocalc_objects)
-	$(CC) -o cosmocalc $(cosmocalc_objects) $(cosmocalc_shared_objects) -lm
 
 mumps:
 	(cd MUMPS_5.0.1; $(MAKE))
@@ -150,9 +145,6 @@ mkdist.o: mkdist.cpp mcmceval.h errors.h
 hyp_2F1.o: hyp_2F1.cpp hyp_2F1.h complex_functions.h
 	$(CC) -c hyp_2F1.cpp
 
-cosmocalc.o: cosmocalc.cpp errors.h cosmo.h modelparams.h
-	$(CC) -c cosmocalc.cpp
-
 cosmo.o: cosmo.cpp cosmo.h
 	$(CC) -c cosmo.cpp
 
@@ -160,7 +152,7 @@ clean_qlens:
 	rm qlens $(objects)
 
 clean:
-	rm qlens mkdist cosmocalc $(objects) $(mkdist_objects) $(cosmocalc_objects)
+	rm qlens mkdist $(objects) $(mkdist_objects) 
 
 clmain:
 	rm qlens.o

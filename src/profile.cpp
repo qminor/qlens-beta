@@ -1363,7 +1363,7 @@ void LensProfile<QScalar>::set_center_if_lensed_coords()
 	if (lensed_center_coords) {
 		if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
 		lensvector<double> xl;
-		qlens->map_to_lens_plane(qlens->lens_redshift_idx[lens_number],xc_prime,yc_prime,xl,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
+		qlens->map_to_lens_plane<double>(qlens->lens_redshift_idx[lens_number],xc_prime,yc_prime,xl,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
 		x_center = xl[0];
 		y_center = xl[1];
 	}
@@ -1773,9 +1773,9 @@ void LensProfile<QScalar>::set_integration_pointers() // Note: make sure the axi
 template void LensProfile<double>::set_integration_pointers(); 
 
 template<typename QScalar>
-double LensProfile<QScalar>::kappa_rsq(const double rsq) // this function should be redefined in all derived classes
+QScalar LensProfile<QScalar>::kappa_rsq(const QScalar rsq) // this function should be redefined in all derived classes
 {
-	double r = sqrt(rsq);
+	QScalar r = sqrt(rsq);
 	if (r < qx_parameter*kspline.xmin()) return (f_parameter*kspline.extend_inner_logslope(r/qx_parameter));
 	if (r > qx_parameter*kspline.xmax()) return (f_parameter*kspline.extend_outer_logslope(r/qx_parameter));
 	return (f_parameter*kspline.splint(r/qx_parameter));
@@ -1783,10 +1783,10 @@ double LensProfile<QScalar>::kappa_rsq(const double rsq) // this function should
 template double LensProfile<double>::kappa_rsq(const double rsq);
 
 template<typename QScalar>
-void LensProfile<QScalar>::deflection_from_elliptical_potential(const double x, const double y, lensvector<double>& def)
+void LensProfile<QScalar>::deflection_from_elliptical_potential(const QScalar x, const QScalar y, lensvector<QScalar>& def)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double kapavg = (this->*kapavgptr_rsq_spherical)((1-epsilon)*x*x + (1+epsilon)*y*y);
+	QScalar kapavg = (this->*kapavgptr_rsq_spherical)((1-epsilon)*x*x + (1+epsilon)*y*y);
 
 	def[0] = kapavg*(1-epsilon)*x;
 	def[1] = kapavg*(1+epsilon)*y;
@@ -1794,10 +1794,10 @@ void LensProfile<QScalar>::deflection_from_elliptical_potential(const double x, 
 template void LensProfile<double>::deflection_from_elliptical_potential(const double x, const double y, lensvector<double>& def);
 
 template<typename QScalar>
-void LensProfile<QScalar>::hessian_from_elliptical_potential(const double x, const double y, lensmatrix<double>& hess)
+void LensProfile<QScalar>::hessian_from_elliptical_potential(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kap;
+	QScalar cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kap;
 	exsq = (1-epsilon)*x*x; // elliptical x^2
 	eysq = (1+epsilon)*y*y; // elliptical y^2
 	rsq = exsq+eysq; // elliptical r^2
@@ -1817,10 +1817,10 @@ void LensProfile<QScalar>::hessian_from_elliptical_potential(const double x, con
 template void LensProfile<double>::hessian_from_elliptical_potential(const double x, const double y, lensmatrix<double>& hess);
 
 template<typename QScalar>
-double LensProfile<QScalar>::kappa_from_elliptical_potential(const double x, const double y)
+QScalar LensProfile<QScalar>::kappa_from_elliptical_potential(const QScalar x, const QScalar y)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double cos2phi, exsq, eysq, rsq, kap_r, shearmag;
+	QScalar cos2phi, exsq, eysq, rsq, kap_r, shearmag;
 	exsq = (1-epsilon)*x*x; // elliptical x^2
 	eysq = (1+epsilon)*y*y; // elliptical y^2
 	rsq = exsq+eysq; // elliptical r^2
@@ -1834,10 +1834,10 @@ double LensProfile<QScalar>::kappa_from_elliptical_potential(const double x, con
 template double LensProfile<double>::kappa_from_elliptical_potential(const double x, const double y);
 
 template<typename QScalar>
-void LensProfile<QScalar>::kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
+void LensProfile<QScalar>::kappa_deflection_and_hessian_from_elliptical_potential(const QScalar x, const QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kapavg;
+	QScalar cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kapavg;
 	exsq = (1-epsilon)*x*x; // elliptical x^2
 	eysq = (1+epsilon)*y*y; // elliptical y^2
 	rsq = exsq+eysq; // elliptical r^2
@@ -2041,18 +2041,44 @@ void LensProfile<QScalar>::rotate_back(double &x, double &y)
 template void LensProfile<double>::rotate_back(double &x, double &y);
 
 template<typename QScalar>
-double LensProfile<QScalar>::kappa(double x, double y)
+QScalar LensProfile<QScalar>::elliptical_radius(QScalar x, QScalar y)
 {
 	// switch to coordinate system centered on lens profile
 	x -= x_center;
 	y -= y_center;
 	if ((!ellipticity_gradient) and (sintheta != 0)) rotate(x,y);
-	double ans, rsq;
+	QScalar ans=0.0, xisq;
+
+	if ((ellipticity_mode==3) and (q != 1)) {
+		die("cannot get ellipticity radius in emode=3 since ellipticity is in the potential");
+	} else {
+		QScalar xisq;
+		if (!ellipticity_gradient) {
+			xisq = (x*x + y*y/(q*q))/(f_major_axis*f_major_axis);
+		} else {
+			xisq = SQR(elliptical_radius_root(x,y));
+		}
+		ans = sqrt(xisq);
+	}
+	return ans;
+}
+template double LensProfile<double>::kappa(double x, double y);
+
+
+
+template<typename QScalar>
+QScalar LensProfile<QScalar>::kappa(QScalar x, QScalar y)
+{
+	// switch to coordinate system centered on lens profile
+	x -= x_center;
+	y -= y_center;
+	if ((!ellipticity_gradient) and (sintheta != 0)) rotate(x,y);
+	QScalar ans;
 
 	if ((ellipticity_mode==3) and (q != 1)) {
 		return kappa_from_elliptical_potential(x,y);
 	} else {
-		double xisq, fourier_factor = 0;
+		QScalar xisq, fourier_factor = 0;
 		if (!ellipticity_gradient) {
 			xisq = (x*x + y*y/(q*q))/(f_major_axis*f_major_axis);
 		} else {
@@ -2066,7 +2092,7 @@ double LensProfile<QScalar>::kappa(double x, double y)
 template double LensProfile<double>::kappa(double x, double y);
 
 template<typename QScalar>
-void LensProfile<QScalar>::deflection(double x, double y, lensvector<double>& def)
+void LensProfile<QScalar>::deflection(QScalar x, QScalar y, lensvector<QScalar>& def)
 {
 	// switch to coordinate system centered on lens profile
 	//if (x*0.0 != 0.0) die("x is fucked going into def function");
@@ -2093,7 +2119,7 @@ void LensProfile<QScalar>::deflection(double x, double y, lensvector<double>& de
 template void LensProfile<double>::deflection(double x, double y, lensvector<double>& def);
 
 template<typename QScalar>
-void LensProfile<QScalar>::hessian(double x, double y, lensmatrix<double>& hess)
+void LensProfile<QScalar>::hessian(QScalar x, QScalar y, lensmatrix<QScalar>& hess)
 {
 	// switch to coordinate system centered on lens profile
 	x -= x_center;
@@ -2157,7 +2183,7 @@ void LensProfile<QScalar>::hessian(double x, double y, lensmatrix<double>& hess)
 template void LensProfile<double>::hessian(double x, double y, lensmatrix<double>& hess);
 
 template<typename QScalar>
-double LensProfile<QScalar>::potential(double x, double y)
+QScalar LensProfile<QScalar>::potential(QScalar x, QScalar y)
 {
 	// switch to coordinate system centered on lens profile
 	x -= x_center;
@@ -2172,7 +2198,7 @@ double LensProfile<QScalar>::potential(double x, double y)
 template double LensProfile<double>::potential(double x, double y);
 
 template<typename QScalar>
-void LensProfile<QScalar>::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
+void LensProfile<QScalar>::kappa_and_potential_derivatives(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
 	// switch to coordinate system centered on lens profile
 	x -= x_center;
@@ -2201,15 +2227,15 @@ void LensProfile<QScalar>::kappa_and_potential_derivatives(double x, double y, d
 template void LensProfile<double>::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess);
 
 template<typename QScalar>
-void LensProfile<QScalar>::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
+void LensProfile<QScalar>::potential_derivatives(QScalar x, QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
-	double kap;
+	QScalar kap;
 	kappa_and_potential_derivatives(x,y,kap,def,hess); // including kappa has no noticeable extra overhead
 }
 template void LensProfile<double>::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
 
 template<typename QScalar>
-void LensProfile<QScalar>::deflection_and_hessian_together(const double x, const double y, lensvector<double> &def, lensmatrix<double>& hess)
+void LensProfile<QScalar>::deflection_and_hessian_together(const QScalar x, const QScalar y, lensvector<QScalar> &def, lensmatrix<QScalar>& hess)
 {
 	if ((defptr == &LensProfile<QScalar>::deflection_numerical) and (hessptr == &LensProfile::hessian_numerical)) {
 		if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
@@ -2601,7 +2627,7 @@ double LensProfile<QScalar>::get_xi_parameter(const double zfactor)
 template double LensProfile<double>::get_xi_parameter(const double zfactor);
 
 template<typename QScalar>
-double LensProfile<QScalar>::kappa_rsq_deriv(const double rsq)
+QScalar LensProfile<QScalar>::kappa_rsq_deriv(const QScalar rsq)
 {
 	static const double precision = 1e-6;
 	double temp, h;
@@ -2660,9 +2686,9 @@ void LensProfile<QScalar>::plot_kappa_profile(const int n_rvals, double* rvals, 
 template void LensProfile<double>::plot_kappa_profile(const int n_rvals, double* rvals, double* kapvals, double* kapavgvals);
 
 template<typename QScalar>
-void LensProfile<QScalar>::deflection_spherical_default(const double x, const double y, lensvector<double>& def)
+void LensProfile<QScalar>::deflection_spherical_default(const QScalar x, const QScalar y, lensvector<QScalar>& def)
 {
-	double kapavg = (this->*kapavgptr_rsq_spherical)(x*x+y*y);
+	QScalar kapavg = (this->*kapavgptr_rsq_spherical)(x*x+y*y);
 
 	def[0] = kapavg*x;
 	def[1] = kapavg*y;
@@ -2670,7 +2696,7 @@ void LensProfile<QScalar>::deflection_spherical_default(const double x, const do
 template void LensProfile<double>::deflection_spherical_default(const double x, const double y, lensvector<double>& def);
 
 template<typename QScalar>
-double LensProfile<QScalar>::potential_spherical_default(const double x, const double y)
+QScalar LensProfile<QScalar>::potential_spherical_default(const QScalar x, const QScalar y)
 {
 	return (this->*potptr_rsq_spherical)(x*x+y*y); // ellipticity is put into the potential in this mode
 }
@@ -2726,9 +2752,9 @@ double LensProfile<QScalar>::mass_enclosed_spherical_integrand(const double u)
 template double LensProfile<double>::mass_enclosed_spherical_integrand(const double u);
 
 template<typename QScalar>
-void LensProfile<QScalar>::hessian_spherical_default(const double x, const double y, lensmatrix<double>& hess)
+void LensProfile<QScalar>::hessian_spherical_default(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess)
 {
-	double rsq, kappa_avg, r_dfdr;
+	QScalar rsq, kappa_avg, r_dfdr;
 	rsq = x*x+y*y;
 	kappa_avg = (this->*kapavgptr_rsq_spherical)(rsq);
 	r_dfdr = 2*(kappa_rsq(rsq) - kappa_avg)/rsq; // Here, r_dfdr = (1/r)*d/dr(kappa_avg)
@@ -2741,10 +2767,10 @@ void LensProfile<QScalar>::hessian_spherical_default(const double x, const doubl
 template void LensProfile<double>::hessian_spherical_default(const double x, const double y, lensmatrix<double>& hess);
 
 template<typename QScalar>
-double LensProfile<QScalar>::potential_spherical_integral(const double rsq)
+QScalar LensProfile<QScalar>::potential_spherical_integral(const QScalar rsq)
 {
 	bool converged;
-	double ans;
+	QScalar ans;
 	LensIntegral lens_integral(this,sqrt(rsq),0,1.0);
 	ans = 0.5*lens_integral.i_integral(converged);
 	return ans;
@@ -2752,7 +2778,7 @@ double LensProfile<QScalar>::potential_spherical_integral(const double rsq)
 template double LensProfile<double>::potential_spherical_integral(const double rsq);
 
 template<typename QScalar>
-void LensProfile<QScalar>::deflection_numerical(const double x, const double y, lensvector<double>& def)
+void LensProfile<QScalar>::deflection_numerical(const QScalar x, const QScalar y, lensvector<QScalar>& def)
 {
 	if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
 		// return zero deflection, since there's a risk of getting 'NaN' if the center of the profile is evaluated
@@ -2813,7 +2839,7 @@ void LensProfile<QScalar>::deflection_numerical(const double x, const double y, 
 template void LensProfile<double>::deflection_numerical(const double x, const double y, lensvector<double>& def);
 
 template<typename QScalar>
-void LensProfile<QScalar>::hessian_numerical(const double x, const double y, lensmatrix<double>& hess)
+void LensProfile<QScalar>::hessian_numerical(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess)
 {
 	if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
 		hess[0][0]=0;
@@ -2826,7 +2852,7 @@ void LensProfile<QScalar>::hessian_numerical(const double x, const double y, len
 	bool converged;
 	if (!ellipticity_gradient) {
 		LensIntegral lens_integral(this,x,y,q);
-		double jint0, jint1;
+		QScalar jint0, jint1;
 		jint0 = lens_integral.j_integral(0,converged);
 		warn_if_not_converged(converged,x,y);
 		jint1 = lens_integral.j_integral(1,converged);
@@ -2895,7 +2921,7 @@ void LensProfile<QScalar>::hessian_numerical(const double x, const double y, len
 		//warn_if_not_converged(converged,x,y);
 
 		LensIntegral lens_integral3(this,x,y,q,3);
-		double jint[3], kint[3];
+		QScalar jint[3], kint[3];
 		lens_integral3.j_integral_egrad_mult(jint,converged);
 		warn_if_not_converged(converged,x,y);
 		lens_integral3.k_integral_egrad_mult(kint,converged);
@@ -2929,7 +2955,7 @@ void LensProfile<QScalar>::hessian_numerical(const double x, const double y, len
 template void LensProfile<double>::hessian_numerical(const double x, const double y, lensmatrix<double>& hess);
 
 template<typename QScalar>
-void LensProfile<QScalar>::deflection_and_hessian_numerical(const double x, const double y, lensvector<double>& def, lensmatrix<double>& hess)
+void LensProfile<QScalar>::deflection_and_hessian_numerical(const QScalar x, const QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
 	// You should make it save the kappa and kappa' values evaluated during J0 and K0 so it doesn't have to evaluate them again for
 	// J1, K1 and K2 (unless higher order quadrature is required for convergence, in which case extra evaluations must be done). This
@@ -2939,7 +2965,7 @@ void LensProfile<QScalar>::deflection_and_hessian_numerical(const double x, cons
 	LensIntegral lens_integral(this,x,y,q);
 	if (!ellipticity_gradient) {
 		//cout << "NOT DOING EGRAD" << endl;
-		double jint0, jint1;
+		QScalar jint0, jint1;
 		jint0 = lens_integral.j_integral(0,converged);
 		warn_if_not_converged(converged,x,y);
 		jint1 = lens_integral.j_integral(1,converged);
@@ -2996,7 +3022,7 @@ void LensProfile<QScalar>::deflection_and_hessian_numerical(const double x, cons
 */
 
 		LensIntegral lens_integral3(this,x,y,q,3);
-		double jint[3], kint[3];
+		QScalar jint[3], kint[3];
 		lens_integral3.j_integral_egrad_mult(jint,converged);
 		warn_if_not_converged(converged,x,y);
 		def[0] = x*jint[0] + y*jint[1];
@@ -3055,7 +3081,7 @@ void LensProfile<QScalar>::warn_if_not_converged(const bool& converged, const do
 template void LensProfile<double>::warn_if_not_converged(const bool& converged, const double &x, const double &y);
 
 template<typename QScalar>
-double LensProfile<QScalar>::potential_numerical(const double x, const double y)
+QScalar LensProfile<QScalar>::potential_numerical(const QScalar x, const QScalar y)
 {
 	if ((!ellipticity_gradient) and (this->kapavgptr_rsq_spherical==NULL)) return 0.0; // for the integral without egrad, cannot calculate potential without a spherical deflection defined
 	bool converged;

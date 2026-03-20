@@ -8659,7 +8659,7 @@ bool ImageData::activate_partner_image_pixels(const int mask_k, const bool emask
 				lensvector<double> pos,src;
 				pos[0] = pixel_xcvals[i];
 				pos[1] = pixel_ycvals[j];
-				qlens->find_sourcept(pos,src,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
+				qlens->find_sourcept<double>(pos,src,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
 				image *img = qlens->get_images(src, n_images, false);
 				for (k=0; k < n_images; k++) {
 					if ((img[k].mag > 0) and (abs(img[k].mag) < 0.1)) continue; // ignore central images
@@ -8693,7 +8693,7 @@ bool ImageData::activate_partner_image_pixels(const int mask_k, const bool emask
 				lensvector<double> pos,src;
 				pos[0] = pixel_xcvals[i];
 				pos[1] = pixel_ycvals[j];
-				qlens->find_sourcept(pos,src,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
+				qlens->find_sourcept<double>(pos,src,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
 				image *img = qlens->get_images(src, n_images, false);
 				for (k=0; k < n_images; k++) {
 					if ((img[k].mag > 0) and (abs(img[k].mag) < 0.1)) continue; // ignore central images
@@ -12228,7 +12228,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 				offset_pt[1] = corner_pts[i][j][1] - psf->psf_offset_y;
 			}
 			//cout << i << " " << j << " " << n << " " << ntot_corners << " " << mpi_end << endl;
-			qlens->find_sourcept(offset_pt,defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
+			qlens->find_sourcept<double>(offset_pt,defx_corners[n],defy_corners[n],thread,imggrid_zfactors,imggrid_betafactors);
 		}
 //#ifdef USE_MPI
 		//#pragma omp master
@@ -12313,7 +12313,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 					offset_pt[0] = center_pts[i][j][0] - psf->psf_offset_x;
 					offset_pt[1] = center_pts[i][j][1] - psf->psf_offset_y;
 				}
-				qlens->find_sourcept(offset_pt,defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
+				qlens->find_sourcept<double>(offset_pt,defx_centers[n_cell],defy_centers[n_cell],thread,imggrid_zfactors,imggrid_betafactors);
 			}
 		}
 	}
@@ -12432,7 +12432,7 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 					offset_pt[0] = subpixel_center_pts[i][j][k][0] - psf->psf_offset_x;
 					offset_pt[1] = subpixel_center_pts[i][j][k][1] - psf->psf_offset_y;
 				}
-				qlens->find_sourcept(offset_pt,defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell],thread,imggrid_zfactors,imggrid_betafactors);
+				qlens->find_sourcept<double>(offset_pt,defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell],thread,imggrid_zfactors,imggrid_betafactors);
 				//if (defx_subpixel_centers[n_subcell]*0.0 != 0.0) die("nonsense value for deflection (x=%g y=%g defx=%g defy=%g)",subpixel_center_pts[i][j][k][0],subpixel_center_pts[i][j][k][1],defx_subpixel_centers[n_subcell],defy_subpixel_centers[n_subcell]);
 			}
 		}
@@ -14312,7 +14312,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 				// For now, just don't bother with central image points when using a pixel image--it only causes trouble in the form of duplicate images
 				//if (!qlens->include_central_image) 
 				if (*twist_type==0) { // central images are unlikely to be highly magnified near a critical curve, so twisting is unlikely in that case
-					kap = qlens->kappa(image_candidates[imgpt_i].pos,imggrid_zfactors,imggrid_betafactors);
+					kap = qlens->kappa<double>(image_candidates[imgpt_i].pos,imggrid_zfactors,imggrid_betafactors);
 					side1 = corner_pts[img_i][img_j+1] - corner_pts[img_i][img_j];
 					side2 = corner_pts[img_i][img_j] - corner_pts[img_i+1][img_j+1];
 					side1_srcplane = corner_sourcepts[img_i][img_j+1] - corner_sourcepts[img_i][img_j];
@@ -14333,7 +14333,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 				image_candidates[imgpt_i].pos[1] = ((*vertex3)[1] + (*vertex4)[1] + (*vertex5)[1])/3;
 				//if (!qlens->include_central_image) 
 				if (*twist_type==0) { // central images are unlikely to be highly magnified near a critical curve, so twisting is unlikely in that case
-					kap = qlens->kappa(image_candidates[imgpt_i].pos,imggrid_zfactors,imggrid_betafactors);
+					kap = qlens->kappa<double>(image_candidates[imgpt_i].pos,imggrid_zfactors,imggrid_betafactors);
 					//if (kap > 1) cout << "CENTRAL IMAGE? candidate pos=" << image_candidates[imgpt_i].pos[0] << "," << image_candidates[imgpt_i].pos[1] << endl;
 					side1 = corner_pts[img_i+1][img_j+1] - corner_pts[img_i+1][img_j];
 					side2 = corner_pts[img_i][img_j+1] - corner_pts[img_i+1][img_j+1];
@@ -14403,13 +14403,13 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 			if ((qlens->skip_newtons_method) or (run_newton(image_candidates[i].pos,mag,thread)==true)) {
 			//{
 				imgpt.pos = image_candidates[i].pos;
-				//imgpt.mag = qlens->magnification(image_candidates[i].pos,0,imggrid_zfactors,imggrid_betafactors);
+				//imgpt.mag = qlens->magnification<double>(image_candidates[i].pos,0,imggrid_zfactors,imggrid_betafactors);
 				imgpt.mag = mag;
 				imgpt.flux = -1e30;
 				//cout << "FOUND IMAGE AT: " << imgpt.pos[0] << " " << imgpt.pos[1] << endl;
 				//if ((qlens->mpi_id==0) and (verbal)) cout << "FOUND IMAGE AT: " << imgpt.pos[0] << " " << imgpt.pos[1] << endl;
 				if (qlens->include_time_delays) {
-					double potential = qlens->potential(imgpt.pos,imggrid_zfactors,imggrid_betafactors);
+					double potential = qlens->potential<double>(imgpt.pos,imggrid_zfactors,imggrid_betafactors);
 					imgpt.td = 0.5*(SQR(imgpt.pos[0]-qlens->source[0])+SQR(imgpt.pos[1]-qlens->source[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
 					imgpt.td *= td_factor;
 				} else {
@@ -14685,10 +14685,10 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 	//}
 
 	lensvector<double> lens_eq_f;
-	qlens->lens_equation(xroot,lens_eq_f,thread,imggrid_zfactors,imggrid_betafactors);
+	qlens->lens_equation<double>(xroot,lens_eq_f,thread,imggrid_zfactors,imggrid_betafactors);
 	//double lenseq_mag = sqrt(SQR(lens_eq_f[0]) + SQR(lens_eq_f[1]));
-	//double tryacc = image_pos_accuracy / sqrt(abs(qlens->magnification(xroot,thread,zfactor)));
-	//cout << lenseq_mag << " " << tryacc << " " << sqrt(abs(qlens->magnification(xroot,thread,zfactor))) << endl;
+	//double tryacc = image_pos_accuracy / sqrt(abs(qlens->magnification<double>(xroot,thread,zfactor)));
+	//cout << lenseq_mag << " " << tryacc << " " << sqrt(abs(qlens->magnification<double>(xroot,thread,zfactor))) << endl;
 	if (newton_check[thread]==true) { warn(qlens->newton_warnings, "false image--converged to local minimum"); return false; }
 	if (qlens->n_singular_points > 0) {
 		//cout << "singular point: " << qlens->singular_pts[0][0] << " " << qlens->singular_pts[0][1] << endl;
@@ -14702,7 +14702,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 	}
 	if (((xroot[0]==xroot_initial[0]) and (xroot_initial[0] != 0)) and ((xroot[1]==xroot_initial[1]) and (xroot_initial[1] != 0)))
 		warn(qlens->newton_warnings, "Newton's method returned initial point");
-	mag = qlens->magnification(xroot,thread,imggrid_zfactors,imggrid_betafactors);
+	mag = qlens->magnification<double>(xroot,thread,imggrid_zfactors,imggrid_betafactors);
 	if ((abs(lens_eq_f[0]) > 1000*image_pos_accuracy) and (abs(lens_eq_f[1]) > 1000*image_pos_accuracy) and (abs(mag) < 1e-3)) {
 		if (qlens->newton_warnings==true) {
 			warn(qlens->newton_warnings,"Newton's method may have found false root (%g,%g) (within 1000*accuracy) for source (%g,%g), cell center (%g,%g), mag %g",xroot[0],xroot[1],qlens->source[0],qlens->source[1],xroot_initial[0],xroot_initial[1],xroot[0],xroot[1],mag);
@@ -14728,7 +14728,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 			}
 		}
 	}
-	if ((qlens->include_central_image==false) and (mag > 0) and (qlens->kappa(xroot,imggrid_zfactors,imggrid_betafactors) > 1)) return false; // discard central image if not desired
+	if ((qlens->include_central_image==false) and (mag > 0) and (qlens->kappa<double>(xroot,imggrid_zfactors,imggrid_betafactors) > 1)) return false; // discard central image if not desired
 
 	/*
 	bool status = true;
@@ -14736,7 +14736,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 	//{
 			images[nfound].pos[0] = xroot[0];
 			images[nfound].pos[1] = xroot[1];
-			images[nfound].mag = qlens->magnification(xroot,0,imggrid_zfactors,imggrid_betafactors);
+			images[nfound].mag = qlens->magnification<double>(xroot,0,imggrid_zfactors,imggrid_betafactors);
 			if (qlens->include_time_delays) {
 				double potential = qlens->potential(xroot,imggrid_zfactors,imggrid_betafactors);
 				images[nfound].td = 0.5*(SQR(xroot[0]-qlens->source[0])+SQR(xroot[1]-qlens->source[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
@@ -14791,7 +14791,7 @@ bool ImagePixelGrid::NewtonsMethod(lensvector<double>& x, bool &check, const int
 	lensvector<double> g, p, xold;
 	lensmatrix<double> fjac;
 
-	qlens->lens_equation(x, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
+	qlens->lens_equation<double>(x, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
 	double f = 0.5*fvec[thread].sqrnorm();
 	if (max_component(fvec[thread]) < 0.01*image_pos_accuracy)
 		return true; 
@@ -14799,7 +14799,7 @@ bool ImagePixelGrid::NewtonsMethod(lensvector<double>& x, bool &check, const int
 	double fold, stpmax, temp, test;
 	stpmax = max_step_length * dmax(x.norm(), 2.0); 
 	for (int its=0; its < max_iterations; its++) {
-		qlens->hessian(x[0],x[1],fjac,thread,imggrid_zfactors,imggrid_betafactors);
+		qlens->hessian<double>(x[0],x[1],fjac,thread,imggrid_zfactors,imggrid_betafactors);
 		fjac[0][0] = -1 + fjac[0][0];
 		fjac[1][1] = -1 + fjac[1][1];
 		g[0] = fjac[0][0] * fvec[thread][0] + fjac[0][1]*fvec[thread][1];
@@ -14818,7 +14818,7 @@ bool ImagePixelGrid::NewtonsMethod(lensvector<double>& x, bool &check, const int
 		}
 		/*
 		qlens->lens_equation(x, fvec[thread], thread, zfactor);
-		double magfac = sqrt(abs(qlens->magnification(x,thread,zfactor)));
+		double magfac = sqrt(abs(qlens->magnification<double>(x,thread,zfactor)));
 		double tryacc;
 		lensvector<double> dx = x - xold;
 		double dxnorm = dx.norm();
@@ -14889,7 +14889,7 @@ bool ImagePixelGrid::LineSearch(lensvector<double>& xold, double fold, lensvecto
 			warn(qlens->newton_warnings, "Newton blew up!");
 			return false;
 		}
-		qlens->lens_equation(x, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
+		qlens->lens_equation<double>(x, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
 		f = 0.5 * fvec[thread].sqrnorm();
 		if (alam < alamin) {
 			x[0] = xold[0];
@@ -19354,7 +19354,7 @@ void QLens::calculate_subpixel_distweights(const int imggrid_i)
 				xl[0] -= psfptr->psf_offset_x;
 				xl[1] -= psfptr->psf_offset_y;
 			}
-			find_sourcept(xl,xc,yc,0,reference_zfactors,default_zsrc_beta_factors);
+			find_sourcept<double>(xl,xc,yc,0,reference_zfactors,default_zsrc_beta_factors);
 			//if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
 			if (lensed_lumreg_rc) {
 				int i, phi_nn = 24;
@@ -19368,7 +19368,7 @@ void QLens::calculate_subpixel_distweights(const int imggrid_i)
 						xl[0] -= psfptr->psf_offset_x;
 						xl[1] -= psfptr->psf_offset_y;
 					}
-					find_sourcept(xl,xc2,yc2,0,reference_zfactors,default_zsrc_beta_factors);
+					find_sourcept<double>(xl,xc2,yc2,0,reference_zfactors,default_zsrc_beta_factors);
 					rc += SQR(xc2-xc)+SQR(yc2-yc);
 				}
 				rc = sqrt(rc/phi_nn);
@@ -19488,7 +19488,7 @@ void QLens::calculate_distreg_srcpixel_weights(const int imggrid_i, const double
 				xl[0] -= psfptr->psf_offset_x;
 				xl[1] -= psfptr->psf_offset_y;
 			}
-			find_sourcept(xl,xc,yc,0,extended_src_zfactors[imggrid_i],extended_src_beta_factors[imggrid_i]);
+			find_sourcept<double>(xl,xc,yc,0,extended_src_zfactors[imggrid_i],extended_src_beta_factors[imggrid_i]);
 			if ((verbal) and (mpi_id==0)) cout << "center coordinates in source plane: xc=" << xc << ", yc=" << yc << endl;
 			if ((lensed_lumreg_rc) and (srcgrid->distreg_rc > 0)) {
 				int i, phi_nn = 24;
@@ -19502,7 +19502,7 @@ void QLens::calculate_distreg_srcpixel_weights(const int imggrid_i, const double
 						xl[0] -= psfptr->psf_offset_x;
 						xl[1] -= psfptr->psf_offset_y;
 					}
-					find_sourcept(xl,xc2,yc2,0,extended_src_zfactors[imggrid_i],extended_src_beta_factors[imggrid_i]);
+					find_sourcept<double>(xl,xc2,yc2,0,extended_src_zfactors[imggrid_i],extended_src_beta_factors[imggrid_i]);
 					rc += SQR(xc2-xc)+SQR(yc2-yc);
 				}
 				rc = sqrt(rc/phi_nn);
@@ -21783,7 +21783,7 @@ void QLens::calculate_foreground_pixel_surface_brightness(const int imggrid_i, c
 						else if ((allow_lensed_noninverted_sources) and (sb_list[k]->is_lensed) and ((imggrid_i<0) or (sbprofile_imggrid_idx[k]==imggrid_i)) and (sb_list[k]->sbtype != SHAPELET) and (sb_list[k]->sbtype != MULTI_GAUSSIAN_EXPANSION) and ((image_data == NULL) or (image_data->foreground_mask[i][j]))) { // if source mode is shapelet and sbprofile is shapelet, will include in inversion
 							//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_index];
 							//center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_index];
-							//find_sourcept(center_pt,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
+							//find_sourcept<double>(center_pt,center_srcpt,thread,reference_zfactors,default_zsrc_beta_factors);
 							//sb += sb_list[k]->surface_brightness(center_srcpt[0],center_srcpt[1]);
 							if (split_imgpixels) sb += sb_list[k]->surface_brightness(image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_index][0],image_pixel_grid->subpixel_center_sourcepts[i][j][subcell_index][1]);
 							else sb += sb_list[k]->surface_brightness(image_pixel_grid->center_sourcepts[i][j][0],image_pixel_grid->center_sourcepts[i][j][1]);
@@ -22014,7 +22014,7 @@ double QLens::find_sbprofile_surface_brightness(lensvector<double> &pt)
 	double sb = 0;
 	lensvector<double> srcpt;
 	
-	find_sourcept(pt,srcpt,0,reference_zfactors,default_zsrc_beta_factors);
+	find_sourcept<double>(pt,srcpt,0,reference_zfactors,default_zsrc_beta_factors);
 	//cout << "src=" << srcpt[0] << "," << srcpt[1] << " pt=" << pt[0] << "," << pt[1] << endl;
 	for (int k=0; k < n_sb; k++) {
 		if (sb_list[k]->is_lensed) {
