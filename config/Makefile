@@ -15,6 +15,8 @@
 #.f.o:
 	#$(F77) -c -o  $@ $<
 
+STAN_INC = -I/Users/qminor/math -I/Users/qminor/math/lib/eigen_3.4.0 -I/Users/qminor/math/lib/boost_1.87.0 -I/Users/qminor/math/lib/sundials_6.1.1/include -I/Users/qminor/math/lib/sundials_6.1.1/src/sundials -include /Users/qminor/math/stan/math/prim/constraint/identity_free.hpp -I/Users/qminor/math/lib/tbb_2020.3/include
+
 # Version without MUMPS
 #default: qlens mkdist cosmocalc 
 default: qlens mkdist 
@@ -22,13 +24,13 @@ CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
-OPTS = -Wno-write-strings -O3 -std=c++17
+OPTS = -Wno-write-strings -O0 -std=c++17
 OPTS_NO_OPT = -Wno-write-strings -O0 -std=c++17
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FITPACK
-FLAGS = -DUSE_READLINE
+FLAGS = -DUSE_READLINE -DUSE_STAN -D_REENTRANT
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
-OTHERLIBS =  -lm -lreadline
+OTHERLIBS =  /Users/qminor/math/lib/tbb/libtbb.dylib -lm -lreadline
 LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 
 # Version with MUMPS
@@ -43,13 +45,13 @@ LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 ##OTHERLIBS =  -lm -lreadline -lcfitsio
 #LINKLIBS = $(MUMPSLIBS) $(OTHERLIBS)
 
-CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
-CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) 
+CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) $(STAN_INC)
+CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) $(STAN_INC)
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
-objects = profile.o sbprofile.o egrad.o models.o qlens.o commands.o params.o modelparams.o lenscalc.o \
-				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o errors.o brent.o sort.o gauss.o \
-				romberg.o spline.o trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
+objects = sbprofile.o profile.o egrad.o models.o qlens.o commands.o params.o modelparams.o lenscalc.o \
+				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o errors.o brent.o sort.o \
+				trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
 
 mkdist_objects = mkdist.o
@@ -121,14 +123,17 @@ powell.o: powell.h powell.cpp
 sort.o: sort.h sort.cpp
 	$(CC) -c sort.cpp
 
-gauss.o: gauss.cpp gauss.h
-	$(CC) -c gauss.cpp
+#gauss.o: gauss.cpp gauss.h
+	#$(CC) -c gauss.cpp
 
-romberg.o: romberg.cpp romberg.h
-	$(CC) -c romberg.cpp
+#romberg.o: romberg.cpp romberg.h
+	#$(CC) -c romberg.cpp
 
-spline.o: spline.cpp spline.h errors.h
-	$(CC) -c spline.cpp
+#qspline.o: qspline.cpp spline.h errors.h
+	#$(CC) -c qspline.cpp
+
+#spline.o: spline.cpp spline.h errors.h
+	#$(CC) -c spline.cpp
 
 trirectangle.o: trirectangle.cpp lensvec.h trirectangle.h
 	$(CC) -c trirectangle.cpp

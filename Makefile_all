@@ -67,9 +67,9 @@ CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(INC) $(UMFOPTS) $(FLAGS) -DUSE_READLINE
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) 
 
 
-core_objects = $(OBJ_DIR)/cosmo.o $(OBJ_DIR)/simplex.o $(OBJ_DIR)/spline.o $(OBJ_DIR)/profile.o $(OBJ_DIR)/sbprofile.o $(OBJ_DIR)/egrad.o $(OBJ_DIR)/models.o \
+core_objects = $(OBJ_DIR)/cosmo.o $(OBJ_DIR)/simplex.o $(OBJ_DIR)/profile.o $(OBJ_DIR)/sbprofile.o $(OBJ_DIR)/egrad.o $(OBJ_DIR)/models.o \
 					$(OBJ_DIR)/params.o $(OBJ_DIR)/modelparams.o $(OBJ_DIR)/lenscalc.o $(OBJ_DIR)/lens.o $(OBJ_DIR)/imgsrch.o $(OBJ_DIR)/pixelgrid.o \
-					$(OBJ_DIR)/cg.o $(OBJ_DIR)/mcmchdr.o $(OBJ_DIR)/errors.o $(OBJ_DIR)/brent.o $(OBJ_DIR)/sort.o $(OBJ_DIR)/gauss.o $(OBJ_DIR)/romberg.o \
+					$(OBJ_DIR)/cg.o $(OBJ_DIR)/mcmchdr.o $(OBJ_DIR)/errors.o $(OBJ_DIR)/brent.o $(OBJ_DIR)/sort.o \
 					$(OBJ_DIR)/trirectangle.o $(OBJ_DIR)/GregsMathHdr.o $(OBJ_DIR)/hyp_2F1.o $(OBJ_DIR)/powell.o $(OBJ_DIR)/mcmceval.o
 
 wrapper_objects = $(OBJ_DIR)/qlens_export.o $(OBJ_DIR)/qlens_wrapper.o $(core_objects)
@@ -157,15 +157,6 @@ $(OBJ_DIR)/powell.o: $(INCLUDE_DIR)/powell.h $(SRC_DIR)/powell.cpp
 
 $(OBJ_DIR)/sort.o: $(INCLUDE_DIR)/sort.h $(SRC_DIR)/sort.cpp
 	$(CC) -c $(SRC_DIR)/sort.cpp -o $(OBJ_DIR)/sort.o
-
-$(OBJ_DIR)/gauss.o: $(SRC_DIR)/gauss.cpp $(INCLUDE_DIR)/gauss.h
-	$(CC) -c $(SRC_DIR)/gauss.cpp -o $(OBJ_DIR)/gauss.o
-
-$(OBJ_DIR)/romberg.o: $(SRC_DIR)/romberg.cpp $(INCLUDE_DIR)/romberg.h
-	$(CC) -c $(SRC_DIR)/romberg.cpp -o $(OBJ_DIR)/romberg.o
-
-$(OBJ_DIR)/spline.o: $(SRC_DIR)/spline.cpp $(INCLUDE_DIR)/spline.h $(INCLUDE_DIR)/errors.h
-	$(CC) -c $(SRC_DIR)/spline.cpp -o $(OBJ_DIR)/spline.o
 
 $(OBJ_DIR)/trirectangle.o: $(SRC_DIR)/trirectangle.cpp $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/trirectangle.h
 	$(CC) -c $(SRC_DIR)/trirectangle.cpp -o $(OBJ_DIR)/trirectangle.o

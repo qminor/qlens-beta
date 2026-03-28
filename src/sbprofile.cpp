@@ -261,7 +261,7 @@ void SB_Profile::set_nparams(const int &n_params_in, const bool resize)
 	}
 }
 
-void SB_Profile::anchor_center_to_lens(LensProfile<double>** center_anchor_list, const int &center_anchor_lens_number)
+void SB_Profile::anchor_center_to_lens(LensProfile** center_anchor_list, const int &center_anchor_lens_number)
 {
 	if (!center_anchored_to_lens) center_anchored_to_lens = true;
 	center_anchor_lens = center_anchor_list[center_anchor_lens_number];

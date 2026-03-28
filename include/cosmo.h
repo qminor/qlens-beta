@@ -46,7 +46,7 @@ struct CosmologyParams
 	void remove_comments(std::string& instring);
 };
 
-class Cosmology : public ModelParams, public Spline, public Romberg, public Brent
+class Cosmology : public ModelParams, public Brent
 {
 	private:
 	double omega_m, omega_b, omega_lambda, hubble, hubble_length, growth_factor, dcrit0;
@@ -70,8 +70,8 @@ class Cosmology : public ModelParams, public Spline, public Romberg, public Bren
 
 	private:
 	double tophat_window_R;
-	Spline comoving_distance_spline;
-	Spline rms_sigma;
+	Spline<double> comoving_distance_spline;
+	Spline<double> rms_sigma;
 
 	// See bottom of this file for a description of the following variables, used in the transfer function
 	double alpha_gamma, alpha_nu, beta_c, num_degen_hdm, f_baryon, f_bnu, f_cb, f_cdm, f_hdm, growth_small_k, growth_to_z0, k_equality,

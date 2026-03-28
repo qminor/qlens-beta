@@ -1,21 +1,255 @@
+#include "errors.h"
+#include <cmath>
 
 #ifndef ROMBERG_H
 #define ROMBERG_H
 
+// NOTE: when you create a Romberg object, initialize as "Romberg<std::function<double(double)>> romberg_object"
+template <typename Func, typename T>
 class Romberg
 {
-	double squad;
-	double trapzd(double (Romberg::*func)(const double), const double a, const double b, const int n);
-	double midinf(double (Romberg::*func)(const double), const double aa, const double bb, const int n);
-	double midpnt(double (Romberg::*func)(const double), const double a, const double b, const int n);
-	void RombergPolyExtrapolate(double xa[], double ya[], const int n, const double x, double &y, double &dy);
+	private:
+	T squad;
+	T trapzd(Func func, const T a, const T b, const int n);
+	T midinf(Func func, const T aa, const T bb, const int n);
+	T midpnt(Func func, const T a, const T b, const int n);
+	void RombergPolyExtrapolate(T xa[], T ya[], const int n, const T x, T &y, T &dy);
 
 	public:
 	Romberg() {}
-	double romberg(double (Romberg::*func)(const double), const double a, const double b, const double eps, const int k);
-	double romberg(double (Romberg::*func)(const double), const double a, const double b, const double eps, const int k, const double min_error);
-	double romberg_open(double (Romberg::*func)(const double), const double a, const double b, const double eps, const int k);
-	double romberg_improper(double (Romberg::*func)(const double), const double a, const double b, const double eps, const int k);
+	T integrate(Func func, const T a, const T b, const T eps, const int k);
+	T integrate(Func func, const T a, const T b, const T eps, const int k, const T min_error);
+	T integrate_open(Func func, const T a, const T b, const T eps, const int k);
+	T integrate_improper(Func func, const T a, const T b, const T eps, const int k);
 };
+
+template <typename Func, typename T>
+T Romberg<Func,T>::integrate(Func func, const T a, const T b, const T eps, const int k)
+{
+	const int jmax = 20;
+	if (k > jmax) die("k must be less than or equal to max iterations (%i) in romberg_open", jmax);
+	T ss, dss;
+	T *s, *hsq;
+
+	// hsq[j] is the (squared) stepsize of the j'th iteration, since the error is a function of h^2
+	hsq = new T[jmax+1];
+	s = new T[jmax];
+
+	hsq[0] = 1.0;
+	for (int j=1; j <= jmax; j++)
+	{
+		s[j-1] = trapzd(func,a,b,j);
+		if (j >= k) {
+			RombergPolyExtrapolate(hsq+j-k, s+j-k, k, 0.0, ss, dss);
+			if (fabs(dss) <= eps*fabs(ss)) {
+				delete[] s;
+				delete[] hsq;
+				return ss;
+			}
+		}
+		hsq[j] = 0.25 * hsq[j-1]; // number of steps is Td with each iteration, so h_new = h_old / 2
+	}
+	die("Too many iterations in routine romberg\n\ncalculated error = %g\nrequired accuracy = %g\nmax iterations = %i", fabs(dss), eps*fabs(ss), jmax);
+	return 0.0;
+}
+
+template <typename Func, typename T>
+T Romberg<Func,T>::integrate(Func func, const T a, const T b, const T eps, const int k, const T min_error)
+{
+	const int jmax = 20;
+	if (k > jmax) die("k must be less than or equal to max iterations (%i) in romberg_open", jmax);
+	T ss, dss;
+	T *s, *hsq;
+	T err, ferr;
+
+	// hsq[j] is the (squared) stepsize of the j'th iteration, since the error is a function of h^2
+	hsq = new T[jmax+1];
+	s = new T[jmax];
+
+	hsq[0] = 1.0;
+	for (int j=1; j <= jmax; j++)
+	{
+		s[j-1] = trapzd(func,a,b,j);
+		if (j >= k) {
+			RombergPolyExtrapolate(hsq+j-k, s+j-k, k, 0.0, ss, dss);
+			//err = ((ferr=eps*fabs(ss)) > min_error) ? min_error : ferr;
+			err = (fabs(ss) < min_error) ? eps*fabs(ss) : min_error;
+			if (fabs(dss) <= err) {
+				delete[] s;
+				delete[] hsq;
+				return ss;
+			}
+		}
+		hsq[j] = 0.25 * hsq[j-1]; // number of steps is Td with each iteration, so h_new = h_old / 2
+	}
+	die("Too many iterations in routine romberg\n\ncalculated error = %g\nrequired accuracy = %g\nmax iterations = %i", fabs(dss), eps*fabs(ss), jmax);
+	return 0.0;
+}
+
+template <typename Func, typename T>
+T Romberg<Func,T>::integrate_open(Func func, const T a, const T b, const T eps, const int k)
+{
+	const int jmax = 20;
+	if (k > jmax) die("k must be less than or equal to max iterations (%i) in romberg_open", jmax);
+	T ss, dss;
+	T *s, *hsq;
+
+	// hsq[j] is the (squared) stepsize of the j'th iteration, since the error goes like h^2
+	hsq = new T[jmax+1];
+	s = new T[jmax];
+
+	hsq[0] = 1.0;
+	for (int j=1; j <= jmax; j++)
+	{
+		s[j-1] = midpnt(func,a,b,j);
+		if (j >= k) {
+			RombergPolyExtrapolate(hsq+j-k, s+j-k, k, 0.0, ss, dss);
+			if (fabs(dss) <= eps*fabs(ss)) {
+				delete[] s;
+				delete[] hsq;
+				return ss;
+			}
+		}
+		hsq[j] = hsq[j-1]/9.0; // number of steps is tripled with each iteration, so h_new = h_old / 3
+	}
+	die("Too many iterations in routine romberg_open\n\ncalculated error = %g\nrequired accuracy = %g\nmax iterations = %i", fabs(dss), eps*fabs(ss), jmax);
+	return 0.0;
+}
+
+template <typename Func, typename T>
+T Romberg<Func,T>::integrate_improper(Func func, const T a, const T b, const T eps, const int k)
+{
+	const int jmax = 20;
+	if (k > jmax) die("k must be less than or equal to max iterations (%i) in romberg_open", jmax);
+	T ss, dss;
+	T *s, *hsq;
+
+	// hsq[j] is the (squared) stepsize of the j'th iteration, since the error goes like h^2
+	hsq = new T[jmax+1];
+	s = new T[jmax];
+
+	hsq[0] = 1.0;
+	for (int j=1; j <= jmax; j++)
+	{
+		s[j-1] = midinf(func,a,b,j);
+		if (j >= k) {
+			RombergPolyExtrapolate(hsq+j-k, s+j-k, k, 0.0, ss, dss);
+			if (fabs(dss) <= eps*fabs(ss)) {
+				delete[] s;
+				delete[] hsq;
+				return ss;
+			}
+		}
+		hsq[j] = hsq[j-1]/9.0; // number of steps is tripled with each iteration, so h_new = h_old / 3
+	}
+	die("Too many iterations in routine romberg_open\n\ncalculated error = %g\nrequired accuracy = %g\nmax iterations = %i", fabs(dss), eps*fabs(ss), jmax);
+	return 0.0;
+}
+
+template <typename Func, typename T>
+T Romberg<Func,T>::trapzd(Func func, const T a, const T b, const int n)
+{
+	T x, tnm, sum, del;
+	//T squad;
+	int it, j;
+
+	if (n == 1) {
+		return (squad = 0.5 * (b-a) * (func(a)+func(b)));
+	} else {
+		for (it=1, j=1; j < n-1; j++) it <<= 1;
+		tnm = it;
+		del = (b-a)/tnm;
+		x = a + 0.5*del;
+		for (sum=0.0, j=0; j < it; j++, x += del) sum += func(x);
+		squad = 0.5*(squad + (b-a)*sum/tnm);
+		return squad;
+	}
+}
+
+template <typename Func, typename T>
+T Romberg<Func,T>::midpnt(Func func, const T a, const T b, const int n)
+{
+	T x,tnm,sum,del,ddel;
+	//T squad;
+	int it,j;
+
+	if (n == 1) {
+		return (squad = (b-a)*func(0.5*(a+b)));
+	} else {
+		for (it=1, j=1; j < n-1; j++) it *= 3;
+		tnm = it;
+		del = (b-a)/(3.0*tnm);
+		ddel = del + del;
+		x = a + 0.5*del;
+		sum = 0.0;
+		for (j=0; j < it; j++) {
+			sum += func(x);
+			x += ddel;
+			sum += func(x);
+			x += del;
+		}
+		squad = (squad + (b-a)*sum/tnm)/3.0;
+		return squad;
+	}
+}
+
+template <typename Func, typename T>
+T Romberg<Func,T>::midinf(Func func, const T aa, const T bb, const int n)
+{
+	T a,b,x,tnm,sum,del,ddel,mid;
+	//T squad;
+	int it,j;
+
+	b=1.0/aa;
+	a=1.0/bb;
+	if (n == 1) {
+		mid = 0.5*(a+b);
+		return (squad = (b-a)*func(1.0/mid)/mid*mid);
+	} else {
+		for (it=1, j=1; j < n-1; j++) it *= 3;
+		tnm = it;
+		del = (b-a)/(3.0*tnm);
+		ddel = del + del;
+		x = a + 0.5*del;
+		sum = 0.0;
+		for (j=0; j < it; j++) {
+			sum += func(1.0/x)/(x*x);
+			x += ddel;
+			sum += func(1.0/x)/(x*x);
+			x += del;
+		}
+		squad = (squad + (b-a)*sum/tnm)/3.0;
+		return squad;
+	}
+}
+
+template <typename Func, typename T>
+void Romberg<Func,T>::RombergPolyExtrapolate(T xa[], T ya[], const int n, const T x, T &y, T &dy)
+{
+	T *c, *d;
+	c = new T[n];
+	d = new T[n];
+	for (int i=0; i < n; i++) {
+		c[i] = d[i] = ya[i];
+	}
+
+	int m,i;
+	T w;
+	y = ya[n-1];
+	for (m=0; m < n-1; m++)
+	{
+		for (i=0; i < n-m-1; i++)
+		{
+			w = (c[i+1] - d[i]) / (xa[i] - xa[i+m+1]);
+			c[i] = w * (xa[i]-x);
+			d[i] = w * (xa[i+m+1]-x);
+		}
+		y += d[n-m-2];
+	}
+	dy = d[0];
+	delete[] c;
+	delete[] d;
+	return;
+}
 
 #endif // ROMBERG_H

@@ -50,13 +50,17 @@ public:
 		DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 		ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 		QLens::allocate_multithreaded_variables(n_omp_threads);
+		GaussLegendre<std::function<double(const double)>,double>::allocate_quadrature_tables(GaussLegendre<std::function<double(const double)>,double>::numberOfPoints);
+		GaussPatterson<std::function<double(const double)>,double>::allocate_gauss_patterson_tables();
+		ClenshawCurtis<std::function<double(const double)>,double>::allocate_cc_quadrature_tables(LensProfile::default_fejer_nlevels,false); // the latter boolean=false tells it to use Fejer quadrature (open interval)
+
 
 #ifdef USE_MPI
 		subgroup_comm = new MPI_Comm[ngroups];
 		subgroup = new MPI_Group[ngroups];
 
-		int subgroup_size[ngroups];
-		int *subgroup_rank[ngroups];
+		int *subgroup_size = new int[ngroups];
+		int **subgroup_rank = new int*[ngroups];
 		int subgroup_id, subgroup_id_sum;
 
 		int n,i,j,group_number;
@@ -84,8 +88,8 @@ public:
 
 		onegroup_comm = new MPI_Comm[mpi_np];
 		onegroup = new MPI_Group[mpi_np];
-		int onegroup_size[mpi_np];
-		int *onegroup_rank[mpi_np];
+		int *onegroup_size = new int[mpi_np];
+		int **onegroup_rank = new int*[mpi_np];
 		int onegroup_id, onegroup_id_sum;
 
 		for (n=0; n < mpi_np; n++) {
@@ -102,7 +106,7 @@ public:
 		//if (disptime) set_show_wtime(true); // useful for optimizing the number of threads and MPI processes to minimize the wall time per likelihood evaluation
 //#endif
 #ifdef USE_MPI
-		int mpi_group_leaders[ngroups];
+		int *mpi_group_leaders = new int[ngroups];
 		for (int i=0; i < ngroups; i++) mpi_group_leaders[i] = subgroup_rank[i][0];
 		set_mpi_params(mpi_id,mpi_np,ngroups,group_number,subgroup_id,subgroup_size[group_number],mpi_group_leaders,&subgroup[group_number],&subgroup_comm[group_number],&onegroup[mpi_id],&onegroup_comm[mpi_id]);
 		if (ngroups==mpi_np) {
@@ -110,7 +114,14 @@ public:
 		} else {
 			Set_MCMC_MPI(mpi_np,mpi_id,ngroups,group_number,mpi_group_leaders);
 		}
+		delete[] mpi_group_leaders;
 		for (n=0; n < ngroups; n++) delete[] subgroup_rank[n];
+		delete[] subgroup_rank;
+		delete[] subgroup_size;
+
+		for (n=0; n < mpi_np; n++) delete[] onegroup_rank[n];
+		delete[] onegroup_rank;
+		delete[] onegroup_size;
 #else
 		set_mpi_params(0,1); // no MPI, so we have one process and id=0
 #endif
@@ -120,10 +131,10 @@ public:
 
 	/*
 	void batch_add_lenses(py::list list) {
-		LensProfile<double>* curr;
+		LensProfile* curr;
 		for (auto arr : list){
 			try {
-				curr = py::cast<LensProfile<double>*>(arr);
+				curr = py::cast<LensProfile*>(arr);
 			} catch (...) {
 				throw std::runtime_error("Error adding lenses. Input should be an array of lenses. Ex: [<Lens1>, <Lens2>]");
 			}
@@ -133,17 +144,17 @@ public:
 
 	void batch_add_lenses_tuple(py::list list) {
 		double zl, zs;
-		LensProfile<double>* curr;
+		LensProfile* curr;
 		for (auto arr : list){
 			try {
-				std::tuple<LensProfile<double>*, double, double> extracted = py::cast<std::tuple<LensProfile<double>*, double, double>>(arr);
+				std::tuple<LensProfile*, double, double> extracted = py::cast<std::tuple<LensProfile*, double, double>>(arr);
 				zl = std::get<1>(extracted);
 				zs = std::get<2>(extracted);
 				curr = std::get<0>(extracted);
 			} catch(std::runtime_error) {
 				zl = lens_redshift;
 				zs = reference_source_redshift;
-				curr = py::cast<LensProfile<double>*>(arr);
+				curr = py::cast<LensProfile*>(arr);
 			} catch (...) {
 				throw std::runtime_error("Error adding lenses. Input should be an array of tuples. Ex: [(<Lens1>, zl1, zs2), (<Lens2>, zl2, zs2)]");
 			}
@@ -151,22 +162,22 @@ public:
 		}
 	}
 
-	void add_lens_tuple(std::tuple<LensProfile<double>*, double, double> lens_tuple) {
+	void add_lens_tuple(std::tuple<LensProfile*, double, double> lens_tuple) {
 		double zl, zs;
-		LensProfile<double>* curr;
+		LensProfile* curr;
 			zl = std::get<1>(lens_tuple);
 			zs = std::get<2>(lens_tuple);
 			curr = std::get<0>(lens_tuple);
 		add_lens(curr);
 	}
 
-	void add_lens_extshear(LensProfile<double>* lens_in, Shear* extshear) {
+	void add_lens_extshear(LensProfile* lens_in, Shear* extshear) {
 		add_lens(lens_in);
-		add_lens((LensProfile<double>*) extshear);
+		add_lens((LensProfile*) extshear);
 		  lens_list[nlens-1]->anchor_center_to_lens(nlens-2);
 	}
 
-	//void add_lens_default(LensProfile<double>* lens_in) {
+	//void add_lens_default(LensProfile* lens_in) {
 		//add_lens(lens_in);
 	//}
 
@@ -232,14 +243,14 @@ public:
 		if(add_simulated_point_image_data(src)) update_parameter_list();
 	}
 
-	bool get_shear_components_mode() { return Shear<double>::use_shear_component_params; }
+	bool get_shear_components_mode() { return Shear::use_shear_component_params; }
 	void set_shear_components_mode(const bool comp) {
-		Shear<double>::use_shear_component_params = comp;
+		Shear::use_shear_component_params = comp;
 		reassign_lensparam_pointers_and_names();
 	}
-	bool get_ellipticity_components_mode() { return LensProfile<double>::use_ellipticity_components; }
+	bool get_ellipticity_components_mode() { return LensProfile::use_ellipticity_components; }
 	void set_ellipticity_components_mode(const bool comp) {
-		LensProfile<double>::use_ellipticity_components = comp;
+		LensProfile::use_ellipticity_components = comp;
 		reassign_lensparam_pointers_and_names();
 	}
 
@@ -529,6 +540,10 @@ public:
 		DelaunayGrid::deallocate_multithreaded_variables();
 		CartesianSourceGrid::deallocate_multithreaded_variables();
 		QLens::deallocate_multithreaded_variables();
+		GaussLegendre<std::function<double(const double)>,double>::deallocate_quadrature_tables();
+		GaussPatterson<std::function<double(const double)>,double>::deallocate_gauss_patterson_tables();
+		ClenshawCurtis<std::function<double(const double)>,double>::deallocate_cc_quadrature_tables();
+
 
 #ifdef USE_MPI
 		MPI_Finalize();

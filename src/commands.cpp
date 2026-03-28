@@ -30,7 +30,7 @@ using namespace std;
 #define Complain(errmsg) do { if (mpi_id==0) cerr << "Error: " << errmsg << endl; if ((read_from_file) and (quit_after_error)) die(); goto next_line; } while (false) // the while(false) is a trick to make the macro syntax behave like a function
 #define display_switch(setting) ((setting) ? "on" : "off")
 #define set_switch(setting,setword) do { if ((setword)=="on") setting = true; else if ((setword)=="off") setting = false; else Complain("invalid argument; must specify 'on' or 'off'"); } while (false)
-#define LENS_AXIS_DIR ((LensProfile<double>::orient_major_axis_north==true) ? "y-axis" : "x-axis")
+#define LENS_AXIS_DIR ((LensProfile::orient_major_axis_north==true) ? "y-axis" : "x-axis")
 
 void QLens::process_commands(bool read_file)
 {
@@ -493,7 +493,7 @@ void QLens::process_commands(bool read_file)
 							"offcenter from the critical curves. If center coordinates are not specified, the lens is centered at\n"
 							"the origin by default.\n";
 					else if (words[2]=="shear")
-						if (Shear<double>::use_shear_component_params)
+						if (Shear::use_shear_component_params)
 							cout << "lens shear <shear_1> <shear_2> [x-center] [y-center]\n\n"
 								"where <shear_1> and <shear_2> are the components of the shear.\n";
 						else
@@ -502,7 +502,7 @@ void QLens::process_commands(bool read_file)
 								"perturber that generates the shear (counterclockwise, in degrees) about the center (defaults=0).\n"
 								"Note that theta is the angle of the perturber (assuming tangential shear), *NOT* the angle of the shear\n"
 								"itself (which differs from theta by 90 degrees).\n\n"
-								"Also note that for theta=0, the shear term has a phase shift " << ((LensProfile<double>::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
+								"Also note that for theta=0, the shear term has a phase shift " << ((LensProfile::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
 								"the the perturber along the " << LENS_AXIS_DIR << ". However, the direction (x vs. y) for theta=0\n"
 								"can be toggled by setting major_axis_along_y on/off.\n";
 					else if (words[2]=="deflection")
@@ -523,7 +523,7 @@ void QLens::process_commands(bool read_file)
 							"term with m=2, n=2 is equivalent to an external shear term with A_m = gamma.\n\n"
 							"Keep in mind that the order of the multiple (m) cannot be varied as a parameter, so only the\n"
 							"remaining five parameters can be varied during a fit or using the 'lens update' command.\n"
-							"Note that for theta=0, the sinusoidal term has a phase shift " << ((LensProfile<double>::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
+							"Note that for theta=0, the sinusoidal term has a phase shift " << ((LensProfile::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
 							"the major axis of the lens along the " << LENS_AXIS_DIR << " (the direction of the major axis (x/y) for theta=0\n"
 							"is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="kmpole")
@@ -539,7 +539,7 @@ void QLens::process_commands(bool read_file)
 							"An important caveat is that beta cannot be larger than 2-m (or else deflections become infinite).\n"
 							"Also keep in mind that the order of the multiple (m) cannot be varied as a parameter, so only the\n"
 							"remaining five parameters can be varied during a fit or using the 'lens update' command.\n"
-							"Note that for theta=0, the sinusoidal term has a phase shift " << ((LensProfile<double>::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
+							"Note that for theta=0, the sinusoidal term has a phase shift " << ((LensProfile::orient_major_axis_north) ? "90" : "0") << " degrees, analogous to having\n"
 							"the major axis of the lens along the " << LENS_AXIS_DIR << " (the direction of the major axis (x/y) for theta=0\n"
 							"is toggled by setting major_axis_along_y on/off).\n";
 					else if (words[2]=="dpie")
@@ -760,7 +760,7 @@ void QLens::process_commands(bool read_file)
 							"This is similar to the above example, except that this lens is anchored to lens 0\n"
 							"so that their centers will always coincide when the parameters are varied.\n\n"
 							"Since it is common to anchor external shear to a lens model, this can be done in\n" <<
-							((Shear<double>::use_shear_component_params) ?
+							((Shear::use_shear_component_params) ?
 								"one line by adding 'shear=<shear_1> <shear_2>' to the end of the line. For example,\n"
 								"to add external shear with shear_1=0.1 and shear_2=0.05, one can enter:\n\n"
 								"fit lens sple 10 1 0 0.9 0 0.3 0.5 shear=0.1 0.05\n" :
@@ -2290,16 +2290,16 @@ void QLens::process_commands(bool read_file)
 				}
 				if (show_lens_settings) {
 					cout << "\033[4mLens model settings\033[0m\n";
-					cout << "emode = " << LensProfile<double>::default_ellipticity_mode << endl;
+					cout << "emode = " << LensProfile::default_ellipticity_mode << endl;
 					cout << "pmode = " << default_parameter_mode << endl;
 					cout << "primary_lens = " << primary_lens_number << ((auto_set_primary_lens==true) ? " (auto)": "") << endl;
-					if (LensProfile<double>::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration" << endl;
-					else if (LensProfile<double>::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature" << endl;
-					else if (LensProfile<double>::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << LensProfile<double>::Gauss_NN << " points" << endl;
-					cout << "integral_tolerance = " << LensProfile<double>::integral_tolerance << endl;
-					cout << "major_axis_along_y: " << display_switch(LensProfile<double>::orient_major_axis_north) << endl;
-					cout << "ellipticity_components: " << display_switch(LensProfile<double>::use_ellipticity_components) << endl;
-					cout << "shear_components: " << display_switch(Shear<double>::use_shear_component_params) << endl;
+					if (LensProfile::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration" << endl;
+					else if (LensProfile::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature" << endl;
+					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << GaussLegendre<std::function<double(const double)>,double>::numberOfPoints << " points" << endl;
+					cout << "integral_tolerance = " << LensProfile::integral_tolerance << endl;
+					cout << "major_axis_along_y: " << display_switch(LensProfile::orient_major_axis_north) << endl;
+					cout << "ellipticity_components: " << display_switch(LensProfile::use_ellipticity_components) << endl;
+					cout << "shear_components: " << display_switch(Shear::use_shear_component_params) << endl;
 					cout << "tab_rmin = " << tabulate_rmin << endl;
 					cout << "tab_r_N = " << tabulate_logr_N << endl;
 					cout << "tab_phi_N = " << tabulate_phi_N << endl;
@@ -2365,16 +2365,17 @@ void QLens::process_commands(bool read_file)
 					if (nwords == 3) {
 						int pts;
 						if (!(ws[2] >> pts)) Complain("invalid number of points");
+						GaussLegendre<std::function<double(const double)>,double>::SetGaussLegendre(pts);
 					}
 				} else Complain("unknown integration method");
 				set_integration_method(method);
 			} else if (nwords==1) {
 				if (mpi_id==0) {
-					method = LensProfile<double>::integral_method;
-					if (method==Romberg_Integration) cout << "Integration method: Romberg integration with tolerance = " << LensProfile<double>::integral_tolerance << endl;
-					else if (method==Gauss_Patterson_Quadrature) cout << "Integration method: Gauss-Patterson quadrature with tolerance = " << LensProfile<double>::integral_tolerance << endl;
-					else if (method==Fejer_Quadrature) cout << "Integration method: Fejer quadrature with tolerance = " << LensProfile<double>::integral_tolerance << endl;
-					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << LensProfile<double>::Gauss_NN << " points" << endl;
+					method = LensProfile::integral_method;
+					if (method==Romberg_Integration) cout << "Integration method: Romberg integration with tolerance = " << LensProfile::integral_tolerance << endl;
+					else if (method==Gauss_Patterson_Quadrature) cout << "Integration method: Gauss-Patterson quadrature with tolerance = " << LensProfile::integral_tolerance << endl;
+					else if (method==Fejer_Quadrature) cout << "Integration method: Fejer quadrature with tolerance = " << LensProfile::integral_tolerance << endl;
+					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << GaussLegendre<std::function<double(const double)>,double>::numberOfPoints << " points" << endl;
 				}
 			} else Complain("no more than two arguments are allowed for 'integral_method' (method,npoints)");
 		}
@@ -2797,11 +2798,11 @@ void QLens::process_commands(bool read_file)
 						stringstream shearstream;
 						shearstream << shearstr;
 						if (!(shearstream >> shear_param_vals[0])) {
-							if (Shear<double>::use_shear_component_params) Complain("invalid shear_1 value");
+							if (Shear::use_shear_component_params) Complain("invalid shear_1 value");
 							Complain("invalid shear value");
 						}
 						if (!(ws[i+1] >> shear_param_vals[1])) {
-							if (Shear<double>::use_shear_component_params) Complain("invalid shear_2 value");
+							if (Shear::use_shear_component_params) Complain("invalid shear_2 value");
 							Complain("invalid shear angle");
 						}
 						remove_word(i+1);
@@ -3115,7 +3116,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sple");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7; // this does not include redshift
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3140,7 +3141,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (b,slope,s,q,theta,xc,yc) in model sple";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3225,7 +3226,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model dpie");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3250,7 +3251,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (b,a,s,q,theta,xc,yc) in model dpie";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3388,7 +3389,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (A_m,n,theta,xc,yc) in model " + words[1];
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3433,7 +3434,7 @@ void QLens::process_commands(bool read_file)
 					}
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
-						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile<double> class; then you can check for different parametrizations directly
+						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
 					}
 					if ((pmode < 0) or (pmode > 2)) Complain("parameter mode must be either 0, 1, or 2");
 
@@ -3482,7 +3483,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model nfw");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3507,7 +3508,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (p1,p2,q,theta,xc,yc) in model nfw";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3565,7 +3566,7 @@ void QLens::process_commands(bool read_file)
 					int tmode = 1;
 					if ((update_parameters) and (lens_list[lens_number]->anchor_special_parameter)) {
 						set_median_concentration = true;
-						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile<double> class; then you can check for different parametrizations directly
+						pmode = 1; // you should generalize the parameter choice option so it's in the LensProfile class; then you can check for different parametrizations directly
 					}
 					if ((pmode < 0) or (pmode > 4)) Complain("parameter mode must be either 0, 1, 2, 3, or 4");
 
@@ -3645,7 +3646,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model tnfw");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3670,7 +3671,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (p1,p2,p3,q,theta,xc,yc) in model tnfw";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3769,7 +3770,7 @@ void QLens::process_commands(bool read_file)
 							}
 						}
 						//if (p3 >= p2) Complain("core radius (p3) must be smaller than scale radius (p2) for model cnfw");
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3794,7 +3795,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (p1,p2,p3,q,theta,xc,yc) in model cnfw";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3868,7 +3869,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model expdisk");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3893,7 +3894,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (k0,R_d,q,theta,xc,yc) in model expdisk";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -3963,7 +3964,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model tophat");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -3988,7 +3989,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (k0,rad,q,theta,xc,yc) in model tophat";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4065,7 +4066,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[index] >> yc)) Complain("invalid y-center parameter for model kspline");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4090,7 +4091,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (qx,f,q,theta,xc,yc) in model kspline";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4160,7 +4161,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model hern");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 6;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4185,7 +4186,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for six parameters (ks,rs,q,theta,xc,yc) in model hern";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4289,7 +4290,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[10] >> yc)) Complain("invalid y-center parameter for model corecusp");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 9;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4314,7 +4315,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for nine parameters (k0,gamma,n,a,s,q,theta,xc,yc) in model corecusp";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4411,7 +4412,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for three parameters (b,xc,yc) in model ptmass";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4475,7 +4476,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[8] >> yc)) Complain("invalid y-center parameter for model sersic");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 7;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4500,7 +4501,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (kappa_e,R_eff,n,q,theta,xc,yc) in model sersic (plus optional Fourier modes)";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4583,7 +4584,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[11] >> yc)) Complain("invalid y-center parameter for model dsersic");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 10;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4608,7 +4609,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for seven parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model dsersic (plus optional Fourier modes)";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4688,7 +4689,7 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[9] >> yc)) Complain("invalid y-center parameter for model csersic");
 							}
 						}
-						if ((LensProfile<double>::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
+						if ((LensProfile::use_ellipticity_components) and ((q > 1)  or (theta > 1))) Complain("ellipticity components cannot be greater than 1");
 
 						default_nparams = 8;
 						param_vals.input(default_nparams+1); // add one for redshift
@@ -4714,7 +4715,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for eight parameters (kappe_e,R_eff,n,q,theta,xc,yc) in model csersic (plus optional Fourier modes)";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4804,7 +4805,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for three parameters (kappa,xc,yc) in model sheet";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4852,7 +4853,7 @@ void QLens::process_commands(bool read_file)
 								complain_str = "Must specify vary flags for three parameters (kappa,xc,yc) in model deflection";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -4883,12 +4884,12 @@ void QLens::process_commands(bool read_file)
 					if (nwords >= 3) {
 						double shear_p1, shear_p2 = 0, xc = 0, yc = 0;
 						if (!(ws[2] >> shear_p1)) {
-							if (Shear<double>::use_shear_component_params) Complain("invalid shear_1 parameter for model shear");
+							if (Shear::use_shear_component_params) Complain("invalid shear_1 parameter for model shear");
 							else Complain("invalid shear parameter for model shear");
 						}
 						if (nwords >= 4) {
 							if (!(ws[3] >> shear_p2)) {
-								if (Shear<double>::use_shear_component_params) Complain("invalid shear_2 parameter for model shear");
+								if (Shear::use_shear_component_params) Complain("invalid shear_2 parameter for model shear");
 								else Complain("invalid theta parameter for model shear");
 							}
 							if (nwords == 5) {
@@ -4944,7 +4945,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 					else {
-						if (Shear<double>::use_shear_component_params) Complain("shear requires 4 parameters (shear_1, shear_2, xc, yc)");
+						if (Shear::use_shear_component_params) Complain("shear requires 4 parameters (shear_1, shear_2, xc, yc)");
 						else Complain("shear requires 4 parameters (shear, q, xc, yc)");
 					}
 				}
@@ -5021,7 +5022,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for five parameters (kscale,rscale,theta,xc,yc) in model tab";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -5126,7 +5127,7 @@ void QLens::process_commands(bool read_file)
 								else complain_str = "Must specify vary flags for five parameters (kscale,rscale,theta,xc,yc) in model qtab";
 								if ((add_shear) and (nwords != tot_nparams_to_vary)) {
 									complain_str += ",\n     plus two shear parameters ";
-									complain_str += ((Shear<double>::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
+									complain_str += ((Shear::use_shear_component_params) ? "(shear1,shear2)" : "(shear,angle)");
 								}
 								if (complain_str != "") Complain(complain_str);
 							}
@@ -11941,7 +11942,7 @@ void QLens::process_commands(bool read_file)
 		else if ((words[0]=="integral_warnings") or (words[0]=="integration_warnings"))
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Warnings for integration convergence: " << display_switch(LensProfile<double>::integration_warnings) << endl;
+				if (mpi_id==0) cout << "Warnings for integration convergence: " << display_switch(LensProfile::integration_warnings) << endl;
 			} else if (nwords==2) {
 				string setword;
 				bool warn;
@@ -11969,7 +11970,7 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="major_axis_along_y")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Orient major axis along y-direction: " << display_switch(LensProfile<double>::orient_major_axis_north) << endl;
+				if (mpi_id==0) cout << "Orient major axis along y-direction: " << display_switch(LensProfile::orient_major_axis_north) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'major_axis_along_y' command; must specify 'on' or 'off'");
 				bool orient_north;
@@ -11991,30 +11992,30 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="shear_components")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Use shear components as parameters: " << display_switch(Shear<double>::use_shear_component_params) << endl;
+				if (mpi_id==0) cout << "Use shear components as parameters: " << display_switch(Shear::use_shear_component_params) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'shear_components' command; must specify 'on' or 'off'");
 				bool use_comps;
 				set_switch(use_comps,setword);
-				Shear<double>::use_shear_component_params = use_comps;
+				Shear::use_shear_component_params = use_comps;
 				reassign_lensparam_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="shear_angle_towards_perturber")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Shear angle points towards (hypothetical) perturber: " << display_switch(Shear<double>::angle_points_towards_perturber) << endl;
+				if (mpi_id==0) cout << "Shear angle points towards (hypothetical) perturber: " << display_switch(Shear::angle_points_towards_perturber) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'shear_angle_towards_perturber' command; must specify 'on' or 'off'");
 				bool towards_perturber;
 				set_switch(towards_perturber,setword);
-				if (Shear<double>::angle_points_towards_perturber != towards_perturber) {
-					Shear<double>::angle_points_towards_perturber = towards_perturber;
-					if (Shear<double>::use_shear_component_params==false) {
+				if (Shear::angle_points_towards_perturber != towards_perturber) {
+					Shear::angle_points_towards_perturber = towards_perturber;
+					if (Shear::use_shear_component_params==false) {
 						// awkward, but otherwise it doesn't change the actual theta_shear parameter
-						Shear<double>::use_shear_component_params = true;
+						Shear::use_shear_component_params = true;
 						reassign_lensparam_pointers_and_names(false);
-						Shear<double>::use_shear_component_params = false;
+						Shear::use_shear_component_params = false;
 						reassign_lensparam_pointers_and_names(false);
 					}
 				}
@@ -12023,12 +12024,12 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="ellipticity_components")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Use ellipticity components instead of (q,theta): " << display_switch(LensProfile<double>::use_ellipticity_components) << endl;
+				if (mpi_id==0) cout << "Use ellipticity components instead of (q,theta): " << display_switch(LensProfile::use_ellipticity_components) << endl;
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'ellipticity_components' command; must specify 'on' or 'off'");
 				bool use_comps;
 				set_switch(use_comps,setword);
-				LensProfile<double>::use_ellipticity_components = use_comps;
+				LensProfile::use_ellipticity_components = use_comps;
 				reassign_lensparam_pointers_and_names();
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
@@ -12100,12 +12101,12 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="emode")
 		{
 			if (nwords==1) {
-				if (mpi_id==0) cout << "Ellipticity mode: " << LensProfile<double>::default_ellipticity_mode << endl;
+				if (mpi_id==0) cout << "Ellipticity mode: " << LensProfile::default_ellipticity_mode << endl;
 			} else if (nwords==2) {
 				int elmode;
 				if (!(ws[1] >> elmode)) Complain("invalid argument to 'emode' command; must specify 0, 1, 2, or 3");
 				if (elmode > 3) Complain("ellipticity mode cannot be greater than 3");
-				LensProfile<double>::default_ellipticity_mode = elmode;
+				LensProfile::default_ellipticity_mode = elmode;
 				SB_Profile::default_ellipticity_mode = elmode;
 			} else Complain("invalid number of arguments; must specify 0, 1, 2, or 3");
 		}
@@ -13162,7 +13163,7 @@ void QLens::process_commands(bool read_file)
 				if (!(ws[1] >> itolerance)) Complain("invalid value for integral_tolerance");
 				set_integral_tolerance(itolerance);
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Tolerance for numerical integration = " << LensProfile<double>::integral_tolerance << endl;
+				if (mpi_id==0) cout << "Tolerance for numerical integration = " << LensProfile::integral_tolerance << endl;
 			} else Complain("must specify either zero or one argument for integral_tolerance");
 		}
 		else if (words[0]=="nrepeat")
@@ -15636,8 +15637,8 @@ void QLens::process_commands(bool read_file)
 			if (!(output_egrad_values_and_knots(srcnum,suffix))) Complain("could not output egrad values"); // crude but hopefully works well enough
 		} else if (words[0]=="output_coolest") {
 			if (nwords != 2) Complain("one argument required: filename to output to <filename>.json");
-			if (LensProfile<double>::use_ellipticity_components) Complain("ellipticity components must be turned off before generating COOLEST json file");
-			if (Shear<double>::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
+			if (LensProfile::use_ellipticity_components) Complain("ellipticity components must be turned off before generating COOLEST json file");
+			if (Shear::use_shear_component_params) Complain("shear components must be turned off before generating COOLEST json file");
 			if (!output_coolest_files(words[1])) Complain("could not output coolest .json file");
 		} else if (words[0]=="test") {
 			/*
@@ -16557,7 +16558,7 @@ void QLens::process_commands(bool read_file)
 						//run_plotter("datapixel");
 						mockdata[i].fit_isophote(xi0,xistep,emode,qq,t0,xc_i,yc_i,maxit,isodata_mock[i],polar,false,NULL,sampling_mode,n_higher_harmonics,fix_center,max_xi_it,ximax,sbgrmax,npts_frac,sbgrtrans);
 					}
-					Spline qcorr_spline[n_xivals];
+					Spline<double> qcorr_spline[n_xivals];
 					for (i=0; i < n_xivals; i++) {
 						if (!skip[i]) {
 							for (j=0; j < nn_q; j++) {

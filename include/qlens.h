@@ -472,6 +472,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	MPI_Group *mpi_group;
 	MPI_Group *my_group;
 #endif
+	inline static bool use_autodiff = false;
 	static int nthreads;
 	int inversion_nthreads;
 	int simplex_nmax, simplex_nmax_anneal;
@@ -511,7 +512,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	DerivedParamList *dparam_list;
 
 	int nlens;
-	LensProfile<double>** lens_list;
+	LensProfile** lens_list;
 	LensList *lenslist;
 	int *lens_redshift_idx;
 
@@ -1147,7 +1148,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	friend class ImagePixelGrid;
 	friend struct ImageData;
 	friend struct DerivedParam;
-	friend class LensProfile<double>;
+	friend class LensProfile;
 	friend class SB_Profile;
 	friend class MGE;
 	friend class Cosmology;
@@ -1334,7 +1335,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
 	bool spawn_lens_from_source_object(const int src_number, const double zl, const double zs, const int pmode, const bool vary_mass_parameter, const bool include_limits, const double mass_param_lower, const double mass_param_upper);
 
-	void add_lens(LensProfile<double> *new_lens);
+	void add_lens(LensProfile *new_lens);
 	void add_new_lens_redshift(const double zl, const int lens_i, int* zlens_idx);
 	void remove_old_lens_redshift(const int znum, const int lens_i, const bool removed_lens);
 	void update_lens_redshift_data();
@@ -1425,7 +1426,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void reassign_lensparam_pointers_and_names(const bool reset_plimits = true);
 	void reassign_sb_param_pointers_and_names();
 	void print_lens_list(bool show_vary_params);
-	LensProfile<double>* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }
+	LensProfile* get_lens_pointer(const int lensnum) { if (lensnum >= nlens) return NULL; else return lens_list[lensnum]; }
 	void print_fit_model();
 	void print_lens_cosmology_info(const int lmin, const int lmax);
 	bool output_mass_r(const double r_arcsec, const int lensnum, const bool use_kpc);
@@ -1548,7 +1549,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	bool initialize_fitmodel(const bool running_fit_in);
 	double update_model(const double* params);
 	void update_prior_limits(const double* lower, const double* upper, const bool* changed_limits);
-	double fitmodel_loglike_point_source(const double* params);
+	template<typename QScalar>
+	QScalar fitmodel_loglike_point_source(const double* params);
 	double fitmodel_loglike_extended_source(const double* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
@@ -1657,11 +1659,10 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void autogrid(double rmin, double rmax);
 	void autogrid();
 	bool get_deflection_spline_info(double &xmax, double &ymax, int &nsteps);
-	void set_Gauss_NN(const int& nn);
 	void set_integral_tolerance(const double& acc);
 	void set_integral_convergence_warnings(const bool warn);
 
-	void set_integration_method(IntegrationMethod method) { LensProfile<double>::integral_method = method; }
+	void set_integration_method(IntegrationMethod method) { LensProfile::integral_method = method; }
 	void set_analytic_bestfit_src(const bool setting) {
 		use_analytic_bestfit_src = setting;
 		bool vary_source_coords = (use_analytic_bestfit_src) ? false : true;
@@ -1818,19 +1819,19 @@ class LensList
 	public:
 	QLens* qlens;
 	int nlens;
-	LensProfile<double>** lenslistptr;
+	LensProfile** lenslistptr;
 	LensList(QLens* qlens_in) { lenslistptr = NULL; qlens = qlens_in; nlens = 0; }
-	void input_ptr(LensProfile<double>** ptr_in, const int nlens_in) { lenslistptr = ptr_in; nlens = nlens_in; }
+	void input_ptr(LensProfile** ptr_in, const int nlens_in) { lenslistptr = ptr_in; nlens = nlens_in; }
 	void clear_ptr() { lenslistptr = NULL; nlens = 0; }
 	void print() {
 		qlens->print_lens_list(true);
 	}
-	void add_lens(LensProfile<double>* lens_in) {
+	void add_lens(LensProfile* lens_in) {
 		qlens->add_lens(lens_in);
 	}
-	void add_lens_extshear(LensProfile<double>* lens_in, Shear<double>* extshear) {
+	void add_lens_extshear(LensProfile* lens_in, Shear* extshear) {
 		qlens->add_lens(lens_in);
-		qlens->add_lens((LensProfile<double>*) extshear);
+		qlens->add_lens((LensProfile*) extshear);
 		  lenslistptr[nlens-1]->anchor_center_to_lens(nlens-2);
 	}
 	bool clear(const int min_loc=-1, const int max_loc=-1) {
@@ -1855,13 +1856,13 @@ class LensList
 		lenslistptr[lens_num1]->anchor_center_to_lens(lens_num2);
 		return true;
 	}
-	MyIterator<LensProfile<double>*> begin() {
-		return MyIterator<LensProfile<double>*>(lenslistptr);
+	MyIterator<LensProfile*> begin() {
+		return MyIterator<LensProfile*>(lenslistptr);
 	}
-	MyIterator<LensProfile<double>*> end() {
-		return MyIterator<LensProfile<double>*>(lenslistptr+nlens);
+	MyIterator<LensProfile*> end() {
+		return MyIterator<LensProfile*>(lenslistptr+nlens);
 	}
-	LensProfile<double>* operator[](size_t i) { return lenslistptr[i]; }
+	LensProfile* operator[](size_t i) { return lenslistptr[i]; }
 };
 
 class SourceList

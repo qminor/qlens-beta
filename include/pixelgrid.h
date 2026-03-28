@@ -475,7 +475,7 @@ class ImagePixelGrid : private Sort
 	friend class CartesianSourceGrid;
 	friend class DelaunaySourceGrid;
 	friend struct ImageData;
-	friend class LensProfile<double>;
+	friend class LensProfile;
 	friend class PSF;
 	QLens *qlens;
 	CartesianSourceGrid *cartesian_srcgrid;
@@ -712,7 +712,7 @@ class PSF : public ModelParams
 	double psf_offset_x, psf_offset_y;
 
 	bool use_input_psf_matrix;
-	Spline2D psf_spline;
+	Spline2D<double> psf_spline;
 	int psf_npixels_x, psf_npixels_y;
 	int supersampled_psf_npixels_x, supersampled_psf_npixels_y;
 	string psf_filename;

@@ -4,6 +4,7 @@
 #include "qlens.h"
 #include "pixelgrid.h"
 #include "errors.h"
+#include "gauss.h"
 #include <time.h>
 #include <iostream>
 #include <cstdlib>
@@ -65,6 +66,9 @@ int main(int argc, char *argv[])
 	DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 	QLens::allocate_multithreaded_variables(n_omp_threads);
+	GaussLegendre<std::function<double(const double)>,double>::allocate_quadrature_tables(GaussLegendre<std::function<double(const double)>,double>::numberOfPoints);
+	GaussPatterson<std::function<double(const double)>,double>::allocate_gauss_patterson_tables();
+	ClenshawCurtis<std::function<double(const double)>,double>::allocate_cc_quadrature_tables(LensProfile::default_fejer_nlevels,false); // the latter boolean=false tells it to use Fejer quadrature (open interval)
 
 	bool read_from_file = false;
 	bool verbal_mode = true;
@@ -143,10 +147,10 @@ int main(int argc, char *argv[])
 	if ((load_cosmology_file) and (cosmology.load_params(cosmology_filename)==false)) die();
 
 #ifdef USE_MPI
-	MPI_Comm subgroup_comm[ngroups];
-	MPI_Group subgroup[ngroups];
-	int subgroup_size[ngroups];
-	int *subgroup_rank[ngroups];
+	MPI_Comm *subgroup_comm = new MPI_Comm[ngroups];
+	MPI_Group *subgroup = new MPI_Group[ngroups];
+	int *subgroup_size = new int[ngroups];
+	int **subgroup_rank = new int*[ngroups];
 	int subgroup_id, subgroup_id_sum;
 
 	int n,i,j,group_number;
@@ -154,56 +158,28 @@ int main(int argc, char *argv[])
 
 	MPI_Comm_group(MPI_COMM_WORLD, &world_group);
 
-	/*
-	if (mpi_np==3) {
-		subgroup_size[0] = 1;
-		subgroup_size[1] = 2;
-		subgroup_rank[0] = new int[1];
-		subgroup_rank[1] = new int[2];
-		subgroup_rank[0][0] = 0;
-		subgroup_rank[1][0] = 1;
-		subgroup_rank[1][1] = 2;
-		for (n=0; n < ngroups; n++) {
-			MPI_Group_incl(world_group, subgroup_size[n], subgroup_rank[n], &subgroup[n]);
-			MPI_Comm_create(MPI_COMM_WORLD, subgroup[n], &subgroup_comm[n]);
+	for (n=0; n < ngroups; n++) {
+		subgroup_size[n] = 0;
+		for (i=n; i < mpi_np; i += ngroups) subgroup_size[n]++;
+		subgroup_rank[n] = new int[subgroup_size[n]];
+		for (j=0, i=n; i < mpi_np; j++, i += ngroups) {
+			subgroup_rank[n][j] = i;
+			//if (mpi_id==0) cout << "subgroup " << n << " process " << j << ": rank " << subgroup_rank[n][j] << endl;
 		}
-		if (mpi_id==0) {
-			MPI_Comm_rank(subgroup_comm[0],&subgroup_id);
-			group_number = 0;
-		}
-		if (mpi_id==1) {
-			MPI_Comm_rank(subgroup_comm[1],&subgroup_id);
-			group_number = 1;
-		}
-		if (mpi_id==2) {
-			MPI_Comm_rank(subgroup_comm[1],&subgroup_id);
-			group_number = 1;
-		}
-	} else {
-		*/
-		for (n=0; n < ngroups; n++) {
-			subgroup_size[n] = 0;
-			for (i=n; i < mpi_np; i += ngroups) subgroup_size[n]++;
-			subgroup_rank[n] = new int[subgroup_size[n]];
-			for (j=0, i=n; i < mpi_np; j++, i += ngroups) {
-				subgroup_rank[n][j] = i;
-				//if (mpi_id==0) cout << "subgroup " << n << " process " << j << ": rank " << subgroup_rank[n][j] << endl;
-			}
 
-			MPI_Group_incl(world_group, subgroup_size[n], subgroup_rank[n], &subgroup[n]);
-			MPI_Comm_create(MPI_COMM_WORLD, subgroup[n], &subgroup_comm[n]);
+		MPI_Group_incl(world_group, subgroup_size[n], subgroup_rank[n], &subgroup[n]);
+		MPI_Comm_create(MPI_COMM_WORLD, subgroup[n], &subgroup_comm[n]);
 
-			if (mpi_id % ngroups == n) {
-				MPI_Comm_rank(subgroup_comm[n],&subgroup_id);
-				group_number = n;
-			}
+		if (mpi_id % ngroups == n) {
+			MPI_Comm_rank(subgroup_comm[n],&subgroup_id);
+			group_number = n;
 		}
-	//}
+	}
 
-	MPI_Comm onegroup_comm[mpi_np];
-	MPI_Group onegroup[mpi_np];
-	int onegroup_size[mpi_np];
-	int *onegroup_rank[mpi_np];
+	MPI_Comm *onegroup_comm = new MPI_Comm[mpi_np];
+	MPI_Group *onegroup = new MPI_Group[mpi_np];
+	int *onegroup_size = new int[mpi_np];
+	int **onegroup_rank = new int*[mpi_np];
 	int onegroup_id, onegroup_id_sum;
 
 	for (n=0; n < mpi_np; n++) {
@@ -224,7 +200,7 @@ int main(int argc, char *argv[])
 	if (disptime) lens.set_show_wtime(true); // useful for optimizing the number of threads and MPI processes to minimize the wall time per likelihood evaluation
 #endif
 #ifdef USE_MPI
-	int mpi_group_leaders[ngroups];
+	int *mpi_group_leaders = new int[ngroups];
 	for (int i=0; i < ngroups; i++) mpi_group_leaders[i] = subgroup_rank[i][0];
 	lens.set_mpi_params(mpi_id,mpi_np,ngroups,group_number,subgroup_id,subgroup_size[group_number],mpi_group_leaders,&subgroup[group_number],&subgroup_comm[group_number],&onegroup[mpi_id],&onegroup_comm[mpi_id]);
 
@@ -233,7 +209,6 @@ int main(int argc, char *argv[])
 	} else {
 		lens.Set_MCMC_MPI(mpi_np,mpi_id,ngroups,group_number,mpi_group_leaders);
 	}
-	for (n=0; n < ngroups; n++) delete[] subgroup_rank[n];
 #else
 	lens.set_mpi_params(0,1); // no MPI, so we have one process and id=0
 #endif
@@ -288,11 +263,24 @@ int main(int argc, char *argv[])
 	DelaunayGrid::deallocate_multithreaded_variables();
 	CartesianSourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
 	QLens::deallocate_multithreaded_variables();
+	GaussLegendre<std::function<double(const double)>,double>::deallocate_quadrature_tables();
+	GaussPatterson<std::function<double(const double)>,double>::deallocate_gauss_patterson_tables();
+	ClenshawCurtis<std::function<double(const double)>,double>::deallocate_cc_quadrature_tables();
 
 #ifdef USE_MPI
 	MPI_Finalize();
+	delete[] mpi_group_leaders;
+	for (n=0; n < ngroups; n++) delete[] subgroup_rank[n];
+	delete[] subgroup_rank;
+	delete[] subgroup_size;
+	for (n=0; n < mpi_np; n++) delete[] onegroup_rank[n];
+	delete[] onegroup_rank;
+	delete[] onegroup_size;
+	delete[] subgroup_comm;
+	delete[] subgroup;
+	delete[] onegroup_comm;
+	delete[] onegroup;
 #endif
-
 	return 0;
 }
 

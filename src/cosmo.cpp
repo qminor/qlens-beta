@@ -4,7 +4,7 @@
 #include <iostream>
 #include "modelparams.h"
 #include "vector.h"
-#include "spline.h"
+//#include "spline.h"
 #include "romberg.h"
 #include "mathexpr.h"
 #include "errors.h"
@@ -23,7 +23,6 @@ const double Cosmology::default_neutrino_mass = 0.06; // in eV; this is the mini
 const double Cosmology::min_tophat_mass = 1e2;
 const double Cosmology::max_tophat_mass = 1e18;
 const double Cosmology::default_sigma8 = 0.82; // Only used if normalizing by sigma8 rather than A_s
-
 
 void CosmologyParams::remove_comments(string& instring)
 {
@@ -388,9 +387,8 @@ double Cosmology::transfer_function(double kk, double zz)
 
 double Cosmology::growth_function(double a)
 {
-	double (Romberg::*growth_ptr)(const double);
-	growth_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::growth_function_integrand);
-	double integral = romberg_open(growth_ptr,0,a,1e-6,5);
+	Romberg<std::function<double(const double)>,double> romberg;
+	double integral = romberg.integrate_open([this](auto x) { return growth_function_integrand(x); },0,a,1e-6,5);
 	return 2.5*omega_m*h_over_h0(a)*integral;
 }
 
@@ -438,13 +436,12 @@ double Cosmology::variance(double k, double z)
 
 double Cosmology::rms_sigma_tophat(const double mass, const double z) // dM/M: rms mass fluctuation of CDM halos
 {
+	auto tophat_window_func = [this](auto x) { return tophat_window_k(x); };
+
 	double mass_fluctuation;
 	tophat_window_R = pow(3 * mass / (M_4PI*omega_m*dcrit0*CUBE(1+z)), (1.0/3.0)); // unit of length is Mpc
-
-	//tophat_window_R = 8.0/hubble;
-	double (Romberg::*tophat_ptr)(const double);
-	tophat_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::tophat_window_k);
-	mass_fluctuation = romberg_open(tophat_ptr, 0, 10, 1.0e-6, 5) + romberg_improper(tophat_ptr, 10, 1e30, 1.0e-6, 5);
+	Romberg<std::function<double(const double)>,double> romberg;
+	mass_fluctuation = romberg.integrate_open(tophat_window_func, 0, 10, 1.0e-6, 5) + romberg.integrate_improper(tophat_window_func, 10, 1e30, 1.0e-6, 5);
 	return sqrt(mass_fluctuation);
 }
 
@@ -452,10 +449,13 @@ double Cosmology::rms_sigma8() // dM/M: rms mass fluctuation of CDM halos
 {
 	double mass_fluctuation;
 	tophat_window_R = 8.0/hubble;
-	double (Romberg::*tophat_ptr)(const double);
-	tophat_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::tophat_window_k);
-	mass_fluctuation = romberg_open(tophat_ptr, 0, 10, 1.0e-6, 5) + romberg_improper(tophat_ptr, 10, 1e30, 1.0e-6, 5);
+
+	auto tophat_window_func = [this](auto x) { return tophat_window_k(x); };
+
+	Romberg<std::function<double(const double)>,double> romberg;
+	mass_fluctuation = romberg.integrate_open(tophat_window_func, 0, 10, 1.0e-6, 5) + romberg.integrate_improper(tophat_window_func, 10, 1e30, 1.0e-6, 5);
 	return sqrt(mass_fluctuation);
+	return 0;
 }
 
 double Cosmology::tophat_window_k(const double k)
@@ -492,11 +492,10 @@ void Cosmology::spline_comoving_distance(void)
 	double z, zmin, zmax, zstep;
 	zmin=0, zmax=10, zstep=(zmax-zmin)/(zsteps-1);
 
-	double (Romberg::*comoving_dist_ptr)(const double);
-	comoving_dist_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::comoving_distance_derivative);
+	Romberg<std::function<double(const double)>,double> romberg;
 	for (i=0, z=zmin; i < zsteps; i++, z += zstep) {
 		z_table[i] = z;
-		d_table[i] = romberg(comoving_dist_ptr, 0, z, 1e-6, 5);
+		d_table[i] = romberg.integrate([this](auto x){return comoving_distance_derivative(x); }, 0, z, 1e-6, 5);
 	}
 
 	comoving_distance_spline.input(z_table, d_table);
@@ -511,10 +510,9 @@ void Cosmology::redshift_distribution(void)
 	zmin=0, zmax=10, zstep=(zmax-zmin)/(zsteps-1);
 
 	ofstream nzout("nz.dat");
-	double (Romberg::*comoving_dist_ptr)(const double);
-	comoving_dist_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::comoving_distance_derivative);
+	Romberg<std::function<double(const double)>,double> romberg;
 	for (i=0, z=zmin; i < zsteps; i++, z += zstep) {
-		chi = romberg(comoving_dist_ptr, 0, z, 1e-6, 5)/hubble_length;
+		chi = romberg.integrate([this](auto x){return comoving_distance_derivative(x);}, 0, z, 1e-6, 5)/hubble_length;
 		nz = chi*chi/pow(1+z,5);
 		nzout << z << " " << chi << " " << nz << endl;
 	}
@@ -522,9 +520,8 @@ void Cosmology::redshift_distribution(void)
 
 double Cosmology::comoving_distance_exact(const double z)
 {
-	double (Romberg::*comoving_dist_ptr)(const double);
-	comoving_dist_ptr = static_cast<double (Romberg::*)(const double)> (&Cosmology::comoving_distance_derivative);
-	double dist = romberg(comoving_dist_ptr, 0, z, 1e-6, 5);
+	Romberg<std::function<double(const double)>,double> romberg;
+	double dist = romberg.integrate([this](auto x){return comoving_distance_derivative(x);}, 0, z, 1e-6, 5);
 	return dist;
 }
 

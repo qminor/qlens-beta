@@ -8,7 +8,7 @@
 #include "errors.h"
 #include <vector>
 #include <complex>
-#include <functional>
+//#include <functional>
 #include <limits>
 #include <stdio.h>
 
@@ -6741,7 +6741,7 @@ void LensPixelGrid::plot_potential(string root, const int npix, const bool inter
 					fits_write_key(outfptr, TDOUBLE, "PXSIZE_Y", &pixel_ylength, "pixel length along the y direction (in arcsec)", &status);
 
 					kk=0;
-					long fpixel[naxis];
+					long *fpixel = new long[naxis];
 					for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 					pixels = new double[npts_x];
 
@@ -6753,6 +6753,7 @@ void LensPixelGrid::plot_potential(string root, const int npix, const bool inter
 						fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
 					}
 					delete[] pixels;
+					delete[] fpixel;
 				}
 			}
 			fits_close_file(outfptr, &status);
@@ -7160,7 +7161,7 @@ bool ImageData::load_data_fits(string fits_filename, const double pixel_size_in,
 				return false;
 			} else {
 				kk=0;
-				long fpixel[naxis];
+				long *fpixel = new long[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 
 				if ((npixels_x != naxes[0]) or (npixels_y != naxes[1])) {
@@ -7285,6 +7286,7 @@ bool ImageData::load_data_fits(string fits_filename, const double pixel_size_in,
 					}
 				}
 				delete[] pixels;
+				delete[] fpixel;
 				image_load_status = true;
 			}
 		}
@@ -7344,7 +7346,7 @@ void ImageData::save_data_fits(string fits_filename, const bool subimage, const 
 				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
 			} else {
 				kk=0;
-				long fpixel[naxis];
+				long *fpixel = new long[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 				pixels = new double[npix_x];
 
@@ -7355,6 +7357,7 @@ void ImageData::save_data_fits(string fits_filename, const bool subimage, const 
 					}
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
 				}
+				delete[] fpixel;
 				delete[] pixels;
 			}
 			if (pixel_size > 0)
@@ -7435,7 +7438,7 @@ bool ImageData::load_noise_map_fits(string fits_filename, const int hdu_indx, co
 				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
 			} else {
 				kk=0;
-				long fpixel[naxis];
+				long* fpixel = new long[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 				if ((npixels_x == naxes[0]) or (npixels_y == naxes[1])) {
 					pixels = new double[npixels_x];
@@ -7466,7 +7469,7 @@ bool ImageData::load_noise_map_fits(string fits_filename, const int hdu_indx, co
 						covinv_map[i][j] = 1.0/SQR(noise_map[i][j]);
 					}
 				}
-
+				delete[] fpixel;
 			}
 		}
 		fits_close_file(fptr, &status);
@@ -7521,7 +7524,7 @@ bool ImageData::save_noise_map_fits(string fits_filename, const bool subimage, c
 				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
 			} else {
 				kk=0;
-				long fpixel[naxis];
+				long* fpixel = new long[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 				pixels = new double[npix_x];
 
@@ -7532,6 +7535,7 @@ bool ImageData::save_noise_map_fits(string fits_filename, const bool subimage, c
 					}
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
 				}
+				delete[] fpixel;
 				delete[] pixels;
 			}
 			if (pixel_size > 0)
@@ -7671,7 +7675,7 @@ bool ImageData::load_mask_fits(const int mask_k, const string fits_filename, con
 				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
 			} else {
 				kk=0;
-				long fpixel[naxis];
+				long* fpixel = new long[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 				if ((naxes[0] != npixels_x) or (naxes[1] != npixels_y)) {
 					if ((naxes[0] < npixels_x) and (naxes[1] < npixels_y)) {
@@ -7777,6 +7781,7 @@ bool ImageData::load_mask_fits(const int mask_k, const string fits_filename, con
 						}
 					}
 				}
+				delete[] fpixel;
 				delete[] pixels;
 				image_load_status = true;
 			}
@@ -7852,7 +7857,7 @@ bool ImageData::save_mask_fits(string fits_filename, const bool foreground, cons
 				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
 			} else {
 				kk=0;
-				long fpixel[naxis];
+				long* fpixel = new long[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 				pixels = new double[npix_x];
 
@@ -7872,6 +7877,7 @@ bool ImageData::save_mask_fits(string fits_filename, const bool foreground, cons
 					}
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
 				}
+				delete[] fpixel;
 				delete[] pixels;
 			}
 		}
@@ -11043,7 +11049,7 @@ bool PSF::load_psf_fits(string fits_filename, const int hdu_indx, const bool sup
 				return false;
 			} else {
 				kk=0;
-				long fpixel[naxis];
+				long* fpixel = new long[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 				nx = naxes[0];
 				ny = naxes[1];
@@ -11061,6 +11067,7 @@ bool PSF::load_psf_fits(string fits_filename, const int hdu_indx, const bool sup
 					}
 				}
 				delete[] pixels;
+				delete[] fpixel;
 				image_load_status = true;
 			}
 		} else {
@@ -11210,7 +11217,7 @@ bool PSF::save_psf_fits(string fits_filename, const bool supersampled)
 				die("Error: only 1D or 2D images are supported (dimension is %i)\n",naxis);
 			} else {
 				kk=0;
-				long fpixel[naxis];
+				long* fpixel = new long[naxis];
 				for (kk=0; kk < naxis; kk++) fpixel[kk] = 1;
 				pixels = new double[nx];
 
@@ -11221,6 +11228,7 @@ bool PSF::save_psf_fits(string fits_filename, const bool supersampled)
 					}
 					fits_write_pix(outfptr, TDOUBLE, fpixel, naxes[0], pixels, &status);
 				}
+				delete[] fpixel;
 				delete[] pixels;
 			}
 
@@ -14362,7 +14370,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 		}
 	}
 
-	LensProfile<double> *lptr;
+	LensProfile *lptr;
 	bool singular;
 	for (i=0; i < qlens->nlens; i++) {
 		lptr = qlens->lens_list[i];
