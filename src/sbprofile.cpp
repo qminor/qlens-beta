@@ -3381,10 +3381,10 @@ double Shapelet::surface_brightness(double x, double y)
 	xarg = x*sqrtq/sig;
 	yarg = y/(sqrtq*sig);
 	if (n_shapelets > 1) {
-		hermvals_x[1] = 2*xarg/SQRT2;
-		hermvals_y[1] = 2*yarg/SQRT2;
+		hermvals_x[1] = 2*xarg/M_SQRT2;
+		hermvals_y[1] = 2*yarg/M_SQRT2;
 	}
-	lastfac = 1.0/SQRT2;
+	lastfac = 1.0/M_SQRT2;
 	int i,j;
 	for (i=2; i < n_shapelets; i++) {
 		fac = 1.0/sqrt(2*i);
@@ -3434,10 +3434,10 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_e
 	xarg = x*sqrtq/sig;
 	yarg = y/(sqrtq*sig);
 	if (n_shapelets > 1) {
-		hermvals_x[1] = 2*xarg/SQRT2;
-		hermvals_y[1] = 2*yarg/SQRT2;
+		hermvals_x[1] = 2*xarg/M_SQRT2;
+		hermvals_y[1] = 2*yarg/M_SQRT2;
 	}
-	lastfac = 1.0/SQRT2;
+	lastfac = 1.0/M_SQRT2;
 	int i,j;
 	for (i=2; i < n_shapelets; i++) {
 		fac = 1.0/sqrt(2*i);

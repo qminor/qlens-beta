@@ -1,7 +1,7 @@
 #ifndef MCMEVAL_H
 #define MCMEVAL_H
 #include "mathexpr.h"
-#include "GregsMathHdr.h"
+#include "mathfuncs.h"
 #include "random.h"
 #include <vector>
 

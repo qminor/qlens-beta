@@ -3,7 +3,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cmath>
-#include "GregsMathHdr.h"
+#include "mathfuncs.h"
 #include <vector>
 
 template<class T>

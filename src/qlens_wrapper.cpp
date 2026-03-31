@@ -544,7 +544,6 @@ public:
 		GaussPatterson<std::function<double(const double)>,double>::deallocate_gauss_patterson_tables();
 		ClenshawCurtis<std::function<double(const double)>,double>::deallocate_cc_quadrature_tables();
 
-
 #ifdef USE_MPI
 		MPI_Finalize();
 		//delete[] subgroup_comm;

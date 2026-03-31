@@ -8,7 +8,7 @@
 #include <exception>
 #include <csignal>
 #include <string>
-#include "GregsMathHdr.h"
+#include "mathfuncs.h"
 #include "mcmchdr.h"
 #include "random.h"
 #include "errors.h"

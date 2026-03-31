@@ -5,7 +5,7 @@
 #include "sbprofile.h"
 #include "mathexpr.h"
 #include "errors.h"
-#include "GregsMathHdr.h"
+#include "mathfuncs.h"
 #include "hyp_2F1.h"
 #include "qlens.h"
 #include <complex>
