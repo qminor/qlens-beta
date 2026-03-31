@@ -28,14 +28,14 @@ CL   := $(CCOMP) $(OPTS)
 core_objects = $(OBJ_DIR)/cosmo.o $(OBJ_DIR)/simplex.o $(OBJ_DIR)/profile.o $(OBJ_DIR)/sbprofile.o $(OBJ_DIR)/egrad.o $(OBJ_DIR)/models.o \
 					$(OBJ_DIR)/params.o $(OBJ_DIR)/modelparams.o $(OBJ_DIR)/lenscalc.o $(OBJ_DIR)/lens.o $(OBJ_DIR)/imgsrch.o $(OBJ_DIR)/pixelgrid.o \
 					$(OBJ_DIR)/cg.o $(OBJ_DIR)/mcmchdr.o $(OBJ_DIR)/errors.o $(OBJ_DIR)/brent.o $(OBJ_DIR)/sort.o \
-					$(OBJ_DIR)/trirectangle.o $(OBJ_DIR)/GregsMathHdr.o $(OBJ_DIR)/hyp_2F1.o $(OBJ_DIR)/powell.o $(OBJ_DIR)/mcmceval.o
+					$(OBJ_DIR)/trirectangle.o $(OBJ_DIR)/hyp_2F1.o $(OBJ_DIR)/powell.o $(OBJ_DIR)/mcmceval.o
 
 wrapper_objects = $(OBJ_DIR)/qlens_export.o $(OBJ_DIR)/qlens_wrapper.o $(core_objects)
 
 objects = $(OBJ_DIR)/commands.o $(OBJ_DIR)/qlens.o $(core_objects)
 
 mkdist_objects = $(OBJ_DIR)/mkdist.o
-mkdist_shared_objects = $(OBJ_DIR)/GregsMathHdr.o $(OBJ_DIR)/errors.o $(OBJ_DIR)/mcmceval.o
+mkdist_shared_objects = $(OBJ_DIR)/errors.o $(OBJ_DIR)/mcmceval.o
 
 mkbuilddir:
 	mkdir -p $(BUILD_DIR)
@@ -90,7 +90,7 @@ $(OBJ_DIR)/pixelgrid.o: $(SRC_DIR)/pixelgrid.cpp $(INCLUDE_DIR)/profile.h $(INCL
 $(OBJ_DIR)/cg.o: $(SRC_DIR)/cg.cpp $(INCLUDE_DIR)/cg.h
 	$(CC) -c $(SRC_DIR)/cg.cpp -o $(OBJ_DIR)/cg.o
 
-$(OBJ_DIR)/mcmchdr.o: $(SRC_DIR)/mcmchdr.cpp $(INCLUDE_DIR)/mcmchdr.h $(INCLUDE_DIR)/GregsMathHdr.h $(INCLUDE_DIR)/random.h
+$(OBJ_DIR)/mcmchdr.o: $(SRC_DIR)/mcmchdr.cpp $(INCLUDE_DIR)/mcmchdr.h $(INCLUDE_DIR)/mathfuncs.h $(INCLUDE_DIR)/random.h
 	$(CC) -c $(SRC_DIR)/mcmchdr.cpp -o $(OBJ_DIR)/mcmchdr.o
 
 $(OBJ_DIR)/profile.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/profile.cpp $(INCLUDE_DIR)/lensvec.h
@@ -120,13 +120,10 @@ $(OBJ_DIR)/sort.o: $(INCLUDE_DIR)/sort.h $(SRC_DIR)/sort.cpp
 $(OBJ_DIR)/trirectangle.o: $(SRC_DIR)/trirectangle.cpp $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/trirectangle.h
 	$(CC) -c $(SRC_DIR)/trirectangle.cpp -o $(OBJ_DIR)/trirectangle.o
 
-$(OBJ_DIR)/GregsMathHdr.o: $(SRC_DIR)/GregsMathHdr.cpp $(INCLUDE_DIR)/GregsMathHdr.h
-	$(CC) -c $(SRC_DIR)/GregsMathHdr.cpp -o $(OBJ_DIR)/GregsMathHdr.o
-
 $(OBJ_DIR)/egrad.o: $(INCLUDE_DIR)/egrad.h $(SRC_DIR)/egrad.cpp $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/qlens.h 
 	$(CC) -c $(SRC_DIR)/egrad.cpp -o $(OBJ_DIR)/egrad.o
 
-$(OBJ_DIR)/mcmceval.o: $(SRC_DIR)/mcmceval.cpp $(INCLUDE_DIR)/mcmceval.h $(INCLUDE_DIR)/GregsMathHdr.h $(INCLUDE_DIR)/random.h $(INCLUDE_DIR)/errors.h
+$(OBJ_DIR)/mcmceval.o: $(SRC_DIR)/mcmceval.cpp $(INCLUDE_DIR)/mcmceval.h $(INCLUDE_DIR)/mathfuncs.h $(INCLUDE_DIR)/random.h $(INCLUDE_DIR)/errors.h
 	$(CC) -c $(SRC_DIR)/mcmceval.cpp -o $(OBJ_DIR)/mcmceval.o
 
 $(OBJ_DIR)/mkdist.o: $(SRC_DIR)/mkdist.cpp $(INCLUDE_DIR)/mcmceval.h $(INCLUDE_DIR)/errors.h

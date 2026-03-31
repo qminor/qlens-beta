@@ -51,11 +51,11 @@ CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
 objects = sbprofile.o profile.o egrad.o models.o qlens.o commands.o params.o modelparams.o lenscalc.o \
 				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o errors.o brent.o sort.o \
-				trirectangle.o GregsMathHdr.o hyp_2F1.o cosmo.o \
+				trirectangle.o hyp_2F1.o cosmo.o \
 				simplex.o powell.o mcmceval.o
 
 mkdist_objects = mkdist.o
-mkdist_shared_objects = GregsMathHdr.o errors.o mcmceval.o
+mkdist_shared_objects = errors.o mcmceval.o
 
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
@@ -93,7 +93,7 @@ pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h m
 cg.o: cg.cpp cg.h
 	$(CC) -c cg.cpp
 
-mcmchdr.o: mcmchdr.cpp mcmchdr.h GregsMathHdr.h random.h
+mcmchdr.o: mcmchdr.cpp mcmchdr.h mathfuncs.h random.h
 	$(CC) -c mcmchdr.cpp
 
 egrad.o: egrad.cpp egrad.h 
@@ -138,10 +138,7 @@ sort.o: sort.h sort.cpp
 trirectangle.o: trirectangle.cpp lensvec.h trirectangle.h
 	$(CC) -c trirectangle.cpp
 
-GregsMathHdr.o: GregsMathHdr.cpp GregsMathHdr.h
-	$(CC) -c GregsMathHdr.cpp
-
-mcmceval.o: mcmceval.cpp mcmceval.h GregsMathHdr.h random.h errors.h
+mcmceval.o: mcmceval.cpp mcmceval.h mathfuncs.h random.h errors.h
 	$(CC) -c mcmceval.cpp
 
 mkdist.o: mkdist.cpp mcmceval.h errors.h

@@ -92,7 +92,133 @@ inline vector<vector<double> > calcIndent (const vector<vector<double> > &pts)
 	return covar;
 }
 
-class UCMC : public Minimize, private LevenMarq, private Derivative
+class Derivative
+{
+	private:
+		int NTAB;
+		double MAX(const double a, const double b){return b > a ? (b) : (a);}
+		//double err;
+	public:
+		Derivative(const double errin, const int tabin) : NTAB(tabin) {}
+		double Ridders(double (Derivative::*f)(const double), double, double);
+		double Ridders(double (Derivative::*f)(const double *), double *, int, double);
+		double Ridders(double (Derivative::*f)(double *, int), double *, int, int, double);
+};
+
+inline double Derivative::Ridders(double (Derivative::*func)(const double), const double x, const double h)
+{
+	const double CON=1.4, CON2=(CON*CON);
+	const double BIG=1.0e100;
+	const double SAFE=2.0;
+	int i,j;
+	double errt,fac,hh,ans=0.0;
+	double **a = matrix <double> (NTAB, NTAB);
+
+	hh=h;
+	a[0][0]=((this->*func)(x+hh)-(this->*func)(x-hh))/(2.0*hh);
+	double err=BIG;
+	for (i=1;i<NTAB;i++) {
+		hh /= CON;
+		a[0][i]=((this->*func)(x+hh)-(this->*func)(x-hh))/(2.0*hh);
+		fac=CON2;
+		for (j=1;j<=i;j++) {
+			a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
+			fac=CON2*fac;
+			errt=MAX(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
+			if (errt <= err) {
+				err=errt;
+				ans=a[j][i];
+			}
+		}
+		if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
+	}
+	del <double> (a, NTAB);
+	return ans;
+}
+
+inline double Derivative::Ridders(double (Derivative::*func)(const double *), double *x, const int in, const double h)
+{
+	const double CON=1.4, CON2=(CON*CON);
+	const double BIG=1.0e100;
+	const double SAFE=2.0;
+	int i,j;
+	double errt,fac,hh,ans=0.0;
+	double x0 = x[in];
+	double **a = matrix <double> (NTAB, NTAB);
+
+	hh=h;
+	x[in] = x0 + hh;
+	a[0][0] = (this->*func)(x);
+	x[in] = x0 - hh;
+	a[0][0] -= (this->*func)(x);
+	a[0][0] /= (2.0*hh);
+	double err=BIG;
+	for (i=1;i<NTAB;i++) {
+		hh /= CON;
+		x[in] = x0 + hh;
+		a[0][i] = (this->*func)(x);
+		x[in] = x0 - hh;
+		a[0][i] -= (this->*func)(x);
+		a[0][i] /= (2.0*hh);
+		fac=CON2;
+		for (j=1;j<=i;j++) {
+			a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
+			fac=CON2*fac;
+			errt=MAX(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
+			if (errt <= err) {
+				err=errt;
+				ans=a[j][i];
+			}
+		}
+		if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
+	}
+	x[in] = x0;
+	del <double> (a, NTAB);
+	return ans;
+}
+
+inline double Derivative::Ridders(double (Derivative::*func)(double *, int), double *x, const int in, const int jn, const double h)
+{
+	const double CON=1.4, CON2=(CON*CON);
+	const double BIG=1.0e100;
+	const double SAFE=2.0;
+	int i,j;
+	double errt,fac,hh,ans=0.0;
+	double x0 = x[jn];
+	double **a = matrix <double> (NTAB, NTAB);
+
+	hh=h;
+	x[jn] = x0 + hh;
+	a[0][0] = (this->*func)(x, in);
+	x[jn] = x0 - hh;
+	a[0][0] -= (this->*func)(x, in);
+	a[0][0] /= (2.0*hh);
+	double err=BIG;
+	for (i=1;i<NTAB;i++) {
+		hh /= CON;
+		x[jn] = x0 + hh;
+		a[0][i] = (this->*func)(x, in);
+		x[jn] = x0 - hh;
+		a[0][i] -= (this->*func)(x, in);
+		a[0][i] /= (2.0*hh);
+		fac=CON2;
+		for (j=1;j<=i;j++) {
+			a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
+			fac=CON2*fac;
+			errt=MAX(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
+			if (errt <= err) {
+				err=errt;
+				ans=a[j][i];
+			}
+		}
+		if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
+	}
+	x[jn] = x0;
+	del <double> (a, NTAB);
+	return ans;
+}
+
+class UCMC : private Derivative
 {
 	private:
 		double **cvar;
@@ -146,9 +272,6 @@ class UCMC : public Minimize, private LevenMarq, private Derivative
 		void SaveCovMatrix(const char *);
 		void FindEig();
 		double GridSearch(int);
-		void FindMin();
-		void FindMinPow();
-		void FindMinLM();
 		void PrintPoint();
 		int Count(double, double, int, char*, int);
 		double OutputParam(int i){return a[i];}

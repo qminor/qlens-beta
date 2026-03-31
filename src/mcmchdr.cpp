@@ -59,7 +59,7 @@ class CovPoints
 		}
 };
 
-UCMC::UCMC() : Minimize(1.0e-6, 1000), LevenMarq(0.001, 3), Derivative(1.0e-6, 10)
+UCMC::UCMC() : Derivative(1.0e-6, 10)
 {
 	rand = 100;
 	cvar = NULL;
@@ -1519,26 +1519,6 @@ void UCMC::SlicingFull(const char *name, const int N)
 	del <double> (r);
 }
 
-void UCMC::FindMinLM()
-{
-	LMFindMin(a, ma, static_cast <double (LevenMarq::*)(double *, double *, double **)> (&UCMC::FindCof));
-}
-
-void UCMC::FindMin()
-{
-	Frprmn(a, ma, static_cast <double (Minimize::*)(double *)> (&UCMC::Chi2), static_cast <void (Minimize::*)(double *, double *)> (&UCMC::CalcDir));
-}
-
-void UCMC::FindMinPow()
-{
-	double **nd = matrix <double> (ma, ma, 0.0);
-	for (int i = 0; i < ma; i++)
-		nd[i][i] = 1.0;
-	
-	Powell(a, ma, nd, static_cast <double (Minimize::*)(double *)> (&UCMC::Chi2));
-	del <double> (nd, ma);
-}
-
 double UCMC::GridSearch(int iin)
 {
 	double chi2h, chi2l, chi2last, chi2, stepsize;
@@ -1626,95 +1606,6 @@ UCMC::~UCMC()
 	if (dparam_list != NULL) delete[] dparam_list;
 }
 
-class Fit : private Minimize, private LevenMarq
-{
-	private:
-		double *data;
-		int N;
-		int jMax;
-		double a;
-		double param[3];
-		double (Minimize::*cPtr)(double *);
-		void (Minimize::*dCPtr)(double *, double *);
-		double (LevenMarq::*lMPtr)(double *, double *, double **);
-		
-	public:
-		Fit(double *datain, const int Nin) : Minimize(1.0e-9, 1000), LevenMarq(0.0001, 5), N(Nin), jMax(Nin)
-		{
-			data = new double[N];
-			for (int i = 0; i < N; i++)
-				data[i] = datain[i];
-			cPtr = static_cast <double (Minimize::*)(double *)> (&Fit::Chi2);
-			dCPtr = static_cast <void (Minimize::*)(double *, double *)> (&Fit::DChi2);
-			lMPtr = static_cast <double (LevenMarq::*)(double *, double *, double **)> (&Fit::Cof);
-			param[0] = log(100.0);
-			param[1] = log(0.1);
-			param[2] = 2.0;
-		}
-		double Chi2(double *params)
-		{
-			double temp = 0.0;
-			for (int i = 0; i < jMax; i++)
-			{
-				temp += pow(log(data[i]*(pow(PI*(i+1)/(N+1)/exp(params[1]), params[2]) + 1.0)) - params[0], 2.0);
-			}
-			return temp;
-		}
-		void DChi2(double *params, double *dirs)
-		{
-			double temp = 0.0;
-			double k;
-			dirs[0] = dirs[1] = dirs[2] = 0.0;
-			
-			for (int i = 0; i < jMax; i++)
-			{
-				k = pow(PI*(i+1)/(N+1)/exp(params[1]), params[2]);
-				temp = -2.0*(log(data[i]*(k + 1.0)) - params[0]);
-				dirs[0] += temp;
-				dirs[1] += k*temp*params[2]/(k + 1.0);
-				dirs[2] += k ? -k*temp*log(k)/params[2]/(k + 1.0): 0.0;
-			}
-			return;
-		}
-		double Cof(double *params, double *beta, double **alpha)
-		{
-			double dirs[3];
-			double ki;
-			double chi2 = 0.0;
-			double temp;
-			int i, j, k;
-			for (i = 0; i < jMax; i++)
-			{
-				ki = pow(PI*(i+1)/(N+1)/exp(params[1]), params[2]);
-				temp = (log(data[i]*(ki + 1.0)) - params[0]);
-				chi2 += pow(temp, 2.0);
-				dirs[0] = 1.0;
-				dirs[1] = ki*params[2]/(ki + 1.0);
-				dirs[2] = ki ? -ki*log(ki)/params[2]/(ki + 1.0) : 0.0;
-				for (j = 0; j < 3; j++)
-				{
-					beta[j] += temp*dirs[j];
-					for (k = 0; k < 3; k++)
-					{
-						alpha[j][k] += dirs[j]*dirs[k];
-					}
-				}
-			}
-			return chi2;
-		}
-		void FindMins()
-		{
-			LMFindMin(param, 3, lMPtr);
-		}
-		double R(){return exp(param[0])/(N+1.0)/2.0;}
-		double JStar(){return exp(param[1])*(N+1)/PI;}
-		double Output(const double kin){return exp(param[0])/(1.0 + pow(kin/exp(param[1]), param[2]));}
-		~Fit()
-		{
-			delete[] data;
-		}
-};
-
 inline double dummy(const double x){return x;}
 inline double pow10(const double x){return pow(10.0, x);}
 inline double pow102(const double x){return pow(10.0, x/2.0);}
@@ -1754,7 +1645,7 @@ class Group : public Cholesky
 		llimit = new double[dimR];
 		double *ptr1 = NULL;
 		double **temp = pointsin;
-		factor = pow(PI, dim/2.0)/Gamma(dim/2.0+1.0);
+		factor = pow(M_PI, dim/2.0)/Gamma(dim/2.0+1.0);
 		//cout << " N = " << N << "   " << dim << flush;
 		area = 1.0;
 		
@@ -1823,7 +1714,7 @@ class Group : public Cholesky
 		dim--;
 		covar = matrix <double> (dim, dim, 0.0);
 		avg = matrix <double> (dim, 0.0);
-		factor = pow(PI, dim/2.0)/Gamma(dim/2.0+1.0);
+		factor = pow(M_PI, dim/2.0)/Gamma(dim/2.0+1.0);
 		
 		for (j = 0, i = 0; j < dim; j++, i++)
 		{
@@ -1940,9 +1831,10 @@ class Group : public Cholesky
 		}
 	}
 	
+	/*
 	double CorrLimits()
 	{
-		double factor2 = pow(PI, (dim-1.0)/2.0)/Gamma((dim+1.0)/2.0);
+		double factor2 = pow(M_PI, (dim-1.0)/2.0)/Gamma((dim+1.0)/2.0);
 		double corr = 0.0;
 		
 		for (int i = 0; i < dim; i++)
@@ -1970,7 +1862,9 @@ class Group : public Cholesky
 		//volume -= factor2*pow(x0, dim)*DetSqrt()*corr;
 		return factor2*corr;
 	}
+	*/
 	
+	/*
 	double CorrVolume()
 	{
 		bool corr = false;
@@ -2007,6 +1901,7 @@ class Group : public Cholesky
 		else
 			return 1.0;
 	}
+	*/
 	
 	void Random(double *ptr)
 	{
@@ -2158,7 +2053,7 @@ class Group : public Cholesky
 // 			double *avgt = matrix <double> (dim, 0.0);
 		double *ptr1 = NULL;
 		double **temp = points;
-// 			factor = pow(PI, dim/2.0)/Gamma(dim/2.0+1.0);
+// 			factor = pow(M_PI, dim/2.0)/Gamma(dim/2.0+1.0);
 		N = NTemp;
 		for (i = 0; i < dim; i++)
 		{
@@ -2205,13 +2100,9 @@ class Group : public Cholesky
 	}
 	
 	double F(){return volume/X0;}
-	
 	double FCorr(){return volumeCorr/X0;}
-	
 	double Volume(){return volume;}
-	
 	double VolumeCorr(){return volumeCorr;}
-	
 	double h(double *u){return volume*Square(u, avg, map)/x0/x0/X0;}
 	
 	bool IsBad(){return isbad;}

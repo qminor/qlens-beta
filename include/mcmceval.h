@@ -1,10 +1,9 @@
 #ifndef MCMEVAL_H
 #define MCMEVAL_H
+#include "mathexpr.h"
 #include "GregsMathHdr.h"
 #include "random.h"
 #include <vector>
-
-//inline double SQR(const double s) { return s*s; }
 
 const char LINEAR = 0x00;
 const char EVAL_NONEG = 0x01;
@@ -71,7 +70,7 @@ struct ParamPriorWeight
 	ParamPriorWeight() { prior_type = EVAL_NO_WEIGHT; }
 	void set_none() { prior_type = EVAL_NO_WEIGHT; }
 	void set_log(const double xmin, const double xmax) { prior_type = EVAL_LOG_PRIOR; normfac = 1.0/log(xmax/xmin); }
-	void set_gaussian(double &pos_in, double &sig_in) { prior_type = EVAL_GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; normfac = 1.0/gaussian_sig/SQRT2PI; }
+	void set_gaussian(double &pos_in, double &sig_in) { prior_type = EVAL_GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; normfac = 1.0/gaussian_sig/M_SQRT_2PI; }
 	//void set_inverse_gaussian(double &pos_in, double &sig_in) { prior_weight = INVERSE_EVAL_GAUSS_PRIOR; gaussian_pos = pos_in; gaussian_sig = sig_in; }
 	double prior_weight(const double param)
 	{

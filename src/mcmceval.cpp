@@ -19,95 +19,6 @@ inline double dummy(const double x){return x;}
 inline double pow10(const double x){return pow(10.0, x);}
 inline double unit(const double x){return 1.0;}
 
-class Fit : private Minimize, private LevenMarq
-{
-	private:
-		double *data;
-		int N;
-		int jMax;
-		double a;
-		double param[3];
-		double (Minimize::*cPtr)(double *);
-		void (Minimize::*dCPtr)(double *, double *);
-		double (LevenMarq::*lMPtr)(double *, double *, double **);
-		
-	public:
-		Fit(double *datain, const int Nin) : Minimize(1.0e-9, 1000), LevenMarq(0.0001, 5), N(Nin), jMax(Nin)
-		{
-			data = new double[N];
-			for (int i = 0; i < N; i++)
-				data[i] = datain[i];
-			cPtr = static_cast <double (Minimize::*)(double *)> (&Fit::Chi2);
-			dCPtr = static_cast <void (Minimize::*)(double *, double *)> (&Fit::DChi2);
-			lMPtr = static_cast <double (LevenMarq::*)(double *, double *, double **)> (&Fit::Cof);
-			param[0] = log(100.0);
-			param[1] = log(0.1);
-			param[2] = 2.0;
-		}
-		double Chi2(double *params)
-		{
-			double temp = 0.0;
-			for (int i = 0; i < jMax; i++)
-			{
-				temp += pow(log(data[i]*(pow(PI*(i+1)/(N+1)/exp(params[1]), params[2]) + 1.0)) - params[0], 2.0);
-			}
-			return temp;
-		}
-		void DChi2(double *params, double *dirs)
-		{
-			double temp = 0.0;
-			double k;
-			dirs[0] = dirs[1] = dirs[2] = 0.0;
-			
-			for (int i = 0; i < jMax; i++)
-			{
-				k = pow(PI*(i+1)/(N+1)/exp(params[1]), params[2]);
-				temp = -2.0*(log(data[i]*(k + 1.0)) - params[0]);
-				dirs[0] += temp;
-				dirs[1] += k*temp*params[2]/(k + 1.0);
-				dirs[2] += k ? -k*temp*log(k)/params[2]/(k + 1.0): 0.0;
-			}
-			return;
-		}
-		double Cof(double *params, double *beta, double **alpha)
-		{
-			double dirs[3];
-			double ki;
-			double chisq = 0.0;
-			double temp;
-			int i, j, k;
-			for (i = 0; i < jMax; i++)
-			{
-				ki = pow(PI*(i+1)/(N+1)/exp(params[1]), params[2]);
-				temp = (log(data[i]*(ki + 1.0)) - params[0]);
-				chisq += pow(temp, 2.0);
-				dirs[0] = 1.0;
-				dirs[1] = ki*params[2]/(ki + 1.0);
-				dirs[2] = ki ? -ki*log(ki)/params[2]/(ki + 1.0) : 0.0;
-				for (j = 0; j < 3; j++)
-				{
-					beta[j] += temp*dirs[j];
-					for (k = 0; k < 3; k++)
-					{
-						alpha[j][k] += dirs[j]*dirs[k];
-					}
-				}
-			}
-			return chisq;
-		}
-		void FindMins()
-		{
-			LMFindMin(param, 3, lMPtr);
-		}
-		double R(){return exp(param[0])/(N+1.0)/2.0;}
-		double JStar(){return exp(param[1])*(N+1)/PI;}
-		double Output(const double kin){return exp(param[0])/(1.0 + pow(kin/exp(param[1]), param[2]));}
-		~Fit()
-		{
-			delete[] data;
-		}
-};
-
 void McmcEval::input(const char *name, int a, int filesin, double *lowLimit, double *hiLimit, double& logev, const int mpi_np, const int cut_val, const char flag, const bool silent, const int n_freeparams, const bool transform_params, const char *transform_filename, const bool importance_sampling, const char *prior_weight_filename)
 {
 	if (a < 0)
@@ -1108,7 +1019,7 @@ void McmcEval::MkHist(double al, double ah, const int N, const char *name, const
 					for (j = lowt; j <= hit; j++)
 					{
 						double temp = (smoothx[j] - point)/width;
-						smoothy[j] += mults[f][i]*exp(-(temp*temp)/2.0)/SQRT2PI/width;
+						smoothy[j] += mults[f][i]*exp(-(temp*temp)/2.0)/M_SQRT_2PI/width;
 					}
 				}
 				
@@ -1133,7 +1044,7 @@ void McmcEval::MkHist(double al, double ah, const int N, const char *name, const
 					for (j = lowt; j <= hit; j++)
 					{
 						double temp = (smoothfx[j] - point)/width;
-						smoothfy[j] += mults[f][i]*exp(-(temp*temp)/2.0)/SQRT2PI/width;
+						smoothfy[j] += mults[f][i]*exp(-(temp*temp)/2.0)/M_SQRT_2PI/width;
 					}
 				}
 			}
@@ -1617,7 +1528,7 @@ void McmcEval::DerivedHist(double al, double ah, const int N, const char *name, 
 				for (k = lowt; k <= hit; k++)
 				{
 					double temp = (smoothx[k] - point)/width;
-					smoothy[k] += derived_mults[j]*exp(-(temp*temp)/2.0)/SQRT2PI/width;
+					smoothy[k] += derived_mults[j]*exp(-(temp*temp)/2.0)/M_SQRT_2PI/width;
 				}
 			}
 			
@@ -1642,7 +1553,7 @@ void McmcEval::DerivedHist(double al, double ah, const int N, const char *name, 
 				for (k = lowt; k <= hit; k++)
 				{
 					double temp = (smoothfx[k] - point)/width;
-					smoothfy[k] += derived_mults[j]*exp(-(temp*temp)/2.0)/SQRT2PI/width;
+					smoothfy[k] += derived_mults[j]*exp(-(temp*temp)/2.0)/M_SQRT_2PI/width;
 				}
 			}
 		}
@@ -2132,7 +2043,7 @@ void McmcEval::MkHistTest(double al, double ah, const int N, const char *name, i
 					for (j = lowt; j <= hit; j++)
 					{
 						double temp = (smoothx[j] - point)/width;
-						smoothDirs[j] += exp(-(temp*temp)/2.0)/SQRT2PI/width;
+						smoothDirs[j] += exp(-(temp*temp)/2.0)/M_SQRT_2PI/width;
 					}
 				}
 			}
@@ -2176,7 +2087,7 @@ void McmcEval::MkHistTest(double al, double ah, const int N, const char *name, i
 					for (j = lowt; j <= hit; j++)
 					{
 						double temp = (smoothx[j] - point)/widtht;
-						smoothy[j] += exp(-(temp*temp)/2.0)/SQRT2PI/widtht;
+						smoothy[j] += exp(-(temp*temp)/2.0)/M_SQRT_2PI/widtht;
 					}
 				}
 			}
@@ -2605,7 +2516,7 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 							{
 								//double ytemp = (smoothy[k] - pointy)/widthy;
 								double dist2 = SQR(smoothx[j] - pointx)*fix + SQR(smoothy[k] - pointy)*fiy + 2.0*(smoothx[j] - pointx)*(smoothy[k] - pointy)*fixy;
-								smoothz[j][k] += mults[f][i]*exp(-dist2/2.0)/sqrt(det)/2.0/PI;
+								smoothz[j][k] += mults[f][i]*exp(-dist2/2.0)/sqrt(det)/2.0/M_PI;
 							}
 						}
 					}
@@ -2656,7 +2567,7 @@ bool McmcEval::MkHist2D(double xl, double xh, double yl, double yh, const int xN
 							{
 								//double ytemp = (smoothfy[k] - pointy)/widthy;
 								double dist2 = SQR(smoothfx[j] - pointx)*fix + SQR(smoothfy[k] - pointy)*fiy + 2.0*(smoothfx[j] - pointx)*(smoothfy[k] - pointy)*fixy;
-								smoothfz[j][k] += mults[f][i]*exp(-dist2/2.0)/sqrt(det)/2.0/PI;
+								smoothfz[j][k] += mults[f][i]*exp(-dist2/2.0)/sqrt(det)/2.0/M_PI;
 							}
 						}
 					}
@@ -3165,7 +3076,7 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 							for (k = lowty; k <= hity; k++)
 							{
 								double ytemp = (smoothy[k] - pointy)/widthy;
-								smoothz[j][k] += mul*pointz*exp(-(xtemp*xtemp + ytemp*ytemp)/2.0)/2.0/PI/widthx/widthy;
+								smoothz[j][k] += mul*pointz*exp(-(xtemp*xtemp + ytemp*ytemp)/2.0)/2.0/M_PI/widthx/widthy;
 							}
 						}
 					}
@@ -3215,7 +3126,7 @@ void McmcEval::MkHist3D(double xl, double xh, double yl, double yh, const int xN
 							for (k = lowty; k <= hity; k++)
 							{
 								double ytemp = (smoothfy[k] - pointy)/widthy;
-								smoothfz[j][k] += mul*pointz*exp(-(xtemp*xtemp + ytemp*ytemp)/2.0)/2.0/PI/widthx/widthy;
+								smoothfz[j][k] += mul*pointz*exp(-(xtemp*xtemp + ytemp*ytemp)/2.0)/2.0/M_PI/widthx/widthy;
 							}
 						}
 					}

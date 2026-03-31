@@ -1665,7 +1665,7 @@ PYBIND11_MODULE(qlens, m) {
 			def[0] = def_vec[0];
 			def[1] = def_vec[1];
 			return def;
-		})
+		}, "returns deflection vector of lens at a specific point in the image plane, in the form of a list. Arguments are (x,y)")
 		.def("hessian", [](LensProfile &current, const double x, const double y){ 
 			py::list hess(2);
 			py::list hess_row(2);
@@ -1679,7 +1679,7 @@ PYBIND11_MODULE(qlens, m) {
 			hess[0] = hess_row;
 			hess[1] = hess_row2;
 			return hess;
-		})
+		}, "returns Hessian matrix of lens at a specific point in the image plane, in the form of a list. Arguments are (x,y)")
 		.def("shear", [](LensProfile &current, const double x, const double y){ 
 			py::list shear(2);
 			lensmatrix<double> hessmat;
@@ -1756,6 +1756,7 @@ PYBIND11_MODULE(qlens, m) {
 				//string outstring = a.get_parameters_string();
 				//return("\n" + outstring);
 		//})
+		.doc() = "Here are the docs for SPLE"
 		;
 
 	py::class_<Shear, LensProfile, std::unique_ptr<Shear, py::nodelete>>(m, "Shear")
@@ -2646,8 +2647,6 @@ PYBIND11_MODULE(qlens, m) {
 				py::arg("x_source"), py::arg("y_source"), py::arg("verbal")=false,
 				py::arg("flux")=-1, py::arg("show_labels")=false
 				)
-		//.def("get_imageset", [](QLens_Wrap &curr, PointSource &imgset, double src_x=0.5, double src_y=0.1, bool verbal=false) {
-				//curr.get_imageset(src_x, src_y, imgset, verbal);
 		.def("find_ptimgs", [](QLens_Wrap &curr, double src_x=0.5, double src_y=0.1, bool verbal=false) {
 				PtImageSet imgset(&curr);
 				curr.get_imageset(src_x, src_y, imgset, verbal);

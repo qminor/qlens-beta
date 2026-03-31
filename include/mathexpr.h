@@ -3,15 +3,17 @@
 
 #include <cmath>
 
-#define EULER 2.71828182846
-#define ln10 2.30258509299
+//#define EULER 2.71828182846
+//#define ln10 2.30258509299
 
-const double M_2PI = 6.28318530717959;
-const double M_HALFPI = 1.57079632679;
-const double M_SQRT_PI = 1.77245385091;
-const double M_SQRT_2PI = 2.50662827463;
-const double M_SQRT_HALFPI = 1.25331413732;
-const double M_4PI = 12.5663706144;
+const double M_2PI = 6.283185307179586;
+const double M_HALFPI = 1.5707963267948966;
+const double M_SQRT_PI = 1.7724538509055159;
+const double M_SQRT_2PI = 2.5066282746310005;
+const double M_SQRT_HALFPI = 1.2533141373155001;
+const double M_4PI = 12.566370614359172;
+const double ln10 = 2.302585092994046;
+const double EULER = 2.718281828459045;
 
 inline double dmin(const double &a, const double &b) { return (a < b ? a : b); }
 inline double dmax(const double &a, const double &b) { return (a > b ? a : b); }
