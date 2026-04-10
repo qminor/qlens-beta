@@ -8,7 +8,6 @@
 #include <exception>
 #include <csignal>
 #include <string>
-#include "mathfuncs.h"
 #include "mcmchdr.h"
 #include "random.h"
 #include "errors.h"
@@ -21,8 +20,6 @@ using namespace std;
 
 #define LOGLIKE(x) (this->*LogLikePtr)(x)
 
-template<class T>
-inline const T SQR(const T a) {return a*a;}
 const string blank = string("                    \033[20D");
 const string bblank = string("                              \033[30D");
 

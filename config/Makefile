@@ -15,11 +15,15 @@
 #.f.o:
 	#$(F77) -c -o  $@ $<
 
+EXT := $(shell python3-config --extension-suffix)
+MODULE := qlens$(shell python3-config --extension-suffix)
+PYBIND11_CFLAGS := $(shell python3 -m pybind11 --includes)
+
 STAN_INC = -I/Users/qminor/math -I/Users/qminor/math/lib/eigen_3.4.0 -I/Users/qminor/math/lib/boost_1.87.0 -I/Users/qminor/math/lib/sundials_6.1.1/include -I/Users/qminor/math/lib/sundials_6.1.1/src/sundials -include /Users/qminor/math/stan/math/prim/constraint/identity_free.hpp -I/Users/qminor/math/lib/tbb_2020.3/include
 
 # Version without MUMPS
 #default: qlens mkdist cosmocalc 
-default: qlens mkdist 
+default: qlens mkdist qlens-wrap
 CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
@@ -51,8 +55,13 @@ CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
 objects = sbprofile.o profile.o egrad.o models.o qlens.o commands.o params.o modelparams.o lenscalc.o \
 				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o errors.o brent.o sort.o \
-				trirectangle.o hyp_2F1.o cosmo.o \
+				trirectangle.o cosmo.o \
 				simplex.o powell.o mcmceval.o
+
+wrapper_objects = qlens_export.o qlens_wrapper.o profile.o mcmceval.o egrad.o commands.o params.o modelparams.o lenscalc.o \
+				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o models.o sbprofile.o errors.o brent.o \
+				sort.o trirectangle.o cosmo.o \
+				simplex.o powell.o 
 
 mkdist_objects = mkdist.o
 mkdist_shared_objects = errors.o mcmceval.o
@@ -62,6 +71,15 @@ qlens: $(objects) $(LIBDMUMPS)
 
 mkdist: $(mkdist_objects) $(mkdist_shared_objects)
 	$(CC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
+
+qlens-wrap: $(wrapper_objects)
+	$(CL) -shared $(wrapper_objects) $(LINKLIBS) -undefined dynamic_lookup -o $(MODULE)
+
+qlens_wrapper.o: qlens_wrapper.cpp qlens.h pixelgrid.h modelparams.h params.h delaunay.h lensvec.h profile.h sbprofile.h 
+	$(CC) $(PYBIND11_CFLAGS) -c qlens_wrapper.cpp -o qlens_wrapper.o
+
+qlens_export.o: qlens_export.cpp qlens.h pixelgrid.h modelparams.h params.h delaunay.h lensvec.h profile.h sbprofile.h 
+	$(CC) $(PYBIND11_CFLAGS) -c qlens_export.cpp -o qlens_export.o
 
 mumps:
 	(cd MUMPS_5.0.1; $(MAKE))
@@ -99,7 +117,7 @@ mcmchdr.o: mcmchdr.cpp mcmchdr.h mathfuncs.h random.h
 egrad.o: egrad.cpp egrad.h 
 	$(CC) -c egrad.cpp
 
-profile.o: profile.h profile.cpp lensvec.h egrad.h
+profile.o: profile.h profile.cpp lensintegral.h lensvec.h egrad.h
 	$(CC) -c profile.cpp
 
 models.o: models.cpp profile.h 
@@ -144,8 +162,8 @@ mcmceval.o: mcmceval.cpp mcmceval.h mathfuncs.h random.h errors.h
 mkdist.o: mkdist.cpp mcmceval.h errors.h
 	$(CC) -c mkdist.cpp
 
-hyp_2F1.o: hyp_2F1.cpp hyp_2F1.h complex_functions.h
-	$(CC) -c hyp_2F1.cpp
+#hyp_2F1.o: hyp_2F1.cpp hyp_2F1.h complex_functions.h
+	#$(CC) -c hyp_2F1.cpp
 
 cosmo.o: cosmo.cpp cosmo.h
 	$(CC) -c cosmo.cpp

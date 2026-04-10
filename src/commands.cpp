@@ -2295,7 +2295,7 @@ void QLens::process_commands(bool read_file)
 					cout << "primary_lens = " << primary_lens_number << ((auto_set_primary_lens==true) ? " (auto)": "") << endl;
 					if (LensProfile::integral_method==Romberg_Integration) cout << "integral_method: Romberg integration" << endl;
 					else if (LensProfile::integral_method==Gauss_Patterson_Quadrature) cout << "integral_method: Gauss-Patterson quadrature" << endl;
-					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << GaussLegendre<std::function<double(const double)>,double>::numberOfPoints << " points" << endl;
+					else if (LensProfile::integral_method==Gaussian_Quadrature) cout << "integral_method: Gaussian quadrature with " << GaussQuad::numberOfPoints << " points" << endl;
 					cout << "integral_tolerance = " << LensProfile::integral_tolerance << endl;
 					cout << "major_axis_along_y: " << display_switch(LensProfile::orient_major_axis_north) << endl;
 					cout << "ellipticity_components: " << display_switch(LensProfile::use_ellipticity_components) << endl;
@@ -2365,7 +2365,7 @@ void QLens::process_commands(bool read_file)
 					if (nwords == 3) {
 						int pts;
 						if (!(ws[2] >> pts)) Complain("invalid number of points");
-						GaussLegendre<std::function<double(const double)>,double>::SetGaussLegendre(pts);
+						GaussQuad::SetGaussLegendre(pts);
 					}
 				} else Complain("unknown integration method");
 				set_integration_method(method);
@@ -2375,7 +2375,7 @@ void QLens::process_commands(bool read_file)
 					if (method==Romberg_Integration) cout << "Integration method: Romberg integration with tolerance = " << LensProfile::integral_tolerance << endl;
 					else if (method==Gauss_Patterson_Quadrature) cout << "Integration method: Gauss-Patterson quadrature with tolerance = " << LensProfile::integral_tolerance << endl;
 					else if (method==Fejer_Quadrature) cout << "Integration method: Fejer quadrature with tolerance = " << LensProfile::integral_tolerance << endl;
-					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << GaussLegendre<std::function<double(const double)>,double>::numberOfPoints << " points" << endl;
+					else if (method==Gaussian_Quadrature) cout << "Integration method: Gaussian quadrature with " << GaussQuad::numberOfPoints << " points" << endl;
 				}
 			} else Complain("no more than two arguments are allowed for 'integral_method' (method,npoints)");
 		}
@@ -3070,14 +3070,14 @@ void QLens::process_commands(bool read_file)
 				if (lens_num1 == lens_num2) Complain("lens1, lens2 must be different");
 				lens_list[lens_num1]->anchor_center_to_lens(lens_num2);
 			}
-			else if (words[1]=="savetab")
-			{
-				if (nwords != 4) Complain("must specify two arguments for 'lens savetab': lens number and output file");
-				int lnum;
-				if (!(ws[2] >> lnum)) Complain("invalid lens number for saving tabulated lens");
-				if (lnum >= nlens) Complain("lens number does not exist");
-				if (!save_tabulated_lens_to_file(lnum,words[3])) Complain("specified lens is not a tabulated lens model");
-			}
+			//else if (words[1]=="savetab")
+			//{
+				//if (nwords != 4) Complain("must specify two arguments for 'lens savetab': lens number and output file");
+				//int lnum;
+				//if (!(ws[2] >> lnum)) Complain("invalid lens number for saving tabulated lens");
+				//if (lnum >= nlens) Complain("lens number does not exist");
+				//if (!save_tabulated_lens_to_file(lnum,words[3])) Complain("specified lens is not a tabulated lens model");
+			//}
 			else
 			{
 				if (zl_in > reference_source_redshift) Complain("lens redshift cannot be greater than reference source redshift (zsrc_ref)");
@@ -4949,6 +4949,7 @@ void QLens::process_commands(bool read_file)
 						else Complain("shear requires 4 parameters (shear, q, xc, yc)");
 					}
 				}
+				/*
 				else if (words[1]=="tab")
 				{
 					string filename;
@@ -5158,6 +5159,7 @@ void QLens::process_commands(bool read_file)
 					}
 					else Complain("qtab requires at least 3 parameters (ks, rs, q)");
 				}
+				*/
 				else if (words[1]=="testmodel")
 				{
 					if (nwords > 6) Complain("more than 7 parameters not allowed for model testmodel");
@@ -5192,7 +5194,6 @@ void QLens::process_commands(bool read_file)
 				}
 				else Complain("unrecognized lens model");
 				if ((vary_parameters) and ((fitmethod == NESTED_SAMPLING) or (fitmethod == TWALK) or (fitmethod == POLYCHORD) or (fitmethod == MULTINEST) or (fitmethod == BFGS))) {
-					cout << "YO?" << endl;
 					int nvary=0;
 					bool enter_limits = true;
 					if (vary_zl) nparams_to_vary++;
@@ -8570,7 +8571,8 @@ void QLens::process_commands(bool read_file)
 					}
 					if (nwords==2) {
 						//run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts,nohists);
-						make_histograms(nbins1d,nbins2d,resampled_posts,no2dposts,false,true);
+						bool status = make_histograms(nbins1d,nbins2d,resampled_posts,no2dposts,false,true);
+						if (!status) Complain("could not make histograms");
 					} else Complain("either zero/one argument allowed for 'fit mkposts' (directory name, plus optional '-n' or '-N' args)");
 				}
 				else if ((words[1]=="run") or (words[1]=="process_chain"))
@@ -15695,7 +15697,7 @@ void QLens::process_commands(bool read_file)
 			for (int n=0; n < npix_in_mask; n++) {
 				i = pixptr_i[n];
 				j = pixptr_j[n];
-				nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+				nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 				npix += nsubpix;
 			}
 
@@ -15715,7 +15717,7 @@ void QLens::process_commands(bool read_file)
 					//ivals[npix] = i;
 					//jvals[npix] = j;
 				} else {
-					nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+					nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 					for (int k=0; k < nsubpix; k++) {
 						srcpts_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][k][0];
 						srcpts_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][k][1];

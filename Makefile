@@ -93,7 +93,7 @@ $(OBJ_DIR)/cg.o: $(SRC_DIR)/cg.cpp $(INCLUDE_DIR)/cg.h
 $(OBJ_DIR)/mcmchdr.o: $(SRC_DIR)/mcmchdr.cpp $(INCLUDE_DIR)/mcmchdr.h $(INCLUDE_DIR)/mathfuncs.h $(INCLUDE_DIR)/random.h
 	$(CC) -c $(SRC_DIR)/mcmchdr.cpp -o $(OBJ_DIR)/mcmchdr.o
 
-$(OBJ_DIR)/profile.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/profile.cpp $(INCLUDE_DIR)/lensvec.h
+$(OBJ_DIR)/profile.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/profile.cpp $(INCLUDE_DIR)/lensintegral.h $(INCLUDE_DIR)/lensvec.h
 	$(CC) -c $(SRC_DIR)/profile.cpp -o $(OBJ_DIR)/profile.o
 
 $(OBJ_DIR)/models.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/models.cpp

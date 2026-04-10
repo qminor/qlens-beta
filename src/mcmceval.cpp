@@ -6,7 +6,6 @@
 #include <string>
 #include <sstream>
 #include <vector>
-#include "mathfuncs.h"
 #include "mcmceval.h"
 #include "random.h"
 #include "errors.h"

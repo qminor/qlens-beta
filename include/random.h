@@ -6,9 +6,6 @@
 #include "mathfuncs.h"
 #include <vector>
 
-template<class T>
-inline const T SQ(const T a) {return a*a;}
-
 class Cholesky
 {
 	private:
@@ -621,6 +618,8 @@ class AdvanceDevs : public BasicDevs, public Cholesky
 class RandomPlane : public AdvanceDevs
 {
 private:
+        double SQ(const double a) {return a*a;}
+
         double **rotVec;
         double **currentVec;
         double **endVec;

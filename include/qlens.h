@@ -449,6 +449,11 @@ void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, d
 // class; it's more transparent to do so, and more object-oriented.
 class QLens : public ModelParams, public UCMC, private Brent, private Sort, private Powell, public Simplex
 {
+	protected:
+	using GaussQuad = GaussLegendre<std::function<double(const double)>,double>;
+	using Patterson = GaussPatterson<std::function<double(const double)>,double>;
+	using Fejer = ClenshawCurtis<std::function<double(const double)>,double>;
+
 	private:
 	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
 	static lensvector<double> *defs, **defs_subtot, *defs_i, *xvals_i;
@@ -1277,7 +1282,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void run_plotter_file(string plotcommand, string filename, string range = "", string extra_command = "", string extra_command2 = "");
 	void run_plotter_range(string plotcommand, string range, string extra_command = "", string extra_command2 = "");
 	void run_mkdist(bool copy_post_files, string posts_dirname, const int nbins_1d, const int nbins_2d, bool copy_subplot_only, bool resampled_posts, bool no2dposts, bool nohists);
-	void make_histograms(const int nbins_1d, const int nbins_2d, bool resampled_posts, bool no2dposts, bool use_fisher_matrix, bool run_python_script);
+	bool find_chain_file_and_threads(const string file_root, string& filename, int& n_threads, int& n_processes, const bool use_fisher_matrix = false);
+	bool get_parameter_percentiles(dvector& halfpct, dvector& lowpct_1sig, dvector& hipct_1sig, dvector& lowpct_2sig, dvector& hipct_2sig, const bool resampled_posts = false, const bool use_fisher_matrix = false);
+	bool make_histograms(const int nbins_1d, const int nbins_2d, bool resampled_posts, bool no2dposts, bool use_fisher_matrix, bool run_python_script);
 	void remove_equal_sign();
 	void remove_word(int n_remove);
 	void remove_comments(string& instring);
@@ -1328,11 +1335,11 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void add_ptmass_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc, const int pmode); // specific version for ptmass model
 	void add_mass_sheet_lens(const double zl, const double zs, const double mass_parameter, const double xc, const double yc); // specific version for mass sheet
 	void add_multipole_lens(const double zl, const double zs, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool kap, bool sine_term);
-	void add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
-	bool add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot);
-	bool add_qtabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot);
-	bool save_tabulated_lens_to_file(int lnum, const string tabfileroot);
-	void add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
+	//void add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc);
+	//bool add_tabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double theta, const double xc, const double yc, const string tabfileroot);
+	//bool add_qtabulated_lens_from_file(const double zl, const double zs, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc, const string tabfileroot);
+	//bool save_tabulated_lens_to_file(int lnum, const string tabfileroot);
+	//void add_qtabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double q, const double theta, const double xc, const double yc);
 	bool spawn_lens_from_source_object(const int src_number, const double zl, const double zs, const int pmode, const bool vary_mass_parameter, const bool include_limits, const double mass_param_lower, const double mass_param_upper);
 
 	void add_lens(LensProfile *new_lens);

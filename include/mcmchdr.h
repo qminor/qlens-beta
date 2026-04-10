@@ -96,7 +96,6 @@ class Derivative
 {
 	private:
 		int NTAB;
-		double MAX(const double a, const double b){return b > a ? (b) : (a);}
 		//double err;
 	public:
 		Derivative(const double errin, const int tabin) : NTAB(tabin) {}
@@ -124,7 +123,7 @@ inline double Derivative::Ridders(double (Derivative::*func)(const double), cons
 		for (j=1;j<=i;j++) {
 			a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
 			fac=CON2*fac;
-			errt=MAX(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
+			errt=dmax(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
 			if (errt <= err) {
 				err=errt;
 				ans=a[j][i];
@@ -164,7 +163,7 @@ inline double Derivative::Ridders(double (Derivative::*func)(const double *), do
 		for (j=1;j<=i;j++) {
 			a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
 			fac=CON2*fac;
-			errt=MAX(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
+			errt=dmax(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
 			if (errt <= err) {
 				err=errt;
 				ans=a[j][i];
@@ -205,7 +204,7 @@ inline double Derivative::Ridders(double (Derivative::*func)(double *, int), dou
 		for (j=1;j<=i;j++) {
 			a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
 			fac=CON2*fac;
-			errt=MAX(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
+			errt=dmax(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
 			if (errt <= err) {
 				err=errt;
 				ans=a[j][i];

@@ -1,8 +1,8 @@
+#include "complex_functions.h"
 #include <iostream>
 #include <complex>
 using namespace std;
 
-#include "complex_functions.h"
 
 // Gamma_inv denotes the entire inverse of the Gamma function, calculated in complex_functions.H .
 // F(z) means 2F1(a,b,c,z) with the a, b, c and z given as inputs in the routine.

@@ -1524,10 +1524,10 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("zlens",&LensProfile::zlens)
 		.def_readonly("zsrc_ref",&LensProfile::zsrc_ref)
 		.def_readonly("sigma_cr",&LensProfile::sigma_cr)
-		.def_readonly("xc",&LensProfile::x_center)
-		.def_readonly("yc",&LensProfile::y_center)
-		.def_readonly("q",&LensProfile::q)
-		.def_readonly("theta",&LensProfile::theta)
+		//.def_readonly("xc",&LensProfile::x_center)
+		//.def_readonly("yc",&LensProfile::y_center)
+		//.def_readonly("q",&LensProfile::q)
+		//.def_readonly("theta",&LensProfile::theta)
 		.def("print_params", &LensProfile::print_parameters)
 		.def("print_vary_params", &LensProfile::print_vary_parameters)
 		.def("get_model_name", &LensProfile::get_model_name)
@@ -2747,6 +2747,43 @@ PYBIND11_MODULE(qlens, m) {
 			curr.adopt_model(curr.bestfitparams);
 		})
 		.def("adopt_chain_bestfit", &QLens_Wrap::adopt_bestfit_point_from_chain)
+		.def("adopt_point_prange", &QLens_Wrap::adopt_point_from_chain_paramrange)
+		.def("get_param_percentiles", [](QLens_Wrap &curr, py::kwargs &kwargs){
+			bool get_2sigma_percentiles = false; // get 1*sigma percentiles by default
+			bool resampled = false;
+			bool use_fisher_matrix = false;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="get_2sigma") {
+					try {
+						get_2sigma_percentiles = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean argument for 'get_2sigma'");
+					}
+				}
+			}
+
+			dvector halfpct, lowpct_1sig, hipct_1sig, lowpct_2sig, hipct_2sig;
+			bool status = curr.get_parameter_percentiles(halfpct,lowpct_1sig,hipct_1sig,lowpct_2sig,hipct_2sig,resampled,use_fisher_matrix);
+			if (!status) throw std::runtime_error("could not find percentiles");
+
+			int npars = halfpct.size();
+			py::list halfpct_list(npars);
+			py::list lowpct_1sig_list(npars);
+			py::list hipct_1sig_list(npars);
+			py::list lowpct_2sig_list(npars);
+			py::list hipct_2sig_list(npars);
+
+			for (int i=0; i < npars; i++) {
+				halfpct_list[i] = halfpct[i];
+				lowpct_1sig_list[i] = lowpct_1sig[i];
+				hipct_1sig_list[i] = hipct_1sig[i];
+				lowpct_2sig_list[i] = lowpct_2sig[i];
+				hipct_2sig_list[i] = hipct_2sig[i];
+			}
+
+			if (get_2sigma_percentiles) return std::make_tuple(halfpct_list,lowpct_2sig_list,hipct_2sig_list);
+			else return std::make_tuple(halfpct_list,lowpct_1sig_list,hipct_1sig_list);
+		})
 		.def("test_lens", &QLens_Wrap::test_lens_functions)
 		.def("mkgrid", &QLens_Wrap::create_grid_from_default_redshift)
 		.def("mkgrid_ptsrc", &QLens_Wrap::create_grid_from_ptsrc_redshifts)
@@ -2764,6 +2801,15 @@ PYBIND11_MODULE(qlens, m) {
 								//cout << "pvec " << iter << " = " << param_vec[iter] << endl;
 				}
 					return current.adopt_model(param_vec);
+		})
+		.def("mkposts", [](QLens_Wrap &current){ 
+			int nbins_1d = 50;
+			int nbins_2d = 40;
+			bool resampled_posts = false;
+			bool no2dposts = false;
+			bool use_fisher_matrix = false;
+			bool run_plotting_scripts = true;
+			return current.make_histograms(nbins_1d,nbins_2d,resampled_posts,no2dposts,use_fisher_matrix,run_plotting_scripts);
 		})
 
 		.def("fit_chisq",&QLens_Wrap::chisq_single_evaluation, py::arg("init_fitmodel") = false, py::arg("show_total_wtime") = false, py::arg("show_wtime") = false, py::arg("showdiag") = false, py::arg("show_status") = true, py::arg("show_lensmodel") = false)

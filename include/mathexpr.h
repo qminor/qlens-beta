@@ -19,10 +19,13 @@ inline double dmin(const double &a, const double &b) { return (a < b ? a : b); }
 inline double dmax(const double &a, const double &b) { return (a > b ? a : b); }
 inline int imin(const int &a, const int &b) { return (a < b ? a : b); }
 inline int imax(const int &a, const int &b) { return (a > b ? a : b); }
-inline double SQR(const double s) { return s*s; }
-inline int INTSQR(const int s) { return s*s; }
-inline double CUBE(const double s) { return s*s*s; }
-inline double QUARTIC(const double s) { return s*s*s*s; }
+template <typename T>
+inline T SQR(const T s) { return s*s; }
+template <typename T>
+T CUBE(const T s) { return s*s*s; }
+template <typename T>
+T QUARTIC(const T s) { return s*s*s*s; }
+
 inline int sign(const double &a) { return (a < 0 ? -1 : a > 0 ? 1 : 0); }
 inline bool sign_bool(const double &a) { return (a < 0 ? false : a > 0 ? true : true); }
 inline double norm(const double a, const double b) { return std::sqrt(a*a+b*b); }

@@ -50,9 +50,9 @@ public:
 		DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 		ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 		QLens::allocate_multithreaded_variables(n_omp_threads);
-		GaussLegendre<std::function<double(const double)>,double>::allocate_quadrature_tables(GaussLegendre<std::function<double(const double)>,double>::numberOfPoints);
-		GaussPatterson<std::function<double(const double)>,double>::allocate_gauss_patterson_tables();
-		ClenshawCurtis<std::function<double(const double)>,double>::allocate_cc_quadrature_tables(LensProfile::default_fejer_nlevels,false); // the latter boolean=false tells it to use Fejer quadrature (open interval)
+		GaussQuad::allocate_quadrature_tables(GaussQuad::numberOfPoints);
+		Patterson::allocate_gauss_patterson_tables();
+		Fejer::allocate_cc_quadrature_tables(LensProfile::default_fejer_nlevels,false); // the latter boolean=false tells it to use Fejer quadrature (open interval)
 
 
 #ifdef USE_MPI
@@ -540,9 +540,9 @@ public:
 		DelaunayGrid::deallocate_multithreaded_variables();
 		CartesianSourceGrid::deallocate_multithreaded_variables();
 		QLens::deallocate_multithreaded_variables();
-		GaussLegendre<std::function<double(const double)>,double>::deallocate_quadrature_tables();
-		GaussPatterson<std::function<double(const double)>,double>::deallocate_gauss_patterson_tables();
-		ClenshawCurtis<std::function<double(const double)>,double>::deallocate_cc_quadrature_tables();
+		GaussQuad::deallocate_quadrature_tables();
+		Patterson::deallocate_gauss_patterson_tables();
+		Fejer::deallocate_cc_quadrature_tables();
 
 #ifdef USE_MPI
 		MPI_Finalize();

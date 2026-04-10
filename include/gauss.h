@@ -1,11 +1,13 @@
 #ifndef GAUSS_H
 #define GAUSS_H
 
-//#include <iostream>
-//#include <iomanip>
-//#include <fstream>
 #include <cmath>
+#include <iostream>
 #include "errors.h"
+
+#ifdef USE_STAN
+#include <stan/math.hpp>
+#endif
 
 // for adaptive quadrature, see "GaussPatterson" and "ClenshawCurtis" below
 
@@ -47,6 +49,7 @@ class GaussPatterson
           
      public:
 			GaussPatterson();
+			GaussPatterson(const double tol_in, const bool show_warnings) { SetGaussPatterson(tol_in,show_warnings); }
 			void SetGaussPatterson(const double tol_in, const bool show_warnings);
 			static void allocate_gauss_patterson_tables();
 			static void deallocate_gauss_patterson_tables();
@@ -78,6 +81,11 @@ class ClenshawCurtis
 
      public:
 			ClenshawCurtis();
+			ClenshawCurtis(const double tol_in, const bool show_warnings = true) {
+				cc_tolerance = tol_in;
+				cc_tolerance_outer = tol_in;
+				show_convergence_warning = show_warnings;
+			}
 			void SetClenshawCurtis(const int nlevels_in, const double tol_in, const bool include_endpoints = true, const bool show_warnings = true);
 			static void allocate_cc_quadrature_tables(const int nlevels_in, const bool include_endpoints_in);
 			static void deallocate_cc_quadrature_tables();
@@ -1986,6 +1994,11 @@ T GaussPatterson<Func,T>::AdaptiveQuad(Func func, T a, T b, bool &converged, boo
 	// Perhaps it is only useful when it is slow to converge, e.g. near singularities (in which case, maybe better to use
 	// Romberg integration). This doesn't seem worth implementing here.
 
+#ifdef USE_STAN
+	bool output = false;
+	if constexpr (std::is_same_v<T, stan::math::var>) output = true;
+	if (output) std::cout << "SHERK0" << std::endl;
+#endif
 	T result = 0, result_old;
 	double tolerance = (outer) ? pat_tolerance_outer : pat_tolerance;
 	int i, level = 0, istep, istart;
@@ -1993,6 +2006,9 @@ T GaussPatterson<Func,T>::AdaptiveQuad(Func func, T a, T b, bool &converged, boo
 	converged = true; // until proven otherwise
 	T *funcptr = pat_funcs;
 	//if (outer) funcptr = pat_funcs2;
+#ifdef USE_STAN
+	if (output) std::cout << "SHERK1" << std::endl;
+#endif
 	int order, j;
 	do {
 		result_old = result;
@@ -2002,8 +2018,17 @@ T GaussPatterson<Func,T>::AdaptiveQuad(Func func, T a, T b, bool &converged, boo
 		istep *= 2;
 		result = 0;
 		for (j=0, i=istart; j < order; j += 2, i += istep) {
+#ifdef USE_STAN
+	if (output) std::cout << "SHERK2" << std::endl;
+#endif
 			funcptr[i] = func(abavg + abdif*pat_points[i]);
+#ifdef USE_STAN
+	if (output) std::cout << "SHERK3" << std::endl;
+#endif
 			result += pat_weights[level][j]*funcptr[i];
+#ifdef USE_STAN
+	if (output) std::cout << "SHERK4" << std::endl;
+#endif
 		}
 		istart = istep - 1;
 		for (j=1, i=istart; j < order; j += 2, i += istep) {

@@ -1,147 +1,282 @@
 #include <iostream>
-#include <stdlib.h>
-using namespace std;
+#include <complex>
+//#include <stdlib.h>
+
+#ifdef USE_STAN
+#include <stan/math.hpp>
+#endif
+
+using std::max;
+using std::real;
+using std::imag;
+using std::sin;
+using std::cos;
+using std::exp;
+using std::fmod;
+using std::fabs;
+using std::abs;
+using std::floor;
+using std::ceil;
+using std::log;
+
+#ifdef USE_STAN
+using stan::math::max;
+using stan::math::real;
+using stan::math::imag;
+using stan::math::sin;
+using stan::math::cos;
+using stan::math::exp;
+using stan::math::fmod;
+using stan::math::fabs;
+using stan::math::abs;
+using stan::math::floor;
+using stan::math::ceil;
+using stan::math::log;
+#endif
+
+template <typename QScalar>
+int cast_int (const QScalar thing)
+{
+#ifdef USE_STAN
+	 double thingdoub;
+    if constexpr (std::is_same_v<QScalar, stan::math::var>)
+	     thingdoub = thing.val();
+	 else
+		 thingdoub = thing;
+	 return static_cast<int> (thingdoub);
+#else 
+	 return static_cast<int> (thing);
+#endif
+}
+
+template <typename QScalar>
+QScalar my_rint(const QScalar x) {
+ QScalar intPart;
+
+ // Get integer part by truncating toward zero
+ intPart = (x >= 0) ? floor(x) : ceil(x);
+
+ // Fractional part is what's left
+ QScalar frac = x - intPart;
+
+ if (fabs(frac) < 0.5) {
+	  return intPart;
+ }
+ if (fabs(frac) > 0.5) {
+	  return intPart + (x > 0 ? 1.0 : -1.0);
+ }
+
+ // Exactly .5 case → round to even
+ if (fmod(intPart, 2.0) == 0.0) {
+	  return intPart;
+ } else {
+	  return intPart + (x > 0 ? 1.0 : -1.0);
+ }
+}
 
 #define SIGN(a) (((a) < 0) ? (-1) : (1))
 
-// Infinite norm of a complex number.
+// Infinite norm of a std::complex number.
 // ----------------------------------
 // It is max(|Re[z]|,|Im[z]|)
 
-inline double inf_norm (const complex<double> &z)
+template <typename QScalar>
+QScalar inf_norm (const std::complex<QScalar> &z)
 {
-  return max (abs (real (z)),abs (imag (z)));
+return max (abs (real (z)),abs (imag (z)));
 }
 
-
-// Test of finiteness of a complex number
+// Test of finiteness of a std::complex number
 // --------------------------------------
 // If real or imaginary parts are finite, true is returned.
 // Otherwise, false is returned
 
-inline bool isfinite (const complex<double> &z)
+template <typename QScalar>
+bool isfinite (const std::complex<QScalar> &z)
 {
-  const double x = real (z), y = imag (z);
+  const QScalar x = real (z), y = imag (z);
 
   return (isfinite (x) && isfinite (y));
 }
 
+template <typename QScalar>
+std::complex<QScalar> complog(const std::complex<QScalar> x)
+{
+#ifdef USE_STAN
+    if constexpr (std::is_same_v<QScalar, stan::math::var>)
+		 return stan::math::internal::complex_log(x);
+	 else
+#else 
+	 return std::log(x);
+#endif
+	return 0;
+}
+
+template <typename QScalar>
+std::complex<QScalar> comppow(const std::complex<QScalar> x, const std::complex<QScalar> y)
+{
+#ifdef USE_STAN
+    if constexpr (std::is_same_v<QScalar, stan::math::var>)
+		 return stan::math::pow(x,y);
+	 else
+#else 
+	 return std::pow(x,y);
+#endif
+	return 0;
+}
 
 
 
-// Usual operator overloads of complex numbers with integers
+// Usual operator overloads of std::complex numbers with integers
 // ---------------------------------------------------------
-// Recent complex libraries do not accept for example z+n or z==n with n integer, signed or unsigned.
-// The operator overload is done here, by simply putting a cast on double to the integer.
+// Recent std::complex libraries do not accept for example z+n or z==n with n integer, signed or unsigned.
+// The operator overload is done here, by simply putting a cast on QScalar to the integer.
 
-inline complex<double> operator + (const complex<double> &z,const int n)
+template <typename QScalar>
+std::complex<QScalar> operator + (const std::complex<QScalar> &z,const int n)
 {
-  return (z+static_cast<double> (n));
+  return (z+static_cast<QScalar> (n));
 }
 
-inline complex<double> operator - (const complex<double> &z,const int n)
+template <typename QScalar>
+std::complex<QScalar> operator - (const std::complex<QScalar> &z,const int n)
 {
-  return (z-static_cast<double> (n));
+  return (z-static_cast<QScalar> (n));
 }
 
-inline complex<double> operator * (const complex<double> &z,const int n)
+template <typename QScalar>
+std::complex<QScalar> operator * (const std::complex<QScalar> &z,const int n)
 {
-  return (z*static_cast<double> (n));
+  return (z*static_cast<QScalar> (n));
 }
 
-inline complex<double> operator / (const complex<double> &z,const int n)
+template <typename QScalar>
+std::complex<QScalar> operator / (const std::complex<QScalar> &z,const int n)
 {
-  return (z/static_cast<double> (n));
+  return (z/static_cast<QScalar> (n));
 }
 
-inline complex<double> operator + (const int n,const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> operator + (const int n,const std::complex<QScalar> &z)
 {
-  return (static_cast<double> (n)+z);
+  return (static_cast<QScalar> (n)+z);
 }
 
-inline complex<double> operator - (const int n,const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> operator - (const int n,const std::complex<QScalar> &z)
 {
-  return (static_cast<double> (n)-z);
+  return (static_cast<QScalar> (n)-z);
 }
 
-inline complex<double> operator * (const int n,const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> operator * (const int n,const std::complex<QScalar> &z)
 {
-  return (static_cast<double> (n)*z);
+  return (static_cast<QScalar> (n)*z);
 }
 
-inline complex<double> operator / (const int n,const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> operator / (const int n,const std::complex<QScalar> &z)
 {
-  return (static_cast<double> (n)/z);
-}
-
-
-
-
-
-
-
-
-inline complex<double> operator + (const complex<double> &z,const unsigned int n)
-{
-  return (z+static_cast<double> (n));
-}
-
-inline complex<double> operator - (const complex<double> &z,const unsigned int n)
-{
-  return (z-static_cast<double> (n));
-}
-
-inline complex<double> operator * (const complex<double> &z,const unsigned int n)
-{
-  return (z*static_cast<double> (n));
-}
-
-inline complex<double> operator / (const complex<double> &z,const unsigned int n)
-{
-  return (z/static_cast<double> (n));
-}
-
-inline complex<double> operator + (const unsigned int n,const complex<double> &z)
-{
-  return (static_cast<double> (n)+z);
-}
-
-inline complex<double> operator - (const unsigned int n,const complex<double> &z)
-{
-  return (static_cast<double> (n)-z);
-}
-
-inline complex<double> operator * (const unsigned int n,const complex<double> &z)
-{
-  return (static_cast<double> (n)*z);
-}
-
-inline complex<double> operator / (const unsigned int n,const complex<double> &z)
-{
-  return (static_cast<double> (n)/z);
+  return (static_cast<QScalar> (n)/z);
 }
 
 
-
-
-inline bool operator == (const complex<double> &z,const int n)
+template <typename QScalar>
+std::complex<QScalar> operator + (const std::complex<QScalar> &z,const unsigned int n)
 {
-  return (z == static_cast<double> (n));
+  return (z+static_cast<QScalar> (n));
 }
 
-inline bool operator != (const complex<double> &z,const int n)
+template <typename QScalar>
+std::complex<QScalar> operator - (const std::complex<QScalar> &z,const unsigned int n)
 {
-  return (z != static_cast<double> (n));
+  return (z-static_cast<QScalar> (n));
 }
 
-inline bool operator == (const int n,const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> operator * (const std::complex<QScalar> &z,const unsigned int n)
 {
-  return (static_cast<double> (n) == z);
+  return (z*static_cast<QScalar> (n));
 }
 
-inline bool operator != (const int n,const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> operator / (const std::complex<QScalar> &z,const unsigned int n)
 {
-  return (static_cast<double> (n) != z);
+  return (z/static_cast<QScalar> (n));
+}
+
+template <typename QScalar>
+std::complex<QScalar> operator + (const unsigned int n,const std::complex<QScalar> &z)
+{
+  return (static_cast<QScalar> (n)+z);
+}
+
+template <typename QScalar>
+std::complex<QScalar> operator - (const unsigned int n,const std::complex<QScalar> &z)
+{
+  return (static_cast<QScalar> (n)-z);
+}
+
+template <typename QScalar>
+std::complex<QScalar> operator * (const unsigned int n,const std::complex<QScalar> &z)
+{
+  return (static_cast<QScalar> (n)*z);
+}
+
+template <typename QScalar>
+std::complex<QScalar> operator / (const unsigned int n,const std::complex<QScalar> &z)
+{
+  return (static_cast<QScalar> (n)/z);
+}
+
+
+template <typename QScalar>
+bool operator == (const std::complex<QScalar> &z,const int n)
+{
+  return (z == static_cast<QScalar> (n));
+}
+
+template <typename QScalar>
+bool operator != (const std::complex<QScalar> &z,const int n)
+{
+  return (z != static_cast<QScalar> (n));
+}
+
+template <typename QScalar>
+bool operator == (const int n,const std::complex<QScalar> &z)
+{
+  return (static_cast<QScalar> (n) == z);
+}
+
+template <typename QScalar>
+bool operator != (const int n,const std::complex<QScalar> &z)
+{
+  return (static_cast<QScalar> (n) != z);
+}
+
+
+template <typename QScalar>
+bool operator == (const std::complex<QScalar> &z,const unsigned int n)
+{
+  return (z == static_cast<QScalar> (n));
+}
+
+template <typename QScalar>
+bool operator != (const std::complex<QScalar> &z,const unsigned int n)
+{
+  return (z != static_cast<QScalar> (n));
+}
+
+template <typename QScalar>
+bool operator == (const unsigned int n,const std::complex<QScalar> &z)
+{
+  return (static_cast<QScalar> (n) == z);
+}
+
+template <typename QScalar>
+bool operator != (const unsigned int n,const std::complex<QScalar> &z)
+{
+  return (static_cast<QScalar> (n) != z);
 }
 
 
@@ -149,71 +284,48 @@ inline bool operator != (const int n,const complex<double> &z)
 
 
 
-
-inline bool operator == (const complex<double> &z,const unsigned int n)
-{
-  return (z == static_cast<double> (n));
-}
-
-inline bool operator != (const complex<double> &z,const unsigned int n)
-{
-  return (z != static_cast<double> (n));
-}
-
-inline bool operator == (const unsigned int n,const complex<double> &z)
-{
-  return (static_cast<double> (n) == z);
-}
-
-inline bool operator != (const unsigned int n,const complex<double> &z)
-{
-  return (static_cast<double> (n) != z);
-}
-
-
-
-
-
-
-// Precise evaluation of exp[z]-1 for z complex
+// Precise evaluation of exp[z]-1 for z std::complex
 // --------------------------------------------
 // When |Re[z]| >= 1 or |Im[z]| >= 1, one uses directly the standard exp function as it is precise.
 // Otherwise, numerical cancellations can occur.
 // So, one uses the always stable formula exp[z]-1 = expm1(x) - 2.exp(x).sin^2(y/2) + i.exp(x).sin(y) 
-// with x = Re[z] and y = Im[z]. expm1(x) gives a precise evaluation of exp(x)-1 for x double.
+// with x = Re[z] and y = Im[z]. expm1(x) gives a precise evaluation of exp(x)-1 for x QScalar.
 
-complex<double> expm1 (const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> expm1 (const std::complex<QScalar> &z)
 {
-  const double x = real (z),y = imag (z);
+  const QScalar x = real (z),y = imag (z);
 
   if ((abs (x) >= 1.0) || (abs (y) >= 1.0)) return (exp (z) - 1.0);
 
-  const double expm1_x = expm1 (x),exp_x = 1.0 + expm1_x,sin_y_over_two = sin (0.5*y),sin_y = sin (y);
+  const QScalar expm1_x = expm1 (x),exp_x = 1.0 + expm1_x,sin_y_over_two = sin (0.5*y),sin_y = sin (y);
 
-  return complex<double> (expm1_x - 2.0*exp_x*sin_y_over_two*sin_y_over_two,exp_x*sin_y);
+  return std::complex<QScalar> (expm1_x - 2.0*exp_x*sin_y_over_two*sin_y_over_two,exp_x*sin_y);
 }
 
 
 
-// Precise evaluation of log[1+z] for z complex
+// Precise evaluation of log[1+z] for z std::complex
 // --------------------------------------------
 // When |Re[z]| >= 1 or |Im[z]| >= 1, one uses directly the standard log function as it is precise.
 // Otherwise, numerical cancellations can occur.
 // So, one uses the always stable formula log[1+z] = log1p(x) + log1p([y/(1+x)]^2)/2 + i.atan2(y,1+x)
-// with x = Re[z] and y = Im[z]. log1p(x) gives a precise evaluation of log(1+x) for x double.
+// with x = Re[z] and y = Im[z]. log1p(x) gives a precise evaluation of log(1+x) for x QScalar.
 // atan2(x,y) gives the arc tangent of y/x so it is in ]-Pi:Pi]. 
 
-complex<double> log1p (const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> log1p (const std::complex<QScalar> &z)
 {
-  const double x = real (z),y = imag (z); 
+  const QScalar x = real (z),y = imag (z); 
 
-  const double xp1 = 1.0 + x,abs_x = abs (x), abs_y = abs (y);
+  const QScalar xp1 = 1.0 + x,abs_x = abs (x), abs_y = abs (y);
 
-  if ((abs_x >= 1.0) || (abs_y >= 1.0)) return log (1.0 + z);
+  std::complex<QScalar> zplusone = 1.0 + z;
+  if ((abs_x >= 1.0) || (abs_y >= 1.0)) return complog (zplusone);
  
-  const double y_over_xp1 = y/xp1;
+  const QScalar y_over_xp1 = y/xp1;
 
-  return complex<double> (log1p (x) + 0.5*log1p (y_over_xp1*y_over_xp1),atan2 (y,xp1));
+  return std::complex<QScalar> (log1p (x) + 0.5*log1p (y_over_xp1*y_over_xp1),atan2 (y,xp1));
 }
 
 
@@ -247,19 +359,20 @@ complex<double> log1p (const complex<double> &z)
 // g : coefficient used in the Lanczos formula. It is here 607/128.
 // z,z_m_0p5,z_p_g_m0p5,zm1 : argument of the Gamma function, z-0.5, z-0.5+g, z-1 
 
-complex<double> log_Gamma (const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> log_Gamma (const std::complex<QScalar> &z)
 {
-  if (!isfinite (z)) cout<<"z is not finite in log_Gamma."<<endl, abort ();
+  if (!isfinite (z)) std::cout<<"z is not finite in log_Gamma."<<std::endl, abort ();
 
-  const double x = real (z),y = imag (z);
+  const QScalar x = real (z),y = imag (z);
 
-  if ((z == rint (x)) && (x <= 0)) cout<<"z is negative integer in log_Gamma."<<endl, abort ();
+  if ((z == my_rint (x)) && (x <= 0)) std::cout<<"z is negative integer in log_Gamma."<<std::endl, abort ();
 
   if (x >= 0.5)
   {
-    const double log_sqrt_2Pi = 0.91893853320467274177,g = 4.7421875;
-    const complex<double> z_m_0p5 = z - 0.5, z_pg_m0p5 = z_m_0p5 + g, zm1 = z - 1.0;
-    const double c[15] = {0.99999999999999709182,
+    const QScalar log_sqrt_2Pi = 0.91893853320467274177,g = 4.7421875;
+    const std::complex<QScalar> z_m_0p5 = z - 0.5, z_pg_m0p5 = z_m_0p5 + g, zm1 = z - 1.0;
+    const QScalar c[15] = {0.99999999999999709182,
 			  57.156235665862923517,
 			  -59.597960355475491248,
 			  14.136097974741747174,
@@ -275,21 +388,21 @@ complex<double> log_Gamma (const complex<double> &z)
 			  -0.26190838401581408670E-4,
 			  0.36899182659531622704E-5};
       
-    complex<double> sum = c[0];
+    std::complex<QScalar> sum = c[0];
     for (int i = 1 ; i < 15 ; i++) sum += c[i]/(zm1 + i);
 
-    const complex<double> log_Gamma_z = log_sqrt_2Pi + log (sum) + z_m_0p5*log (z_pg_m0p5) - z_pg_m0p5;
+    const std::complex<QScalar> log_Gamma_z = log_sqrt_2Pi + complog (sum) + z_m_0p5*complog (z_pg_m0p5) - z_pg_m0p5;
 
     return log_Gamma_z;
   }
   else if (y >= 0.0)
   {
-    const int n = (x < rint (x)) ? (static_cast<int> (rint (x)) - 1) : (static_cast<int> (rint (x)));
-    const double log_Pi = 1.1447298858494002;
-    const complex<double> log_const(-M_LN2,M_PI_2),i_Pi(0.0,M_PI);
-    const complex<double> eps = z - n,log_sin_Pi_z = (y > 110) ? (-i_Pi*z + log_const) : (log (sin (M_PI*eps)) - i_Pi*n);
+    const int n = (x < my_rint (x)) ? (cast_int (my_rint (x)) - 1) : (cast_int (my_rint (x)));
+    const QScalar log_Pi = 1.1447298858494002;
+    const std::complex<QScalar> log_const(-M_LN2,M_PI_2),i_Pi(0.0,M_PI);
+    const std::complex<QScalar> eps = z - n,log_sin_Pi_z = (y > 110) ? (-i_Pi*z + log_const) : (complog (sin (M_PI*eps)) - i_Pi*n);
 
-    const complex<double> log_Gamma_z = log_Pi - log_sin_Pi_z - log_Gamma (1.0 - z);
+    const std::complex<QScalar> log_Gamma_z = log_Pi - log_sin_Pi_z - log_Gamma (1.0 - z);
  
     return log_Gamma_z;
   }
@@ -300,17 +413,18 @@ complex<double> log_Gamma (const complex<double> &z)
 
 
 
-complex<double> Gamma_inv (const complex<double> &z)
+template <typename QScalar>
+std::complex<QScalar> Gamma_inv (const std::complex<QScalar> &z)
 {
-  if (!isfinite (z)) cout<<"z is not finite in Gamma_inv."<<endl, abort ();
+  if (!isfinite (z)) std::cout<<"z is not finite in Gamma_inv."<<std::endl, abort ();
 
-  const double x = real (z);
+  const QScalar x = real (z);
 
   if (x >= 0.5)
   {
-    const double log_sqrt_2Pi = 0.91893853320467274177,g = 4.7421875;
-    const complex<double> z_m_0p5 = z - 0.5, z_pg_m0p5 = z_m_0p5 + g, zm1 = z - 1.0;
-    const double c[15] = {0.99999999999999709182,
+    const QScalar log_sqrt_2Pi = 0.91893853320467274177,g = 4.7421875;
+    const std::complex<QScalar> z_m_0p5 = z - 0.5, z_pg_m0p5 = z_m_0p5 + g, zm1 = z - 1.0;
+    const QScalar c[15] = {0.99999999999999709182,
 			  57.156235665862923517,
 			  -59.597960355475491248,
 			  14.136097974741747174,
@@ -326,18 +440,18 @@ complex<double> Gamma_inv (const complex<double> &z)
 			  -0.26190838401581408670E-4,
 			  0.36899182659531622704E-5};
       
-    complex<double> sum = c[0];
+    std::complex<QScalar> sum = c[0];
     for (int i = 1 ; i < 15 ; i++) sum += c[i]/(zm1 + i);
 
-    const complex<double> Gamma_inv_z = exp (z_pg_m0p5 - z_m_0p5*log (z_pg_m0p5) - log_sqrt_2Pi)/sum;
+    const std::complex<QScalar> Gamma_inv_z = exp (z_pg_m0p5 - z_m_0p5*complog (z_pg_m0p5) - log_sqrt_2Pi)/sum;
 
     return Gamma_inv_z;
   }
   else
   {
-    const int n = static_cast<int> (rint (x));
+    const int n = cast_int (my_rint (x));
 
-    const complex<double> eps = z - n;
+    const std::complex<QScalar> eps = z - n;
 
     if (n%2 == 0)
       return (sin (M_PI*eps)*M_1_PI)/Gamma_inv (1.0 - z);
@@ -362,16 +476,17 @@ complex<double> Gamma_inv (const complex<double> &z)
 // log_Gamma_plus,log_Gamma_minus : logs of Gamma[1+l+I.eta], Gamma[1+l-I.eta].
 // sigma_l : returned result.
 
-complex<double> sigma_l_calc (const complex<double> &l,const complex<double> &eta)
+template <typename QScalar>
+std::complex<QScalar> sigma_l_calc (const std::complex<QScalar> &l,const std::complex<QScalar> &eta)
 {
-  const complex<double> Ieta(-imag (eta),real (eta)),one_over_two_I(0,-0.5);
-  const complex<double> arg_plus = 1.0 + l + Ieta, arg_minus = 1.0 + l - Ieta;
+  const std::complex<QScalar> Ieta(-imag (eta),real (eta)),one_over_two_I(0,-0.5);
+  const std::complex<QScalar> arg_plus = 1.0 + l + Ieta, arg_minus = 1.0 + l - Ieta;
 
-  if ((rint (real (arg_plus)) == arg_plus) && (rint (real (arg_plus)) <= 0.0)) return 0.0;
-  if ((rint (real (arg_minus)) == arg_minus) && (rint (real (arg_minus)) <= 0.0)) return 0.0;
+  if ((my_rint (real (arg_plus)) == arg_plus) && (my_rint (real (arg_plus)) <= 0.0)) return 0.0;
+  if ((my_rint (real (arg_minus)) == arg_minus) && (my_rint (real (arg_minus)) <= 0.0)) return 0.0;
 
-  const complex<double> log_Gamma_plus = log_Gamma (arg_plus),log_Gamma_minus = log_Gamma (arg_minus);  
-  const complex<double> sigma_l = (log_Gamma_plus - log_Gamma_minus)*one_over_two_I;
+  const std::complex<QScalar> log_Gamma_plus = log_Gamma (arg_plus),log_Gamma_minus = log_Gamma (arg_minus);  
+  const std::complex<QScalar> sigma_l = (log_Gamma_plus - log_Gamma_minus)*one_over_two_I;
 
   return sigma_l;
 }
@@ -396,16 +511,17 @@ complex<double> sigma_l_calc (const complex<double> &l,const complex<double> &et
 // log_Gamma_plus,log_Gamma_minus,log_Gamma_2l_plus_2 : logs of Gamma[1+l+I.eta], Gamma[1+l-I.eta], Gamma[2l+2].
 // log_Cl_eta : returned result.
 
-complex<double> log_Cl_eta_calc (const complex<double> &l,const complex<double> &eta)
+template <typename QScalar>
+std::complex<QScalar> log_Cl_eta_calc (const std::complex<QScalar> &l,const std::complex<QScalar> &eta)
 {
-  const complex<double> Ieta(-imag (eta),real (eta));
-  const complex<double> arg_plus = 1.0 + l + Ieta, arg_minus = 1.0 + l - Ieta; 
+  const std::complex<QScalar> Ieta(-imag (eta),real (eta));
+  const std::complex<QScalar> arg_plus = 1.0 + l + Ieta, arg_minus = 1.0 + l - Ieta; 
 
-  if ((rint (real (arg_plus)) == arg_plus) && (rint (real (arg_plus)) <= 0.0)) return 0.0;
-  if ((rint (real (arg_minus)) == arg_minus) && (rint (real (arg_minus)) <= 0.0)) return 0.0;
+  if ((my_rint (real (arg_plus)) == arg_plus) && (my_rint (real (arg_plus)) <= 0.0)) return 0.0;
+  if ((my_rint (real (arg_minus)) == arg_minus) && (my_rint (real (arg_minus)) <= 0.0)) return 0.0;
 
-  const complex<double> log_Gamma_plus = log_Gamma (arg_plus),log_Gamma_minus = log_Gamma (arg_minus),log_Gamma_2l_plus_2 = log_Gamma (2.0*l + 2.0);
-  const complex<double> log_Cl_eta = l*M_LN2 - M_PI_2*eta + 0.5*(log_Gamma_plus + log_Gamma_minus) - log_Gamma_2l_plus_2;
+  const std::complex<QScalar> log_Gamma_plus = log_Gamma (arg_plus),log_Gamma_minus = log_Gamma (arg_minus),log_Gamma_2l_plus_2 = log_Gamma (2.0*l + 2.0);
+  const std::complex<QScalar> log_Cl_eta = l*M_LN2 - M_PI_2*eta + 0.5*(log_Gamma_plus + log_Gamma_minus) - log_Gamma_2l_plus_2;
 
   return log_Cl_eta;
 }
@@ -436,23 +552,24 @@ complex<double> log_Cl_eta_calc (const complex<double> &l,const complex<double> 
 // two_I_Pi, two_I_Pi_eps : 2.i.Pi, 2.i.Pi.eps .
 // log_cut_constant : returned result.
 
-complex<double> log_cut_constant_AS_calc (const int omega,const complex<double> &l,const complex<double> &eta)
+template <typename QScalar>
+std::complex<QScalar> log_cut_constant_AS_calc (const int omega,const std::complex<QScalar> &l,const std::complex<QScalar> &eta)
 {
-  const complex<double> Ieta(-imag (eta),real (eta));
-  const double l_int = rint (real (l)), Ieta_int = rint (real (Ieta));
-  const complex<double> eps = (Ieta - Ieta_int) - omega*(l - l_int);
+  const std::complex<QScalar> Ieta(-imag (eta),real (eta));
+  const QScalar l_int = my_rint (real (l)), Ieta_int = my_rint (real (Ieta));
+  const std::complex<QScalar> eps = (Ieta - Ieta_int) - omega*(l - l_int);
 
-  const complex<double> two_I_Pi(0,2.0*M_PI),two_I_Pi_eps = two_I_Pi*eps;
+  const std::complex<QScalar> two_I_Pi(0,2.0*M_PI),two_I_Pi_eps = two_I_Pi*eps;
 
   if (real (two_I_Pi_eps) > -0.1)
   {
-    const complex<double> log_cut_constant = log (expm1 (-two_I_Pi_eps)) + two_I_Pi_eps;
+    const std::complex<QScalar> log_cut_constant = complog (expm1 (-two_I_Pi_eps)) + two_I_Pi_eps;
 
     return log_cut_constant;
   }
   else
   {
-    const complex<double> log_cut_constant = log1p (-exp (two_I_Pi_eps));
+    const std::complex<QScalar> log_cut_constant = log1p (-exp (two_I_Pi_eps));
 
     return log_cut_constant;
   }
@@ -490,23 +607,24 @@ complex<double> log_cut_constant_AS_calc (const int omega,const complex<double> 
 // log_two_I_omega : log[2.i.omega] = log[2] + i.omega.Pi/2 .
 // log_cut_constant : returned result.
 
-complex<double> log_cut_constant_CFa_calc (const bool is_it_normalized,const int omega,const complex<double> &l,const complex<double> &eta)
+template <typename QScalar>
+std::complex<QScalar> log_cut_constant_CFa_calc (const bool is_it_normalized,const int omega,const std::complex<QScalar> &l,const std::complex<QScalar> &eta)
 {
-  const complex<double> Ieta(-imag (eta),real (eta));
-  const double l_int = rint (real (l)), Ieta_int = rint (real (Ieta));
-  const complex<double> eps = omega*(l - l_int) - (Ieta - Ieta_int);
-  const complex<double> log_norm = (!is_it_normalized) ? (2.0*log_Cl_eta_calc (l,eta)) : (0.0);
-  const complex<double> two_I_Pi(0,2.0*M_PI),two_I_Pi_eps = two_I_Pi*eps,log_two_I_omega(M_LN2,omega*M_PI_2);
+  const std::complex<QScalar> Ieta(-imag (eta),real (eta));
+  const QScalar l_int = my_rint (real (l)), Ieta_int = my_rint (real (Ieta));
+  const std::complex<QScalar> eps = omega*(l - l_int) - (Ieta - Ieta_int);
+  const std::complex<QScalar> log_norm = (!is_it_normalized) ? (2.0*log_Cl_eta_calc (l,eta)) : (0.0);
+  const std::complex<QScalar> two_I_Pi(0,2.0*M_PI),two_I_Pi_eps = two_I_Pi*eps,log_two_I_omega(M_LN2,omega*M_PI_2);
 
   if (real (two_I_Pi_eps) < 0.1)
   {
-    const complex<double> log_cut_constant = log_two_I_omega + log (expm1 (two_I_Pi_eps)) + log_norm;
+    const std::complex<QScalar> log_cut_constant = log_two_I_omega + complog (expm1 (two_I_Pi_eps)) + log_norm;
 
     return log_cut_constant;
   }
   else
   {
-    const complex<double> log_cut_constant = log_two_I_omega + log1p (-exp (-two_I_Pi_eps)) + two_I_Pi_eps + log_norm;
+    const std::complex<QScalar> log_cut_constant = log_two_I_omega + log1p (-exp (-two_I_Pi_eps)) + two_I_Pi_eps + log_norm;
 
     return log_cut_constant; 
   }
@@ -543,13 +661,14 @@ complex<double> log_cut_constant_CFa_calc (const bool is_it_normalized,const int
 // log_two_I_omega : log[2.i.omega] = log[2] + i.omega.Pi/2 .
 // log_cut_constant : returned result.
 
-complex<double> log_cut_constant_CFb_calc (const bool is_it_normalized,const int omega,const complex<double> &l,const complex<double> &eta)
+template <typename QScalar>
+std::complex<QScalar> log_cut_constant_CFb_calc (const bool is_it_normalized,const int omega,const std::complex<QScalar> &l,const std::complex<QScalar> &eta)
 {
-  const complex<double> Ieta(-imag (eta),real (eta));
-  const double l_int = rint (real (l)), Ieta_int = rint (real (Ieta));
-  const complex<double> eps = omega*(l - l_int) + (Ieta - Ieta_int);
-  const complex<double> log_norm = (!is_it_normalized) ? (2.0*log_Cl_eta_calc (l,eta)) : (0.0);
-  const complex<double> two_I_Pi(0,2.0*M_PI),log_two_I_omega(M_LN2,omega*M_PI_2),log_cut_constant = log_two_I_omega - two_I_Pi*eps + log_norm;
+  const std::complex<QScalar> Ieta(-imag (eta),real (eta));
+  const QScalar l_int = my_rint (real (l)), Ieta_int = my_rint (real (Ieta));
+  const std::complex<QScalar> eps = omega*(l - l_int) + (Ieta - Ieta_int);
+  const std::complex<QScalar> log_norm = (!is_it_normalized) ? (2.0*log_Cl_eta_calc (l,eta)) : (0.0);
+  const std::complex<QScalar> two_I_Pi(0,2.0*M_PI),log_two_I_omega(M_LN2,omega*M_PI_2),log_cut_constant = log_two_I_omega - two_I_Pi*eps + log_norm;
 
   return log_cut_constant;
 }
@@ -584,11 +703,12 @@ complex<double> log_cut_constant_CFb_calc (const bool is_it_normalized,const int
 // eta : Sommerfeld parameter.
 // sin_chi : sin (chi)
 
-complex<double> sin_chi_calc (const complex<double> &l,const complex<double> &eta)
+template <typename QScalar>
+std::complex<QScalar> sin_chi_calc (const std::complex<QScalar> &l,const std::complex<QScalar> &eta)
 {
-  if (rint (real (2.0*l)) == 2.0*l) return 0.0;
+  if (my_rint (real (2.0*l)) == 2.0*l) return 0.0;
 
-  const complex<double> sin_chi = -(2*l+1)*exp (log_Cl_eta_calc (l,eta) + log_Cl_eta_calc (-l-1,eta));
+  const std::complex<QScalar> sin_chi = -(2*l+1)*exp (log_Cl_eta_calc (l,eta) + log_Cl_eta_calc (-l-1,eta));
   
   return sin_chi;
 }
@@ -619,22 +739,23 @@ complex<double> sin_chi_calc (const complex<double> &l,const complex<double> &et
 // cos_chi : sign[Re[cos (chi)]].sqrt[1 - [sin(chi)]^2]
 // exp_I_omega_chi : exp[i.omega.chi], returned result.
 
-complex<double> exp_I_omega_chi_calc (const int omega,const complex<double> &l,const complex<double> &eta)
+template <typename QScalar>
+std::complex<QScalar> exp_I_omega_chi_calc (const int omega,const std::complex<QScalar> &l,const std::complex<QScalar> &eta)
 {
-  if (rint (real (2.0*l)) == 2.0*l) return 1.0;
+  if (my_rint (real (2.0*l)) == 2.0*l) return 1.0;
 
-  const complex<double> I_omega(0,omega),sin_chi = sin_chi_calc (l,eta);
-  const complex<double> chi = sigma_l_calc (l,eta) - sigma_l_calc (-l-1,eta) - (l+0.5)*M_PI;
+  const std::complex<QScalar> I_omega(0,omega),sin_chi = sin_chi_calc (l,eta);
+  const std::complex<QScalar> chi = sigma_l_calc (l,eta) - sigma_l_calc (-l-1,eta) - (l+0.5)*M_PI;
 
   if (abs (sin_chi) > 0.5)
   {
-    const complex<double> exp_I_omega_chi = exp (I_omega*chi);
+    const std::complex<QScalar> exp_I_omega_chi = exp (I_omega*chi);
 
     return exp_I_omega_chi;
   }
   else
   {
-    const complex<double> cos_chi = SIGN (real (cos (chi)))*sqrt (1.0 - sin_chi*sin_chi),exp_I_omega_chi = cos_chi + I_omega*sin_chi;
+    const std::complex<QScalar> cos_chi = SIGN (real (cos (chi)))*sqrt (1.0 - sin_chi*sin_chi),exp_I_omega_chi = cos_chi + I_omega*sin_chi;
 
     return exp_I_omega_chi;
   }

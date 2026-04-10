@@ -265,8 +265,8 @@ void SB_Profile::anchor_center_to_lens(LensProfile** center_anchor_list, const i
 {
 	if (!center_anchored_to_lens) center_anchored_to_lens = true;
 	center_anchor_lens = center_anchor_list[center_anchor_lens_number];
-	x_center = center_anchor_lens->x_center;
-	y_center = center_anchor_lens->y_center;
+	x_center = center_anchor_lens->lensparams->x_center;
+	y_center = center_anchor_lens->lensparams->y_center;
 }
 
 void SB_Profile::anchor_center_to_source(SB_Profile** center_anchor_list, const int &center_anchor_source_number)
@@ -1001,8 +1001,8 @@ bool SB_Profile::update_anchored_parameters_to_source(const int src_i)
 void SB_Profile::update_anchor_center()
 {
 	if (center_anchored_to_lens) {
-		x_center = center_anchor_lens->x_center;
-		y_center = center_anchor_lens->y_center;
+		x_center = center_anchor_lens->lensparams->x_center;
+		y_center = center_anchor_lens->lensparams->y_center;
 	} else if (center_anchored_to_source) {
 		x_center = center_anchor_source->x_center;
 		y_center = center_anchor_source->y_center;

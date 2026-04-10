@@ -29,6 +29,7 @@ class NFW_Source;
 class SB_Profile;
 
 enum IntegrationMethod { Romberg_Integration, Gaussian_Quadrature, Gauss_Patterson_Quadrature, Fejer_Quadrature };
+
 enum LensProfileName
 {
 	KSPLINE,
@@ -54,8 +55,10 @@ enum LensProfileName
 	TESTMODEL
 };
 
-struct LensIntegral;
-class QLens;
+template <typename QScalar>
+struct LensIntegral; // defined in lensintegral.h
+
+class QLens; 
 
 template <typename QScalar>
 class LensParams
@@ -63,17 +66,26 @@ class LensParams
 	public:
 	QScalar q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
 	QScalar **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
-	Spline<QScalar> kspline;
-	QScalar qx_parameter, f_parameter;
 	QScalar epsilon, epsilon1, epsilon2; // used for defining ellipticity, and/or components of ellipticity (epsilon1, epsilon2)
 	QScalar costheta, sintheta;
 	QScalar theta_eff; // used for intermediate calculations if ellipticity components are being used
 	QScalar xc_prime, yc_prime; // used if lensed_center_coords is set to true
 };
 
+template <typename QScalar>
+class LensSpline_Params : public LensParams<QScalar>
+{
+	public:
+	Spline<QScalar> kspline;
+	QScalar qx_parameter, f_parameter;
+};
+
 class LensProfile : public EllipticityGradient
 {
-	friend struct LensIntegral;
+	friend struct LensIntegral<double>;
+#ifdef USE_STAN
+	friend struct LensIntegral<stan::math::var>;
+#endif
 	friend class QLens;
 	friend class SB_Profile;
 	friend class Sersic;
@@ -87,44 +99,58 @@ class LensProfile : public EllipticityGradient
 	using Patterson = GaussPatterson<std::function<double(const double)>,double>;
 	using Fejer = ClenshawCurtis<std::function<double(const double)>,double>;
 
-	// the following private declarations are specific to LensProfile and not derived classes
-	private:
-	Romberg<std::function<double(const double)>,double> romberg;
-	GaussLegendre<std::function<double(const double)>,double> gauss_legendre;
-	GaussPatterson<std::function<double(const double)>,double> patterson;
-	ClenshawCurtis<std::function<double(const double)>,double> fejer;
-
-#ifdef USE_STAN
-	Romberg<std::function<stan::math::var(const stan::math::var)>,stan::math::var> romberg_dif;
-	GaussLegendre<std::function<stan::math::var(const stan::math::var)>,stan::math::var> gauss_legendre_dif;
-	GaussPatterson<std::function<stan::math::var(const stan::math::var)>,stan::math::var> patterson_dif;
-	ClenshawCurtis<std::function<stan::math::var(const stan::math::var)>,stan::math::var> fejer_dif;
-#endif
-
-	Spline<double> kspline;
-	double qx_parameter, f_parameter;
+	//Spline<double> kspline;
+	//double qx_parameter, f_parameter;
 
 	public:
 	LensParams<double>* lensparams; // this will point to the corresponding lensparams in the inherited classes
-	LensParams<double> lensparams_base;
 #ifdef USE_STAN
-	LensParams<stan::math::var> lensparams_base_dif; // autodiff version
+	LensParams<stan::math::var>* lensparams_dif; // this will point to the corresponding lensparams in the inherited classes
 #endif
+
+	private:
+	LensSpline_Params<double> lensparams_spl;
+#ifdef USE_STAN
+	LensSpline_Params<stan::math::var> lensparams_spl_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	LensSpline_Params<QScalar>& assign_lensspline_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_spl_dif;
+		else
+#endif
+		return lensparams_spl;
+	}
+
+	template <typename QScalar>
+	LensParams<QScalar>& assign_lensparam_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return (*lensparams_dif);
+		else
+#endif
+		return (*lensparams);
+	}
+
+	public:
 	double zlens, zsrc_ref;
 	double sigma_cr, kpc_to_arcsec;
-	double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
+	//double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
 
 	protected:
 	LensProfileName lenstype;
 	bool center_defined;
 	bool lensed_center_coords; // option for line-of-sight perturber that makes the lensed position of the perturber the free parameters
 	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
-	double xc_prime, yc_prime; // used if lensed_center_coords is set to true
+	//double xc_prime, yc_prime; // used if lensed_center_coords is set to true
 	double f_major_axis; // used for defining elliptical radius
-	double epsilon, epsilon1, epsilon2; // used for defining ellipticity, and/or components of ellipticity (epsilon1, epsilon2)
-	double costheta, sintheta;
-	double theta_eff; // used for intermediate calculations if ellipticity components are being used
-	double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
+	//double epsilon, epsilon1, epsilon2; // used for defining ellipticity, and/or components of ellipticity (epsilon1, epsilon2)
+	//double costheta, sintheta;
+	//double theta_eff; // used for intermediate calculations if ellipticity components are being used
+	//double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
 	bool perturber; // optional flag that can make the perturber subgridding faster, if used
 
 	int n_params, n_vary_params;
@@ -171,7 +197,6 @@ class LensProfile : public EllipticityGradient
 	void set_geometric_parameters(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	void set_angle_from_components(const double &comp_x, const double &comp_y);
 	void set_center_if_lensed_coords();
-	void set_integration_parameters();
 
 	void set_integration_pointers();
 	virtual void set_model_specific_integration_pointers();
@@ -204,10 +229,15 @@ class LensProfile : public EllipticityGradient
 	double mass_intval; // for calculating 3d enclosed mass
 	Spline<double> *rho3d_logx_spline;
 
-	double kappa_avg_spherical_integral(const double);
-	double mass_enclosed_spherical_integrand(const double);
-	double kapavg_spherical_generic(const double rsq);
-	double potential_spherical_integral(const double rsq);
+	template <typename QScalar>
+	QScalar kappa_avg_spherical_integral(const QScalar);
+
+	template <typename QScalar>
+	QScalar mass_enclosed_spherical_integrand(const QScalar);
+	template <typename QScalar>
+	QScalar kapavg_spherical_generic(const QScalar rsq);
+	template <typename QScalar>
+	QScalar potential_spherical_integral(const QScalar rsq);
 
 	double calculate_scaled_mass_3d_from_kappa(const double r);
 	double calculate_scaled_mass_3d_from_analytic_rho3d(const double r);
@@ -259,14 +289,18 @@ class LensProfile : public EllipticityGradient
 	bool analytic_3d_density; // if true, uses analytic 3d density to find mass_3d(r); if false, finds deprojected 3d profile through integration
 
 	LensProfile() {
+		//std::cout << "HUBBA WHA??" << std::endl;
 		set_null_ptrs_and_values();
-		qx_parameter = 1.0;
-		setup_lens_properties();
+		//std::cout << "HUBBA WHA2??" << std::endl;
+		//lensparams_spl.qx_parameter = 1.0;
+		//std::cout << "HUBBA WHA3??" << std::endl;
+		//setup_lens_properties();
+		//std::cout << "HUBBA WHA4??" << std::endl;
 	}
 	LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, Cosmology*);
 	LensProfile(const LensProfile* lens_in);
 	~LensProfile() {
-		if (param != NULL) delete[] param;
+		if (lensparams->param != NULL) delete[] lensparams->param;
 		if (anchor_parameter_to_lens != NULL) delete[] anchor_parameter_to_lens;
 		if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
 		if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
@@ -294,7 +328,7 @@ class LensProfile : public EllipticityGradient
 		parameter_anchor_source = NULL;
 		parameter_anchor_paramnum = NULL;
 		at_least_one_param_anchored = false;
-		param = NULL;
+		//lensparams->param = NULL;
 		parameter_anchor_ratio = NULL;
 		parameter_anchor_exponent = NULL;
 		zlens = zlens_current = 0;
@@ -315,6 +349,11 @@ class LensProfile : public EllipticityGradient
 	void set_redshifts(const double zlens_in, const double zsrc_in);
 	void setup_cosmology(Cosmology* cosmo_in);
 
+	template <typename QScalar>
+	using temp_defptr = void(*)(const QScalar, const QScalar, lensvector<QScalar>&);
+
+	//void (LensProfile::*temp_defptr)(const QScalar, const QScalar, lensvector<QScalar>& def); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
+
 	// in all derived classes, each of the following function pointers can be redirected if analytic formulas
 	// are used instead of the default numerical version
 	double (LensProfile::*kapavgptr_rsq_spherical)(const double); // numerical: &LensProfile::kapavg_spherical_integral
@@ -323,6 +362,15 @@ class LensProfile : public EllipticityGradient
 	void (LensProfile::*hessptr)(const double, const double, lensmatrix<double>& hess); // numerical: &LensProfile::hessian_numerical or &LensProfile::hessian_spherical_default
 	double (LensProfile::*potptr)(const double, const double); // numerical: &LensProfile::potential_numerical
 	void (LensProfile::*def_and_hess_ptr)(const double, const double, lensvector<double>& def, lensmatrix<double> &hess); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
+
+#ifdef USE_STAN
+	stan::math::var (LensProfile::*kapavgptr_rsq_spherical_autodif)(const stan::math::var); // numerical: &LensProfile::kapavg_spherical_integral
+	stan::math::var (LensProfile::*potptr_rsq_spherical_autodif)(const stan::math::var); // numerical: &LensProfile::potential_spherical_integral
+	void (LensProfile::*defptr_autodif)(const stan::math::var, const stan::math::var, lensvector<stan::math::var>& def); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
+	void (LensProfile::*hessptr_autodif)(const stan::math::var, const stan::math::var, lensmatrix<stan::math::var>& hess); // numerical: &LensProfile::hessian_numerical or &LensProfile::hessian_spherical_default
+	stan::math::var (LensProfile::*potptr_autodif)(const stan::math::var, const stan::math::var); // numerical: &LensProfile::potential_numerical
+	void (LensProfile::*def_and_hess_ptr_autodif)(const stan::math::var, const stan::math::var, lensvector<stan::math::var>& def, lensmatrix<stan::math::var> &hess); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
+#endif
 
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
 	void delete_center_anchor();
@@ -424,31 +472,19 @@ class LensProfile : public EllipticityGradient
 	void print_vary_parameters();
 	virtual void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { aux_paramname = ""; aux_param = 0; } // used for outputting information of derived parameters
 
-	//testing templated version
-	template <typename QScalar>
-	LensParams<QScalar>& assign_param_object()
-	{
-#ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>)
-			return lensparams_base_dif;
-		else
-#endif
-		return lensparams_base;
-	}
-	//template LensParams<double>* LensProfile::assign_param_object<double>();
-//#ifdef USE_STAN
-	//template LensParams<stan::math::var>* LensProfile::assign_param_object<stan::math::var>();
-//#endif
-
-
-	template <typename QScalar>
-	QScalar templated_kappa_rsq(const QScalar rsq);
-
 	// the following function MUST be redefined in all derived classes
-	virtual double kappa_rsq(const double rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	virtual double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	virtual double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	virtual stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	virtual stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
 
-	// some of these functions can be redefined in the derived classes
-	virtual double kappa_rsq_deriv(const double rsq);
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_xi_parameter(const double zfactor);
 	virtual double get_inner_logslope();
@@ -487,12 +523,12 @@ class LensProfile : public EllipticityGradient
 	void spline_fourier_mode_integrals(const double rmin, const double rmax);
 
 	public:
-	bool isspherical() { return (q==1.0); }
+	bool isspherical() { return (lensparams->q==1.0); }
 	std::string get_model_name() { return model_name; }
 	LensProfileName get_lenstype() { return lenstype; }
-	void get_center_coords(double &xc, double &yc) { xc=x_center; yc=y_center; }
-	void get_center_coords(lensvector<double> &center) { center[0]=x_center; center[1]=y_center; }
-	void get_q_theta(double &q_out, double& theta_out) { q_out=q; theta_out=theta; }
+	void get_center_coords(double &xc, double &yc) { xc=lensparams->x_center; yc=lensparams->y_center; }
+	void get_center_coords(lensvector<double> &center) { center[0]=lensparams->x_center; center[1]=lensparams->y_center; }
+	void get_q_theta(double &q_out, double& theta_out) { q_out=lensparams->q; theta_out=lensparams->theta; }
 	double get_f_major_axis() { return f_major_axis; }
 	double get_redshift() { return zlens; }
 	int get_n_params() { return n_params; }
@@ -502,142 +538,21 @@ class LensProfile : public EllipticityGradient
 	int get_center_anchor_number() { return center_anchor_lens->lens_number; }
 	virtual int get_special_parameter_anchor_number() { return -1; } // no special parameters can be center_anchored for the base class
 	void set_zsrc_ref(const double zsrc_ref_in) { zsrc_ref = zsrc_ref_in; }
-	void set_theta(double theta_in) { theta=theta_in; update_angle_meta_params(); }
-	void set_center(double xc_in, double yc_in) { x_center = xc_in; y_center = yc_in; }
+	void set_theta(double theta_in) { lensparams->theta=theta_in; update_angle_meta_params(); }
+	void set_center(double xc_in, double yc_in) { lensparams->x_center = xc_in; lensparams->y_center = yc_in; }
 	void set_include_limits(bool inc) { include_limits = inc; }
-	void set_integral_tolerance(const double acc);
-	void set_integral_warnings();
+	//void set_integral_tolerance(const double acc);
+	//void set_integral_warnings();
 	void set_perturber(bool ispert) { perturber = ispert; }
 	void set_lensed_center(bool lensed_xcyc) {
 		lensed_center_coords = lensed_xcyc;
-		xc_prime = x_center;
-		yc_prime = y_center;
+		lensparams->xc_prime = lensparams->x_center;
+		lensparams->yc_prime = lensparams->y_center;
 		set_center_if_lensed_coords();
 		assign_paramnames();
 		assign_param_pointers();
 	}
 	bool output_plates(const int n_plates);
-};
-
-struct LensIntegral 
-{
-	using GaussQuad = GaussLegendre<std::function<double(const double)>,double>;
-	using Patterson = GaussPatterson<std::function<double(const double)>,double>;
-	using Fejer = ClenshawCurtis<std::function<double(const double)>,double>;
-
-	LensProfile *profile;
-	double xval, yval, xsqval, ysqval, fsqinv, xisq, u, epsilon, qfac, nval_plus_half, mnval_plus_half;
-	int nval, emode;
-	int mval, fourier_ival; // mval, fourier_ival are used for the Fourier mode integrals
-	double phi0; // phi0 is used for Fourier mode integrals if ellipticity gradient is used
-	bool cosmode;
-	double *cosamps, *sinamps; // used for Fourier modes
-	double *gausspoints, *gaussweights;
-	//double *pat_points, **pat_weights;
-	double *pat_funcs;
-	double **pat_funcs_mult;
-	//double *cc_points, **cc_weights;
-	double *cc_funcs;
-	double **cc_funcs_mult;
-	int n_mult;
-
-	LensIntegral()
-	{
-		cosamps=sinamps=NULL;
-		n_mult = 0;
-	}
-	LensIntegral(LensProfile *profile_in, const double xval_in, const double yval_in, const double q = 1, const int n_mult_in = 0) : xval(xval_in), yval(yval_in)
-	{
-		cosamps=sinamps=NULL;
-		initialize(profile_in,q,n_mult_in);
-	}
-	void initialize(LensProfile *profile_in, const double q = 1, const int n_mult_in = 0)
-	{
-		n_mult = n_mult_in;
-		profile = profile_in;
-		xsqval = xval*xval;
-		ysqval = yval*yval;
-		epsilon = 1 - q*q;
-		emode = profile->ellipticity_mode;
-		fsqinv = (emode==0) ? 1 : (emode==1) ? q : (emode==2) ? q : q*q/((1+q*q)/2); 
-		phi0 = 0;
-		gausspoints = GaussQuad::points;
-		gaussweights = GaussQuad::weights;
-		if (profile->integral_method==Gauss_Patterson_Quadrature) {
-			if (n_mult > 0) {
-				pat_funcs_mult = new double*[511];
-				for (int i=0; i < 511; i++) pat_funcs_mult[i] = new double[n_mult];
-			} else {
-				pat_funcs = new double[511];
-			}
-
-		} else if (profile->integral_method==Fejer_Quadrature) {
-			if (n_mult > 0) {
-				cc_funcs_mult = new double*[Fejer::cc_N];
-				for (int i=0; i < Fejer::cc_N; i++) cc_funcs_mult[i] = new double[n_mult];
-			} else {
-				cc_funcs = new double[Fejer::cc_N];
-			}
-		}
-	}
-	~LensIntegral() {
-		if (profile->integral_method==Gauss_Patterson_Quadrature) {
-			if (n_mult > 0) {
-				for (int i=0; i < 511; i++) delete[] pat_funcs_mult[i];
-				delete[] pat_funcs_mult;
-			} else {
-				delete[] pat_funcs;
-			}
-		} else if (profile->integral_method==Fejer_Quadrature) {
-			if (n_mult > 0) {
-				for (int i=0; i < Fejer::cc_N; i++) delete[] cc_funcs_mult[i];
-				delete[] cc_funcs_mult;
-			} else {
-				delete[] cc_funcs;
-			}
-		}
-	}
-	double GaussIntegrate(double (LensIntegral::*func)(const double), const double a, const double b);
-	double PattersonIntegrate(double (LensIntegral::*func)(const double), const double a, const double b, bool &converged);
-	double FejerIntegrate(double (LensIntegral::*func)(double), double a, double b, bool &converged);
-
-	// Functions for doing multiple integrals simultaneously
-	void GaussIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs);
-	void PattersonIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);
-	void FejerIntegrate(void (LensIntegral::*func)(const double, double*), const double a, const double b, double* results, const int n_funcs, bool& converged);
-
-	double i_integrand_prime(const double w);
-	double j_integrand_prime(const double w);
-	double k_integrand_prime(const double w);
-	//double i_integrand_v2(const double w);
-	//double j_integrand_v2(const double w);
-	//double k_integrand_v2(const double w);
-	double i_integral(bool &converged);
-	double j_integral(const int nval, bool &converged);
-	double k_integral(const int nval, bool &converged);
-
-	double i_integrand_egrad(const double w);
-	//double j_integrand_egrad(const double w);
-	//double k_integrand_egrad(const double w);
-	//double jprime_integrand_egrad(const double w);
-
-	double i_integral_egrad(bool &converged);
-	//double j_integral_egrad(const int nval_in, bool &converged);
-	//double k_integral_egrad(const int nval_in, bool &converged);
-	//double jprime_integral_egrad(const int nval_in, bool &converged);
-
-	void j_integrand_egrad_mult(const double w, double* jint);
-	void k_integrand_egrad_mult(const double w, double* kint);
-	void jprime_integrand_egrad_mult(const double w, double* jint);
-	void j_integral_egrad_mult(double *jint, bool &converged);
-	void k_integral_egrad_mult(double *kint, bool &converged);
-	void jprime_integral_egrad_mult(double *jint, bool &converged);
-
-	void calculate_fourier_integrals(const int mval_in, const int fourier_ival_in, const bool cosmode_in, const double rval, double& ileft, double& iright, bool &converged);
-	double fourier_kappa_perturbation(const double r);
-	double ileft_integrand(const double r);
-	double iright_integrand(const double u); // here, u = 1/r
-	double fourier_kappa_m(const double r, const double phi, const int mval_in, const double fourier_ival_in);
 };
 
 class SPLE_Lens : public LensProfile
@@ -651,24 +566,13 @@ class SPLE_Lens : public LensProfile
 		QScalar qsq, ssq_prime;
 	};
 
-	public:
+	private:
 	SPLE_Params<double> lensparams_sple;
 #ifdef USE_STAN
 	SPLE_Params<stan::math::var> lensparams_sple_dif; // autodiff version
 #endif
-
-	private:
-	double alpha, bprime, sprime; // alpha=2D density log-slope, whereas bprime,sprime are defined along the major axis
-	// Note that in emode=1, the actual fit parameters are bprime' = bprime*sqrt(q) and sprime' = sprime*sqrt(q), not bprime and sprime. (See the constructor function for more on how this is implemented.)
-	double b, s;
-	double qsq, ssq_prime; // used in lensing calculations
-	double gamma; // 3D density log-slope, which is an alternative parameter instead of alpha
-	inline static const double euler_mascheroni = 0.57721566490153286060;
-	inline static const double def_tolerance = 1e-16;
-
-	//testing templated version
 	template <typename QScalar>
-	SPLE_Params<QScalar>& assign_param_object()
+	SPLE_Params<QScalar>& assign_sple_param_object()
 	{
 #ifdef USE_STAN
 		if constexpr (std::is_same_v<QScalar, stan::math::var>)
@@ -677,17 +581,27 @@ class SPLE_Lens : public LensProfile
 #endif
 		return lensparams_sple;
 	}
-	//template LensParams<double>* LensProfile::assign_param_object<double>();
-//#ifdef USE_STAN
-	//template LensParams<stan::math::var>* LensProfile::assign_param_object<stan::math::var>();
-//#endif
+
+	private:
+	//double alpha, bprime, sprime; // alpha=2D density log-slope, whereas bprime,sprime are defined along the major axis
+	// Note that in emode=1, the actual fit parameters are bprime' = bprime*sqrt(q) and sprime' = sprime*sqrt(q), not bprime and sprime. (See the constructor function for more on how this is implemented.)
+	//double b, s;
+	//double qsq, ssq_prime; // used in lensing calculations
+	//double gamma; // 3D density log-slope, which is an alternative parameter instead of alpha
+	inline static const double euler_mascheroni = 0.57721566490153286060;
+	inline static const double def_tolerance = 1e-16;
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
 
 	template <typename QScalar>
-	QScalar templated_kappa_rsq(const QScalar rsq);
-
-
-	double kappa_rsq(const double);
-	double kappa_rsq_deriv(const double);
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
 	double kapavg_spherical_rsq(const double rsq);
 	double potential_spherical_rsq(const double rsq);
@@ -721,8 +635,8 @@ class SPLE_Lens : public LensProfile
 	void set_auto_ranges();
 
 	double calculate_scaled_mass_3d(const double r);
-	bool core_present() { return (sprime==0) ? false : true; }
-	double get_inner_logslope() { return -alpha; }
+	bool core_present() { return (lensparams_sple.sprime==0) ? false : true; }
+	double get_inner_logslope() { return -lensparams_sple.alpha; }
 	void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor = 1.0);
 	bool output_cosmology_info(const int lens_number);
 };
@@ -739,22 +653,41 @@ class dPIE_Lens : public LensProfile
 		QScalar qsq, ssq_prime, asq;
 	};
 
-	public:
-	dPIE_Params<double> lensparams;
+	private:
+	dPIE_Params<double> lensparams_dpie;
 #ifdef USE_STAN
-	dPIE_Params<stan::math::var> lensparams_dif; // autodiff version
+	dPIE_Params<stan::math::var> lensparams_dpie_dif; // autodiff version
 #endif
+	template <typename QScalar>
+	dPIE_Params<QScalar>& assign_dpie_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_dpie_dif;
+		else
+#endif
+		return lensparams_dpie;
+	}
 
 	private:
-	double b, s, a; // a is the truncation radius
-	double sigma0, mtot, s_kpc, a_kpc; // alternate parametrizations
+	//double b, s, a; // a is the truncation radius
+	//double sigma0, mtot, s_kpc, a_kpc; // alternate parametrizations
 
 	// the following are meta-parameters used in lensing calculations
-	double bprime, sprime, aprime; // these are the lengths along the major axis
-	double qsq, ssq_prime, asq;
+	//double bprime, sprime, aprime; // these are the lengths along the major axis
+	//double qsq, ssq_prime, asq;
 
-	double kappa_rsq(const double);
-	double kappa_rsq_deriv(const double);
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
 	double kapavg_spherical_rsq(const double rsq);
 	void deflection_elliptical(const double, const double, lensvector<double>&);
@@ -789,20 +722,54 @@ class dPIE_Lens : public LensProfile
 	bool output_cosmology_info(const int lens_number = -1);
 	double calculate_scaled_mass_3d(const double r);
 	bool calculate_total_scaled_mass(double& total_mass);
-	void get_einstein_radius(double& r1, double &r2, const double zfactor = 1.0) { this->rmin_einstein_radius = 0.01*b; this->rmax_einstein_radius = 100*b; LensProfile::get_einstein_radius(r1,r2,zfactor); } 
-	double get_tidal_radius() { return aprime; }
-	bool core_present() { return (sprime==0) ? false : true; }
+	void get_einstein_radius(double& r1, double &r2, const double zfactor = 1.0) { this->rmin_einstein_radius = 0.01*lensparams_dpie.b; this->rmax_einstein_radius = 100*lensparams_dpie.b; LensProfile::get_einstein_radius(r1,r2,zfactor); } 
+	double get_tidal_radius() { return lensparams_dpie.aprime; }
+	bool core_present() { return (lensparams_dpie.sprime==0) ? false : true; }
 };
 
 class NFW : public LensProfile
 {
-	private:
-	double ks, rs;
-	double m200, c200, rs_kpc; // alternate parametrizations
+	template <typename QScalar>
+	class NFW_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar ks, rs;
+		QScalar m200, c200, rs_kpc; // alternate parametrizations
+	};
 
-	double kappa_rsq(const double);
-	double kappa_rsq_deriv(const double);
-	double lens_function_xsq(const double&);
+	private:
+	NFW_Params<double> lensparams_nfw;
+#ifdef USE_STAN
+	NFW_Params<stan::math::var> lensparams_nfw_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	NFW_Params<QScalar>& assign_nfw_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_nfw_dif;
+		else
+#endif
+		return lensparams_nfw;
+	}
+
+	public:
+	//double ks, rs;
+	//double m200, c200, rs_kpc; // alternate parametrizations
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+	template <typename QScalar>
+	QScalar lens_function_xsq(const QScalar);
 
 	double kapavg_spherical_rsq(const double rsq);
 	double potential_spherical_rsq(const double rsq);
@@ -835,13 +802,47 @@ class NFW : public LensProfile
 
 class Truncated_NFW : public LensProfile
 {
+	template <typename QScalar>
+	class Truncated_NFW_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar ks, rs, rt;
+		QScalar m200, c200, rs_kpc, rt_kpc, tau200, tau_s; // alternate parametrizations
+	};
+
+	private:
+	Truncated_NFW_Params<double> lensparams_tnfw;
+#ifdef USE_STAN
+	Truncated_NFW_Params<stan::math::var> lensparams_tnfw_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	Truncated_NFW_Params<QScalar>& assign_tnfw_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_tnfw_dif;
+		else
+#endif
+		return lensparams_tnfw;
+	}
+
 	// This profile is the same as NFW, times a factor (1+(r/rt)^2)^-2 which smoothly truncates the halo (prescription from Baltz, Marshall & Oguri (2008))
 	private:
-	double ks, rs, rt;
-	double m200, c200, rs_kpc, rt_kpc, tau200, tau_s; // alternate parametrizations
+	//double ks, rs, rt;
+	//double m200, c200, rs_kpc, rt_kpc, tau200, tau_s; // alternate parametrizations
 
-	double kappa_rsq(const double);
-	double lens_function_xsq(const double&);
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return 0; } // no implementation in this class for kappa_rsq_deriv...still overloading the wrapper just to be safe
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return 0; }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+
+	template <typename QScalar>
+	QScalar lens_function_xsq(const QScalar);
 	double kapavg_spherical_rsq(const double rsq);
 	double rho3d_r_integrand_analytic(const double r);
 
@@ -869,14 +870,48 @@ class Truncated_NFW : public LensProfile
 
 class Cored_NFW : public LensProfile
 {
+	template <typename QScalar>
+	class Cored_NFW_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar ks, rs, rc;
+		QScalar m200, c200, beta, rs_kpc, rc_kpc; // alternate parametrization
+	};
+
+	private:
+	Cored_NFW_Params<double> lensparams_cnfw;
+#ifdef USE_STAN
+	Cored_NFW_Params<stan::math::var> lensparams_cnfw_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	Cored_NFW_Params<QScalar>& assign_cnfw_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_cnfw_dif;
+		else
+#endif
+		return lensparams_cnfw;
+	}
+
 	// This profile goes like 1/(r+rc)/(r+rs)^2
 	private:
-	double ks, rs, rc;
-	double m200, c200, beta, rs_kpc, rc_kpc; // alternate parametrization
+	//double ks, rs, rc;
+	//double m200, c200, beta, rs_kpc, rc_kpc; // alternate parametrization
 
-	double kappa_rsq(const double);
-	double kappa_rsq_deriv(const double rsq);
-	double lens_function_xsq(const double&);
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+	template <typename QScalar>
+	QScalar lens_function_xsq(const QScalar);
 	double kapavg_spherical_rsq(const double rsq);
 	//double potential_spherical_rsq(const double rsq);
 	//double potential_lens_function_xsq(const double&);
@@ -907,12 +942,45 @@ class Cored_NFW : public LensProfile
 
 class Hernquist : public LensProfile
 {
-	private:
-	double ks, rs;
+	template <typename QScalar>
+	class Hernquist_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar ks, rs;
+	};
 
-	double kappa_rsq(const double);
-	double kappa_rsq_deriv(const double);
-	double lens_function_xsq(const double);
+	private:
+	Hernquist_Params<double> lensparams_hernquist;
+#ifdef USE_STAN
+	Hernquist_Params<stan::math::var> lensparams_hernquist_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	Hernquist_Params<QScalar>& assign_hernquist_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_hernquist_dif;
+		else
+#endif
+		return lensparams_hernquist;
+	}
+
+	private:
+	//double ks, rs;
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+	template <typename QScalar>
+	QScalar lens_function_xsq(const QScalar);
 	double kapavg_spherical_rsq(const double rsq);
 	double potential_spherical_rsq(const double rsq);
 	double rho3d_r_integrand_analytic(const double r);
@@ -935,11 +1003,43 @@ class Hernquist : public LensProfile
 
 class ExpDisk : public LensProfile
 {
-	private:
-	double k0, R_d;
+	template <typename QScalar>
+	class ExpDisk_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar k0, R_d;
+	};
 
-	double kappa_rsq(const double);
-	double kappa_rsq_deriv(const double);
+	private:
+	ExpDisk_Params<double> lensparams_expdisk;
+#ifdef USE_STAN
+	ExpDisk_Params<stan::math::var> lensparams_expdisk_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	ExpDisk_Params<QScalar>& assign_expdisk_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_expdisk_dif;
+		else
+#endif
+		return lensparams_expdisk;
+	}
+
+	private:
+	//double k0, R_d;
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 	double kapavg_spherical_rsq(const double rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
@@ -967,17 +1067,37 @@ class Shear : public LensProfile
 		QScalar shear1, shear2;
 	};
 
-	public:
+	private:
 	Shear_Params<double> lensparams_shear;
 #ifdef USE_STAN
 	Shear_Params<stan::math::var> lensparams_shear_dif; // autodiff version
 #endif
+	template <typename QScalar>
+	Shear_Params<QScalar>& assign_shear_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_shear_dif;
+		else
+#endif
+		return lensparams_shear;
+	}
 
 	private:
-	double shear, theta_eff;
-	double shear1, shear2; // used when shear_components is turned on
-	double kappa_rsq(const double) { return 0; }
-	double kappa_rsq_deriv(const double) { return 0; }
+	//double shear, theta_eff;
+	//double shear1, shear2; // used when shear_components is turned on
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq) { return 0; }
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq) {return 0; }
+
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
@@ -1015,14 +1135,46 @@ class Shear : public LensProfile
 
 class Multipole : public LensProfile
 {
+	template <typename QScalar>
+	class Multipole_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar A_n, n, theta_eff;
+	};
+
+	private:
+	Multipole_Params<double> lensparams_mpole;
+#ifdef USE_STAN
+	Multipole_Params<stan::math::var> lensparams_mpole_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	Multipole_Params<QScalar>& assign_mpole_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_mpole_dif;
+		else
+#endif
+		return lensparams_mpole;
+	}
+
 	private:
 	int m;
-	double A_n, n, theta_eff;
+	//double A_n, n, theta_eff;
 	bool kappa_multipole; // specifies whether it is a multipole in the potential or in kappa
 	bool sine_term; // specifies whether it is a sine or cosine multipole term
 
-	double kappa_rsq(const double rsq);
-	double kappa_rsq_deriv(const double rsq);
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
@@ -1052,18 +1204,52 @@ class Multipole : public LensProfile
 
 class PointMass : public LensProfile
 {
-	private:
-	double b; // Einstein radius of point mass
-	double mtot; // alternative parameterization
+	template <typename QScalar>
+	class PointMass_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar b; // Einstein radius of point mass
+		QScalar mtot; // alternative parameterization
+	};
 
-	double kappa_rsq(const double rsq) { return 0; }
-	double kappa_rsq_deriv(const double rsq) { return 0; }
+	private:
+	PointMass_Params<double> lensparams_ptmass;
+#ifdef USE_STAN
+	PointMass_Params<stan::math::var> lensparams_ptmass_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	PointMass_Params<QScalar>& assign_ptmass_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_ptmass_dif;
+		else
+#endif
+		return lensparams_ptmass;
+	}
+
+	private:
+	//double b; // Einstein radius of point mass
+	//double mtot; // alternative parameterization
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq) { return 0; }
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq) {return 0; }
 	double kapavg_spherical_rsq(const double rsq);
 	double potential_spherical_rsq(const double rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
 	public:
+	PointMass() {}
 	PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology*);
 	void initialize_parameters(const double &p_in, const double &xc_in, const double &yc_in);
 	PointMass(const PointMass* lens_in);
@@ -1096,32 +1282,69 @@ class PointMass : public LensProfile
 
 class CoreCusp : public LensProfile
 {
+	template <typename QScalar>
+	class CoreCusp_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar n, gamma, a, s, k0;
+		QScalar einstein_radius;
+		QScalar core_enclosed_mass;
+		QScalar digamma_term, beta_p1, beta_p2; // used for calculations of kappa, dkappa
+		QScalar r200_const;
+
+	};
+
 	private:
-	double n, gamma, a, s, k0;
+	CoreCusp_Params<double> lensparams_cc;
+#ifdef USE_STAN
+	CoreCusp_Params<stan::math::var> lensparams_cc_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	CoreCusp_Params<QScalar>& assign_cc_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_cc_dif;
+		else
+#endif
+		return lensparams_cc;
+	}
+
+	private:
+	//double n, gamma, a, s, k0;
 	inline static const double nstep = 0.2; // this is for calculating the n=3 case, which requires extrapolation since F21 is singular for n=3
 	inline static const double digamma_three_halves = 0.036489973978435; // needed for the n=3 case
 
 	bool set_k0_by_einstein_radius;
-	double einstein_radius;
-	double core_enclosed_mass;
-	double digamma_term, beta_p1, beta_p2; // used for calculations of kappa, dkappa
-	double r200_const;
 
-	double kappa_rsq(const double);
-	double kappa_rsq_deriv(const double rsq);
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+
+	template <typename QScalar>
+	QScalar kappa_rsq_nocore(const QScalar rsq_prime, const QScalar atilde);
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_nocore(const QScalar rsq_prime, const QScalar atilde);
+
 	double kapavg_spherical_rsq(const double rsq);
 
-	double kappa_rsq_nocore(const double rsq_prime, const double atilde);
-	double enclosed_mass_spherical_nocore(const double rsq_prime, const double atilde) { return enclosed_mass_spherical_nocore(rsq_prime,atilde,n); }
+	double enclosed_mass_spherical_nocore(const double rsq_prime, const double atilde) { return enclosed_mass_spherical_nocore(rsq_prime,atilde,lensparams_cc.n); }
 	double enclosed_mass_spherical_nocore(const double rsq_prime, const double atilde, const double nprime);
 	double enclosed_mass_spherical_nocore_n3(const double rsq_prime, const double atilde, const double nprime);
 	double enclosed_mass_spherical_nocore_limit(const double rsq, const double atilde, const double n_stepsize);
-	double kappa_rsq_deriv_nocore(const double rsq_prime, const double atilde);
 	void set_core_enclosed_mass();
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
-	void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { if (set_k0_by_einstein_radius) aux_paramname = "k0"; aux_param = k0; }
+	void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { if (set_k0_by_einstein_radius) aux_paramname = "k0"; aux_param = lensparams_cc.k0; }
 
 	public:
 	bool calculate_tidal_radius;
@@ -1142,7 +1365,7 @@ class CoreCusp : public LensProfile
 	double rho3d_r_integrand_analytic(const double r);
 	bool output_cosmology_info(const int lens_number);
 	double r200_root_eq(const double r);
-	bool core_present() { return (s==0) ? false : true; }
+	bool core_present() { return (lensparams_cc.s==0) ? false : true; }
 };
 
 class SersicLens : public LensProfile
@@ -1150,14 +1373,50 @@ class SersicLens : public LensProfile
 	friend class SB_Profile;
 	friend class Sersic;
 
-	private:
-	double kappa0, b, n;
-	double re; // effective radius
-	double mstar; // total stellar mass (alternate parameterization)
-	double def_factor; // used to calculate the spherical deflection
+	template <typename QScalar>
+	class Sersic_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar kappa0, b, n;
+		QScalar re; // effective radius
+		QScalar mstar; // total stellar mass (alternate parameterization)
+		QScalar def_factor; // used to calculate the spherical deflection
+	};
 
-	double kappa_rsq(const double rsq);
-	double kappa_rsq_deriv(const double rsq);
+	private:
+	Sersic_Params<double> lensparams_sersic;
+#ifdef USE_STAN
+	Sersic_Params<stan::math::var> lensparams_sersic_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	Sersic_Params<QScalar>& assign_sersic_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_sersic_dif;
+		else
+#endif
+		return lensparams_sersic;
+	}
+
+	private:
+	//double kappa0, b, n;
+	//double re; // effective radius
+	//double mstar; // total stellar mass (alternate parameterization)
+	//double def_factor; // used to calculate the spherical deflection
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+
 	double kapavg_spherical_rsq(const double rsq);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -1183,16 +1442,53 @@ class DoubleSersicLens : public LensProfile
 	friend class SB_Profile;
 	friend class DoubleSersic;
 
+	template <typename QScalar>
+	class DoubleSersic_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar kappa0, delta_k;
+		QScalar kappa0_1, b1, n1;
+		QScalar kappa0_2, b2, n2;
+		QScalar Reff1, Reff2; // effective radiukappa
+		QScalar mstar; // total stellar mass (alternate parameterization to kappa0)
+	};
+
 	private:
-	double kappa0, delta_k;
-	double kappa0_1, b1, n1;
-	double kappa0_2, b2, n2;
-	double Reff1, Reff2; // effective radiukappa
-	double mstar; // total stellar mass (alternate parameterization to kappa0)
+	DoubleSersic_Params<double> lensparams_dsersic;
+#ifdef USE_STAN
+	DoubleSersic_Params<stan::math::var> lensparams_dsersic_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	DoubleSersic_Params<QScalar>& assign_dsersic_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_dsersic_dif;
+		else
+#endif
+		return lensparams_dsersic;
+	}
+
+	private:
+	//double kappa0, delta_k;
+	//double kappa0_1, b1, n1;
+	//double kappa0_2, b2, n2;
+	//double Reff1, Reff2; // effective radiukappa
+	//double mstar; // total stellar mass (alternate parameterization to kappa0)
 	//double def_factor; // used to calculate the spherical deflection
 
-	double kappa_rsq(const double rsq);
-	double kappa_rsq_deriv(const double rsq);
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+
 	//double kapavg_spherical_rsq(const double rsq);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -1215,15 +1511,52 @@ class DoubleSersicLens : public LensProfile
 
 class Cored_SersicLens : public LensProfile
 {
-	private:
-	double kappa0, b, n;
-	double re; // effective radius
-	double rc; // core radius
-	double mstar; // total stellar mass (alternate parameterization)
-	double def_factor; // used to calculate the spherical deflection
+	template <typename QScalar>
+	class Cored_Sersic_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar kappa0, b, n;
+		QScalar re; // effective radius
+		QScalar rc; // core radius
+		QScalar mstar; // total stellar mass (alternate parameterization)
+		QScalar def_factor; // used to calculate the spherical deflection
+	};
 
-	double kappa_rsq(const double rsq);
-	double kappa_rsq_deriv(const double rsq);
+	private:
+	Cored_Sersic_Params<double> lensparams_csersic;
+#ifdef USE_STAN
+	Cored_Sersic_Params<stan::math::var> lensparams_csersic_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	Cored_Sersic_Params<QScalar>& assign_csersic_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_csersic_dif;
+		else
+#endif
+		return lensparams_csersic;
+	}
+
+	private:
+	//double kappa0, b, n;
+	//double re; // effective radius
+	//double rc; // core radius
+	//double mstar; // total stellar mass (alternate parameterization)
+	//double def_factor; // used to calculate the spherical deflection
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+
 	double kapavg_spherical_rsq(const double rsq);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -1246,11 +1579,44 @@ class Cored_SersicLens : public LensProfile
 
 class MassSheet : public LensProfile
 {
-	private:
-	double kext;
+	template <typename QScalar>
+	class MassSheet_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar kext;
+	};
 
-	double kappa_rsq(const double rsq);
-	double kappa_rsq_deriv(const double rsq);
+	private:
+	MassSheet_Params<double> lensparams_sheet;
+#ifdef USE_STAN
+	MassSheet_Params<stan::math::var> lensparams_sheet_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	MassSheet_Params<QScalar>& assign_sheet_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_sheet_dif;
+		else
+#endif
+		return lensparams_sheet;
+	}
+
+	private:
+	//double kext;
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+
 	double kapavg_spherical_rsq(const double rsq);
 	double potential_spherical_rsq(const double rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -1274,7 +1640,7 @@ class MassSheet : public LensProfile
 	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
 	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
 	{
-		kap = kext;
+		kap = lensparams_sheet.kext;
 		potential_derivatives(x,y,def,hess);
 	}
 
@@ -1286,11 +1652,43 @@ class MassSheet : public LensProfile
 
 class Deflection : public LensProfile
 {
-	private:
-	double def_x, def_y;
+	template <typename QScalar>
+	class Deflection_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar def_x, def_y;
+	};
 
-	double kappa_rsq(const double rsq) { return 0; }
-	double kappa_rsq_deriv(const double rsq) { return 0; }
+	private:
+	Deflection_Params<double> lensparams_defl;
+#ifdef USE_STAN
+	Deflection_Params<stan::math::var> lensparams_defl_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	Deflection_Params<QScalar>& assign_defl_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_defl_dif;
+		else
+#endif
+		return lensparams_defl;
+	}
+
+	private:
+	//double def_x, def_y;
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq) { return 0; }
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq) {return 0; }
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
@@ -1324,11 +1722,43 @@ class Deflection : public LensProfile
 
 class TopHatLens : public LensProfile
 {
-	private:
-	double kap0, xi0;
+	template <typename QScalar>
+	class TopHat_Params : public LensParams<QScalar>
+	{
+		public:
+		QScalar kap0, xi0;
+	};
 
-	double kappa_rsq(const double);
-	double kappa_rsq_deriv(const double);
+	private:
+	TopHat_Params<double> lensparams_tophat;
+#ifdef USE_STAN
+	TopHat_Params<stan::math::var> lensparams_tophat_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	TopHat_Params<QScalar>& assign_tophat_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lensparams_tophat_dif;
+		else
+#endif
+		return lensparams_tophat;
+	}
+
+	private:
+	//double kap0, xi0;
+
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+	template <typename QScalar>
+	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
 	double kapavg_spherical_rsq(const double rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -1351,6 +1781,7 @@ class TopHatLens : public LensProfile
 	//bool calculate_total_scaled_mass(double& total_mass);
 };
 
+/*
 class Tabulated_Model : public LensProfile
 {
 	private:
@@ -1429,13 +1860,23 @@ class QTabulated_Model : public LensProfile
 
 	//void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0) { r1=0; r2=0; } // cannot use this
 };
+*/
 
 // Model for testing purposes; can also be used as a template for a new lens model
 class TestModel : public LensProfile
 {
 	private:
 
-	double kappa_rsq(const double);
+	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
+	double kappa_rsq_deriv(const double rsq) { return 0; }
+#ifdef USE_STAN
+	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
+	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return 0; }
+#endif
+
+	template <typename QScalar>
+	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 
 	// The following functions can be overloaded, but don't necessarily have to be

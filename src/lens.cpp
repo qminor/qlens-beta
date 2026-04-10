@@ -10,7 +10,7 @@
 #include "romberg.h"
 #include "spline.h"
 #include "mcmchdr.h"
-#include "hyp_2F1.h"
+//#include "hyp_2F1.h"
 #include "cosmo.h"
 #include <cmath>
 #include <complex>
@@ -1075,15 +1075,26 @@ void QLens::create_and_add_lens(LensProfileName name, const int emode, const dou
 	// if using ellipticity components, (eparam,theta) are actually (e1,e2)
 	
 	LensProfile* new_lens = NULL;
+	//cout << "GOT HERE" << endl;
+	//PointMass *ptm = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this->cosmo);
+	//cout << "WOAH!!!" << endl;
+	//LensProfile *kspl = new LensProfile("hargkap.dat", zl, zs, eparam, theta, xc, yc, 1, 1, this->cosmo);
+	//cout << "GOT HERE?" << endl;
 
 	int old_emode = LensProfile::default_ellipticity_mode;
 	if (emode != -1) LensProfile::default_ellipticity_mode = emode; // set ellipticity mode to user-specified value for this lens
 
-	SPLE_Lens* alphaptr;
+	//SPLE_Lens* alphaptr;
 	//Shear* shearptr;
 	//Truncated_NFW* tnfwptr;
+	//cout << "YO0" << endl;
 	switch (name) {
 		case PTMASS:
+	//cout << "YO1" << endl;
+			//new_lens = new PointMass();
+			//cout << "YO2" << endl;
+			//die();
+			//break;
 			new_lens = new PointMass(zl, zs, mass_parameter, xc, yc, pmode, this->cosmo); break;
 		case SHEET:
 			new_lens = new MassSheet(zl, zs, mass_parameter, xc, yc, this->cosmo); break;
@@ -1233,6 +1244,7 @@ void QLens::add_multipole_lens(const double zl, const double zs, int m, const do
 	reset_grid();
 }
 
+/*
 void QLens::add_tabulated_lens(const double zl, const double zs, int lnum, const double kscale, const double rscale, const double theta, const double xc, const double yc)
 {
 	// automatically set gridsize if the appropriate settings are turned on
@@ -1383,6 +1395,7 @@ bool QLens::add_qtabulated_lens_from_file(const double zl, const double zs, cons
 	reset_grid();
 	return true;
 }
+*/
 
 void QLens::add_lens(LensProfile *new_lens)
 {
@@ -2600,6 +2613,7 @@ void QLens::print_zfactors_and_beta_matrices()
 	}
 }
 
+/*
 bool QLens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
 {
 	int pos;
@@ -2618,6 +2632,7 @@ bool QLens::save_tabulated_lens_to_file(int lnum, const string tabfileroot)
 	}
 	return true;
 }
+*/
 
 void QLens::set_source_redshift(const double zsrc)
 {
@@ -6778,8 +6793,8 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	double new_kappaval, new_sheartot, new_shear_angle, shear_deriv, kappa_deriv;
 	const double increment = 1e-4;
 
-	rvals = new double[npts];
-	phivals = new double[npts];
+	rvals = new double[npts+1];
+	phivals = new double[npts+1];
 
 	// incrementing through number of critical curve points
 	for (m=0; m < npts; m++) {
@@ -6790,11 +6805,16 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 		phivals[m] = get_angle(x,y);
 	}
 	sort(npts,phivals,rvals);
+	phivals[npts] = phivals[0] + M_2PI;
+	rvals[npts] = rvals[0];
 	//for (int i=0; i < npts; i++) {
 		//cout << phivals[i] << " " << rvals[i] << endl;
 	//}
-	Spline<double> rspline(phivals,rvals,npts);
-	r_phi = rspline.splint(phi);
+	Spline<double> rspline(phivals,rvals,npts+1);
+	double phi0 = phi;
+	if (phi < phivals[0]) phi0 += M_2PI;
+	if (phi > phivals[npts]) phi0 -= M_2PI;
+	r_phi = rspline.splint(phi0);
 	x_phi = xc+r_phi*cos(phi);
 	y_phi = yc+r_phi*sin(phi);
 	lensvector<double> point(x_phi,y_phi);
@@ -8283,10 +8303,10 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 				fitmodel->lens_list[i] = new MassSheet((MassSheet*) lens_list[i]); break;
 			case DEFLECTION:
 				fitmodel->lens_list[i] = new Deflection((Deflection*) lens_list[i]); break;
-			case TABULATED:
-				fitmodel->lens_list[i] = new Tabulated_Model((Tabulated_Model*) lens_list[i]); break;
-			case QTABULATED:
-				fitmodel->lens_list[i] = new QTabulated_Model((QTabulated_Model*) lens_list[i]); break;
+			//case TABULATED:
+				//fitmodel->lens_list[i] = new Tabulated_Model((Tabulated_Model*) lens_list[i]); break;
+			//case QTABULATED:
+				//fitmodel->lens_list[i] = new QTabulated_Model((QTabulated_Model*) lens_list[i]); break;
 			default:
 				die("lens type not supported for fitting");
 		}
@@ -11859,7 +11879,175 @@ double QLens::find_percentile(const unsigned long npoints, const double pct, con
 	return 0.0;
 }
 
-void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampled_posts, bool no2dposts, bool use_fisher_matrix, bool run_python_script)
+bool QLens::find_chain_file_and_threads(const string file_root, string& filename, int& n_threads, int& n_processes, const bool use_fisher_matrix)
+{
+	auto file_exists = [](const string &filename)
+	{
+		ifstream infile(filename.c_str());
+		bool exists = infile.good();
+		infile.close();
+		return exists;
+	};
+
+	int i=0,j=0;
+	int cut = -1;
+
+	//int nparams_subset = -1;
+	string istring, jstring;
+	if (!use_fisher_matrix) {
+		for(;;)
+		{
+			stringstream jstream;
+			jstream << j;
+			jstream >> jstring;
+			filename = file_root + "_0." + jstring;
+			if (file_exists(filename)) j++;
+			else break;
+		}
+		if (j==0) {
+			for(;;) {
+				stringstream istream;
+				istream << i;
+				istream >> istring;
+				filename = file_root + "_" + istring;
+				if (file_exists(filename)) i++;
+				else break;
+			}
+			if (i==0) {
+				if (file_exists(file_root)) {
+					// in this case the "chain" data is from nested sampling, and no cut needs to be made
+					if (cut == -1) cut = 0;
+					i++;
+				}
+				else {
+					warn("No data files found");
+					return false;
+				}
+			}
+		} else {
+			for (;;) {
+				stringstream istream;
+				istream << i;
+				istream >> istring;
+				filename = file_root + "_" + istring + ".0";
+				if (file_exists(filename)) i++;
+				else break;
+			}
+			if (i==0) {
+				if (file_exists(file_root)) {
+					i++;
+				}
+				else {
+					warn("No data files found");
+					return false;
+				}
+			}
+		}
+		if (cut != 0) {
+			if (i > 0) n_threads = i; // set number of chains for MCMC data
+			if (j > 0) n_processes = j; // set number of MPI processes that were used to produce MCMC data
+		}
+	} else {
+		filename = file_root + ".pcov";
+		if (!file_exists(filename)) {
+			warn("Inverse-Fisher matrix file not found");
+			return false;
+		}
+	}
+	return true;
+}
+
+bool QLens::get_parameter_percentiles(dvector& halfpct, dvector& lowpct_1sig, dvector& hipct_1sig, dvector& lowpct_2sig, dvector& hipct_2sig, const bool resampled_posts, const bool use_fisher_matrix)
+{
+	auto file_exists = [](const string &filename)
+	{
+		ifstream infile(filename.c_str());
+		bool exists = infile.good();
+		infile.close();
+		return exists;
+	};
+
+	int i,j;
+	int n_threads=1, n_processes=1;
+	bool silent = false;
+	bool transform_parameters = false;
+	bool importance_sampling = false;
+	char param_transform_filename[100] = "";
+	char prior_weight_filename[100] = "";
+	string filename_root = fit_output_filename;
+	if (resampled_posts) filename_root += ".new";
+	string file_root = fit_output_dir + "/" + filename_root;
+
+	i=0;
+	j=0;
+	int cut = -1;
+	bool exclude_derived_params = false;
+
+	//int nparams_subset = -1;
+	string filename;
+	int nparams, nparams_eff, n_fitparams = -1;
+	bool found_data = find_chain_file_and_threads(file_root,filename,n_threads,n_processes,use_fisher_matrix);
+	if (!found_data) return false;
+
+	string nparam_filename = file_root + ".nparam";
+	ifstream nparam_file(nparam_filename.c_str());
+	if (nparam_file.good()) {
+		nparam_file >> n_fitparams;
+		nparam_file.close();
+	}
+
+	McmcEval Eval;
+	FisherEval FEval;
+	double logev = 1e30;
+
+	if (use_fisher_matrix) {
+		FEval.input(file_root.c_str(),true);
+		FEval.get_nparams(nparams);
+	}
+	else
+	{
+		bool mpi_silent = true;
+		if (mpi_id==0) mpi_silent = silent;
+		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,logev,n_processes,cut,MULT|LIKE,mpi_silent,n_fitparams,transform_parameters,param_transform_filename,importance_sampling,prior_weight_filename);
+		Eval.get_nparams(nparams);
+	}
+	if (nparams==0) {
+		warn("no parameters found; nparams=0");
+		return false;
+	}
+
+	nparams_eff = nparams;
+	if (n_fitparams==-1) n_fitparams = nparams;
+	if (exclude_derived_params) nparams_eff = n_fitparams;
+
+	double *minvals = new double[nparams];
+	double *maxvals = new double[nparams];
+	for (i=0; i < nparams; i++) {
+		minvals[i] = -1e30;
+		maxvals[i] = 1e30;
+	}
+
+	double threshold = 3e-3;
+	int nbins = 60; // can't remember why/how this gets used by FindRanges below
+	Eval.FindRanges(minvals,maxvals,nbins,threshold);
+	halfpct.input(nparams_eff);
+	lowpct_1sig.input(nparams_eff);
+	hipct_1sig.input(nparams_eff);
+	lowpct_2sig.input(nparams_eff);
+	hipct_2sig.input(nparams_eff);
+	for (i=0; i < nparams_eff; i++) {
+		lowpct_2sig[i] = Eval.cl(0.025,i,minvals[i],maxvals[i]);
+		hipct_2sig[i] = Eval.cl(0.975,i,minvals[i],maxvals[i]);
+		lowpct_1sig[i] = Eval.cl(0.15865,i,minvals[i],maxvals[i]);
+		hipct_1sig[i] = Eval.cl(0.84135,i,minvals[i],maxvals[i]);
+		halfpct[i] = Eval.cl(0.5,i,minvals[i],maxvals[i]);
+	}
+	delete[] minvals;
+	delete[] maxvals;
+	return true;
+}
+
+bool QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampled_posts, bool no2dposts, bool use_fisher_matrix, bool run_python_script)
 {
 	auto file_exists = [](const string &filename)
 	{
@@ -11982,59 +12170,10 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 	bool print_marker_values = false;
 
 	//int nparams_subset = -1;
-	string filename, istring, jstring;
+	string filename;
 	int nparams, nparams_eff, n_fitparams = -1;
-	if (!use_fisher_matrix) {
-		for(;;)
-		{
-			stringstream jstream;
-			jstream << j;
-			jstream >> jstring;
-			filename = file_root + "_0." + jstring;
-			if (file_exists(filename)) j++;
-			else break;
-		}
-		if (j==0) {
-			for(;;) {
-				stringstream istream;
-				istream << i;
-				istream >> istring;
-				filename = file_root + "_" + istring;
-				if (file_exists(filename)) i++;
-				else break;
-			}
-			if (i==0) {
-				if (file_exists(file_root)) {
-					// in this case the "chain" data is from nested sampling, and no cut needs to be made
-					if (cut == -1) cut = 0;
-					i++;
-				}
-				else die("No data files found");
-			}
-		} else {
-			for (;;) {
-				stringstream istream;
-				istream << i;
-				istream >> istring;
-				filename = file_root + "_" + istring + ".0";
-				if (file_exists(filename)) i++;
-				else break;
-			}
-			if (i==0) {
-				if (file_exists(file_root)) {
-					i++;
-				}
-				else die("No data files found");
-			}
-		}
-		if (cut != 0) {
-			if (i > 0) n_threads = i; // set number of chains for MCMC data
-			if (j > 0) n_processes = j; // set number of MPI processes that were used to produce MCMC data
-		}
-	} else {
-		filename = file_root + ".pcov";
-		if (!file_exists(filename)) die("Inverse-Fisher matrix file not found");
-	}
+	bool found_data = find_chain_file_and_threads(file_root,filename,n_threads,n_processes,use_fisher_matrix);
+	if (!found_data) return false;
 
 	string nparam_filename = file_root + ".nparam";
 	ifstream nparam_file(nparam_filename.c_str());
@@ -12058,7 +12197,10 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 		Eval.input(file_root.c_str(),-1,n_threads,NULL,NULL,logev,n_processes,cut,MULT|LIKE,mpi_silent,n_fitparams,transform_parameters,param_transform_filename,importance_sampling,prior_weight_filename);
 		Eval.get_nparams(nparams);
 	}
-	if (nparams==0) die();
+	if (nparams==0) {
+		warn("no parameters found; nparams=0");
+		return false;
+	}
 	nparams_eff = nparams;
 	if (n_fitparams==-1) n_fitparams = nparams;
 	if (exclude_derived_params) nparams_eff = n_fitparams;
@@ -12073,7 +12215,11 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 	paramnames_filename = file_root + ".paramnames";
 	ifstream paramnames_file(paramnames_filename.c_str());
 	for (i=0; i < nparams; i++) {
-		if (!(paramnames_file >> param_names[i])) die("not all parameter names are given in file '%s'",paramnames_filename.c_str());
+		if (!(paramnames_file >> param_names[i])) {
+			warn("not all parameter names are given in file '%s'",paramnames_filename.c_str());
+			delete[] param_names;
+			return false;
+		}
 	}
 	paramnames_file.close();
 
@@ -12085,10 +12231,10 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 		const int n_characters = 1024;
 		char line[n_characters];
 		for (i=0; i < nparams; i++) {
-			if (!(latex_paramnames_file.getline(line,n_characters))) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			if (!(latex_paramnames_file.getline(line,n_characters))) { warn("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str()); delete[] latex_param_names; return false; }
 			istringstream instream(line);
-			if (!(instream >> dummy)) die("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str());
-			if (!(instream >> latex_param_names[i])) die("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str());
+			if (!(instream >> dummy)) { warn("not all parameter names are given in file '%s'",latex_paramnames_filename.c_str()); delete[] latex_param_names; return false; }
+			if (!(instream >> latex_param_names[i])) { warn("not all latex parameter names are given in file '%s'",latex_paramnames_filename.c_str()); delete[] latex_param_names; return false; }
 			while (instream >> dummy) latex_param_names[i] += " " + dummy;
 		}
 		latex_paramnames_file.close();
@@ -12104,9 +12250,9 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 	ifstream paramranges_file(paramranges_filename.c_str());
 	if (paramranges_file.is_open()) {
 		for (i=0; i < nparams; i++) {
-			if (!(paramranges_file >> prior_minvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
-			if (!(paramranges_file >> prior_maxvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
-			if (prior_minvals[i] > prior_maxvals[i]) die("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str());
+			if (!(paramranges_file >> prior_minvals[i])) { warn("not all parameter ranges are given in file '%s'",paramranges_filename.c_str()); delete[] latex_param_names; delete[] prior_minvals; delete[] prior_maxvals; return false; }
+			if (!(paramranges_file >> prior_maxvals[i])) { warn("not all parameter ranges are given in file '%s'",paramranges_filename.c_str()); delete[] latex_param_names; delete[] prior_minvals; delete[] prior_maxvals; return false; }
+			if (prior_minvals[i] > prior_maxvals[i]) { warn("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str()); delete[] latex_param_names; delete[] prior_minvals; delete[] prior_maxvals; return false; }
 		}
 		paramranges_file.close();
 	} else warn("parameter range file '%s' not found",paramranges_filename.c_str());
@@ -12141,13 +12287,13 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 			string *hist2d_param_names = new string[nparams_eff];
 			ifstream hist2d_paramnames_file(hist2d_paramnames_filename.c_str());
 			for (i=0; i < nparams_eff; i++) {
-				if (!(hist2d_paramnames_file >> hist2d_param_names[i])) die("not all hist2d_parameter names are given in file '%s'",hist2d_paramnames_filename.c_str());
-				if (hist2d_param_names[i] != param_names[i]) die("hist2d parameter names do not match names given in paramnames file (%s versus %s)",hist2d_param_names[i].c_str(),param_names[i].c_str());
+				if (!(hist2d_paramnames_file >> hist2d_param_names[i])) { warn("not all hist2d_parameter names are given in file '%s'",hist2d_paramnames_filename.c_str()); return false; }
+				if (hist2d_param_names[i] != param_names[i]) { warn("hist2d parameter names do not match names given in paramnames file (%s versus %s)",hist2d_param_names[i].c_str(),param_names[i].c_str()); return false; }
 				int pflag;
-				if (!(hist2d_paramnames_file >> pflag)) die("hist2d parameter flag not given in file '%s'",hist2d_paramnames_filename.c_str());
+				if (!(hist2d_paramnames_file >> pflag)) { warn("hist2d parameter flag not given in file '%s'",hist2d_paramnames_filename.c_str()); return false; }
 				if (pflag == 0) hist2d_active_params[i] = false;
 				else if (pflag == 1) hist2d_active_params[i] = true;
-				else die("invalid hist2d parameter flag in file '%s'; should either be 0 or 1",hist2d_paramnames_filename.c_str());
+				else { warn("invalid hist2d parameter flag in file '%s'; should either be 0 or 1",hist2d_paramnames_filename.c_str()); return false; }
 			}
 			hist2d_paramnames_file.close();
 			delete[] hist2d_param_names;
@@ -12166,14 +12312,14 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 		string *subplot_param_names = new string[nparams_eff];
 		ifstream subplot_paramnames_file(subplot_paramnames_filename.c_str());
 		for (i=0; i < nparams_eff; i++) {
-			if (!(subplot_paramnames_file >> subplot_param_names[i])) die("not all subplot_parameter names are given in file '%s'",subplot_paramnames_filename.c_str());
-			if (subplot_param_names[i] != param_names[i]) die("subplot parameter names do not match names given in paramnames file");
+			if (!(subplot_paramnames_file >> subplot_param_names[i])) { warn("not all subplot_parameter names are given in file '%s'",subplot_paramnames_filename.c_str()); return false; }
+			if (subplot_param_names[i] != param_names[i]) { warn("subplot parameter names do not match names given in paramnames file"); return false; }
 			int pflag;
-			if (!(subplot_paramnames_file >> pflag)) die("subplot parameter flag not given in file '%s'",subplot_paramnames_filename.c_str());
+			if (!(subplot_paramnames_file >> pflag)) { warn("subplot parameter flag not given in file '%s'",subplot_paramnames_filename.c_str()); return false; }
 			if (pflag == 0) subplot_active_params[i] = false;
 			else if (pflag == 1) subplot_active_params[i] = true;
-			else die("invalid subplot parameter flag in file '%s'; should either be 0 or 1",subplot_paramnames_filename.c_str());
-			if ((subplot_active_params[i]) and (!hist2d_active_params[i])) die("subplot parameter '%s' must also have the hist2d flag set to 'true' in <label>.hist2d_params",subplot_param_names[i].c_str());
+			else { warn("invalid subplot parameter flag in file '%s'; should either be 0 or 1",subplot_paramnames_filename.c_str()); return false; }
+			if ((subplot_active_params[i]) and (!hist2d_active_params[i])) { warn("subplot parameter '%s' must also have the hist2d flag set to 'true' in <label>.hist2d_params",subplot_param_names[i].c_str()); return false; }
 		}
 		subplot_paramnames_file.close();
 		delete[] subplot_param_names;
@@ -12665,6 +12811,7 @@ void QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 	delete[] markers;
 	delete[] subplot_active_params;
 	delete[] hist2d_active_params;
+	return true;
 }
 
 bool QLens::output_egrad_values_and_knots(const int srcnum, const string suffix)
@@ -13618,21 +13765,21 @@ double QLens::fitmodel_custom_prior()
 void QLens::set_integral_tolerance(const double& acc)
 {
 	LensProfile::integral_tolerance = acc;
-	if (nlens > 0) {
-		for (int i=0; i < nlens; i++) {
-			lens_list[i]->set_integral_tolerance(acc);
-		}
-	}
+	//if (nlens > 0) {
+		//for (int i=0; i < nlens; i++) {
+			//lens_list[i]->set_integral_tolerance(acc);
+		//}
+	//}
 }
 
 void QLens::set_integral_convergence_warnings(const bool warn)
 {
 	LensProfile::integration_warnings = warn;
-	if (nlens > 0) {
-		for (int i=0; i < nlens; i++) {
-			lens_list[i]->set_integral_warnings(); // this is for integrations used for derived parameters etc.
-		}
-	}
+	//if (nlens > 0) {
+		//for (int i=0; i < nlens; i++) {
+			//lens_list[i]->set_integral_warnings(); // this is for integrations used for derived parameters etc.
+		//}
+	//}
 }
 
 void QLens::reassign_lensparam_pointers_and_names(const bool reset_plimits)
@@ -14350,7 +14497,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			if (include_fgmask_in_inversion) npix_in_lensing_mask++;
 			include = false;
 			nysubpix = image_pixel_grids[imggrid_i]->nsplits[i][j]; // why not just store the square and avoid having to always take the square?
-			nsubpix = INTSQR(nysubpix); // why not just store the square and avoid having to always take the square?
+			nsubpix = SQR(nysubpix); // why not just store the square and avoid having to always take the square?
 			if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
 				include = true;
 				sb = image_data->surface_brightness[i][j];
@@ -14397,7 +14544,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 				srcpts_x[npix] = image_pixel_grids[imggrid_i]->center_sourcepts[i][j][0];
 				srcpts_y[npix] = image_pixel_grids[imggrid_i]->center_sourcepts[i][j][1];
 			} else {
-				nsubpix = INTSQR(image_pixel_grids[imggrid_i]->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+				nsubpix = SQR(image_pixel_grids[imggrid_i]->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 				if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (delaunay_mode==5)) {
 					for (int k=0; k < nsubpix; k++) {
 						srcpts_x[npix] = image_pixel_grids[imggrid_i]->subpixel_center_sourcepts[i][j][nsubpix-1-k][0];
@@ -14681,7 +14828,7 @@ bool QLens::create_lensgrid_from_imggrid_delaunay(const int zsrc_i, const int pi
 		i = pixptr_i[n];
 		j = pixptr_j[n];
 		nysubpix = image_pixel_grids[zsrc_i]->nsplits[i][j]; // why not just store the square and avoid having to always take the square?
-		nsubpix = INTSQR(nysubpix); // why not just store the square and avoid having to always take the square?
+		nsubpix = SQR(nysubpix); // why not just store the square and avoid having to always take the square?
 		if ((use_lenspixel_clustering) or (delaunay_mode==5)) {
 			include = true;
 			sb = image_data->surface_brightness[i][j];
@@ -14725,7 +14872,7 @@ bool QLens::create_lensgrid_from_imggrid_delaunay(const int zsrc_i, const int pi
 				pts_x[npix] = image_pixel_grids[zsrc_i]->center_pts[i][j][0];
 				pts_y[npix] = image_pixel_grids[zsrc_i]->center_pts[i][j][1];
 			} else {
-				nsubpix = INTSQR(image_pixel_grids[zsrc_i]->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+				nsubpix = SQR(image_pixel_grids[zsrc_i]->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 				if ((use_lenspixel_clustering) or (delaunay_mode==5)) {
 					for (int k=0; k < nsubpix; k++) {
 						pts_x[npix] = image_pixel_grids[zsrc_i]->subpixel_center_pts[i][j][nsubpix-1-k][0];

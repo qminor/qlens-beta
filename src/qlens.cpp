@@ -10,6 +10,10 @@
 #include <cstdlib>
 #include <stdio.h>
 
+#ifdef USE_STAN
+#include <stan/math.hpp>
+#endif
+
 using namespace std;
 
 char *advance(char *p);
@@ -69,6 +73,11 @@ int main(int argc, char *argv[])
 	GaussLegendre<std::function<double(const double)>,double>::allocate_quadrature_tables(GaussLegendre<std::function<double(const double)>,double>::numberOfPoints);
 	GaussPatterson<std::function<double(const double)>,double>::allocate_gauss_patterson_tables();
 	ClenshawCurtis<std::function<double(const double)>,double>::allocate_cc_quadrature_tables(LensProfile::default_fejer_nlevels,false); // the latter boolean=false tells it to use Fejer quadrature (open interval)
+#ifdef USE_STAN
+	GaussLegendre<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::allocate_quadrature_tables(GaussLegendre<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::numberOfPoints);
+	GaussPatterson<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::allocate_gauss_patterson_tables();
+	ClenshawCurtis<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::allocate_cc_quadrature_tables(LensProfile::default_fejer_nlevels,false); // the latter boolean=false tells it to use Fejer quadrature (open interval)
+#endif
 
 	bool read_from_file = false;
 	bool verbal_mode = true;
@@ -266,6 +275,11 @@ int main(int argc, char *argv[])
 	GaussLegendre<std::function<double(const double)>,double>::deallocate_quadrature_tables();
 	GaussPatterson<std::function<double(const double)>,double>::deallocate_gauss_patterson_tables();
 	ClenshawCurtis<std::function<double(const double)>,double>::deallocate_cc_quadrature_tables();
+#ifdef USE_STAN
+	GaussLegendre<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::deallocate_quadrature_tables();
+	GaussPatterson<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::deallocate_gauss_patterson_tables();
+	ClenshawCurtis<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::deallocate_cc_quadrature_tables();
+#endif
 
 #ifdef USE_MPI
 	MPI_Finalize();

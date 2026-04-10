@@ -11970,7 +11970,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 	//}
 	//if (qlens->mpi_id==0) cout << "HACK: mask_min_r=" << mask_min_r << endl;
 
-	int nsubpix = INTSQR(qlens->default_imgpixel_nsplit);
+	int nsubpix = SQR(qlens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			mapped_cartesian_srcpixels[i][j].clear();
@@ -12006,7 +12006,7 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((!pixel_in_mask) or (pixel_in_mask[i][j]) or (image_data == NULL) or (emask == NULL) or (emask[i][j])) {
-				ntot_subpixels += INTSQR(nsplits[i][j]);
+				ntot_subpixels += SQR(nsplits[i][j]);
 				if ((verbal) and (nsplits[i][j] > 1)) nsplitpix++;
 			}
 		}
@@ -12027,7 +12027,7 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((!pixel_in_mask) or (pixel_in_mask[i][j]) or (image_data == NULL) or ((emask==NULL) or (emask[i][j]))) {
-				for (k=0; k < INTSQR(nsplits[i][j]); k++) {
+				for (k=0; k < SQR(nsplits[i][j]); k++) {
 					extended_mask_subcell_i[n_subpixel] = i;
 					extended_mask_subcell_j[n_subpixel] = j;
 					extended_mask_subcell_index[n_subpixel] = k;
@@ -12042,7 +12042,7 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((!pixel_in_mask) or (pixel_in_mask[i][j]) or (image_data == NULL)) {
-				ntot_subpixels_in_mask += INTSQR(nsplits[i][j]);
+				ntot_subpixels_in_mask += SQR(nsplits[i][j]);
 				if ((verbal) and (nsplits[i][j] > 1)) nsplitpix++;
 			}
 		}
@@ -12060,7 +12060,7 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((!pixel_in_mask) or (pixel_in_mask[i][j]) or (image_data == NULL)) {
-				for (k=0; k < INTSQR(nsplits[i][j]); k++) {
+				for (k=0; k < SQR(nsplits[i][j]); k++) {
 					mask_subcell_i[n_subpixel] = i;
 					mask_subcell_j[n_subpixel] = j;
 					mask_subcell_index[n_subpixel] = k;
@@ -12668,7 +12668,7 @@ void ImagePixelGrid::plot_sourcepts(string outfile_root, const bool show_subpixe
 				if ((!qlens->split_imgpixels) or (!show_subpixels)) {
 					sourcepts_file << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << center_pts[i][j][0] << " " << center_pts[i][j][1] << endl;
 				} else {
-					nsp = INTSQR(nsplits[i][j]);
+					nsp = SQR(nsplits[i][j]);
 					for (k=0; k < nsp; k++) {
 						sourcepts_file << subpixel_center_sourcepts[i][j][k][0] << " " << subpixel_center_sourcepts[i][j][k][1] << " " << subpixel_center_pts[i][j][k][0] << " " << subpixel_center_pts[i][j][k][1] << endl;
 					}
@@ -12774,7 +12774,7 @@ bool ImagePixelGrid::set_fit_window(ImageData& pixel_data, const bool raytrace, 
 		pixel_in_mask = new bool*[x_N];
 		for (i=0; i < x_N; i++) pixel_in_mask[i] = new bool[y_N];
 	}
-	int nsubpix = INTSQR(qlens->default_imgpixel_nsplit);
+	int nsubpix = SQR(qlens->default_imgpixel_nsplit);
 	mask = pixel_data.in_mask[mask_index];
 	emask = pixel_data.extended_mask[mask_index];
 	fgmask = pixel_data.foreground_mask;
@@ -12817,7 +12817,7 @@ void ImagePixelGrid::include_all_pixels(const bool redo_fft)
 		pixel_in_mask = new bool*[x_N];
 		for (i=0; i < x_N; i++) pixel_in_mask[i] = new bool[y_N];
 	}
-	int nsubpix = INTSQR(qlens->default_imgpixel_nsplit);
+	int nsubpix = SQR(qlens->default_imgpixel_nsplit);
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			pixel_in_mask[i][j] = true;
@@ -12843,7 +12843,7 @@ void ImagePixelGrid::activate_extended_mask(const bool redo_fft)
 		pixel_in_mask = new bool*[x_N];
 		for (i=0; i < x_N; i++) pixel_in_mask[i] = new bool[y_N];
 	}
-	int nsubpix = INTSQR(qlens->default_imgpixel_nsplit);
+	int nsubpix = SQR(qlens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			pixel_in_mask[i][j] = emask[i][j];
@@ -12867,7 +12867,7 @@ void ImagePixelGrid::activate_foreground_mask(const bool redo_fft, const bool da
 		pixel_in_mask = new bool*[x_N];
 		for (i=0; i < x_N; i++) pixel_in_mask[i] = new bool[y_N];
 	}
-	int nsubpix = INTSQR(qlens->default_imgpixel_nsplit);
+	int nsubpix = SQR(qlens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (datamask) pixel_in_mask[i][j] = image_data->foreground_mask_data[i][j];
@@ -12889,7 +12889,7 @@ void ImagePixelGrid::deactivate_extended_mask(const bool redo_fft, const bool us
 {
 	if (mask==NULL) { warn("mask pointer set to NULL; could not activate extended mask"); return; }
 	int i,j,k;
-	int nsubpix = INTSQR(qlens->default_imgpixel_nsplit);
+	int nsubpix = SQR(qlens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (use_fgmask) pixel_in_mask[i][j] = fgmask[i][j];
@@ -12911,7 +12911,7 @@ void ImagePixelGrid::update_mask_values(const bool use_fgmask)
 {
 	if (mask==NULL) { warn("mask pointer set to NULL; could not update mask values within imggrid"); return; }
 	int i,j,k;
-	int nsubpix = INTSQR(qlens->default_imgpixel_nsplit);
+	int nsubpix = SQR(qlens->default_imgpixel_nsplit);
 	for (i=0; i < x_N; i++) {
 		for (j=0; j < y_N; j++) {
 			if (use_fgmask) pixel_in_mask[i][j] = fgmask[i][j];
@@ -13082,7 +13082,7 @@ void ImagePixelGrid::find_optimal_sourcegrid(double& sourcegrid_xmin, double& so
 						ysavg = center_sourcepts[i][j][1];
 					} else {
 						xsavg=ysavg=0;
-						nsp = INTSQR(nsplits[i][j]);
+						nsp = SQR(nsplits[i][j]);
 						for (k=0; k < nsp; k++) {
 							xsavg += subpixel_center_sourcepts[i][j][k][0];
 							ysavg += subpixel_center_sourcepts[i][j][k][1];
@@ -13179,7 +13179,7 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 							ysavg = center_sourcepts[i][j][1];
 						} else {
 							xsavg=ysavg=0;
-							nsp = INTSQR(nsplits[i][j]);
+							nsp = SQR(nsplits[i][j]);
 							for (k=0; k < nsp; k++) {
 								xsavg += subpixel_center_sourcepts[i][j][k][0];
 								ysavg += subpixel_center_sourcepts[i][j][k][1];
@@ -13228,7 +13228,7 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 						ysavg = center_sourcepts[i][j][1];
 					} else {
 						xsavg=ysavg=0;
-						nsp = INTSQR(nsplits[i][j]);
+						nsp = SQR(nsplits[i][j]);
 						for (k=0; k < nsp; k++) {
 							xsavg += subpixel_center_sourcepts[i][j][k][0];
 							ysavg += subpixel_center_sourcepts[i][j][k][1];
@@ -13294,7 +13294,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 						ysavg = center_sourcepts[i][j][1];
 					} else {
 						xsavg=ysavg=0;
-						nsp = INTSQR(nsplits[i][j]);
+						nsp = SQR(nsplits[i][j]);
 						for (k=0; k < nsp; k++) {
 							xsavg += subpixel_center_sourcepts[i][j][k][0];
 							ysavg += subpixel_center_sourcepts[i][j][k][1];
@@ -13330,7 +13330,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 						ysavg = center_sourcepts[i][j][1];
 					} else {
 						xsavg=ysavg=0;
-						nsp = INTSQR(nsplits[i][j]);
+						nsp = SQR(nsplits[i][j]);
 						for (k=0; k < nsp; k++) {
 							xsavg += subpixel_center_sourcepts[i][j][k][0];
 							ysavg += subpixel_center_sourcepts[i][j][k][1];
@@ -13370,7 +13370,7 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 					ysavg = center_sourcepts[i][j][1];
 				} else {
 					xsavg=ysavg=0;
-					nsp = INTSQR(nsplits[i][j]);
+					nsp = SQR(nsplits[i][j]);
 					for (k=0; k < nsp; k++) {
 						xsavg += subpixel_center_sourcepts[i][j][k][0];
 						ysavg += subpixel_center_sourcepts[i][j][k][1];
@@ -13630,7 +13630,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 	int i,j,k;
 	n_active_pixels = 0;
 	n_high_sn_pixels = 0;
-	int nsubpix = INTSQR(qlens->default_imgpixel_nsplit);
+	int nsubpix = SQR(qlens->default_imgpixel_nsplit);
 	int *ptr;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
@@ -13701,7 +13701,7 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 				for (j=0; j < y_N; j++) {
 					for (i=0; i < x_N; i++) {
 						if ((pixel_in_mask == NULL) or (pixel_in_mask[i][j])) {
-							nsubpix = INTSQR(nsplits[i][j]);
+							nsubpix = SQR(nsplits[i][j]);
 							if (!map_all_imgpixels) maps_to_something = false;
 							for (subcell_index=0; subcell_index < nsubpix; subcell_index++)
 							{
@@ -13881,7 +13881,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 							if ((pixel_in_mask == NULL) or (pixel_in_mask[i][j])) {
 								sbtot=0;
 
-								nsubpix = INTSQR(nsplits[i][j]);
+								nsubpix = SQR(nsplits[i][j]);
 								center_srcpt = subpixel_center_sourcepts[i][j];
 								center_pt = subpixel_center_pts[i][j];
 								for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
@@ -14074,7 +14074,7 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 				for (i=0; i < x_N; i++) {
 					if ((pixel_in_mask == NULL) or (pixel_in_mask[i][j])) {
 						sbtot=0;
-						nsubpix = INTSQR(nsplits[i][j]);
+						nsubpix = SQR(nsplits[i][j]);
 						center_srcpt = subpixel_center_sourcepts[i][j];
 						center_pt = subpixel_center_pts[i][j];
 						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
@@ -15089,7 +15089,7 @@ bool QLens::assign_pixel_mappings(const int imggrid_i, const bool potential_pert
 				for (i=0; i < imggrid->x_N; i++) {
 					if (imggrid->maps_to_source_pixel[i][j]) {
 						if (imggrid->nsplits[i][j] != default_imgpixel_nsplit) die("nsplit has to be the same for all pixels to use supersampling (pixel (%i,%i), nsplits: %i vs %i)",i,j,imggrid->nsplits[i][j],default_imgpixel_nsplit);
-						nsubpix = INTSQR(imggrid->nsplits[i][j]);
+						nsubpix = SQR(imggrid->nsplits[i][j]);
 						nsub += nsubpix;
 					}
 				}
@@ -15141,7 +15141,7 @@ bool QLens::assign_pixel_mappings(const int imggrid_i, const bool potential_pert
 					imggrid->active_image_pixel_j[image_pixel_index] = j;
 					imggrid->pixel_index[i][j] = image_pixel_index++;
 					if (psf_supersampling) {
-						nsubpix = INTSQR(imggrid->nsplits[i][j]);
+						nsubpix = SQR(imggrid->nsplits[i][j]);
 						if (imggrid->nsplits[i][j] != default_imgpixel_nsplit) die("nsplit has to be the same for all pixels to use supersampling (pixel (%i,%i), nsplits: %i vs %i)",i,j,imggrid->nsplits[i][j],default_imgpixel_nsplit);
 						for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
 							imggrid->active_image_pixel_i_ss[image_subpixel_index] = i;
@@ -15562,7 +15562,7 @@ void QLens::construct_Lmatrix(const int imggrid_i, const bool delaunay, const bo
 					i = image_pixel_grid->active_image_pixel_i[img_index];
 					j = image_pixel_grid->active_image_pixel_j[img_index];
 
-					nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+					nsubpix = SQR(image_pixel_grid->nsplits[i][j]);
 					center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j];
 					if (delaunay) {
 						if (image_pixel_grid->delaunay_srcgrid != NULL) {
@@ -15796,7 +15796,7 @@ void QLens::construct_Lmatrix_shapelets(const int imggrid_i)
 				i = image_pixel_grid->active_image_pixel_i[img_index];
 				j = image_pixel_grid->active_image_pixel_j[img_index];
 
-				nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+				nsubpix = SQR(image_pixel_grid->nsplits[i][j]);
 				center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j];
 				center_pt = image_pixel_grid->subpixel_center_pts[i][j];
 				for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
@@ -15874,7 +15874,7 @@ void QLens::add_MGE_amplitudes_to_Lmatrix(const int imggrid_i)
 				i = image_pixel_grid->active_image_pixel_i[img_index];
 				j = image_pixel_grid->active_image_pixel_j[img_index];
 
-				nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+				nsubpix = SQR(image_pixel_grid->nsplits[i][j]);
 				center_srcpt = image_pixel_grid->subpixel_center_sourcepts[i][j];
 				center_pt = image_pixel_grid->subpixel_center_pts[i][j];
 				for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
@@ -19273,7 +19273,7 @@ void QLens::calculate_subpixel_sbweights(const int imggrid_i, const bool save_sb
 		for (n=0; n < npix_in_mask; n++) {
 			i = pixptr_i[n];
 			j = pixptr_j[n];
-			nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+			nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 			n_sbweights += nsubpix;
 		}
 		if (mpi_id==0) cout << "Saving " << n_sbweights << " sbweights" << endl;
@@ -19304,7 +19304,7 @@ void QLens::calculate_subpixel_sbweights(const int imggrid_i, const bool save_sb
 		for (n=0; n < npix_in_mask; n++) {
 			i = pixptr_i[n];
 			j = pixptr_j[n];
-			nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+			nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 			for (k=0; k < nsubpix; k++) {
 				// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)...did I already accomplish this? (check)
 				sb = 0;
@@ -19330,7 +19330,7 @@ void QLens::calculate_subpixel_sbweights(const int imggrid_i, const bool save_sb
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
-		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		for (k=0; k < nsubpix; k++) {
 			image_pixel_grid->subpixel_weights[i][j][k] /= max_sb;
 			if (save_sbweights) saved_sbweights[l++] = image_pixel_grid->subpixel_weights[i][j][k];
@@ -19407,7 +19407,7 @@ void QLens::calculate_subpixel_distweights(const int imggrid_i)
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
-		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		n_weights += nsubpix;
 	}
 	double *scaled_dists = new double[n_weights];
@@ -19427,7 +19427,7 @@ void QLens::calculate_subpixel_distweights(const int imggrid_i)
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
-		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		for (k=0; k < nsubpix; k++) {
 			image_pixel_grid->subpixel_weights[i][j][k] = exp(-pow(sqrt(SQR(scaled_dists[l++]) + scaled_rcsq),srcgrid->regparam_lum_index));
 			//cout << "WEIGHT " << (l-1) << ": " << image_pixel_grid->subpixel_weights[i][j][k] << " " << scaled_dists[l-1] << " " << (*srcpts[l-1])[0] << " " << (*srcpts[l-1])[1] << " " << xc << " " << yc << " " << sig << endl;
@@ -19631,7 +19631,7 @@ void QLens::find_srcpixel_weights(const int imggrid_i)
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
-		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		for (k=0; k < nsubpix; k++) {
 			pt = &image_pixel_grid->subpixel_center_sourcepts[i][j][k];
 			// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)
@@ -19673,7 +19673,7 @@ void QLens::load_pixel_sbweights(const int imggrid_i)
 	for (int n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
-		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		nweights += nsubpix;
 	}
 	if (nweights != n_sbweights) die("number of subpixels (%i) doesn't match number of saved sb-weights (%i)",nweights,n_sbweights);
@@ -19682,7 +19682,7 @@ void QLens::load_pixel_sbweights(const int imggrid_i)
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
-		nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
+		nsubpix = SQR(image_pixel_grid->nsplits[i][j]); // why not just store the square and avoid having to always take the square?
 		for (k=0; k < nsubpix; k++) {
 			image_pixel_grid->subpixel_weights[i][j][k] = saved_sbweights[l++];
 		}
@@ -21882,7 +21882,7 @@ void QLens::vectorize_image_pixel_surface_brightness(const int imggrid_i, bool u
 					n++;
 					if (psf_supersampling) {
 						if (image_pixel_grid->nsplits[i][j] != default_imgpixel_nsplit) die("nsplit has to be the same for all pixels to use supersampling (pixel (%i,%i), nsplits: %i vs %i)",i,j,image_pixel_grid->nsplits[i][j],default_imgpixel_nsplit);
-						nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+						nsubpix = SQR(image_pixel_grid->nsplits[i][j]);
 						nsub += nsubpix;
 					}
 				}
@@ -21943,7 +21943,7 @@ void QLens::vectorize_image_pixel_surface_brightness(const int imggrid_i, bool u
 				//if (image_pixel_grid->pixel_index[i][j] != k) cout << "PIXEL_INDEX ARRAYS FUCKED UP" << endl;
 				image_pixel_grid->pixel_index[i][j] = k++;
 				if (psf_supersampling) {
-					nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+					nsubpix = SQR(image_pixel_grid->nsplits[i][j]);
 					if (image_pixel_grid->nsplits[i][j] != default_imgpixel_nsplit) die("nsplit has to be the same for all pixels to use supersampling (pixel (%i,%i), nsplits: %i vs %i)",i,j,image_pixel_grid->nsplits[i][j],default_imgpixel_nsplit);
 					for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
 						image_pixel_grid->active_image_pixel_i_ss[image_subpixel_index] = i;
@@ -22002,7 +22002,7 @@ void QLens::vectorize_image_pixel_surface_brightness(const int imggrid_i, bool u
 		//for (k=0; k < image_npixels; k++) {
 			//i = image_pixel_grid->active_image_pixel_i[k];
 			//j = image_pixel_grid->active_image_pixel_j[k];
-			//nsubpix = INTSQR(image_pixel_grid->nsplits[i][j]);
+			//nsubpix = SQR(image_pixel_grid->nsplits[i][j]);
 			//for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
 				//image_surface_brightness_supersampled[image_subpixel_index++] = image_pixel_grid->subpixel_surface_brightness[i][j][subcell_index];
 			//}
