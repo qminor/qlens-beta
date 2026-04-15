@@ -96,7 +96,7 @@ bool isfinite (const std::complex<QScalar> &z)
 {
   const QScalar x = real (z), y = imag (z);
 
-  return (isfinite (x) && isfinite (y));
+  return (std::isfinite (x) && std::isfinite (y));
 }
 
 template <typename QScalar>

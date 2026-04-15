@@ -10,6 +10,7 @@
 //#include "sbprofile.h"
 #include "romberg.h"
 #include "cosmo.h"
+#include <functional>
 #include <iostream>
 #include <vector>
 #include <complex>
