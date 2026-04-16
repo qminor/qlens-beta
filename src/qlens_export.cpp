@@ -717,9 +717,29 @@ PYBIND11_MODULE(qlens, m) {
 			ny = yvals.size()-1;
 
 			string plottype = "data"; 
-			py::array_t<double> xvec(nx+1,xvals.array());
-			py::array_t<double> yvec(ny+1,yvals.array());
-			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
+
+ 			py::array_t<double> xvec(nx + 1);
+ 			py::array_t<double> yvec(ny + 1);
+ 			py::array_t<double> zmat({ny, nx});
+ 
+ 			auto xbuf = xvec.mutable_unchecked<1>();
+ 			auto ybuf = yvec.mutable_unchecked<1>();
+ 			auto zbuf = zmat.mutable_unchecked<2>();
+ 
+ 			// copy data into them
+ 			for (ssize_t i = 0; i < nx+1; ++i)
+ 				 xbuf(i) = xvals[i];
+ 
+ 			for (ssize_t i = 0; i < ny+1; ++i)
+ 				 ybuf(i) = yvals[i];
+ 
+ 			for (ssize_t j = 0; j < ny; ++j)
+ 				 for (ssize_t i = 0; i < nx; ++i)
+ 					  zbuf(j,i) = zvals[j*nx + i];
+
+			//py::array_t<double> xvec(nx+1,xvals.array());
+			//py::array_t<double> yvec(ny+1,yvals.array());
+			//py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		.def("mask_all_pixels", [](ImageData &current, py::kwargs &kwargs) {
@@ -2987,9 +3007,29 @@ PYBIND11_MODULE(qlens, m) {
 			ny = yvals.size()-1;
 
 			string plottype = "imgplane"; 
-			py::array_t<double> xvec(nx+1,xvals.array());
-			py::array_t<double> yvec(ny+1,yvals.array());
-			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
+
+ 			py::array_t<double> xvec(nx + 1);
+ 			py::array_t<double> yvec(ny + 1);
+ 			py::array_t<double> zmat({ny, nx});
+ 
+ 			auto xbuf = xvec.mutable_unchecked<1>();
+ 			auto ybuf = yvec.mutable_unchecked<1>();
+ 			auto zbuf = zmat.mutable_unchecked<2>();
+ 
+ 			// copy data into them
+ 			for (ssize_t i = 0; i < nx+1; ++i)
+ 				 xbuf(i) = xvals[i];
+ 
+ 			for (ssize_t i = 0; i < ny+1; ++i)
+ 				 ybuf(i) = yvals[i];
+ 
+ 			for (ssize_t j = 0; j < ny; ++j)
+ 				 for (ssize_t i = 0; i < nx; ++i)
+ 					  zbuf(j,i) = zvals[j*nx + i];
+ 
+			//py::array_t<double> xvec(nx+1,xvals.array());
+			//py::array_t<double> yvec(ny+1,yvals.array());
+			//py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		.def_property("optimize_regparam", &QLens_Wrap::get_optimize_regparam, &QLens_Wrap::set_optimize_regparam)
