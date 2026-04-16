@@ -1521,8 +1521,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def(py::init<>([](){return new LensProfile();}))
 		.def(py::init<const LensProfile*>())
 		.def_readonly("indx",&LensProfile::lens_number)
-		.def_readonly("z",&LensProfile::zlens)
-		.def_readonly("zlens",&LensProfile::zlens)
+		//.def_readonly("z",&LensProfile::zlens)
+		//.def_readonly("zlens",&LensProfile::zlens)
 		.def_readonly("zsrc_ref",&LensProfile::zsrc_ref)
 		.def_readonly("sigma_cr",&LensProfile::sigma_cr)
 		//.def_readonly("xc",&LensProfile::x_center)
@@ -2431,9 +2431,29 @@ PYBIND11_MODULE(qlens, m) {
 			ny = yvals.size()-1;
 
 			string plottype = "srcplane"; 
-			py::array_t<double> xvec(nx+1,xvals.array());
-			py::array_t<double> yvec(ny+1,yvals.array());
-			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
+
+ 			py::array_t<double> xvec(nx + 1);
+ 			py::array_t<double> yvec(ny + 1);
+ 			py::array_t<double> zmat({ny, nx});
+ 
+ 			auto xbuf = xvec.mutable_unchecked<1>();
+ 			auto ybuf = yvec.mutable_unchecked<1>();
+ 			auto zbuf = zmat.mutable_unchecked<2>();
+ 
+ 			// copy data into them
+ 			for (ssize_t i = 0; i < nx+1; ++i)
+ 				 xbuf(i) = xvals[i];
+ 
+ 			for (ssize_t i = 0; i < ny+1; ++i)
+ 				 ybuf(i) = yvals[i];
+ 
+ 			for (ssize_t j = 0; j < ny; ++j)
+ 				 for (ssize_t i = 0; i < nx; ++i)
+ 					  zbuf(j,i) = zvals[j*nx + i];
+ 
+ 			//py::array_t<double> xvec(nx+1,xvals.array());
+ 			//py::array_t<double> yvec(ny+1,yvals.array());
+ 			//py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		;
@@ -2480,12 +2500,32 @@ PYBIND11_MODULE(qlens, m) {
 			ny = yvals.size()-1;
 
 			string plottype = "srcplane"; 
-			py::array_t<double> xvec(nx+1,xvals.array());
-			py::array_t<double> yvec(ny+1,yvals.array());
-			double *zptr;
-			if (show_mag) zptr = zvals.array();
-			else zptr = zvals.array();
-			py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zptr,py::none());
+
+ 			py::array_t<double> xvec(nx + 1);
+ 			py::array_t<double> yvec(ny + 1);
+ 			py::array_t<double> zmat({ny, nx});
+ 
+ 			auto xbuf = xvec.mutable_unchecked<1>();
+ 			auto ybuf = yvec.mutable_unchecked<1>();
+ 			auto zbuf = zmat.mutable_unchecked<2>();
+ 
+ 			// copy data into them
+ 			for (ssize_t i = 0; i < nx+1; ++i)
+ 				 xbuf(i) = xvals[i];
+ 
+ 			for (ssize_t i = 0; i < ny+1; ++i)
+ 				 ybuf(i) = yvals[i];
+ 
+ 			for (ssize_t j = 0; j < ny; ++j)
+ 				 for (ssize_t i = 0; i < nx; ++i)
+ 					  zbuf(j,i) = zvals[j*nx + i];
+
+			//py::array_t<double> xvec(nx+1,xvals.array());
+			//py::array_t<double> yvec(ny+1,yvals.array());
+			//double *zptr;
+			//if (show_mag) zptr = zvals.array();
+			//else zptr = zvals.array();
+			//py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zptr,py::none());
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		;
