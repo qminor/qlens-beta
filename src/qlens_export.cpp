@@ -6,6 +6,7 @@
 #include "cosmo.h"
 #include "qlens.h"
 #include <vector>
+#include <sstream>
 
 namespace py = pybind11;
 
@@ -2747,6 +2748,19 @@ PYBIND11_MODULE(qlens, m) {
 			curr.adopt_model(curr.bestfitparams);
 		})
 		.def("adopt_chain_bestfit", &QLens_Wrap::adopt_bestfit_point_from_chain)
+		.def("add_chain_dparams", [](QLens_Wrap &curr, py::kwargs &kwargs){
+			std::string file_ext = "";
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="file_ext") {
+					try {
+						file_ext = py::cast<std::string>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid argument for 'file_ext'");
+					}
+				}
+			}
+			curr.add_dparams_to_chain(file_ext);
+		})
 		.def("adopt_point_prange", &QLens_Wrap::adopt_point_from_chain_paramrange)
 		.def("get_param_percentiles", [](QLens_Wrap &curr, py::kwargs &kwargs){
 			bool get_2sigma_percentiles = false; // get 1*sigma percentiles by default
@@ -2783,6 +2797,42 @@ PYBIND11_MODULE(qlens, m) {
 
 			if (get_2sigma_percentiles) return std::make_tuple(halfpct_list,lowpct_2sig_list,hipct_2sig_list);
 			else return std::make_tuple(halfpct_list,lowpct_1sig_list,hipct_1sig_list);
+		})
+		.def("show_param_markers", [](QLens_Wrap &curr){
+			if (curr.param_markers.empty()) throw std::runtime_error("parameter markers have not been set");
+			if (curr.mpi_id==0) std::cout << "Parameter marker values: '" << curr.param_markers << "'\n";
+		})
+		.def("param_markers", [](QLens_Wrap &curr, std::string paramstring){
+			if (paramstring=="none") curr.param_markers = "";
+			else if (paramstring=="all") {
+				if (curr.param_list->nparams > 0) curr.create_parameter_value_string(curr.param_markers);
+				else throw std::runtime_error("no fit parameters have been defined");
+			} else {
+				curr.param_markers = "";
+				std::istringstream linestream(paramstring);
+				vector<std::string> words;
+				std::string word;
+				while (linestream >> word)
+					words.push_back(word);
+				int nwords = words.size();
+
+				for (int i=0; i < nwords; i++) {
+					char* p;
+					strtod(words[i].c_str(), &p);
+					if (*p) {
+						double pval;
+						if (curr.lookup_parameter_value(words[i],pval)==false) throw std::runtime_error("parameter name '" + words[i] + "' is not listed among the fit parameters");
+						std::stringstream pvalstr;
+						std::string pvalstring;
+						pvalstr << pval;
+						pvalstr >> pvalstring;
+						curr.param_markers += pvalstring;
+					} else {
+						curr.param_markers += words[i]; // a number has been manually entered in, so just tack it on to the line
+					}
+					if (i != nwords-1) curr.param_markers += " ";
+				}
+			}
 		})
 		.def("test_lens", &QLens_Wrap::test_lens_functions)
 		.def("mkgrid", &QLens_Wrap::create_grid_from_default_redshift)
