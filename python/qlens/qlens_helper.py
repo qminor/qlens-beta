@@ -7,6 +7,7 @@ import inspect
 import numbers
 import sys
 import os
+import linecache
 
 _cmap_scheme = 'turbo'      # this is the colormap scheme that I like the best, but it can be changed with the set_cmap function
 _line_width = 1.2
@@ -24,6 +25,56 @@ def pause():
             code.interact(local=locals_dict,banner="Pausing for input...press <Ctrl-d> to continue the script, or 'quit()' to exit.",exitmsg="")
         except SystemExit:
             os._exit(0)
+
+def show_commands():
+    main_module = sys.modules["__main__"]
+    main_file = os.path.realpath(main_module.__file__)
+
+    state = {"last_lineno": None}
+
+    def trace_calls(frame, event, arg):
+        filename = os.path.realpath(frame.f_code.co_filename)
+
+        if event == "call":
+            if filename == main_file:
+                return trace_calls
+            return None
+
+        if event == "line" and filename == main_file:
+            lineno = frame.f_lineno
+            last = state["last_lineno"]
+            if last is not None:
+                for missing in range(last + 1, lineno):
+                    line = linecache.getline(filename, missing)
+                    print(line, end="")
+
+            line = linecache.getline(filename, lineno)
+            print(line, end="")
+
+            state["last_lineno"] = lineno
+
+        return trace_calls
+
+    # Set global tracer
+    sys.settrace(trace_calls)
+
+    # Attach to the *caller’s* frame (the main script)
+    caller_frame = sys._getframe(1)
+    caller_frame.f_trace = trace_calls
+
+def hide_commands():
+    global _trace_func
+
+    # Disable future tracing
+    sys.settrace(None)
+
+    # Also disable tracing on the current frame
+    frame = sys._getframe()
+    while frame:
+        frame.f_trace = None
+        frame = frame.f_back
+
+    _trace_func = None
 
 def set_cmap(scheme):
     global _cmap_scheme
