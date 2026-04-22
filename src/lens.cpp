@@ -6825,10 +6825,6 @@ double QLens::cc_xi_parameter(int cc_num)
 
 double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 {
-#ifdef USE_STAN
-	using stan::math::cos;
-	using stan::math::sin;
-#endif
 	double r_ein,zfac,xi_param;
 	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
@@ -6909,183 +6905,39 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 
 	theta_perp_shear = degrees_to_radians(shear_angle-90);
 
-	/*
-	stan::math::var theta_perp_stan = theta_perp_shear;
-	stan::math::var tt = 0;
-	stan::math::var uu = 0;
-	stan::math::var x_phi_stan = x_phi + tt*cos(theta_perp_stan);
-	stan::math::var y_phi_stan = y_phi + tt*sin(theta_perp_stan);
-	stan::math::var x_phi_stan2 = x_phi + uu*cos(theta_perp_stan);
-	stan::math::var y_phi_stan2 = y_phi + uu*sin(theta_perp_stan);
-	stan::math::var kappaval_stan = kappa<stan::math::var>(x_phi_stan,y_phi_stan,reference_zfactors,default_zsrc_beta_factors);
-	stan::math::var sheartot_stan;
-	stan::math::var shear_angle_stan;
-	lensvector<stan::math::var> pt_stan(x_phi_stan2,y_phi_stan2);
-	shear<stan::math::var>(pt_stan,sheartot_stan,shear_angle_stan,0,reference_zfactors,default_zsrc_beta_factors);
+	x_phi2 = x_phi + h*cos(theta_perp_shear);
+	y_phi2 = y_phi + h*sin(theta_perp_shear);
 
-	kappaval_stan.grad();
-	cout << "kappa GRAD: " << tt.adj() << endl;
-	sheartot_stan.grad();
-	cout << "shear GRAD: " << uu.adj() << endl;
-	*/
-
-	auto kapfunc = [=](const double hh) {
-		double x2, y2, r1, r2;
-		double theta_perp = theta_perp_shear;
-		x2 = x_phi + hh*cos(theta_perp_shear);
-		y2 = y_phi + hh*sin(theta_perp_shear);
-
-		r1 = sqrt(SQR(x_phi-xc) + SQR(y_phi-yc));
-		r2 = sqrt(SQR(x2-xc) + SQR(y2-yc));
-
-		//cout << " r_phi: " << r_phi << " r_phi_test: " << r_phi_test << " r_phi2: " << r_phi2 << endl;
-
-		if (r2 < r1) {
-			theta_perp = theta_perp_shear + M_PI;
-			x2 = x_phi + hh*cos(theta_perp);
-			y2 = y_phi + hh*sin(theta_perp);
-		}
-
-		lensvector<double> pt2(x2, y2);
-		double kapval = kappa<double>(pt2,reference_zfactors,default_zsrc_beta_factors);
-		return kapval;
-	};
-
-	auto shearfunc = [=](const double hh) {
-		double x2, y2, r1, r2;
-		double theta_perp = theta_perp_shear;
-		x2 = x_phi + hh*cos(theta_perp_shear);
-		y2 = y_phi + hh*sin(theta_perp_shear);
-
-		r1 = sqrt(SQR(x_phi-xc) + SQR(y_phi-yc));
-		r2 = sqrt(SQR(x2-xc) + SQR(y2-yc));
-
-		if (r2 < r1) {
-			theta_perp = theta_perp_shear + M_PI;
-			x2 = x_phi + hh*cos(theta_perp);
-			y2 = y_phi + hh*sin(theta_perp);
-		}
-
-		lensvector<double> pt2(x2, y2);
-		double shearval, shear_ang;
-		shear<double>(pt2,shearval,shear_ang,0,reference_zfactors,default_zsrc_beta_factors);
-		return shearval;
-	};
-	//x_phi2 = x_phi + h*cos(theta_perp_shear);
-	//y_phi2 = y_phi + h*sin(theta_perp_shear);
-
-	//r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+	r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
 
 	//cout << " r_phi: " << r_phi << " r_phi_test: " << r_phi_test << " r_phi2: " << r_phi2 << endl;
 
-	//if (r_phi2 < r_phi) {
-		//theta_perp_shear = theta_perp_shear + M_PI;
-		//x_phi2 = x_phi + h*cos(theta_perp_shear);
-		//y_phi2 = y_phi + h*sin(theta_perp_shear);
-		//r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
-		////cout << "new r_phi2: " << r_phi2 << endl;
-	//}
+	if (r_phi2 < r_phi) {
+		theta_perp_shear = theta_perp_shear + M_PI;
+		x_phi2 = x_phi + h*cos(theta_perp_shear);
+		y_phi2 = y_phi + h*sin(theta_perp_shear);
+		r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+		//cout << "new r_phi2: " << r_phi2 << endl;
+	}
 
-	//lensvector<double> point2(x_phi2, y_phi2);
+	lensvector<double> point2(x_phi2, y_phi2);
 
-	//kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
-	//shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+	kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+	shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
 
 	// calculate xi from here, taking numerical derivatives
 	// just take a forward difference for now
-	//dkappa = (kappaval2 - kappaval)/h;
-	dkappa = (kapfunc(h) - kapfunc(0))/h;
-	//cout << "dkappa = " << dkappa << endl;
-	dshear = (shearfunc(h) - shearfunc(0))/h;
+	dkappa = (kappaval2 - kappaval)/h;
+	dshear = (sheartot2 - sheartot)/h;
 
-	const double CON=1.4, CON2=(CON*CON);
-	const double BIG=1.0e100;
-	const double SAFE=2.0;
-	const int NTAB = 10;
-	//int i,j;
-	double errt,fac,hh,ans=0.0;
+	//cout << "this is dkappa: " << dkappa << endl;
+	//cout << "this is dsehar: " << dshear << endl;
 
-/*
-	// We use Ridder's method for numerical derivative, because it is less noisy compared to finite differencing
-	int j;
-	double xx;
-	xx = 0;
-	ans=0.0;
-	double x0 = xx;
-	double a[NTAB][NTAB];
-	//double **a = matrix <double> (NTAB, NTAB);
+	double x0 = 0;
+	double y0 = 0;
 
-	hh=0.5;
-	xx = x0 + hh;
-	a[0][0] = kapfunc(xx);
-	xx = x0 - hh;
-	a[0][0] -= kapfunc(xx);
-	a[0][0] /= (2.0*hh);
-	double err=BIG;
-	for (i=1;i<NTAB;i++) {
-		hh /= CON;
-		xx = x0 + hh;
-		a[0][i] = kapfunc(xx);
-		xx = x0 - hh;
-		a[0][i] -= kapfunc(xx);
-		a[0][i] /= (2.0*hh);
-		fac=CON2;
-		for (j=1;j<=i;j++) {
-			a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
-			fac=CON2*fac;
-			errt=dmax(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
-			if (errt <= err) {
-				err=errt;
-				ans=a[j][i];
-			}
-		}
-		if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
-	}
-	xx = x0;
-	dkappa = ans;
-
-	x0 = xx;
-	ans = 0.0;
-
-	hh=0.5;
-	xx = x0 + hh;
-	a[0][0] = shearfunc(xx);
-	xx = x0 - hh;
-	a[0][0] -= shearfunc(xx);
-	a[0][0] /= (2.0*hh);
-	err=BIG;
-	for (i=1;i<NTAB;i++) {
-		hh /= CON;
-		xx = x0 + hh;
-		a[0][i] = shearfunc(xx);
-		xx = x0 - hh;
-		a[0][i] -= shearfunc(xx);
-		a[0][i] /= (2.0*hh);
-		fac=CON2;
-		for (j=1;j<=i;j++) {
-			a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
-			fac=CON2*fac;
-			errt=dmax(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
-			if (errt <= err) {
-				err=errt;
-				ans=a[j][i];
-			}
-		}
-		if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
-	}
-	xx = x0;
-	dshear = ans;
-
-*/
-
-	cout << "this is dkappa: " << dkappa << endl;
-	cout << "this is dshear: " << dshear << endl;
-
-	//double x0 = 0;
-	//double y0 = 0;
-
-	//double test_x0_2 = x0 + h*cos(theta_perp_shear);
-	//double test_y0_2 = y0 + h*sin(theta_perp_shear);
+	double test_x0_2 = x0 + h*cos(theta_perp_shear);
+	double test_y0_2 = y0 + h*sin(theta_perp_shear);
 
 	//cout << "this is x0_1: " << 
 	//cout << "this is x0_2: " << test_x0_2 << " and this is y0_2: " << test_y0_2 << endl;
