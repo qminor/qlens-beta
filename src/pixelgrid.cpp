@@ -118,32 +118,55 @@ void ImagePixelGrid::deallocate_multithreaded_variables()
 
 /************************ Functions in class PointSource (perhaps put in different file?) ***************************/
 
-PointSource::PointSource(QLens* lens_in) : ModelParams()
+PointSource::PointSource(QLens* lens_in) : Model()
 {
+	modelparams = &ptsrc_params;
+#ifdef USE_STAN
+	modelparams_dif = &ptsrc_params_dif;
+#endif
 	model_name = "ptsrc";
 	qlens = lens_in;
 	setup_parameters(true);
+	setup_param_pointers<double>();
+#ifdef USE_STAN
+	setup_param_pointers<stan::math::var>();
+#endif
+
 }
 
-PointSource::PointSource(QLens* lens_in, const lensvector<double>& sourcept, const double zsrc_in) : ModelParams()
+PointSource::PointSource(QLens* lens_in, const lensvector<double>& sourcept, const double zsrc_in) : Model()
 {
+	modelparams = &ptsrc_params;
+#ifdef USE_STAN
+	modelparams_dif = &ptsrc_params_dif;
+#endif
 	qlens = lens_in;
 	setup_parameters(true);
-	zsrc = zsrc_in;
-	pos[0] = sourcept[0];
-	pos[1] = sourcept[1];
+	setup_param_pointers<double>();
+#ifdef USE_STAN
+	setup_param_pointers<stan::math::var>();
+#endif
+
+	PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
+	p.zsrc = zsrc_in;
+	p.pos[0] = sourcept[0];
+	p.pos[1] = sourcept[1];
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
 }
 
 void PointSource::setup_parameters(const bool initial_setup)
 {
+	//PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	if (initial_setup) {
 		// default initial values
-		pos[0] = 0.0;
-		pos[1] = 0.0;
-		srcflux = 1.0;
-		zsrc=2.0;
-		shift[0] = 0.0;
-		shift[1] = 0.0;
+		//p.pos[0] = 0.0;
+		//p.pos[1] = 0.0;
+		//p.srcflux = 1.0;
+		//p.zsrc=2.0;
+		//p.shift[0] = 0.0;
+		//p.shift[1] = 0.0;
 
 		setup_parameter_arrays(6);
 	} else {
@@ -161,7 +184,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 	if ((qlens) and (qlens->include_ptsrc_shift)) include_shift = true;
 
 	if (initial_setup) {
-		param[indx] = &pos[0];
+		//p.param[indx] = &p.pos[0];
 		paramnames[indx] = "xsrc"; latex_paramnames[indx] = "x"; latex_param_subscripts[indx] = "src";
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -171,7 +194,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		param[indx] = &pos[1];
+		//p.param[indx] = &p.pos[1];
 		paramnames[indx] = "ysrc"; latex_paramnames[indx] = "y"; latex_param_subscripts[indx] = "src";
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -181,7 +204,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		param[indx] = &srcflux;
+		//p.param[indx] = &p.srcflux;
 		paramnames[indx] = "srcflux"; latex_paramnames[indx] = "f"; latex_param_subscripts[indx] = "src";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0.01; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = true;
@@ -192,7 +215,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 
 	if (initial_setup) {
 		// NOTE! If you change the order of parameters, change update_meta_parameters() below because it refers to index 3 for zsrc!!
-		param[indx] = &zsrc;
+		//p.param[indx] = &p.zsrc;
 		paramnames[indx] = "zsrc"; latex_paramnames[indx] = "z"; latex_param_subscripts[indx] = "src";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -203,7 +226,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		param[indx] = &shift[0];
+		//p.param[indx] = &p.shift[0];
 		paramnames[indx] = "xshift"; latex_paramnames[indx] = "\\delta x"; latex_param_subscripts[indx] = "s";
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.01; scale_stepsize_by_param_value[indx] = false;
@@ -215,7 +238,7 @@ void PointSource::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		param[indx] = &shift[1];
+		//p.param[indx] = &p.shift[1];
 		paramnames[indx] = "yshift"; latex_paramnames[indx] = "\\delta y"; latex_param_subscripts[indx] = "s";
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.01; scale_stepsize_by_param_value[indx] = false;
@@ -227,17 +250,58 @@ void PointSource::setup_parameters(const bool initial_setup)
 	indx++;
 }
 
+template <typename QScalar>
+void PointSource::setup_param_pointers()
+{
+	PtSrcParams<QScalar>& p = assign_ptsrc_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+	p.pos[0] = 0.0;
+	p.pos[1] = 0.0;
+	p.srcflux = 1.0;
+	p.zsrc=2.0;
+	p.shift[0] = 0.0;
+	p.shift[1] = 0.0;
+
+	QScalar** param_ptr = p.param;
+	*(param_ptr++) = &p.pos[0];
+	*(param_ptr++) = &p.pos[1];
+	*(param_ptr++) = &p.srcflux;
+	*(param_ptr++) = &p.zsrc;
+	*(param_ptr++) = &p.shift[0];
+	*(param_ptr++) = &p.shift[1];
+}
+template void PointSource::setup_param_pointers<double>();
+#ifdef USE_STAN
+template void PointSource::setup_param_pointers<stan::math::var>();
+#endif
+
+
 void PointSource::copy_ptsrc_data(PointSource* ptsrc_in)
 {
-	pos[0] = ptsrc_in->pos[0];
-	pos[1] = ptsrc_in->pos[1];
-	srcflux = ptsrc_in->srcflux;
-	zsrc=ptsrc_in->zsrc;
-	shift[0] = ptsrc_in->shift[0];
-	shift[1] = ptsrc_in->shift[1];
+	PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
+	p.pos[0] = ptsrc_in->ptsrc_params.pos[0];
+	p.pos[1] = ptsrc_in->ptsrc_params.pos[1];
+	p.srcflux = ptsrc_in->ptsrc_params.srcflux;
+	p.zsrc=ptsrc_in->ptsrc_params.zsrc;
+	p.shift[0] = ptsrc_in->ptsrc_params.shift[0];
+	p.shift[1] = ptsrc_in->ptsrc_params.shift[1];
 	include_shift = ptsrc_in->include_shift;
 	copy_param_arrays(ptsrc_in);
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
 }
+
+#ifdef USE_STAN
+void PointSource::sync_autodif_parameters()
+{
+	ptsrc_params_dif.pos[0] = ptsrc_params.pos[0];
+	ptsrc_params_dif.pos[1] = ptsrc_params.pos[1];
+	ptsrc_params_dif.srcflux = ptsrc_params.srcflux;
+	ptsrc_params_dif.zsrc = ptsrc_params.zsrc;
+	ptsrc_params_dif.shift[0] = ptsrc_params.shift[0];
+	ptsrc_params_dif.shift[1] = ptsrc_params.shift[1];
+}
+#endif
 
 void PointSource::update_meta_parameters(const bool varied_only_fitparams)
 {
@@ -282,11 +346,12 @@ void PointSource::set_vary_source_coords()
 
 void PointSource::copy_imageset(const lensvector<double>& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in)
 {
+	PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	n_images = nimg;
-	zsrc = zsrc_in;
-	srcflux = srcflux_in;
-	pos[0] = pos_in[0];
-	pos[1] = pos_in[1];
+	p.zsrc = zsrc_in;
+	p.srcflux = srcflux_in;
+	p.pos[0] = pos_in[0];
+	p.pos[1] = pos_in[1];
 	images.clear();
 	images.resize(n_images);
 	for (int i=0; i < n_images; i++) {
@@ -295,6 +360,9 @@ void PointSource::copy_imageset(const lensvector<double>& pos_in, const double z
 		images[i].td = images_in[i].td;
 		images[i].parity = images_in[i].parity;
 	}
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
 }
 
 void PointSource::set_images(image* images_in, const int nimg)
@@ -310,43 +378,60 @@ void PointSource::set_images(image* images_in, const int nimg)
 	}
 }
 
-void PointSource::update_srcpos(const lensvector<double>& srcpt)
+template <typename QScalar>
+void PointSource::update_srcpos(const lensvector<QScalar>& srcpt)
 {
-	pos[0] = srcpt[0];
-	pos[1] = srcpt[1];
+	PtSrcParams<QScalar>& p = assign_ptsrc_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+	p.pos[0] = srcpt[0];
+	p.pos[1] = srcpt[1];
 	if (include_shift) {
-		pos[0] += shift[0];
-		pos[1] += shift[1];
+		p.pos[0] += p.shift[0];
+		p.pos[1] += p.shift[1];
 	}
+#ifdef USE_STAN
+		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency. Maybe revisit this later? Might not be necessary
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			ptsrc_params.pos[0] = (ptsrc_params_dif.pos[0]).val();
+			ptsrc_params.pos[1] = (ptsrc_params_dif.pos[1]).val();
+		} else {
+			ptsrc_params_dif.pos[0] = ptsrc_params.pos[0];
+			ptsrc_params_dif.pos[1] = ptsrc_params.pos[1];
+		}
+#endif
 }
+template void PointSource::update_srcpos<double>(const lensvector<double>& srcpt);
+#ifdef USE_STAN
+template void PointSource::update_srcpos<stan::math::var>(const lensvector<stan::math::var>& srcpt);
+#endif
 
 void PointSource::print_to_file(bool include_time_delays, bool show_labels, std::ofstream* srcfile, std::ofstream* imgfile)
 {
+	PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	std::cout << "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
-	if (srcflux != -1) std::cout << "\tsrc_flux";
+	if (p.srcflux != -1) std::cout << "\tsrc_flux";
 	std::cout << std::endl;
-	std::cout << pos[0] << "\t" << pos[1] << "\t" << n_images << "\t";
-	if (srcflux != -1) std::cout << "\t" << srcflux;
+	std::cout << p.pos[0] << "\t" << p.pos[1] << "\t" << n_images << "\t";
+	if (p.srcflux != -1) std::cout << "\t" << p.srcflux;
 	std::cout << std::endl << std::endl;
 
-	if (srcfile != NULL) (*srcfile) << pos[0] << " " << pos[1] << std::endl;
+	if (srcfile != NULL) (*srcfile) << p.pos[0] << " " << p.pos[1] << std::endl;
 	//std::cout << "# " << n_images << " images" << std::endl;
 	if (show_labels) {
 		std::cout << "#pos_x (arcsec)\tpos_y (arcsec)\tmagnification";
-		if (srcflux != -1.0) std::cout << "\tflux\t";
+		if (p.srcflux != -1.0) std::cout << "\tflux\t";
 		if (include_time_delays) std::cout << "\ttime_delay (days)";
 		std::cout << std::endl;
 	}
 	if (include_time_delays) {
 		for (int i = 0; i < n_images; i++) {
-			if (srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].td << std::endl;
-			else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << "\t" << images[i].td << std::endl;
+			if (p.srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].td << std::endl;
+			else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*p.srcflux << "\t" << images[i].td << std::endl;
 			if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << std::endl;
 		}
 	} else {
 		for (int i = 0; i < n_images; i++) {
-			if (srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << std::endl;
-			else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*srcflux << std::endl;
+			if (p.srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << std::endl;
+			else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*p.srcflux << std::endl;
 			if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << std::endl;
 		}
 	}
@@ -423,7 +508,7 @@ void CartesianSourcePixel::deallocate_multithreaded_variables()
 	}
 }
 
-CartesianSourceGrid::CartesianSourceGrid(QLens* qlens_in, const int band, const double zsrc_in) : ModelParams(), CartesianSourcePixel(qlens_in)
+CartesianSourceGrid::CartesianSourceGrid(QLens* qlens_in, const int band, const double zsrc_in) : Model(), CartesianSourcePixel(qlens_in)
 {
 	parent_grid = this;
 	qlens = qlens_in;
@@ -4225,7 +4310,7 @@ DelaunayGrid::~DelaunayGrid()
 
 /********************************************* Functions in class DelaunaySourceGrid ***********************************************/
 
-DelaunaySourceGrid::DelaunaySourceGrid(QLens* qlens_in, const int band, const double zsrc_in) : ModelParams(), DelaunayGrid()
+DelaunaySourceGrid::DelaunaySourceGrid(QLens* qlens_in, const int band, const double zsrc_in) : Model(), DelaunayGrid()
 {
 	qlens = qlens_in;
 	if (zsrc_in < 0) model_name = "delaunay_srcgrid";
@@ -5467,7 +5552,7 @@ DelaunaySourceGrid::~DelaunaySourceGrid()
 
 /********************************************* Functions in class LensPixelGrid ***********************************************/
 
-LensPixelGrid::LensPixelGrid(QLens* lens_in, const int lens_redshift_indx_in) : ModelParams(), DelaunayGrid()
+LensPixelGrid::LensPixelGrid(QLens* lens_in, const int lens_redshift_indx_in) : Model(), DelaunayGrid()
 {
 	qlens = lens_in;
 	cartesian_pixel_index = NULL;
@@ -10594,7 +10679,7 @@ string ImageData::get_imgdata_info_string()
 
 /***************************************** Functions in class PSF ****************************************/
 
-PSF::PSF(QLens* lens_in) : ModelParams()
+PSF::PSF(QLens* lens_in) : Model()
 {
 	qlens = lens_in;
 	use_input_psf_matrix = false;
@@ -19481,8 +19566,8 @@ void QLens::calculate_distreg_srcpixel_weights(const int imggrid_i, const double
 	if (auto_lumreg_center) {
 		if (lumreg_center_from_ptsource) {
 			if (n_ptsrc==0) die("no source points have been defined");
-			xc = ptsrc_list[0]->pos[0];
-			yc = ptsrc_list[0]->pos[1];
+			xc = ptsrc_list[0]->ptsrc_params.pos[0];
+			yc = ptsrc_list[0]->ptsrc_params.pos[1];
 		} else {
 			xc = xc_in;
 			yc = yc_in;
@@ -19760,13 +19845,6 @@ double QLens::chisq_regparam(const double logreg)
 	}
 	return chisq;
 }
-
-template <typename T>
-T tryfunc(const T x)
-{
-	return x*2;
-}
-template double tryfunc<double>(const double);
 
 double QLens::chisq_regparam_dense(const double logreg)
 {
@@ -20490,10 +20568,12 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 #if defined(USE_EIGEN) || defined(USE_MKL)
 	if (!use_covariance_matrix) {
 #if defined(USE_EIGEN)
-		double inv_wtime0, inv_wtime;
-		if (show_wtime) {
-			inv_wtime0 = omp_get_wtime();
-		}
+		//double inv_wtime0, inv_wtime;
+//#ifdef USE_OPENMP
+		//if (show_wtime) {
+			//inv_wtime0 = omp_get_wtime();
+		//}
+//#endif
 		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','T',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the lower half of Fmatrix_stacked
 		//LAPACKE_mkl_dtpunpack(LAPACK_ROW_MAJOR,'U','N',n_amps,Fmatrix_packed.array(),1,1,n_amps,n_amps,Fmatrix_stacked.array(),n_amps); // fill the upper half of Fmatrix_stacked
 		using MatrixRMd = Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic,Eigen::RowMajor>;
@@ -20522,9 +20602,11 @@ void QLens::invert_lens_mapping_dense(const int imggrid_i, bool verbal)
 		//} else
 		if (use_non_negative_least_squares) {
 #ifdef USE_EIGEN_NNLS
-			if (show_wtime) {
-				inv_wtime0 = omp_get_wtime();
-			}
+//#ifdef USE_OPENMP
+			//if (show_wtime) {
+				//inv_wtime0 = omp_get_wtime();
+			//}
+//#endif
 			Eigen::MatrixXd lnnlsmat(n_amps,n_amps);
 
 			Eigen::NNLS<Eigen::MatrixXd> Fmatrix_nnls(F,max_nnls_iterations,nnls_tolerance);
@@ -21156,8 +21238,8 @@ void QLens::update_source_and_lensgrid_amplitudes(const int imggrid_i, const boo
 		}
 	} else if (include_srcflux_in_inversion) {
 		for (j=0; j < n_ptsrc; j++) {
-			ptsrc_list[j]->srcflux = amplitude_vector[index++];
-			if ((mpi_id==0) and (verbal)) cout << "srcpt " << j << ": srcflux=" << ptsrc_list[j]->srcflux << endl;
+			ptsrc_list[j]->get_srcflux() = amplitude_vector[index++];
+			if ((mpi_id==0) and (verbal)) cout << "srcpt " << j << ": srcflux=" << ptsrc_list[j]->get_srcflux() << endl;
 		}
 	}
 	delete[] imggrids;

@@ -8,17 +8,28 @@ class Sort
 {
 	public:
 	Sort() {}
-	void sort(const int, double[]);
-	void sort(const int, double[], double[]);
-	void sort(const unsigned long, double[], double[]);
+	template <typename QScalar>
+	void sort(const int, QScalar[]);
+	template <typename QScalar>
+	void sort(const int, QScalar[], QScalar[]);
+	template <typename QScalar>
+	void sort(const unsigned long, QScalar[], QScalar[]);
+	template <typename QScalar>
 	void sort(const int, int[], int[]);
-	void sort(const int n, int arr[], double brr[]);
-	void sort(const int n, double arr[], int brr[]);
-	void sort(const int n, const dvector& a, Vector<double>& b) { sort(n,a.array(),b.array()); }
-	void sort(const int n, double arr[], int brr[], int crr[]);
-	void sort(const int n, double arr[], double brr[], double crr[]); // This is why you should use templates. Ugh
-	void sort(const int n, double arr[], double brr[], double crr[], int drr[]); // This is why you should use templates. Ugh
-	void sort(const int n, double arr[], double brr[], double crr[], double drr[], double err[]); // This is why you should use templates. Ugh
+	template <typename QScalar>
+	void sort(const int n, int arr[], QScalar brr[]);
+	template <typename QScalar>
+	void sort(const int n, QScalar arr[], int brr[]);
+	template <typename QScalar>
+	void sort(const int n, const dvector& a, Vector<QScalar>& b) { sort(n,a.array(),b.array()); }
+	template <typename QScalar>
+	void sort(const int n, QScalar arr[], int brr[], int crr[]);
+	template <typename QScalar>
+	void sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[]); // This is why you should use templates. Ugh
+	template <typename QScalar>
+	void sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[], int drr[]); // This is why you should use templates. Ugh
+	template <typename QScalar>
+	void sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[], QScalar drr[], QScalar err[]); // This is why you should use templates. Ugh
 };
 
 #endif // SORT_H

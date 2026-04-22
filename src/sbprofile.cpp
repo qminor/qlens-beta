@@ -281,8 +281,8 @@ void SB_Profile::anchor_center_to_ptsrc(PointSource** center_anchor_list, const 
 {
 	if (!center_anchored_to_ptsrc) center_anchored_to_ptsrc = true;
 	center_anchor_ptsrc = center_anchor_list[center_anchor_ptsrc_number];
-	x_center = center_anchor_ptsrc->pos[0];
-	y_center = center_anchor_ptsrc->pos[1];
+	x_center = center_anchor_ptsrc->ptsrc_params.pos[0];
+	y_center = center_anchor_ptsrc->ptsrc_params.pos[1];
 }
 
 int SB_Profile::get_center_anchor_number() {
@@ -1007,8 +1007,8 @@ void SB_Profile::update_anchor_center()
 		x_center = center_anchor_source->x_center;
 		y_center = center_anchor_source->y_center;
 	} else if (center_anchored_to_ptsrc) {
-		x_center = center_anchor_ptsrc->pos[0];
-		y_center = center_anchor_ptsrc->pos[1];
+		x_center = center_anchor_ptsrc->ptsrc_params.pos[0];
+		y_center = center_anchor_ptsrc->ptsrc_params.pos[1];
 	}
 }
 

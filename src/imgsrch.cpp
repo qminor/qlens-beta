@@ -2043,8 +2043,8 @@ bool QLens::get_fit_imagesets(int min_dataset, int max_dataset, bool verbal)
 	if (max_dataset < 0) max_dataset = n_ptsrc - 1;
 	if ((min_dataset < 0) or (min_dataset > max_dataset)) return false;
 
-	if (analytic_source_flux) set_analytic_srcflux<double>(false);
-	if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
+	if (analytic_source_flux) set_analytic_srcflux(false);
+	if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 
 	int redshift_idx;
 	for (int i=min_dataset; i <= max_dataset; i++) {
@@ -2053,8 +2053,9 @@ bool QLens::get_fit_imagesets(int min_dataset, int max_dataset, bool verbal)
 			if (!create_grid(false,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx])) return false;
 		}
 
-		source[0] = ptsrc_list[i]->pos[0];
-		source[1] = ptsrc_list[i]->pos[1];
+		//source[0] = ptsrc_list[i]->pos[0];
+		//source[1] = ptsrc_list[i]->pos[1];
+		source = ptsrc_list[i]->get_pos();
 
 		find_images();
 		ptsrc_list[i]->set_images(images_found,Grid::nfound);

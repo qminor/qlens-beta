@@ -5,6 +5,8 @@ q = QLens(cosmo)
 (lens,ptsrc,ptimgdata) = q.ptimg_objects()   # this is so we can enter 'lens' instead of 'q.lens', 'ptsrc' instead of 'q.ptsrc', etc.
 (params,dparams) = q.param_objects()         # same as above; we can enter 'params' instead of 'q.params', etc.
 
+show_commands()
+
 q.fit_label = 'alpha_multinest'
 q.sci_notation = False
 
@@ -40,8 +42,6 @@ q.analytic_bestfit_src = True
 q.flux_chisq = True
 q.chisqtol = 1e-6
 q.nrepeat = 2
-#print("Fit model:")
-#q.fitmodel()
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
 q.n_livepts = 300
@@ -49,10 +49,10 @@ q.run_fit("multinest",adopt=True,resume=False)
 
 #q.adopt_chain_bestfit()
 
-plot_fit_ptimgs(q) # plot_fit_ptimgs returns the source and image figures, so you can also do
+#plot_fit_ptimgs(q) # plot_fit_ptimgs returns the source and image figures, so you can also do
                 # (srcfig, imgfig) = plot_fit_ptimgs(q,showplot=False) and modify the figures
 q.mkposts()
 
-(median, lowpct, highpct) = q.get_parameter_percentiles(get_2sigma=False)
+#(median, lowpct, highpct) = q.get_param_percentiles(get_2sigma=False) # by default, gets 1-sigma percentiles
 
 #plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing

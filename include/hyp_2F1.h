@@ -402,7 +402,7 @@ complex<QScalar> B_sum_init_PS_one (const complex<QScalar> &a,const complex<QSca
     const complex<QScalar> prod3 = Gamma_inv_a_pm*Gamma_inv_b_pm*Gamma_inv_eps_pm_p1*z_term;
 
     const complex<QScalar> res = Gamma_c*prod_ab*(prod1 - prod2 - prod3); 
-    if (isfinite (res))
+    if (isitfinite (res))
       return res;
     else
     {
@@ -530,7 +530,7 @@ complex<QScalar> B_sum_init_PS_infinity (const complex<QScalar> &a,const complex
     const complex<QScalar> prod_2c = Gamma_inv_eps_pm_p1*Gamma_inv_a_pm*(Gamma_inv_diff_eps<QScalar> (cma,-eps) + Gamma_inv_cma_meps*z_term);
     const complex<QScalar> prod2 = prod_eps_pa_mc_p1*(prod_2a - prod_2b - prod_2c),res = Gamma_c*prod_a*(prod1 + prod2);
 
-    if (isfinite (res))
+    if (isitfinite (res))
       return res;
     else
     { 
@@ -740,7 +740,7 @@ complex<QScalar> hyp_PS_one (const complex<QScalar> &a,const complex<QScalar> &b
   const complex<QScalar> A_first_term = (m > 0) ? (Gamma_prod*A_sum_init (m,eps,Gamma_inv_one_meps)) : (0.0);
   complex<QScalar> A_sum = A_first_term,A_term = A_first_term;
 
-  if (!isfinite (A_first_term)) 
+  if (!isitfinite (A_first_term)) 
   {
     A_sum = A_term = exp (log_Gamma (c) - log_Gamma (eps_pa_pm) - log_Gamma (eps_pb_pm) + log_A_sum_init (m,eps));
     if ((imag (a) == 0.0) && (imag (b) == 0.0) && (imag (c) == 0.0)) A_sum = A_term = real (A_term);
@@ -842,7 +842,7 @@ complex<QScalar> hyp_PS_infinity (const complex<QScalar> &a,const complex<QScala
   const complex<QScalar> A_first_term = (m > 0) ? (Gamma_prod*A_sum_init (m,eps,Gamma_inv_one_meps)) : (0.0);
   complex<QScalar> A_sum = A_first_term,A_term = A_first_term;
 
-  if (!isfinite (A_first_term)) 
+  if (!isitfinite (A_first_term)) 
   {
     A_sum = A_term = exp (log_Gamma (c) - log_Gamma (cma) - log_Gamma (b) + log_A_sum_init (m,eps));
     if ((imag (a) == 0.0) && (imag (b) == 0.0) && (imag (c) == 0.0)) A_sum = A_term = real (A_term);

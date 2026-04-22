@@ -146,9 +146,9 @@ inline lensvector<QScalar> operator / (const lensvector<QScalar> a, const double
 template <typename QScalar>
 class lensmatrix
 {
+	public:
 	QScalar **j;
 
-	public:
 	lensmatrix() : j(new QScalar*[2]) { j[0] = new QScalar[2]; j[1] = new QScalar[2]; }
 	~lensmatrix() { delete[] j[0]; delete[] j[1]; delete[] j; }
 	lensmatrix(const QScalar z) : j(new QScalar*[2]) {
@@ -251,7 +251,7 @@ class lensmatrix
 
 		return;
 	}
-	void rotate(const double cs, const double ss)
+	void rotate(const QScalar cs, const QScalar ss)
 	{
 		QScalar x_prime;
 
@@ -274,7 +274,7 @@ class lensmatrix
 
 		return;
 	}
-	void rotate_back(const double cs, const double ss)
+	void rotate_back(const QScalar cs, const QScalar ss)
 	{
 		QScalar x_prime;
 		if (cs==0) {

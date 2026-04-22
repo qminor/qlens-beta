@@ -4,6 +4,10 @@
 #include <cmath>
 #include <iostream>
 
+#ifdef USE_STAN
+#include <stan/math.hpp>
+#endif
+
 template <typename T>
 T *matrix(const int xN)
 {
@@ -85,11 +89,17 @@ void del(T **temp, int xN)
      delete[] temp;
 }
 
-inline double Gamma(const double x)
+template <typename QScalar>
+QScalar Gamma(const QScalar x)
 {
+#ifdef USE_STAN
+	using stan::math::sin;
+	using stan::math::pow;
+	using stan::math::exp;
+#endif
      static const double cof[6] ={76.18009172947146, -86.50532032941677, 24.01409824083091,
                               -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5};
-     double temp = 1.000000000190015;
+     QScalar temp = 1.000000000190015;
      
      if (x < 0.0)
 	  return M_PI/Gamma(1.0-x)/sin(x*M_PI);
@@ -101,18 +111,24 @@ inline double Gamma(const double x)
      }
 }
 
-inline double Beta(const double x, const double y)
+template <typename QScalar>
+QScalar Beta(const QScalar x, const QScalar y)
 {
 	return Gamma(x)*Gamma(y)/Gamma(x+y);
 }
 
-inline double DiGamma(const double x)
+template <typename QScalar>
+QScalar DiGamma(const QScalar x)
 {
+#ifdef USE_STAN
+	using stan::math::log;
+#endif
+
 	static double c = 8.5;
 	static double euler_mascheroni = 0.57721566490153286060;
-	double r;
-	double value;
-	double x2;
+	QScalar r;
+	QScalar value;
+	QScalar x2;
 	if ( x == 0.0 ) die("DiGamma function is singular at x=0");
 	if (x < 0) return (DiGamma(1+x) - 1/x); // recursive identity to handle negative arguments
 	if ( x <= 0.000001 ) {
@@ -140,10 +156,11 @@ inline double DiGamma(const double x)
 	return value;
 }
 
-inline double G_Function(const double b, const double c, const double x)  // This is the limit (2F1(a,b,c;x) - 1)/a as a --> 0
+template <typename QScalar>
+inline QScalar G_Function(const QScalar b, const QScalar c, const QScalar x)  // This is the limit (2F1(a,b,c;x) - 1)/a as a --> 0
 {
 	int j=1;
-	double ans=0, fac=1;
+	QScalar ans=0, fac=1;
 	static double tol = 1e-12;
 	do {
 		fac *= ((b+j-1)/(c+j-1)) * x;
@@ -153,9 +170,14 @@ inline double G_Function(const double b, const double c, const double x)  // Thi
 	return ans;
 }
 
-inline double gammln(const double xx)
+template <typename QScalar>
+QScalar gammln(const QScalar xx)
 {
-	double x,y,tmp,ser;
+#ifdef USE_STAN
+	using stan::math::log;
+#endif
+
+	QScalar x,y,tmp,ser;
 	static double cof[6] = {76.18009172947146,-86.50532032941677,
 		24.01409824083091,-1.231739572450155,
 		0.1208650973866179e-2,-0.5395239384953e-5};
@@ -168,11 +190,17 @@ inline double gammln(const double xx)
 	return (-tmp + log(2.5066282746310005*ser/x));
 }
 
-inline void gser(double &gamser, const double a, const double x, double &gln)
+template <typename QScalar>
+void gser(QScalar &gamser, const QScalar a, const QScalar x, QScalar &gln)
 {
+#ifdef USE_STAN
+	using stan::math::exp;
+	using stan::math::log;
+#endif
+
 	const int ITMAX = 100;
 	const double EPS = 3.0e-7;
-	double sum,del,ap;
+	QScalar sum,del,ap;
 
 	gln = gammln(a);
 	if (x <= 0.0) {
@@ -196,13 +224,18 @@ inline void gser(double &gamser, const double a, const double x, double &gln)
 	}
 }
 
-inline void gcf(double &gammcf, const double a, const double x, double &gln)
+template <typename QScalar>
+void gcf(QScalar &gammcf, const QScalar a, const QScalar x, QScalar &gln)
 {
+#ifdef USE_STAN
+	using stan::math::exp;
+	using stan::math::log;
+#endif
 	const int ITMAX = 100;
 	const double EPS = 3.0e-7;
 	const double FPMIN = 1.0e-30;
 	int i;
-	double an,b,c,d,del,h;
+	QScalar an,b,c,d,del,h;
 
 	gln = gammln(a);
 	b = x + 1.0 - a;
@@ -226,9 +259,10 @@ inline void gcf(double &gammcf, const double a, const double x, double &gln)
 	return;
 }
 
-inline double IncGamma(const double a, const double x)
+template <typename QScalar>
+QScalar IncGamma(const QScalar a, const QScalar x)
 {
-	double gamser,gammcf,gln;
+	QScalar gamser,gammcf,gln;
 
 	if ((x < 0.0) or (a <= 0.0)) die("Invalid arguments in routine gammp");
 	if (x < (a+1.0)) {
@@ -240,50 +274,56 @@ inline double IncGamma(const double a, const double x)
 	}
 }
 
-inline void IncGammaP_and_Gamma(const double a, const double x, double& GammaP, double& gam)
+template <typename QScalar>
+void IncGammaP_and_Gamma(const QScalar a, const QScalar x, QScalar& GammaP, QScalar& gam)
 {
-	double gln;
+	QScalar gln;
 
 	if ((x < 0.0) or (a <= 0.0)) {
 		if (x < 0.0) die("x < 0 in routine gammp (x=%g, a=%g)",x,a);
 		if (a <= 0.0) die("a <= 0 in routine gammp (x=%g, a=%g)",x,a);
 	}
 	if (x < (a+1.0)) {
-		double gamser;
+		QScalar gamser;
 		gser(gamser,a,x,gln);
 		GammaP = gamser;
 	} else {
-		double gammcf;
+		QScalar gammcf;
 		gcf(gammcf,a,x,gln);
 		GammaP = 1.0-gammcf;
 	}
 	gam = exp(gln);
 }
 
-inline double IncGammaUp(const double a, const double x)
+template <typename QScalar>
+QScalar IncGammaUp(const QScalar a, const QScalar x)
 {
-	double gln;
+	QScalar gln;
 
 	if ((x < 0.0) or (a <= 0.0)) die("Invalid arguments in routine gammq");
 	if (x < (a+1.0)) {
-		double gamser;
+		QScalar gamser;
 		gser(gamser,a,x,gln);
 		return 1.0-gamser;
 	} else {
-		double gammcf;
+		QScalar gammcf;
 		gcf(gammcf,a,x,gln);
 		return gammcf;
 	}
 }
 
-inline double erffc(const double x)
+template <typename QScalar>
+QScalar erffc(const QScalar x)
 {
-	return x < 0.0 ? 1.0+IncGamma(0.5,x*x) : IncGammaUp(0.5,x*x);
+	QScalar onehalf = 0.5;
+	return x < 0.0 ? 1.0+IncGamma(onehalf,x*x) : IncGammaUp(onehalf,x*x);
 }
 
-inline double erff(const double x)
+template <typename QScalar>
+QScalar erff(const QScalar x)
 {
-	return x < 0.0 ? -IncGamma(0.5,x*x) : IncGamma(0.5,x*x);
+	QScalar onehalf = 0.5;
+	return x < 0.0 ? -IncGamma(onehalf,x*x) : IncGamma(onehalf,x*x);
 }
 
 #define erfinv_a3 -0.140543331
@@ -306,9 +346,10 @@ inline double erff(const double x)
 #define erfinv_d1 3.543889200
 #define erfinv_d0 1
 
-inline double erfinv(double x)
+template <typename QScalar>
+QScalar erfinv(QScalar x)
 {
-  double x2, r, y;
+  QScalar x2, r, y;
   int  sign_x;
 
   if (x < -1 || x > 1)

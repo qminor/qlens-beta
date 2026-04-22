@@ -24,7 +24,7 @@ struct LensIntegral
 	int mval, fourier_ival; // mval, fourier_ival are used for the Fourier mode integrals
 	QScalar phi0; // phi0 is used for Fourier mode integrals if ellipticity gradient is used
 	bool cosmode;
-	QScalar *cosamps, *sinamps; // used for Fourier modes
+	double *cosamps, *sinamps; // used for Fourier modes
 	double *gausspoints, *gaussweights;
 	//double *pat_points, **pat_weights;
 	QScalar *pat_funcs;
@@ -130,7 +130,7 @@ struct LensIntegral
 	QScalar fourier_kappa_perturbation(const QScalar r);
 	QScalar ileft_integrand(const QScalar r);
 	QScalar iright_integrand(const QScalar u); // here, u = 1/r
-	QScalar fourier_kappa_m(const QScalar r, const QScalar phi, const int mval_in, const int fourier_ival_in);
+	QScalar fourier_kappa_m(const QScalar r, const QScalar phi, const int mval_in, const QScalar fourier_ival_in);
 };
 
 
@@ -153,8 +153,11 @@ QScalar LensIntegral<QScalar>::i_integral(bool &converged)
 	}
 	else if (profile->integral_method == Gauss_Patterson_Quadrature)
 	{
+		std::cout << "YO0" << std::endl;
 		QScalar (LensIntegral::*iptr)(QScalar) = &LensIntegral::i_integrand_prime;
+		std::cout << "YO1" << std::endl;
 		ans = sqrt(1-epsilon)*PattersonIntegrate(iptr,0,1,converged);
+		std::cout << "YO2" << std::endl;
 	}
 	else if (profile->integral_method == Fejer_Quadrature)
 	{
@@ -947,7 +950,7 @@ void LensIntegral<QScalar>::calculate_fourier_integrals(const int mval_in, const
 }
 
 template <typename QScalar>
-QScalar LensIntegral<QScalar>::fourier_kappa_m(const QScalar r, const QScalar phi, const int mval_in, const int fourier_ival_in)
+QScalar LensIntegral<QScalar>::fourier_kappa_m(const QScalar r, const QScalar phi, const int mval_in, const QScalar fourier_ival_in)
 {
 	QScalar ans, mphi;
 	mval = mval_in;
@@ -965,10 +968,10 @@ template <typename QScalar>
 inline QScalar LensIntegral<QScalar>::fourier_kappa_perturbation(const QScalar r)
 {
 	if (profile->ellipticity_gradient) {
-		//phi0 = profile->angle_function(r);
+		phi0 = profile->angle_function(r);
 	}
 	if (profile->fourier_gradient) {
-		//profile->fourier_mode_function(r,cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
+		profile->fourier_mode_function(r,cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
 	}
 	QScalar kapm;
 	if (phi0==0) {
@@ -1018,11 +1021,25 @@ QScalar LensIntegral<QScalar>::PattersonIntegrate(QScalar (LensIntegral::*func)(
 	double *weightptr;
 	converged = true; // will change to false if convergence not achieved
 
+#ifdef USE_STAN
+	bool output = false;
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) output = true;
+#endif
+
 	int order, j;
+#ifdef USE_STAN
+	if (output) std::cout << "HARG0" << std::endl;
+#endif
 	do {
 		weightptr = Patterson::pat_weights[level];
+#ifdef USE_STAN
+	if (output) std::cout << "HARG1" << std::endl;
+#endif
 		result_old = result;
 		order = Patterson::pat_orders[level];
+#ifdef USE_STAN
+	if (output) std::cout << "HARG2" << std::endl;
+#endif
 		istep = 512 / (order+1);
 		istart = istep - 1;
 		istep *= 2;
@@ -1030,18 +1047,35 @@ QScalar LensIntegral<QScalar>::PattersonIntegrate(QScalar (LensIntegral::*func)(
 		// Note, the pat_funcs[i] is not a problem for multiple OpenMP threads because a separate LensIntegral object was
 		// created for each thread
 		for (j=0, i=istart; j < order; j += 2, i += istep) {
-			pat_funcs[i] = (this->*func)(absum + abdif*Patterson::pat_points[i]);
+#ifdef USE_STAN
+	if (output) std::cout << "HARG3" << std::endl;
+#endif
+	QScalar herg = absum + abdif*Patterson::pat_points[i];
+#ifdef USE_STAN
+	if (output) std::cout << "HARG3b" << std::endl;
+#endif
+			pat_funcs[i] = (this->*func)(herg);
+			//pat_funcs[i] = (this->*func)(absum + abdif*Patterson::pat_points[i]);
+#ifdef USE_STAN
+	if (output) std::cout << "HARG4" << std::endl;
+#endif
 			result += weightptr[j]*pat_funcs[i];
 		}
 		for (j=1, i=istep-1; j < order; j += 2, i += istep) {
 			result += weightptr[j]*pat_funcs[i];
 		}
+#ifdef USE_STAN
+	if (output) std::cout << "HARG5" << std::endl;
+#endif
 		//if (level > 1) cout << "n=" << nval << ", level " << level << ": j=" << result << ", j_old=" << result_old << ", diff=" << abs(result-result_old) << " tol=" << (profile->pat_tolerance*abs(result)) << endl;
 
 		if ((level > 1) and (abs(result-result_old) < profile->integral_tolerance*abs(result))) {
 			//cout << "patterson converged at level " << level << endl;
 			break;
 		}
+#ifdef USE_STAN
+	if (output) std::cout << "HARG6" << std::endl;
+#endif
 		//if ((level > 1) and (abs(result-result_old) < profile->integral_tolerance)) break;
 	} while (++level < 9);
 

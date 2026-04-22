@@ -86,7 +86,7 @@ enum DerivedParamType {
 };
 
 class QLens;			// Defined after class Grid
-class ModelParams;
+class Model;
 class CartesianSourceGrid;
 class LensPixelGrid;
 class DelaunaySourceGrid;
@@ -210,18 +210,41 @@ struct PtImageDataSet {
 	}
 };
 
-class PointSource : public ModelParams
+template <typename QScalar>
+class PtSrcParams : public ModelParams<QScalar>
+{
+	public:
+	//QScalar pos_x, pos_y;
+	lensvector<QScalar> pos;
+	lensvector<QScalar> shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
+	QScalar zsrc, srcflux;
+};
+
+class PointSource : public Model
 {
 	friend class QLens;
 	friend class SB_Profile;
+
+	public:
+	PtSrcParams<double> ptsrc_params;
+#ifdef USE_STAN
+	PtSrcParams<stan::math::var> ptsrc_params_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	PtSrcParams<QScalar>& assign_ptsrc_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return ptsrc_params_dif;
+		else
+#endif
+		return ptsrc_params;
+	}
 
 	private:
 	int zsrc_paramnum; // just to keep track of which parameter number is zsrc (set when constructor is called)
 
 	public:
-	lensvector<double> pos;
-	lensvector<double> shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
-	double zsrc, srcflux;
 	bool include_shift;
 	int n_images;
 	std::vector<image> images;
@@ -234,20 +257,38 @@ class PointSource : public ModelParams
 		copy_imageset(src_in, zsrc_in, images_in, nimg, srcflux_in);
 	}
 	void setup_parameters(const bool initial_setup);
+	template <typename QScalar>
+	void setup_param_pointers();
+
 	void update_meta_parameters(const bool varied_only_fitparams);
 	void get_parameter_numbers_from_qlens(int& pi, int& pf);
 	bool register_vary_parameters_in_qlens();
 	void register_limits_in_qlens();
 	void update_fitparams_in_qlens();
 	void set_vary_source_coords();
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
 	void copy_ptsrc_data(PointSource* ptsrc_in);
 	void copy_imageset(const lensvector<double>& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0);
 	void set_images(image* images_in, const int nimg);
-	void update_srcpos(const lensvector<double>& srcpt);
-	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*srcflux); else return -1; }
+	template <typename QScalar>
+	void update_srcpos(const lensvector<QScalar>& srcpt);
+	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*ptsrc_params.srcflux); else return -1; }
 	void print(bool include_time_delays = false, bool show_labels = true) { print_to_file(include_time_delays,show_labels,NULL,NULL); }
 	void print_to_file(bool include_time_delays, bool show_labels, std::ofstream* srcfile, std::ofstream* imgfile);
 	void reset_images() { n_images = 0; images.clear(); }
+	lensvector<double>& get_pos() { return ptsrc_params.pos; }
+#ifdef USE_STAN
+	lensvector<stan::math::var>& get_pos_autodif() { return ptsrc_params_dif.pos; }
+#endif
+	double& get_srcflux() { return ptsrc_params.srcflux; }
+	void set_srcflux(const double flux_in) { ptsrc_params.srcflux = flux_in; }
+#ifdef USE_STAN
+	stan::math::var& get_srcflux_autodif() { return ptsrc_params_dif.srcflux; }
+	void set_srcflux_autodif(const stan::math::var flux_in) { ptsrc_params_dif.srcflux = flux_in; }
+#endif
+
 };
 
 class Grid : private Brent
@@ -445,9 +486,18 @@ void polychord_dumper(int ndead,int nlive,int npars,double* live,double* dead,do
 void multinest_loglikelihood(double *Cube, int &ndim, int &npars, double &lnew, void *context);
 void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, double **posterior, double **paramConstr, double &maxLogLike, double &logZ, double &INSlogZ, double &logZerr, void *context);
 
-// There is too much inheritance going on here. Nearly all of these (except ModelParams) can be changed to simply objects that are created within the QLens
+// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
+template <typename QScalar>
+class LensCalc
+{
+	public:
+	static lensvector<QScalar> *defs, **defs_subtot, *defs_i, *xvals_i;
+	static lensmatrix<QScalar> *jacs, *hesses, **hesses_subtot, *hesses_i, *Amats_i;
+};
+
+// There is too much inheritance going on here. Nearly all of these (except Model) can be changed to simply objects that are created within the QLens
 // class; it's more transparent to do so, and more object-oriented.
-class QLens : public ModelParams, public UCMC, private Brent, private Sort, private Powell, public Simplex
+class QLens : public Model, public UCMC, private Brent, private Sort, private Powell, public Simplex
 {
 	protected:
 	using GaussQuad = GaussLegendre<std::function<double(const double)>,double>;
@@ -455,9 +505,24 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	using Fejer = ClenshawCurtis<std::function<double(const double)>,double>;
 
 	private:
-	// These are arrays of dummy variables used for lensing calculations, arranged so that each thread gets its own set of dummy variables.
-	static lensvector<double> *defs, **defs_subtot, *defs_i, *xvals_i;
-	static lensmatrix<double> *jacs, *hesses, **hesses_subtot, *hesses_i, *Amats_i;
+	LensCalc<double> lenscalc;
+#ifdef USE_STAN
+	LensCalc<stan::math::var> lenscalc_dif;
+#endif
+
+	template <typename QScalar>
+	LensCalc<QScalar>& assign_lenscalc_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return lenscalc_dif;
+		else
+#endif
+		return lenscalc;
+	}
+
+	//static lensvector<double> *defs, **defs_subtot, *defs_i, *xvals_i;
+	//static lensmatrix<double> *jacs, *hesses, **hesses_subtot, *hesses_i, *Amats_i;
 	static int *indxs;
 
 	double raw_chisq;
@@ -531,7 +596,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	int n_pixellated_src;
 	int* pixellated_src_redshift_idx;
 	int* pixellated_src_band;
-	ModelParams **srcgrids; // this is the base class for Delaunay and cartesian source grids
+	Model **srcgrids; // this is the base class for Delaunay and cartesian source grids
 	PixSrcList *pixsrclist;
 	DelaunaySourceGrid **delaunay_srcgrids;
 	CartesianSourceGrid **cartesian_srcgrids;
@@ -1178,7 +1243,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	template<typename QScalar>
 	QScalar kappa(const QScalar& x, const QScalar& y, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	QScalar potential(const QScalar&, const QScalar&, double* zfacs, double** betafacs);
+	QScalar potential(const double&, const double&, double* zfacs, double** betafacs);
 	template<typename QScalar>
 	void deflection(const QScalar&, const QScalar&, lensvector<QScalar>&, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
@@ -1188,36 +1253,43 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	template<typename QScalar>
 	void hessian(const QScalar&, const QScalar&, lensmatrix<QScalar>&, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	void hessian_weak(const QScalar&, const QScalar&, lensmatrix<QScalar>&, const int &thread, double* zfacs);
+	void hessian_weak(const double&, const double&, lensmatrix<QScalar>&, const int &thread, double* zfacs);
 	template<typename QScalar>
-	void find_sourcept(const lensvector<QScalar>& x, lensvector<QScalar>& srcpt, const int &thread, double* zfacs, double** betafacs);
+	void find_sourcept(const lensvector<double>& x, lensvector<QScalar>& srcpt, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	void find_sourcept(const lensvector<QScalar>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int &thread, double* zfacs, double** betafacs);
+	void find_sourcept(const lensvector<double>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
 	void kappa_inverse_mag_sourcept(const lensvector<QScalar>& x, lensvector<QScalar>& srcpt, QScalar &kap_tot, QScalar &invmag, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	void sourcept_jacobian(const lensvector<QScalar>& xvec, lensvector<QScalar>& srcpt, lensmatrix<QScalar>& jac_tot, const int &thread, double* zfacs, double** betafacs);
+	void sourcept_jacobian(const lensvector<double>& xvec, lensvector<QScalar>& srcpt, lensmatrix<QScalar>& jac_tot, const int &thread, double* zfacs, double** betafacs);
 
 	// versions of the above functions that use lensvector<QScalar> for (x,y) coordinates
 	template<typename QScalar>
 	QScalar kappa(const lensvector<QScalar> &x, double* zfacs, double** betafacs) { return kappa<QScalar>(x[0], x[1], zfacs, betafacs); }
 	template<typename QScalar>
-	QScalar potential(const lensvector<QScalar>& x, double* zfacs, double** betafacs) { return potential<QScalar>(x[0],x[1], zfacs, betafacs); }
+	QScalar potential(const lensvector<double>& x, double* zfacs, double** betafacs) { return potential<QScalar>(x[0],x[1], zfacs, betafacs); }
 	template<typename QScalar>
 	void deflection(const lensvector<QScalar>& x, lensvector<QScalar>& def, double* zfacs, double** betafacs) { deflection<QScalar>(x[0], x[1], def, 0, zfacs, betafacs); }
 	template<typename QScalar>
 	void hessian(const lensvector<QScalar>& x, lensmatrix<QScalar>& hess, double* zfacs, double** betafacs) { hessian<QScalar>(x[0], x[1], hess, 0, zfacs, betafacs); }
+	template<typename QScalar>
+	void hessian_at_datapt(const lensvector<double>& x, lensmatrix<QScalar>& hess, double* zfacs, double** betafacs) {
+		QScalar xx, yy;
+		xx = x[0];
+		yy = x[1];
+		hessian<QScalar>(xx, yy, hess, 0, zfacs, betafacs);
+	}
 
 	template<typename QScalar>
-	QScalar inverse_magnification(const lensvector<QScalar>&, const int &thread, double* zfacs, double** betafacs);
+	QScalar inverse_magnification(const lensvector<double>&, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	QScalar magnification(const lensvector<QScalar> &x, const int &thread, double* zfacs, double** betafacs);
+	QScalar magnification(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
 	QScalar shear(const lensvector<QScalar> &x, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
 	void shear(const lensvector<QScalar> &x, QScalar& shear_tot, QScalar& angle, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	void reduced_shear_components(const lensvector<QScalar> &x, QScalar& g1, QScalar& g2, const int &thread, double* zfacs);
+	void reduced_shear_components(const lensvector<double> &x, QScalar& g1, QScalar& g2, const int &thread, double* zfacs);
 
 	// non-multithreaded versions
 	//QScalar inverse_magnification(const lensvector<QScalar>& x, double* zfacs) { return inverse_magnification(x,0,zfacs); }
@@ -1226,33 +1298,33 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	//void shear(const lensvector<QScalar> &x, QScalar& shear_tot, QScalar& angle, double* zfacs) { return shear(x,shear_tot,angle,0,zfacs); }
 
 	template<typename QScalar>
-	void hessian_exclude(const QScalar& x, const QScalar& y, bool* exclude, lensmatrix<QScalar>& hess_tot, const int& thread, double* zfacs, double** betafacs);
+	void hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix<QScalar>& hess_tot, const int& thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	QScalar magnification_exclude(const lensvector<QScalar> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	QScalar magnification_exclude(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	QScalar inverse_magnification_exclude(const lensvector<QScalar> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	QScalar inverse_magnification_exclude(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	QScalar shear_exclude(const lensvector<QScalar> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	QScalar shear_exclude(const lensvector<double> &x, bool* exclude, const int& thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	void shear_exclude(const lensvector<QScalar> &x, QScalar& shear, QScalar& angle, bool* exclude, const int& thread, double* zfacs, double** betafacs);
+	void shear_exclude(const lensvector<double> &x, QScalar& shear, QScalar& angle, bool* exclude, const int& thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	QScalar kappa_exclude(const lensvector<QScalar> &x, bool* exclude, double* zfacs, double** betafacs);
+	QScalar kappa_exclude(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	void deflection_exclude(const QScalar& x, const QScalar& y, bool* exclude, QScalar& def_tot_x, QScalar& def_tot_y, const int &thread, double* zfacs, double** betafacs);
+	void deflection_exclude(const double& x, const double& y, bool* exclude, QScalar& def_tot_x, QScalar& def_tot_y, const int &thread, double* zfacs, double** betafacs);
 
 	// non-multithreaded versions
 	template<typename QScalar>
-	void hessian_exclude(const QScalar& x, const QScalar& y, bool* exclude, lensmatrix<QScalar>& hess_tot, double* zfacs, double** betafacs) { hessian_exclude<QScalar>(x,y,exclude,hess_tot,0,zfacs,betafacs); }
+	void hessian_exclude(const double& x, const double& y, bool* exclude, lensmatrix<QScalar>& hess_tot, double* zfacs, double** betafacs) { hessian_exclude<QScalar>(x,y,exclude,hess_tot,0,zfacs,betafacs); }
 	template<typename QScalar>
-	QScalar magnification_exclude(const lensvector<QScalar> &x, bool* exclude, double* zfacs, double** betafacs) { return magnification_exclude<QScalar>(x,exclude,0,zfacs,betafacs); }
+	QScalar magnification_exclude(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs) { return magnification_exclude<QScalar>(x,exclude,0,zfacs,betafacs); }
 	template<typename QScalar>
-	QScalar inverse_magnification_exclude(const lensvector<QScalar> &x, bool* exclude, double* zfacs, double** betafacs) { return inverse_magnification_exclude<QScalar>(x,exclude,0,zfacs,betafacs); }
+	QScalar inverse_magnification_exclude(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs) { return inverse_magnification_exclude<QScalar>(x,exclude,0,zfacs,betafacs); }
 	template<typename QScalar>
-	QScalar shear_exclude(const lensvector<QScalar> &x, bool* exclude, double* zfacs, double** betafacs) { return shear_exclude<QScalar>(x,exclude,0,zfacs,betafacs); }
+	QScalar shear_exclude(const lensvector<double> &x, bool* exclude, double* zfacs, double** betafacs) { return shear_exclude<QScalar>(x,exclude,0,zfacs,betafacs); }
 	template<typename QScalar>
-	void shear_exclude(const lensvector<QScalar> &x, QScalar &shear, QScalar &angle, bool* exclude, double* zfacs, double** betafacs) { shear_exclude<QScalar>(x,shear,angle,exclude,0,zfacs,betafacs); }
+	void shear_exclude(const lensvector<double> &x, QScalar &shear, QScalar &angle, bool* exclude, double* zfacs, double** betafacs) { shear_exclude<QScalar>(x,shear,angle,exclude,0,zfacs,betafacs); }
 	template<typename QScalar>
-	void deflection_exclude(const lensvector<QScalar>& x, bool* exclude, lensvector<QScalar>& def, double* zfacs, double** betafacs) { deflection_exclude<QScalar>(x[0], x[1], exclude, def[0], def[1], 0, zfacs, betafacs); }
+	void deflection_exclude(const lensvector<double>& x, bool* exclude, lensvector<QScalar>& def, double* zfacs, double** betafacs) { deflection_exclude<QScalar>(x[0], x[1], exclude, def[0], def[1], 0, zfacs, betafacs); }
 
 	void record_singular_points(double *zfacs);
 
@@ -1326,7 +1398,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 
 	bool plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal);
 	template<typename QScalar>
-	void lens_equation(const lensvector<QScalar>&, lensvector<QScalar>&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
+	void lens_equation(const lensvector<double>&, lensvector<QScalar>&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
 	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
@@ -1549,15 +1621,16 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void update_pixsrc_active_parameters(const int src_number);
 	void update_pixlens_active_parameters(const int pixlens_number);
 	void update_ptsrc_active_parameters(const int src_number);
-	void update_active_parameters(ModelParams* param_object, const int pi);
+	void update_active_parameters(Model* param_object, const int pi);
 
 	void get_automatic_initial_stepsizes(dvector& stepsizes);
 	void set_default_plimits();
 	bool initialize_fitmodel(const bool running_fit_in);
-	double update_model(const double* params);
+	template <typename QScalar>
+	double update_model(const QScalar* params);
 	void update_prior_limits(const double* lower, const double* upper, const bool* changed_limits);
 	template<typename QScalar>
-	QScalar fitmodel_loglike_point_source(const double* params);
+	QScalar fitmodel_loglike_point_source(const QScalar* params);
 	double fitmodel_loglike_extended_source(const double* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
@@ -1624,6 +1697,8 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	template<typename QScalar>
 	QScalar chisq_pos_source_plane();
 	template<typename QScalar>
+	//QScalar chisq_pos_source_plane_test(const QScalar beta_x, const QScalar beta_y);
+	//template<typename QScalar>
 	QScalar chisq_pos_image_plane();
 	template<typename QScalar>
 	QScalar chisq_pos_image_plane_diagnostic(const bool verbose, const bool output_residuals_to_file, double& rms_imgpos_err, int& n_matched_images, const string output_filename = "fit_chivals.dat");
@@ -1636,13 +1711,9 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	QScalar chisq_time_delays_from_model_imgs();
 	template<typename QScalar>
 	QScalar chisq_weak_lensing();
-	template<typename QScalar>
-	void find_analytic_srcflux(QScalar *bestfit_flux);
-	template<typename QScalar>
-	void find_analytic_srcpos(lensvector<QScalar> *beta_i);
-	template<typename QScalar>
+	void find_analytic_srcflux(double *bestfit_flux);
+	void find_analytic_srcpos(lensvector<double> *beta_i);
 	void set_analytic_sourcepts(const bool verbal = false);
-	template<typename QScalar>
 	void set_analytic_srcflux(const bool verbal = false);
 
 	bool output_weak_lensing_chivals(string filename);
@@ -1667,6 +1738,7 @@ class QLens : public ModelParams, public UCMC, private Brent, private Sort, priv
 	void autogrid();
 	bool get_deflection_spline_info(double &xmax, double &ymax, int &nsteps);
 	void set_integral_tolerance(const double& acc);
+	double get_integral_tolerance() { return LensProfile::integral_tolerance; }
 	void set_integral_convergence_warnings(const bool warn);
 
 	void set_integration_method(IntegrationMethod method) { LensProfile::integral_method = method; }
@@ -1928,9 +2000,9 @@ class PixSrcList
 	public:
 	QLens* qlens;
 	int n_pixsrc;
-	ModelParams** pixsrclist_ptr; // we use ModelParams (the base class) because the pixellated source could be either DelaunaySourceGrid or CartesianSourceGrid
+	Model** pixsrclist_ptr; // we use Model (the base class) because the pixellated source could be either DelaunaySourceGrid or CartesianSourceGrid
 	PixSrcList(QLens* qlens_in) { pixsrclist_ptr = NULL; qlens = qlens_in; n_pixsrc = 0; }
-	void input_ptr(ModelParams** ptr_in, const int n_pixsrc_in) { pixsrclist_ptr = ptr_in; n_pixsrc = n_pixsrc_in; }
+	void input_ptr(Model** ptr_in, const int n_pixsrc_in) { pixsrclist_ptr = ptr_in; n_pixsrc = n_pixsrc_in; }
 	void clear_ptr() { pixsrclist_ptr = NULL; n_pixsrc = 0; }
 	void print() {
 		qlens->print_pixellated_source_list(true);
@@ -1955,13 +2027,13 @@ class PixSrcList
 		}
 		return true;
 	}
-	MyIterator<ModelParams*> begin() {
-		return MyIterator<ModelParams*>(pixsrclist_ptr);
+	MyIterator<Model*> begin() {
+		return MyIterator<Model*>(pixsrclist_ptr);
 	}
-	MyIterator<ModelParams*> end() {
-		return MyIterator<ModelParams*>(pixsrclist_ptr+n_pixsrc);
+	MyIterator<Model*> end() {
+		return MyIterator<Model*>(pixsrclist_ptr+n_pixsrc);
 	}
-	ModelParams* operator[](size_t i) { return pixsrclist_ptr[i]; }
+	Model* operator[](size_t i) { return pixsrclist_ptr[i]; }
 };
 
 class PtSrcList

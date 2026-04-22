@@ -254,21 +254,21 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		;
 
-	py::class_<ModelParams>(m, "ModelParams")
-		.def(py::init<>([](){return new ModelParams();}))
-		.def("update", [](ModelParams &current, py::dict dict){
+	py::class_<Model>(m, "Model")
+		.def(py::init<>([](){return new Model();}))
+		.def("update", [](Model &current, py::dict dict){
 			for (auto item : dict) {
 				if(!current.update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second)))
 					return false;
 			}
 			return true;
 		})
-		.def("update", [](ModelParams &current, const string name, const double value){
+		.def("update", [](Model &current, const string name, const double value){
 			return current.update_specific_parameter(name, value);
 		})
-		.def("print_params", [](ModelParams &current) { current.print_parameters(false); })
-		.def("print_vary_params", &ModelParams::print_vary_parameters)
-		.def("vary", [](ModelParams &current, py::list list){ 
+		.def("print_params", [](Model &current) { current.print_parameters(false); })
+		.def("print_vary_params", &Model::print_vary_parameters)
+		.def("vary", [](Model &current, py::list list){ 
 			int np = list.size();
 			if (np==0) return;
 			bool string_input = false;
@@ -300,7 +300,7 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 		})
-		.def("fix", [](ModelParams &current, py::list list){ 
+		.def("fix", [](Model &current, py::list list){ 
 			int np = list.size();
 			if (np==0) return;
 			int nstrings = 0;
@@ -317,10 +317,10 @@ PYBIND11_MODULE(qlens, m) {
 				current.update_specific_varyflag(paramnames[i],false);
 			}
 		})
-		.def("vary", [](ModelParams &current, const string paramname, const bool flag = true){ 
+		.def("vary", [](Model &current, const string paramname, const bool flag = true){ 
 			return current.update_specific_varyflag(paramname,flag);
 		})
-		//.def("vary", [](ModelParams &current, py::list list) { 
+		//.def("vary", [](Model &current, py::list list) { 
 			//vector<string> paramnames;
 			//for (auto arr : list){
 				//string paramname;
@@ -336,24 +336,24 @@ PYBIND11_MODULE(qlens, m) {
 				//current.update_specific_varyflag(paramnames[i],true);
 			//}
 		//})
-		.def("vary_none", [](ModelParams &current){ 
+		.def("vary_none", [](Model &current){ 
 			int npar = current.n_active_params;
 			boolvector vary_flags(npar);
 			for (int i=0; i < npar; i++) vary_flags[i] = false;
 			current.set_varyflags(vary_flags);
 		})
-		.def("vary_all", [](ModelParams &current){ 
+		.def("vary_all", [](Model &current){ 
 			int npar = current.n_active_params;
 			boolvector vary_flags(npar);
 			for (int i=0; i < npar; i++) vary_flags[i] = true;
 			current.set_varyflags(vary_flags);
 		})
-		.def("set_limits", [](ModelParams &curr, const string &param, const double lower, const double upper){
+		.def("set_limits", [](Model &curr, const string &param, const double lower, const double upper){
 			if (curr.set_limits_specific_parameter(param,lower,upper)==false) {
 				throw std::runtime_error("could not set limits for given parameter " + param);
 			}
 		})
-		.def("set_limits", [](ModelParams &curr, py::list list){
+		.def("set_limits", [](Model &curr, py::list list){
 			string paramname;
 			double lower, upper;
 			for (auto arr : list){
@@ -370,14 +370,14 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 		})
-		.def_readonly("indx",&ModelParams::entry_number)
-		.def("__repr__", [](ModelParams &a) {
+		.def_readonly("indx",&Model::entry_number)
+		.def("__repr__", [](Model &a) {
 				string outstring = a.get_parameters_string();
 				return("\n" + outstring);
 		})
 		;
 
-	py::class_<Cosmology, ModelParams, std::unique_ptr<Cosmology, py::nodelete>>(m, "Cosmology")
+	py::class_<Cosmology, Model, std::unique_ptr<Cosmology, py::nodelete>>(m, "Cosmology")
 		//.def(py::init<>([](){return new Cosmology();}))
 		.def(py::init<>([](py::kwargs &kwargs){
 			if (kwargs) {
@@ -2403,7 +2403,7 @@ PYBIND11_MODULE(qlens, m) {
 		}))
 		;
 
-	py::class_<DelaunaySourceGrid, ModelParams, std::unique_ptr<DelaunaySourceGrid, py::nodelete>>(m, "DelaunaySrcGrid")
+	py::class_<DelaunaySourceGrid, Model, std::unique_ptr<DelaunaySourceGrid, py::nodelete>>(m, "DelaunaySrcGrid")
 		.def(py::init<>([](QLens* qlens_in){return new DelaunaySourceGrid(qlens_in);}))
 		.def(py::init<const DelaunaySourceGrid*>())
 		.def("plot", [](DelaunaySourceGrid &current, py::kwargs& kwargs){
@@ -2478,7 +2478,7 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		;
 
-	py::class_<CartesianSourceGrid, ModelParams, std::unique_ptr<CartesianSourceGrid, py::nodelete>>(m, "CartesianSrcGrid")
+	py::class_<CartesianSourceGrid, Model, std::unique_ptr<CartesianSourceGrid, py::nodelete>>(m, "CartesianSrcGrid")
 		//.def(py::init<>([](QLens* qlens_in){return new CartesianSourceGrid(qlens_in);}))
 		//.def(py::init<const CartesianSourceGrid*>())
 		.def("plot", [](CartesianSourceGrid &current, py::kwargs& kwargs){
@@ -3033,7 +3033,7 @@ PYBIND11_MODULE(qlens, m) {
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		.def_property("optimize_regparam", &QLens_Wrap::get_optimize_regparam, &QLens_Wrap::set_optimize_regparam)
-		.def("set_sourcepts_auto",&QLens_Wrap::set_analytic_sourcepts<double>, py::arg("verbal") = true)
+		.def("set_sourcepts_auto",&QLens_Wrap::set_analytic_sourcepts, py::arg("verbal") = true)
 		.def("fitmodel", &QLens_Wrap::print_fit_model)
 		.def_readonly("sorted_critical_curve", &QLens_Wrap::sorted_critical_curve)
 		.def_readonly("nlens", &QLens_Wrap::nlens)
@@ -3066,6 +3066,37 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("matrix_format", &QLens_Wrap::get_matrix_format_string, &QLens_Wrap::set_matrix_format_string)
 		.def_property("sparse_solver", &QLens_Wrap::get_sparse_solver_string, &QLens_Wrap::set_sparse_solver_string)
 		.def_readwrite("use_nnls", &QLens_Wrap::use_non_negative_least_squares)
+		.def_property("integral_tolerance", &QLens_Wrap::get_integral_tolerance, &QLens_Wrap::set_integral_tolerance)
+		.def("set_integral_method", [](QLens_Wrap &current, string method_name, py::kwargs& kwargs){ 
+			int npoints = -1;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="npoints") {
+					try {
+						npoints = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid value for 'npoints' argument");
+					}
+				} else throw std::runtime_error("argument to 'set_integral_method' not recognized");
+			}
+			IntegrationMethod method;
+			if (method_name=="patterson") {
+				method = Gauss_Patterson_Quadrature;
+			} else if (method_name=="fejer") {
+				method = Fejer_Quadrature;
+			} else if (method_name=="romberg") {
+				method = Romberg_Integration;
+			}
+			else if (method_name=="gauss") {
+				method = Gaussian_Quadrature;
+				if (npoints > 0) {
+					GaussLegendre<std::function<double(const double)>,double>::SetGaussLegendre(npoints);
+#ifdef USE_STAN
+					GaussLegendre<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::SetGaussLegendre(npoints);
+#endif
+				}
+			} else throw std::runtime_error("unknown integration method");
+			current.set_integration_method(method);
+		})
 		.def_readwrite("cc_splitlevels", &QLens_Wrap::cc_splitlevels)
 		.def_readwrite("zlens", &QLens_Wrap::lens_redshift)
 		.def("lensinfo", &QLens_Wrap::print_lensing_info_at_point)
@@ -3122,14 +3153,14 @@ PYBIND11_MODULE(qlens, m) {
 
 		;
 
-	py::class_<PointSource, ModelParams, std::unique_ptr<PointSource, py::nodelete>>(m, "PtSrc")
+	py::class_<PointSource, Model, std::unique_ptr<PointSource, py::nodelete>>(m, "PtSrc")
 		.def(py::init<>([](QLens* qlens_in){ return new PointSource(qlens_in); }))
 		.def("print", &PointSource::print,
 				py::arg("include_time_delays") = false, py::arg("include_time_delays") = true)
 		.def_readonly("n_images", &PointSource::n_images)
-		.def_readonly("zsrc", &PointSource::zsrc)
-		.def_readonly("srcflux", &PointSource::srcflux)
-		.def_readonly("pos", &PointSource::pos)
+		//.def_readonly("zsrc", &PointSource::zsrc)
+		//.def_readonly("srcflux", &PointSource::srcflux)
+		//.def_readonly("pos", &PointSource::pos)
 		//.def("pos", [](PointSource &curr){
 			//py::list srcpos(2);
 			//for (int i=0; i < 2; i++) srcpos[i] = curr.pos[i];

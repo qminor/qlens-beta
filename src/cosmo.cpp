@@ -11,6 +11,11 @@
 #include "brent.h"
 #include "cosmo.h"
 #include "qlens.h"
+
+#ifdef USE_STAN
+#include <stan/math.hpp>
+#endif
+
 using namespace std;
 
 const double Cosmology::default_omega_baryon = 0.0488;
@@ -542,40 +547,75 @@ double Cosmology::comoving_distance_derivative(const double z)
 	//return pow(1+z,-1.5);
 }
 
-double Cosmology::critical_density(const double z)
+template <typename QScalar>
+QScalar Cosmology::critical_density(const QScalar z)
 {
 	return dcrit0*(omega_m*CUBE(1+z)+1-omega_m);
 }
+template double Cosmology::critical_density<double>(const double z);
+#ifdef USE_STAN
+template stan::math::var Cosmology::critical_density<stan::math::var>(const stan::math::var z);
+#endif
 
-void Cosmology::get_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, double &mvir, double &rvir)
+template <typename QScalar>
+void Cosmology::get_halo_parameters_from_rs_ds(const QScalar z, const QScalar rs, const QScalar ds, QScalar &mvir, QScalar &rvir)
 {
 	static const double virial_ratio = 200.0;
 	double (Brent::*croot)(const double);
 	croot = static_cast<double (Brent::*)(const double)> (&Cosmology::concentration_root_equation);
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		stan::math::var croot_autodif;
+		croot_autodif = virial_ratio*critical_density(z)/(3*ds*1e9);
+		croot_const = croot_autodif.val();
+	} else
+#endif
 	croot_const = virial_ratio*critical_density(z)/(3*ds*1e9);
+
 	double c;
 	c = BrentsMethod(croot, 0.01, 1000, 1e-4);
 	rvir = c * rs;
 	mvir = 4.0*M_PI/3.0*CUBE(rvir)*1e-9*virial_ratio*critical_density(z);
 }
+template void Cosmology::get_halo_parameters_from_rs_ds<double>(const double z, const double rs, const double ds, double &mvir, double &rvir);
+#ifdef USE_STAN
+template void Cosmology::get_halo_parameters_from_rs_ds<stan::math::var>(const stan::math::var z, const stan::math::var rs, const stan::math::var ds, stan::math::var &mvir, stan::math::var &rvir);
+#endif
 
 double Cosmology::concentration_root_equation(const double c)
 {
 	return croot_const*c*c*c - log(1+c) + c/(1+c);
 }
 
-void Cosmology::get_cored_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, const double beta, double &mvir, double &rvir)
+template <typename QScalar>
+void Cosmology::get_cored_halo_parameters_from_rs_ds(const QScalar z, const QScalar rs, const QScalar ds, const QScalar beta, QScalar &mvir, QScalar &rvir)
 {
 	static const double virial_ratio = 200.0;
 	double (Brent::*croot)(const double);
 	croot = static_cast<double (Brent::*)(const double)> (&Cosmology::cored_concentration_root_equation);
-	croot_const = virial_ratio*critical_density(z)*SQR(1-beta)/(3*ds*1e9);
-	beta_const = beta;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		stan::math::var croot_autodif;
+		croot_autodif = virial_ratio*critical_density(z)/(3*ds*1e9);
+		croot_const = croot_autodif.val();
+		stan::math::var beta_autodif = beta;
+		beta_const = beta.val();
+	} else
+#endif
+	{
+		croot_const = virial_ratio*critical_density(z)/(3*ds*1e9);
+		beta_const = beta;
+	}
+
 	double c;
 	c = BrentsMethod(croot, 0.01, 1000, 1e-4);
 	rvir = c * rs;
 	mvir = 4.0*M_PI/3.0*CUBE(rvir)*1e-9*virial_ratio*critical_density(z);
 }
+template void Cosmology::get_cored_halo_parameters_from_rs_ds<double>(const double z, const double rs, const double ds, const double beta, double &mvir, double &rvir);
+#ifdef USE_STAN
+template void Cosmology::get_cored_halo_parameters_from_rs_ds<stan::math::var>(const stan::math::var z, const stan::math::var rs, const stan::math::var ds, const stan::math::var beta, stan::math::var &mvir, stan::math::var &rvir);
+#endif
 
 double Cosmology::cored_concentration_root_equation(const double c)
 {
@@ -839,23 +879,36 @@ void Cosmology::plot_mc_relation_dutton_moline(const double z, const double xsub
 	double c200, logm, logmi=8.0, logmf=12.0;
 	double logmstep = (logmf-logmi)/(n_logm-1);
 	for (i=0, logm=logmi; i < n_logm; i++, logm += logmstep) {
-		c200 = median_concentration_dutton(pow(10,logm),z);
+		c200 = median_concentration_dutton<double>(pow(10,logm),z);
 		if (xsub != 1.0) c200 *= (1-0.54*log(xsub)/ln10);
 		cout << logm << " " << log(c200)/ln10 << " " << log(c200/1.66)/ln10 << " " << log(c200*1.66)/ln10 << endl; // the 1.66 is twice the 1-sigma scatter in c200 (1.29^2)
 	}
 }
 
-double Cosmology::median_concentration_dutton(const double mass, const double z)
+template <typename QScalar>
+QScalar Cosmology::median_concentration_dutton(const QScalar mass, const QScalar z)
 {
-	double a, b, logc;
+	using std::log;
+	using std::exp;
+	using std::pow;
+#ifdef USE_STAN
+	using stan::math::log;
+	using stan::math::exp;
+	using stan::math::pow;
+#endif
+	QScalar a, b, logc, ten = 10.0;
 	a = 0.52 + (0.901 - 0.520)*exp(-0.617*pow(z,1.21));
 	b = -0.101 + 0.026*z;
-	//double logccheck = 2.148 - 0.11*log(mass)/ln10;
+	//QScalar logccheck = 2.148 - 0.11*log(mass)/ln10;
 
 	logc = a + b*log(mass*hubble*1e-12)/ln10;
 	//cout << "LOGC: " << logc << " " << logccheck << endl;
-	return pow(10,logc);
+	return pow(ten,logc);
 }
+template double Cosmology::median_concentration_dutton<double>(const double mass, const double z);
+#ifdef USE_STAN
+template stan::math::var Cosmology::median_concentration_dutton<stan::math::var>(const stan::math::var mass, const stan::math::var z);
+#endif
 
 double Cosmology::median_concentration_bullock(const double mass, const double z)
 {
@@ -906,8 +959,8 @@ double Cosmology::rms_lsig(const double rad)
 
 double Cosmology::mass_function_ST(const double mass, const double z)
 {
-	double dsigma_dlogm, dr_dm, matter_density, sig, rad, der, nu, ans;
-	matter_density = omega_m*dcrit0;
+	double dsigma_dlogm, dr_dm, matter_density0, sig, rad, der, nu, ans;
+	matter_density0 = omega_m*dcrit0;
 	sig = rms_sigma.splint(mass);
 	rad = pow(3 * mass / (M_4PI*omega_m*dcrit0), (1.0/3.0)); // unit of length is Mpc
 
@@ -920,7 +973,7 @@ double Cosmology::mass_function_ST(const double mass, const double z)
 	dsigma_dlogm = (mass/sig)*dr_dm*der;
 
 	nu = (SQR(delta_z(z)) * 0.707) / (sig*sig);
-	ans = ((matter_density/(mass*mass)) * 0.322 * dsigma_dlogm * sqrt(2*nu/M_PI) * (1 + pow(nu,-0.3)) * exp(-nu/2));
+	ans = ((matter_density0/(mass*mass)) * 0.322 * dsigma_dlogm * sqrt(2*nu/M_PI) * (1 + pow(nu,-0.3)) * exp(-nu/2));
 	return ans;
 }
 

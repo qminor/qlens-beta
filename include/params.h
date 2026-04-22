@@ -924,7 +924,8 @@ struct ParamList
 	{
 		inverse_transform_prior_limits(paramnum,paramnum+1);
 	}
-	void inverse_transform_parameters(const double *params, double *inverse_transformed_params, const int pi = 0, int pf = -1)
+	template <typename QScalar>
+	void inverse_transform_parameters(const QScalar *params, QScalar *inverse_transformed_params, const int pi = 0, int pf = -1)
 	{
 		if (pf==-1) pf = nparams;
 		bool apply_ratio_transform_afterwards = false;
@@ -1030,9 +1031,10 @@ struct ParamList
 	{
 		for (int i=0; i < nparams; i++) transform_stepsize(i);
 	}
-	void add_prior_terms_to_loglike(const double *params, double& loglike)
+	template <typename QScalar>
+	void add_prior_terms_to_loglike(const QScalar *params, QScalar& loglike)
 	{
-		double dloglike,dloglike_tot=0;
+		QScalar dloglike,dloglike_tot=0;
 		for (int i=0; i < nparams; i++) {
 			if (priors[i]->prior!=UNIFORM_PRIOR) {
 				dloglike_tot += log(prior_norms[i]); // Normalize the prior for the bayesian evidence
@@ -1046,12 +1048,14 @@ struct ParamList
 				}
 				else if (priors[i]->prior==GAUSS2_PRIOR) {
 					int j = priors[i]->gauss_paramnums[1];
-					Vector<double> bvec, cvec;
+					Vector<QScalar> bvec, cvec;
 					bvec.input(2);
 					cvec.input(2);
 					bvec[0] = params[i] - priors[i]->gauss_meanvals[0];
 					bvec[1] = params[j] - priors[i]->gauss_meanvals[1];
-					cvec = priors[i]->inv_covariance_matrix * bvec;
+					cvec[0] = priors[i]->inv_covariance_matrix[0][0] * bvec[0] + priors[i]->inv_covariance_matrix[0][1] * bvec[1];
+					cvec[1] = priors[i]->inv_covariance_matrix[1][0] * bvec[0] + priors[i]->inv_covariance_matrix[1][1] * bvec[1];
+					//cvec = priors[i]->inv_covariance_matrix * bvec;
 					dloglike = (bvec[0]*cvec[0] + bvec[1]*cvec[1]) / 2.0;
 					dloglike_tot += dloglike;
 				}
@@ -1104,7 +1108,8 @@ struct ParamList
 	{
 		set_prior_norms(paramnum,paramnum+1);
 	}
-	void add_jacobian_terms_to_loglike(const double *params, double& loglike)
+	template <typename QScalar>
+	void add_jacobian_terms_to_loglike(const QScalar *params, QScalar& loglike)
 	{
 		for (int i=0; i < nparams; i++) {
 			if (transforms[i]->include_jacobian==true) {

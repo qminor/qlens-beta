@@ -71,6 +71,20 @@ class LensParams
 	QScalar costheta, sintheta;
 	QScalar theta_eff; // used for intermediate calculations if ellipticity components are being used
 	QScalar xc_prime, yc_prime; // used if lensed_center_coords is set to true
+	Vector<QScalar> fourier_mode_cosamp, fourier_mode_sinamp;
+	QScalar zlens;
+
+	Spline<QScalar> *fourier_integral_left_cos_spline;
+	Spline<QScalar> *fourier_integral_left_sin_spline;
+	Spline<QScalar> *fourier_integral_right_cos_spline;
+	Spline<QScalar> *fourier_integral_right_sin_spline;
+	LensParams() {
+		param = NULL;
+		fourier_integral_left_cos_spline = NULL;
+		fourier_integral_left_sin_spline = NULL;
+		fourier_integral_right_cos_spline = NULL;
+		fourier_integral_right_sin_spline = NULL;
+	}
 };
 
 template <typename QScalar>
@@ -137,7 +151,7 @@ class LensProfile : public EllipticityGradient
 	}
 
 	public:
-	double zlens, zsrc_ref;
+	double zsrc_ref;
 	double sigma_cr, kpc_to_arcsec;
 	//double q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
 
@@ -145,9 +159,9 @@ class LensProfile : public EllipticityGradient
 	LensProfileName lenstype;
 	bool center_defined;
 	bool lensed_center_coords; // option for line-of-sight perturber that makes the lensed position of the perturber the free parameters
-	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
 	//double xc_prime, yc_prime; // used if lensed_center_coords is set to true
 	double f_major_axis; // used for defining elliptical radius
+	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
 	//double epsilon, epsilon1, epsilon2; // used for defining ellipticity, and/or components of ellipticity (epsilon1, epsilon2)
 	//double costheta, sintheta;
 	//double theta_eff; // used for intermediate calculations if ellipticity components are being used
@@ -171,11 +185,6 @@ class LensProfile : public EllipticityGradient
 
 	int n_fourier_modes; // Number of Fourier mode perturbations to elliptical density contours (zero by default)
 	ivector fourier_mode_mvals, fourier_mode_paramnum;
-	Vector<double> fourier_mode_cosamp, fourier_mode_sinamp;
-	Spline<double> *fourier_integral_left_cos_spline;
-	Spline<double> *fourier_integral_left_sin_spline;
-	Spline<double> *fourier_integral_right_cos_spline;
-	Spline<double> *fourier_integral_right_sin_spline;
 	bool fourier_integrals_splined;
 
 	virtual void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -187,41 +196,77 @@ class LensProfile : public EllipticityGradient
 	void reset_anchor_lists();
 	void set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
 
-	void set_geometric_param_pointers(int qi);
 	void set_geometric_paramnames(int qi);
-	void set_angle(const double &theta_degrees);
-	void set_angle_radians(const double &theta_in);
-	void set_ellipticity_parameter(const double &q_in);
-	void rotate(double&, double&);
-	void rotate_back(double&, double&);
 
-	void set_geometric_parameters(const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
-	void set_angle_from_components(const double &comp_x, const double &comp_y);
+	template <typename QScalar>
+	void set_angle(const QScalar &theta_degrees);
+	template <typename QScalar>
+	void set_angle_radians(const QScalar &theta_in);
+	template <typename QScalar>
+	void set_ellipticity_parameter(const QScalar &q_in);
+	template <typename QScalar>
+	void rotate(QScalar&, QScalar&);
+	template <typename QScalar>
+	void rotate_back(QScalar&, QScalar&);
+
+	template <typename QScalar>
+	void set_geometric_param_pointers(int qi);
+	template <typename QScalar>
+	void set_geometric_parameters(const QScalar &q_in, const QScalar &theta_degrees, const QScalar &xc_in, const QScalar &yc_in);
+	template <typename QScalar>
+	void set_angle_from_components(const QScalar &comp_x, const QScalar &comp_y);
+	template <typename QScalar>
 	void set_center_if_lensed_coords();
+#ifdef USE_STAN
+	virtual void sync_autodif_parameters();
+	void sync_autodif_geometric_parameters();
+#endif
 
 	void set_integration_pointers();
 	virtual void set_model_specific_integration_pointers();
 	void update_meta_parameters_and_pointers();
+
+	template <typename QScalar>
 	void update_angle_meta_params();
+	template <typename QScalar>
 	void update_ellipticity_meta_parameters();
 	void update_cosmology_meta_parameters(const bool force_update = false);
-	virtual void update_meta_parameters()
+
+	virtual void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	virtual void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
+
+	template <typename QScalar>
+	void update_meta_parameters_impl()
 	{
 		update_cosmology_meta_parameters();
-		update_ellipticity_meta_parameters();
+		update_ellipticity_meta_parameters<QScalar>();
 	}
+	template <typename QScalar>
 	void calculate_ellipticity_components();
+	template <typename QScalar>
 	void update_center_from_pixsrc_coords(QLens* qlensptr);
 
-	double potential_numerical(const double, const double);
-	double potential_spherical_default(const double x, const double y);
-	void deflection_numerical(const double, const double, lensvector<double>&);
-	void deflection_spherical_default(const double, const double, lensvector<double>&);
-	void hessian_numerical(const double, const double, lensmatrix<double>&);
-	void hessian_spherical_default(const double, const double, lensmatrix<double>&);
-	void deflection_and_hessian_together(const double x, const double y, lensvector<double> &def, lensmatrix<double>& hess);
-	void deflection_and_hessian_numerical(const double x, const double y, lensvector<double>& def, lensmatrix<double>& hess);
-	void warn_if_not_converged(const bool& converged, const double &x, const double &y);
+	template <typename QScalar>
+	QScalar potential_numerical(const QScalar, const QScalar);
+	template <typename QScalar>
+	QScalar potential_spherical_default(const QScalar x, const QScalar y);
+	template <typename QScalar>
+	void deflection_numerical(const QScalar, const QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void deflection_spherical_default(const QScalar, const QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void hessian_numerical(const QScalar, const QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	void hessian_spherical_default(const QScalar, const QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	void deflection_and_hessian_together(const QScalar x, const QScalar y, lensvector<QScalar> &def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void deflection_and_hessian_numerical(const QScalar x, const QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+
+	template <typename QScalar>
+	void warn_if_not_converged(const bool& converged, const QScalar &x, const QScalar &y);
 
 	double rmin_einstein_radius; // initial bracket used to find Einstein radius
 	double rmax_einstein_radius; // initial bracket used to find Einstein radius
@@ -250,10 +295,14 @@ class LensProfile : public EllipticityGradient
 	double mass_inverse_rsq(const double u);
 	double half_mass_radius_root(const double r);
 
-	void kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess);
-	void deflection_from_elliptical_potential(const double x, const double y, lensvector<double>& def);
-	void hessian_from_elliptical_potential(const double x, const double y, lensmatrix<double>& hess);
-	double kappa_from_elliptical_potential(const double x, const double y);
+	template <typename QScalar>
+	void kappa_deflection_and_hessian_from_elliptical_potential(const QScalar x, const QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void deflection_from_elliptical_potential(const QScalar x, const QScalar y, lensvector<QScalar>& def);
+	template <typename QScalar>
+	void hessian_from_elliptical_potential(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	QScalar kappa_from_elliptical_potential(const QScalar x, const QScalar y);
 
 	public:
 	int lens_number;
@@ -301,7 +350,6 @@ class LensProfile : public EllipticityGradient
 	LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, Cosmology*);
 	LensProfile(const LensProfile* lens_in);
 	~LensProfile() {
-		if (lensparams->param != NULL) delete[] lensparams->param;
 		if (anchor_parameter_to_lens != NULL) delete[] anchor_parameter_to_lens;
 		if (parameter_anchor_lens != NULL) delete[] parameter_anchor_lens;
 		if (anchor_parameter_to_source != NULL) delete[] anchor_parameter_to_source;
@@ -309,10 +357,19 @@ class LensProfile : public EllipticityGradient
 		if (parameter_anchor_paramnum != NULL) delete[] parameter_anchor_paramnum;
 		if (parameter_anchor_ratio != NULL) delete[] parameter_anchor_ratio;
 		if (parameter_anchor_exponent != NULL) delete[] parameter_anchor_exponent;
-		if (fourier_integral_left_cos_spline != NULL) delete[] fourier_integral_left_cos_spline;
-		if (fourier_integral_left_cos_spline != NULL) delete[] fourier_integral_left_sin_spline;
-		if (fourier_integral_left_cos_spline != NULL) delete[] fourier_integral_right_cos_spline;
-		if (fourier_integral_left_cos_spline != NULL) delete[] fourier_integral_right_sin_spline;
+
+		if (lensparams->param != NULL) delete[] lensparams->param;
+		if (lensparams->fourier_integral_left_cos_spline != NULL) delete[] lensparams->fourier_integral_left_cos_spline;
+		if (lensparams->fourier_integral_left_cos_spline != NULL) delete[] lensparams->fourier_integral_left_sin_spline;
+		if (lensparams->fourier_integral_left_cos_spline != NULL) delete[] lensparams->fourier_integral_right_cos_spline;
+		if (lensparams->fourier_integral_left_cos_spline != NULL) delete[] lensparams->fourier_integral_right_sin_spline;
+#ifdef USE_STAN
+		if (lensparams_dif->param != NULL) delete[] lensparams_dif->param;
+		if (lensparams_dif->fourier_integral_left_cos_spline != NULL) delete[] lensparams_dif->fourier_integral_left_cos_spline;
+		if (lensparams_dif->fourier_integral_left_cos_spline != NULL) delete[] lensparams_dif->fourier_integral_left_sin_spline;
+		if (lensparams_dif->fourier_integral_left_cos_spline != NULL) delete[] lensparams_dif->fourier_integral_right_cos_spline;
+		if (lensparams_dif->fourier_integral_left_cos_spline != NULL) delete[] lensparams_dif->fourier_integral_right_sin_spline;
+#endif
 
 	}
 	void set_null_ptrs_and_values()
@@ -323,6 +380,13 @@ class LensProfile : public EllipticityGradient
 		hessptr = NULL;
 		potptr = NULL;
 		def_and_hess_ptr = NULL;
+#ifdef USE_STAN
+		kapavgptr_rsq_spherical_autodif = NULL;
+		potptr_rsq_spherical_autodif = NULL;
+		hessptr_autodif = NULL;
+		potptr_autodif = NULL;
+		def_and_hess_ptr_autodif = NULL;
+#endif
 		anchor_parameter_to_lens = NULL;
 		parameter_anchor_lens = NULL;
 		anchor_parameter_to_source = NULL;
@@ -332,15 +396,14 @@ class LensProfile : public EllipticityGradient
 		//lensparams->param = NULL;
 		parameter_anchor_ratio = NULL;
 		parameter_anchor_exponent = NULL;
-		zlens = zlens_current = 0;
 		zsrc_ref = 0;
 		zfac = 1.0;
 		sigma_cr = 0;
 		fourier_integrals_splined = false;
-		fourier_integral_left_cos_spline = NULL;
-		fourier_integral_left_sin_spline = NULL;
-		fourier_integral_right_cos_spline = NULL;
-		fourier_integral_right_sin_spline = NULL;
+		//fourier_integral_left_cos_spline = NULL;
+		//fourier_integral_left_sin_spline = NULL;
+		//fourier_integral_right_cos_spline = NULL;
+		//fourier_integral_right_sin_spline = NULL;
 		use_concentration_prior = false;
 		qlens = NULL;
 		cosmo = NULL;
@@ -382,7 +445,14 @@ class LensProfile : public EllipticityGradient
 	bool enable_fourier_gradient(Vector<double>& fourier_params, const Vector<double>& knots, const bool copy_vary_settings = false, boolvector* vary_egrad = NULL);
 	void find_egrad_paramnums(int& qi, int& qf, int& theta_i, int& theta_f, int& amp_i, int& amp_f);
 
-	virtual void assign_param_pointers();
+	// the following function MUST be redefined in all derived classes
+	virtual void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	virtual void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+
+	template <typename QScalar>
+	void assign_param_pointers_impl();
 	virtual void assign_paramnames();
 	bool register_vary_flags();
 	bool set_vary_flags(boolvector &vary_flags);
@@ -451,7 +521,8 @@ class LensProfile : public EllipticityGradient
 	bool update_specific_parameter(const std::string name_in, const double& value);
 	bool update_specific_parameter(const int paramnum, const double& value);
 	void update_parameters(const double* params);
-	void update_fit_parameters(const double* fitparams, int &index, bool& status);
+	template <typename QScalar>
+	void update_fit_parameters(const QScalar* fitparams, int &index, bool& status);
 	void update_ellipticity_parameter(const double param);
 	void update_anchored_parameters();
 	void update_anchor_center();
@@ -509,19 +580,46 @@ class LensProfile : public EllipticityGradient
 	virtual bool core_present(); // this function is only used for certain derived classes (i.e. specific lens models)
 	bool has_kapavg_profile();
 
-	double elliptical_radius(double x, double y);
-	virtual void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess);
-	virtual void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
-	virtual double potential(double x, double y);
-	virtual double kappa(double x, double y);
-	virtual void deflection(double x, double y, lensvector<double>& def);
-	virtual void hessian(double x, double y, lensmatrix<double>& hess); // the Hessian matrix of the lensing potential (*not* the arrival time surface)
+	virtual void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	virtual void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	virtual double potential(double x, double y) { return potential_impl(x,y); }
+	virtual double kappa(double x, double y) { return kappa_impl(x,y); }
+	virtual void deflection(double x, double y, lensvector<double>& def) { deflection_impl(x,y,def); }
+	virtual void hessian(double x, double y, lensmatrix<double>& hess)  { hessian_impl(x,y,hess); }
+#ifdef USE_STAN
+	virtual void kappa_and_potential_derivatives(stan::math::var x, stan::math::var y, stan::math::var& kap, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	virtual void potential_derivatives(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	virtual stan::math::var potential(stan::math::var x, stan::math::var y) { return potential_impl(x,y); }
+	virtual stan::math::var kappa(stan::math::var x, stan::math::var y) { return kappa_impl(x,y); }
+	virtual void deflection(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def) { deflection_impl(x,y,def); }
+	virtual void hessian(stan::math::var x, stan::math::var y, lensmatrix<stan::math::var>& hess)  { hessian_impl(x,y,hess); }
+#endif
+
+	template <typename QScalar>
+	QScalar elliptical_radius(QScalar x, QScalar y);
+	template <typename QScalar>
+	void kappa_and_potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	QScalar potential_impl(QScalar x, QScalar y);
+	template <typename QScalar>
+	QScalar kappa_impl(QScalar x, QScalar y);
+	template <typename QScalar>
+	void deflection_impl(QScalar x, QScalar y, lensvector<QScalar>& def);
+	template <typename QScalar>
+	void hessian_impl(QScalar x, QScalar y, lensmatrix<QScalar>& hess); // the Hessian matrix of the lensing potential (*not* the arrival time surface)
+
+	template <typename QScalar>
+	QScalar kappa_from_fourier_modes(const QScalar x, const QScalar y);
+	template <typename QScalar>
+	void add_deflection_from_fourier_modes(const QScalar x, const QScalar y, lensvector<QScalar>& def);
+	template <typename QScalar>
+	void add_hessian_from_fourier_modes(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void spline_fourier_mode_integrals(const QScalar rmin, const QScalar rmax);
 
 	void kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap); // this is just used for the 'xi' parameter
-	double kappa_from_fourier_modes(const double x, const double y);
-	void add_deflection_from_fourier_modes(const double x, const double y, lensvector<double>& def);
-	void add_hessian_from_fourier_modes(const double x, const double y, lensmatrix<double>& hess);
-	void spline_fourier_mode_integrals(const double rmin, const double rmax);
 
 	public:
 	bool isspherical() { return (lensparams->q==1.0); }
@@ -531,7 +629,7 @@ class LensProfile : public EllipticityGradient
 	void get_center_coords(lensvector<double> &center) { center[0]=lensparams->x_center; center[1]=lensparams->y_center; }
 	void get_q_theta(double &q_out, double& theta_out) { q_out=lensparams->q; theta_out=lensparams->theta; }
 	double get_f_major_axis() { return f_major_axis; }
-	double get_redshift() { return zlens; }
+	double get_redshift() { return lensparams->zlens; }
 	int get_n_params() { return n_params; }
 	int get_lensprofile_nparams() { return lensprofile_nparams; }
 	int get_n_vary_params() { return n_vary_params; }
@@ -539,7 +637,14 @@ class LensProfile : public EllipticityGradient
 	int get_center_anchor_number() { return center_anchor_lens->lens_number; }
 	virtual int get_special_parameter_anchor_number() { return -1; } // no special parameters can be center_anchored for the base class
 	void set_zsrc_ref(const double zsrc_ref_in) { zsrc_ref = zsrc_ref_in; }
-	void set_theta(double theta_in) { lensparams->theta=theta_in; update_angle_meta_params(); }
+	void set_theta(double theta_in) {
+		lensparams->theta=theta_in;
+		update_angle_meta_params<double>();
+#ifdef USE_STAN
+		lensparams_dif->theta=theta_in;
+		update_angle_meta_params<stan::math::var>();
+#endif
+	}
 	void set_center(double xc_in, double yc_in) { lensparams->x_center = xc_in; lensparams->y_center = yc_in; }
 	void set_include_limits(bool inc) { include_limits = inc; }
 	//void set_integral_tolerance(const double acc);
@@ -549,9 +654,12 @@ class LensProfile : public EllipticityGradient
 		lensed_center_coords = lensed_xcyc;
 		lensparams->xc_prime = lensparams->x_center;
 		lensparams->yc_prime = lensparams->y_center;
-		set_center_if_lensed_coords();
+		set_center_if_lensed_coords<double>();
 		assign_paramnames();
 		assign_param_pointers();
+#ifdef USE_STAN
+		assign_param_pointers_autodif();
+#endif
 	}
 	bool output_plates(const int n_plates);
 };
@@ -567,7 +675,7 @@ class SPLE_Lens : public LensProfile
 		QScalar qsq, ssq_prime;
 	};
 
-	private:
+	public:
 	SPLE_Params<double> lensparams_sple;
 #ifdef USE_STAN
 	SPLE_Params<stan::math::var> lensparams_sple_dif; // autodiff version
@@ -604,19 +712,32 @@ class SPLE_Lens : public LensProfile
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
-	double kapavg_spherical_rsq(const double rsq);
-	double potential_spherical_rsq(const double rsq);
-	double kapavg_spherical_rsq_iso(const double rsq);
-	void deflection_elliptical_iso(const double, const double, lensvector<double>&);
-	void hessian_elliptical_iso(const double, const double, lensmatrix<double>&);
-	double potential_spherical_rsq_iso(const double rsq);
-	double potential_elliptical_iso(const double x, const double y);
-	void deflection_elliptical_nocore(const double x, const double y, lensvector<double>&);
-	void deflection_and_hessian_elliptical_nocore(const double x, const double y, lensvector<double>&, lensmatrix<double>&);
-	void hessian_elliptical_nocore(const double x, const double y, lensmatrix<double>& hess);
-	double potential_elliptical_nocore(const double x, const double y);
-	double potential_spherical_rsq_nocore(const double rsq);
-	std::complex<double> deflection_angular_factor(const double &phi);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
+	template <typename QScalar>
+	QScalar potential_spherical_rsq(const QScalar rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq_iso(const QScalar rsq);
+	template <typename QScalar>
+	void deflection_elliptical_iso(const QScalar, const QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void hessian_elliptical_iso(const QScalar, const QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	QScalar potential_spherical_rsq_iso(const QScalar rsq);
+	template <typename QScalar>
+	QScalar potential_elliptical_iso(const QScalar x, const QScalar y);
+	template <typename QScalar>
+	void deflection_elliptical_nocore(const QScalar x, const QScalar y, lensvector<QScalar>&);
+	template <typename QScalar>
+	void deflection_and_hessian_elliptical_nocore(const QScalar x, const QScalar y, lensvector<QScalar>&, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	void hessian_elliptical_nocore(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	QScalar potential_elliptical_nocore(const QScalar x, const QScalar y);
+	template <typename QScalar>
+	QScalar potential_spherical_rsq_nocore(const QScalar rsq);
+	template <typename QScalar>
+	std::complex<QScalar> deflection_angular_factor(const QScalar &phi);
 	double rho3d_r_integrand_analytic(const double r);
 
 	void setup_lens_properties(const int parameter_mode_in = 0, const int subclass = 0);
@@ -628,10 +749,25 @@ class SPLE_Lens : public LensProfile
 	SPLE_Lens(const SPLE_Lens* lens_in);
 	void initialize_parameters(const double &bb, const double &slope, const double &ss, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	SPLE_Lens(SPLE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
@@ -690,11 +826,17 @@ class dPIE_Lens : public LensProfile
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
-	double kapavg_spherical_rsq(const double rsq);
-	void deflection_elliptical(const double, const double, lensvector<double>&);
-	void hessian_elliptical(const double, const double, lensmatrix<double>&);
-	double potential_elliptical(const double x, const double y);
-	double potential_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
+	template <typename QScalar>
+	void deflection_elliptical(const QScalar, const QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void hessian_elliptical(const QScalar, const QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	QScalar potential_elliptical(const QScalar x, const QScalar y);
+	template <typename QScalar>
+	QScalar potential_spherical_rsq(const QScalar rsq);
+
 	double rho3d_r_integrand_analytic(const double r);
 
 	void setup_lens_properties(const int parameter_mode_in = 0, const int subclass = 0);
@@ -708,17 +850,34 @@ class dPIE_Lens : public LensProfile
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	dPIE_Lens(const dPIE_Lens* lens_in);
 	dPIE_Lens(dPIE* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void get_parameters_pmode(const int pmode, double* params);
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*, const double factor, const bool just_created);
 	void update_special_anchored_params();
 
+	template <typename QScalar>
 	void set_abs_params_from_sigma0();
+	template <typename QScalar>
 	void set_abs_params_from_mtot();
 	bool output_cosmology_info(const int lens_number = -1);
 	double calculate_scaled_mass_3d(const double r);
@@ -772,13 +931,17 @@ class NFW : public LensProfile
 	template <typename QScalar>
 	QScalar lens_function_xsq(const QScalar);
 
-	double kapavg_spherical_rsq(const double rsq);
-	double potential_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
+	template <typename QScalar>
+	QScalar potential_spherical_rsq(const QScalar rsq);
 	double rho3d_r_integrand_analytic(const double r);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
+	template <typename QScalar>
 	void set_ks_rs_from_m200_c200();
+	template <typename QScalar>
 	void set_ks_c200_from_m200_rs();
 
 	public:
@@ -786,10 +949,24 @@ class NFW : public LensProfile
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	NFW(const NFW* lens_in);
 	NFW(NFW_Source* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*, const double factor, const bool just_created);
@@ -844,22 +1021,39 @@ class Truncated_NFW : public LensProfile
 
 	template <typename QScalar>
 	QScalar lens_function_xsq(const QScalar);
-	double kapavg_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
 	double rho3d_r_integrand_analytic(const double r);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
+	template <typename QScalar>
 	void set_ks_rs_from_m200_c200();
+	template <typename QScalar>
 	void set_ks_c200_from_m200_rs();
 
 	public:
 	Truncated_NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int truncation_mode_in, const int parameter_mode_in, Cosmology* cosmo_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Truncated_NFW(const Truncated_NFW* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*, const double factor, const bool just_created);
@@ -913,25 +1107,43 @@ class Cored_NFW : public LensProfile
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 	template <typename QScalar>
 	QScalar lens_function_xsq(const QScalar);
-	double kapavg_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
 	//double potential_spherical_rsq(const double rsq);
 	//double potential_lens_function_xsq(const double&);
 	double rho3d_r_integrand_analytic(const double r);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
+	template <typename QScalar>
 	void set_ks_rs_from_m200_c200_beta();
+	template <typename QScalar>
 	void set_ks_rs_from_m200_c200_rckpc();
+	template <typename QScalar>
 	void set_ks_c200_from_m200_rs();
 
 	public:
 	Cored_NFW(const double zlens_in, const double zsrc_in, const double &ks_in, const double &rs_in, const double &rt_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology* cosmo_in);
 	void initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Cored_NFW(const Cored_NFW* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*, const double factor, const bool just_created);
@@ -982,8 +1194,10 @@ class Hernquist : public LensProfile
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 	template <typename QScalar>
 	QScalar lens_function_xsq(const QScalar);
-	double kapavg_spherical_rsq(const double rsq);
-	double potential_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
+	template <typename QScalar>
+	QScalar potential_spherical_rsq(const QScalar rsq);
 	double rho3d_r_integrand_analytic(const double r);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -994,10 +1208,24 @@ class Hernquist : public LensProfile
 			const double &xc_in, const double &yc_in, Cosmology*);
 	void initialize_parameters(const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Hernquist(const Hernquist* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 };
@@ -1041,7 +1269,8 @@ class ExpDisk : public LensProfile
 	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
-	double kapavg_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
@@ -1049,10 +1278,24 @@ class ExpDisk : public LensProfile
 	ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Cosmology*);
 	void initialize_parameters(const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	ExpDisk(const ExpDisk* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	bool calculate_total_scaled_mass(double& total_mass);
@@ -1102,35 +1345,72 @@ class Shear : public LensProfile
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
-	void set_angle_from_components(const double &comp_x, const double &comp_y);
+	template <typename QScalar>
+	void set_angle_from_components(const QScalar &comp_x, const QScalar &comp_y);
 
 	public:
 	Shear(const double zlens_in, const double zsrc_in, const double &shear_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Cosmology*);
 	void initialize_parameters(const double &shear_p1_in, const double &shear_p2_in, const double &xc_in, const double &yc_in);
 	Shear(const Shear* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
 
 	inline static bool use_shear_component_params = false; // if set to true, uses shear_1 and shear_2 as fit parameters instead of gamma and theta
 	inline static bool angle_points_towards_perturber = false; // direction of hypothetical perturber differs from shear angle by 90 degrees
 
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
+
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	double potential(double x, double y) { return potential_impl(x,y); }
+	double kappa(double x, double y) { return kappa_impl(x,y); }
+	void deflection(double x, double y, lensvector<double>& def) { deflection_impl(x,y,def); }
+	void hessian(double x, double y, lensmatrix<double>& hess)  { hessian_impl(x,y,hess); }
+#ifdef USE_STAN
+	void kappa_and_potential_derivatives(stan::math::var x, stan::math::var y, stan::math::var& kap, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	stan::math::var potential(stan::math::var x, stan::math::var y) { return potential_impl(x,y); }
+	stan::math::var kappa(stan::math::var x, stan::math::var y) { return kappa_impl(x,y); }
+	void deflection(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def) { deflection_impl(x,y,def); }
+	void hessian(stan::math::var x, stan::math::var y, lensmatrix<stan::math::var>& hess)  { hessian_impl(x,y,hess); }
+#endif
+
 	// here the base class deflection/hessian functions are overloaded because the angle is put in explicitly in the formulas (no rotation of the coordinates is needed)
-	double potential(double, double);
-	void potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess);
-	void deflection(double, double, lensvector<double>&);
-	void hessian(double, double, lensmatrix<double>&);
-	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
-	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
+	template <typename QScalar>
+	QScalar potential_impl(QScalar, QScalar);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void deflection_impl(QScalar, QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void hessian_impl(QScalar, QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void kappa_and_potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 	{
 		kap = 0;
-		potential_derivatives(x,y,def,hess);
+		potential_derivatives_impl(x,y,def,hess);
 	}
 
-	double kappa(double, double) { return 0; }
+	template <typename QScalar>
+	QScalar kappa_impl(QScalar, QScalar) { return 0; }
 	void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0) { r1=0; r2=0; }
 };
 
@@ -1180,23 +1460,60 @@ class Multipole : public LensProfile
 	void set_model_specific_integration_pointers();
 
 	public:
-
 	Multipole(const double zlens_in, const double zsrc_in, const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, Cosmology*, const bool sine=false);
 	void initialize_parameters(const double &A_m_in, const double n_in, const int m_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const bool kap, const bool sine);
 	Multipole(const Multipole* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	double potential(double x, double y) { return potential_impl(x,y); }
+	double kappa(double x, double y) { return kappa_impl(x,y); }
+	void deflection(double x, double y, lensvector<double>& def) { deflection_impl(x,y,def); }
+	void hessian(double x, double y, lensmatrix<double>& hess)  { hessian_impl(x,y,hess); }
+#ifdef USE_STAN
+	void kappa_and_potential_derivatives(stan::math::var x, stan::math::var y, stan::math::var& kap, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	stan::math::var potential(stan::math::var x, stan::math::var y) { return potential_impl(x,y); }
+	stan::math::var kappa(stan::math::var x, stan::math::var y) { return kappa_impl(x,y); }
+	void deflection(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def) { deflection_impl(x,y,def); }
+	void hessian(stan::math::var x, stan::math::var y, lensmatrix<stan::math::var>& hess)  { hessian_impl(x,y,hess); }
+#endif
 
 	// here the base class deflection/hessian functions are overloaded because the angle is put in explicitly in the formulas (no rotation of the coordinates is needed)
-	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess);
-	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
-	void deflection(double, double, lensvector<double>&);
-	void hessian(double, double, lensmatrix<double>&);
-	double potential(double, double);
-	double kappa(double, double);
-	double deflection_m0_spherical_r(const double r);
+	template <typename QScalar>
+	QScalar kappa_impl(QScalar, QScalar);
+	template <typename QScalar>
+	QScalar potential_impl(QScalar, QScalar);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void deflection_impl(QScalar, QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void hessian_impl(QScalar, QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void kappa_and_potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	QScalar deflection_m0_spherical_r(const QScalar r);
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
@@ -1241,11 +1558,15 @@ class PointMass : public LensProfile
 #endif
 
 	template <typename QScalar>
+	QScalar kappa_impl(QScalar, QScalar);
+	template <typename QScalar>
 	QScalar kappa_rsq_impl(const QScalar rsq) { return 0; }
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq) {return 0; }
-	double kapavg_spherical_rsq(const double rsq);
-	double potential_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
+	template <typename QScalar>
+	QScalar potential_spherical_rsq(const QScalar rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
@@ -1254,27 +1575,61 @@ class PointMass : public LensProfile
 	PointMass(const double zlens_in, const double zsrc_in, const double &bb, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology*);
 	void initialize_parameters(const double &p_in, const double &xc_in, const double &yc_in);
 	PointMass(const PointMass* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	double potential(double, double);
-	double kappa(double, double);
-	double kappa_avg_r(const double r);
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	double potential(double x, double y) { return potential_impl(x,y); }
+	double kappa(double x, double y) { return kappa_impl(x,y); }
+	void deflection(double x, double y, lensvector<double>& def) { deflection_impl(x,y,def); }
+	void hessian(double x, double y, lensmatrix<double>& hess)  { hessian_impl(x,y,hess); }
+#ifdef USE_STAN
+	void kappa_and_potential_derivatives(stan::math::var x, stan::math::var y, stan::math::var& kap, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	stan::math::var potential(stan::math::var x, stan::math::var y) { return potential_impl(x,y); }
+	stan::math::var kappa(stan::math::var x, stan::math::var y) { return kappa_impl(x,y); }
+	void deflection(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def) { deflection_impl(x,y,def); }
+	void hessian(stan::math::var x, stan::math::var y, lensmatrix<stan::math::var>& hess)  { hessian_impl(x,y,hess); }
+#endif
 
 	// here the base class deflection/hessian functions are overloaded because the potential has circular symmetry (no rotation of the coordinates is needed)
-	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
-	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
+	template <typename QScalar>
+	QScalar potential_impl(QScalar, QScalar);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void deflection_impl(QScalar, QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void hessian_impl(QScalar, QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void kappa_and_potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 	{
 		kap = 0;
-		potential_derivatives(x,y,def,hess);
+		potential_derivatives_impl(x,y,def,hess);
 	}
 
-	void deflection(double, double, lensvector<double>&);
-	void hessian(double, double, lensmatrix<double>&);
+	double kappa_avg_r(const double r);
 
 	bool calculate_total_scaled_mass(double& total_mass);
 	double calculate_scaled_mass_3d(const double r);
@@ -1335,12 +1690,21 @@ class CoreCusp : public LensProfile
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_nocore(const QScalar rsq_prime, const QScalar atilde);
 
-	double kapavg_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
 
-	double enclosed_mass_spherical_nocore(const double rsq_prime, const double atilde) { return enclosed_mass_spherical_nocore(rsq_prime,atilde,lensparams_cc.n); }
-	double enclosed_mass_spherical_nocore(const double rsq_prime, const double atilde, const double nprime);
-	double enclosed_mass_spherical_nocore_n3(const double rsq_prime, const double atilde, const double nprime);
-	double enclosed_mass_spherical_nocore_limit(const double rsq, const double atilde, const double n_stepsize);
+	template <typename QScalar>
+	QScalar enclosed_mass_spherical_nocore(const QScalar rsq_prime, const QScalar atilde) {
+		CoreCusp_Params<QScalar>& p = assign_cc_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+		return enclosed_mass_spherical_nocore(rsq_prime,atilde,p.n);
+	}
+	template <typename QScalar>
+	QScalar enclosed_mass_spherical_nocore(const QScalar rsq_prime, const QScalar atilde, const QScalar nprime);
+	template <typename QScalar>
+	QScalar enclosed_mass_spherical_nocore_n3(const QScalar rsq_prime, const QScalar atilde, const double n_stepsize);
+	template <typename QScalar>
+	QScalar enclosed_mass_spherical_nocore_limit(const QScalar rsq, const QScalar atilde, const double n_stepsize);
+	template <typename QScalar>
 	void set_core_enclosed_mass();
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
@@ -1348,16 +1712,30 @@ class CoreCusp : public LensProfile
 	void get_auxiliary_parameter(std::string& aux_paramname, double& aux_param) { if (set_k0_by_einstein_radius) aux_paramname = "k0"; aux_param = lensparams_cc.k0; }
 
 	public:
-	bool calculate_tidal_radius;
-	int get_special_parameter_anchor_number() { return special_anchor_lens->lens_number; } // no special parameters can be anchored for the base class
-
 	CoreCusp(const double zlens_in, const double zsrc_in, const double &k0_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology*);
 	void initialize_parameters(const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	CoreCusp(const CoreCusp* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	bool calculate_tidal_radius;
+	int get_special_parameter_anchor_number() { return special_anchor_lens->lens_number; } // no special parameters can be anchored for the base class
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	void assign_special_anchored_parameters(LensProfile*, const double factor, const bool just_created);
@@ -1418,21 +1796,35 @@ class SersicLens : public LensProfile
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
-	double kapavg_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
 	public:
-
 	SersicLens(const double zlens_in, const double zsrc_in, const double &kappa0_in, const double &k_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology*);
 	void initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	SersicLens(const SersicLens* lens_in);
 	SersicLens(Sersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	bool output_cosmology_info(const int lens_number);
@@ -1496,15 +1888,28 @@ class DoubleSersicLens : public LensProfile
 	//void set_model_specific_integration_pointers();
 
 	public:
-
 	DoubleSersicLens(const double zlens_in, const double zsrc_in, const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology*);
 	void initialize_parameters(const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	DoubleSersicLens(const DoubleSersicLens* lens_in);
 	DoubleSersicLens(DoubleSersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	bool output_cosmology_info(const int lens_number);
@@ -1558,21 +1963,35 @@ class Cored_SersicLens : public LensProfile
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
-	double kapavg_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
 	public:
-
 	Cored_SersicLens(const double zlens_in, const double zsrc_in, const double &kappa0_in, const double &k_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int parameter_mode_in, Cosmology*);
 	void initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	Cored_SersicLens(const Cored_SersicLens* lens_in);
 	Cored_SersicLens(Cored_Sersic* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	bool output_cosmology_info(const int lens_number);
@@ -1614,12 +2033,16 @@ class MassSheet : public LensProfile
 #endif
 
 	template <typename QScalar>
+	QScalar kappa_impl(QScalar, QScalar);
+	template <typename QScalar>
 	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
-	double kapavg_spherical_rsq(const double rsq);
-	double potential_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
+	template <typename QScalar>
+	QScalar potential_spherical_rsq(const QScalar rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
@@ -1627,26 +2050,57 @@ class MassSheet : public LensProfile
 	MassSheet(const double zlens_in, const double zsrc_in, const double &kext_in, const double &xc_in, const double &yc_in, Cosmology*);
 	void initialize_parameters(const double &kext_in, const double &xc_in, const double &yc_in);
 	MassSheet(const MassSheet* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters() {}
+	template <typename QScalar>
+	void assign_param_pointers_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	double potential(double, double);
-	double kappa(double, double);
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	double potential(double x, double y) { return potential_impl(x,y); }
+	double kappa(double x, double y) { return kappa_impl(x,y); }
+	void deflection(double x, double y, lensvector<double>& def) { deflection_impl(x,y,def); }
+	void hessian(double x, double y, lensmatrix<double>& hess)  { hessian_impl(x,y,hess); }
+#ifdef USE_STAN
+	void kappa_and_potential_derivatives(stan::math::var x, stan::math::var y, stan::math::var& kap, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	stan::math::var potential(stan::math::var x, stan::math::var y) { return potential_impl(x,y); }
+	stan::math::var kappa(stan::math::var x, stan::math::var y) { return kappa_impl(x,y); }
+	void deflection(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def) { deflection_impl(x,y,def); }
+	void hessian(stan::math::var x, stan::math::var y, lensmatrix<stan::math::var>& hess)  { hessian_impl(x,y,hess); }
+#endif
 
 	// here the base class deflection/hessian functions are overloaded because the potential has circular symmetry (no rotation of the coordinates is needed)
-	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
-	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
+	template <typename QScalar>
+	QScalar potential_impl(QScalar, QScalar);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void deflection_impl(QScalar, QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void hessian_impl(QScalar, QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void kappa_and_potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 	{
 		kap = lensparams_sheet.kext;
-		potential_derivatives(x,y,def,hess);
+		potential_derivatives_impl(x,y,def,hess);
 	}
-
-	void deflection(double, double, lensvector<double>&);
-	void hessian(double, double, lensmatrix<double>&);
 
 	void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0) { r1=0; r2=0; }
 };
@@ -1687,6 +2141,8 @@ class Deflection : public LensProfile
 #endif
 
 	template <typename QScalar>
+	QScalar kappa_impl(QScalar, QScalar);
+	template <typename QScalar>
 	QScalar kappa_rsq_impl(const QScalar rsq) { return 0; }
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq) {return 0; }
@@ -1697,26 +2153,58 @@ class Deflection : public LensProfile
 	Deflection(const double zlens_in, const double zsrc_in, const double &defx_in, const double &defy_in, Cosmology*);
 	void initialize_parameters(const double &defx_in, const double &defy_in);
 	Deflection(const Deflection* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters() {}
+	template <typename QScalar>
+	void assign_param_pointers_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 
-	double potential(double, double);
-	double kappa(double, double);
+
+	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	double potential(double x, double y) { return potential_impl(x,y); }
+	double kappa(double x, double y) { return kappa_impl(x,y); }
+	void deflection(double x, double y, lensvector<double>& def) { deflection_impl(x,y,def); }
+	void hessian(double x, double y, lensmatrix<double>& hess)  { hessian_impl(x,y,hess); }
+#ifdef USE_STAN
+	void kappa_and_potential_derivatives(stan::math::var x, stan::math::var y, stan::math::var& kap, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { kappa_and_potential_derivatives_impl(x,y,kap,def,hess); }
+	void potential_derivatives(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess) { potential_derivatives_impl(x,y,def,hess); }
+	stan::math::var potential(stan::math::var x, stan::math::var y) { return potential_impl(x,y); }
+	stan::math::var kappa(stan::math::var x, stan::math::var y) { return kappa_impl(x,y); }
+	void deflection(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def) { deflection_impl(x,y,def); }
+	void hessian(stan::math::var x, stan::math::var y, lensmatrix<stan::math::var>& hess)  { hessian_impl(x,y,hess); }
+#endif
 
 	// here the base class deflection/hessian functions are overloaded because the potential has circular symmetry (no rotation of the coordinates is needed)
-	void potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
-	void kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
+	template <typename QScalar>
+	QScalar potential_impl(QScalar, QScalar);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void deflection_impl(QScalar, QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void hessian_impl(QScalar, QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	void potential_derivatives_impl(QScalar x, QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
+	template <typename QScalar>
+	void kappa_and_potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 	{
 		kap = 0;
-		potential_derivatives(x,y,def,hess);
+		potential_derivatives_impl(x,y,def,hess);
 	}
-
-	void deflection(double, double, lensvector<double>&);
-	void hessian(double, double, lensmatrix<double>&);
 
 	void get_einstein_radius(double& r1, double& r2, const double zfactor = 1.0) { r1=0; r2=0; }
 };
@@ -1761,7 +2249,8 @@ class TopHatLens : public LensProfile
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
-	double kapavg_spherical_rsq(const double rsq);
+	template <typename QScalar>
+	QScalar kapavg_spherical_rsq(const QScalar rsq);
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 
@@ -1769,14 +2258,31 @@ class TopHatLens : public LensProfile
 	TopHatLens(const double zlens_in, const double zsrc_in, const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Cosmology*);
 	void initialize_parameters(const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in);
 	TopHatLens(const TopHatLens* lens_in);
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
 
-	void deflection_analytic(const double, const double, lensvector<double>&);
-	void hessian_analytic(const double, const double, lensmatrix<double>&);
-	double potential_analytic(const double x, const double y);
+	template <typename QScalar>
+	void deflection_analytic(const QScalar, const QScalar, lensvector<QScalar>&);
+	template <typename QScalar>
+	void hessian_analytic(const QScalar, const QScalar, lensmatrix<QScalar>&);
+	template <typename QScalar>
+	QScalar potential_analytic(const QScalar x, const QScalar y);
+
+	void assign_param_pointers() { assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { assign_param_pointers_impl<stan::math::var>(); }
+#endif
+	void update_meta_parameters() { update_meta_parameters_impl<double>(); }
+#ifdef USE_STAN
+	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
+#endif
 
 	void assign_paramnames();
-	void assign_param_pointers();
-	void update_meta_parameters();
+	template <typename QScalar>
+	void assign_param_pointers_impl();
+	template <typename QScalar>
+	void update_meta_parameters_impl();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
 	//bool calculate_total_scaled_mass(double& total_mass);
@@ -1806,8 +2312,12 @@ class Tabulated_Model : public LensProfile
 	~Tabulated_Model();
 	void output_tables(const std::string tabfile_root);
 
+	void assign_param_pointers() { return assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { return assign_param_pointers_impl<stan::math::var>(); }
+#endif
 	void assign_paramnames();
-	void assign_param_pointers();
+	void assign_param_pointers_impl();
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();
@@ -1846,8 +2356,12 @@ class QTabulated_Model : public LensProfile
 	~QTabulated_Model();
 	void output_tables(const std::string tabfile_root);
 
+	void assign_param_pointers() { return assign_param_pointers_impl<double>(); }
+#ifdef USE_STAN
+	void assign_param_pointers_autodif() { return assign_param_pointers_impl<stan::math::var>(); }
+#endif
 	void assign_paramnames();
-	void assign_param_pointers();
+	void assign_param_pointers_impl();
 	void update_meta_parameters();
 	void set_auto_stepsizes();
 	void set_auto_ranges();

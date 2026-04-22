@@ -3123,7 +3123,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=b; param_vals[1]=slope; param_vals[2]=s; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
-						else param_vals[7]=lens_list[lens_number]->zlens;
+						else param_vals[7]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -3233,7 +3233,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=p3; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
-						else param_vals[7]=lens_list[lens_number]->zlens;
+						else param_vals[7]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -3371,7 +3371,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=a_m; param_vals[1]=n; param_vals[2]=theta; param_vals[3]=xc; param_vals[4]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[5]=zl_in;
-						else param_vals[5]=lens_list[lens_number]->zlens;
+						else param_vals[5]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -3490,7 +3490,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
-						else param_vals[6]=lens_list[lens_number]->zlens;
+						else param_vals[6]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -3653,7 +3653,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=p3; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
-						else param_vals[7]=lens_list[lens_number]->zlens;
+						else param_vals[7]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -3777,7 +3777,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=p2; param_vals[2]=p3; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
-						else param_vals[7]=lens_list[lens_number]->zlens;
+						else param_vals[7]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -3876,7 +3876,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=k0; param_vals[1]=R_d; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
-						else param_vals[6]=lens_list[lens_number]->zlens;
+						else param_vals[6]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -3971,7 +3971,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=k0; param_vals[1]=rad; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
-						else param_vals[6]=lens_list[lens_number]->zlens;
+						else param_vals[6]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -4073,7 +4073,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=qx; param_vals[1]=f; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
-						else param_vals[6]=lens_list[lens_number]->zlens;
+						else param_vals[6]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -4168,7 +4168,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=ks; param_vals[1]=rs; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
-						else param_vals[6]=lens_list[lens_number]->zlens;
+						else param_vals[6]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -4297,7 +4297,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=gamma; param_vals[2]=n; param_vals[3]=a; param_vals[4]=s; param_vals[5]=q; param_vals[6]=theta; param_vals[7]=xc; param_vals[8]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[9]=zl_in;
-						else param_vals[9]=lens_list[lens_number]->zlens;
+						else param_vals[9]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -4394,7 +4394,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=xc; param_vals[2]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[3]=zl_in;
-						else param_vals[3]=lens_list[lens_number]->zlens;
+						else param_vals[3]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -4483,7 +4483,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=re; param_vals[2]=n; param_vals[3]=q; param_vals[4]=theta; param_vals[5]=xc; param_vals[6]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[7]=zl_in;
-						else param_vals[7]=lens_list[lens_number]->zlens;
+						else param_vals[7]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -4591,7 +4591,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=delta_k; param_vals[2]=re1; param_vals[3]=n1; param_vals[4]=re2; param_vals[5]=n2; param_vals[6]=q; param_vals[7]=theta; param_vals[8]=xc; param_vals[9]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[10]=zl_in;
-						else param_vals[10]=lens_list[lens_number]->zlens;
+						else param_vals[10]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -4696,7 +4696,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=p1; param_vals[1]=re; param_vals[2]=n; param_vals[3]=rc; param_vals[4]=q; param_vals[5]=theta; param_vals[6]=xc; param_vals[7]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[8]=zl_in;
-						else param_vals[8]=lens_list[lens_number]->zlens;
+						else param_vals[8]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -4787,7 +4787,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kappa; param_vals[1]=xc; param_vals[2]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[3]=zl_in;
-						else param_vals[3]=lens_list[lens_number]->zlens;
+						else param_vals[3]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -4842,7 +4842,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=defx; param_vals[1]=defy;
 						if ((update_zl) or (!update_parameters)) param_vals[2]=zl_in;
-						else param_vals[2]=lens_list[lens_number]->zlens;
+						else param_vals[2]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = default_nparams;
 							tot_nparams_to_vary = (add_shear) ? nparams_to_vary+2 : nparams_to_vary;
@@ -4913,7 +4913,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=shear_p1; param_vals[1]=shear_p2; param_vals[2]=xc; param_vals[3]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[4]=zl_in;
-						else param_vals[4]=lens_list[lens_number]->zlens;
+						else param_vals[4]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -5005,7 +5005,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kscale; param_vals[1]=rscale; param_vals[2]=theta; param_vals[3]=xc; param_vals[4]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[5]=zl_in;
-						else param_vals[5]=lens_list[lens_number]->zlens;
+						else param_vals[5]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -5110,7 +5110,7 @@ void QLens::process_commands(bool read_file)
 						for (int i=0; i < parameter_anchor_i; i++) if ((parameter_anchors[i].anchor_object_number==nlens) and (parameter_anchors[i].anchor_paramnum > param_vals.size())) Complain("specified parameter number to anchor to does not exist for given lens");
 						param_vals[0]=kscale; param_vals[1]=rscale; param_vals[2]=q; param_vals[3]=theta; param_vals[4]=xc; param_vals[5]=yc;
 						if ((update_zl) or (!update_parameters)) param_vals[6]=zl_in;
-						else param_vals[6]=lens_list[lens_number]->zlens;
+						else param_vals[6]=lens_list[lens_number]->get_redshift();
 						if (vary_parameters) {
 							nparams_to_vary = (anchor_lens_center) ? default_nparams-2 : default_nparams;
 							nparams_to_vary += fourier_nmodes*2;
@@ -7710,8 +7710,8 @@ void QLens::process_commands(bool read_file)
 				}
 				else if (words[1]=="auto") {
 					if (nwords > 2) Complain("no arguments allowed to 'ptsrc auto'");
-					set_analytic_sourcepts<double>(true);
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(true);
+					set_analytic_sourcepts(true);
+					//if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(true);
 					vary_parameters = false;
 				}
 				else if (words[1]=="add") {
@@ -8142,10 +8142,11 @@ void QLens::process_commands(bool read_file)
 						show_all = false;
 					} else if (nwords > 3) Complain("invalid number of arguments; can only specify sourcept number");
 
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(false);
-					if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 
 					if (mpi_id==0) cout << endl;
+					PtSrcParams<double> *ptsrc_params;
 					if (show_all) {
 						bool different_zsrc = false;
 						for (int i=0; i < n_ptsrc; i++) if (ptsrc_redshifts[ptsrc_redshift_idx[i]] != source_redshift) different_zsrc = true;
@@ -8156,7 +8157,8 @@ void QLens::process_commands(bool read_file)
 								}
 							}
 							if (mpi_id==0) cout << "# Source " << i << ":" << endl;
-							output_images_single_source(ptsrc_list[i]->pos[0], ptsrc_list[i]->pos[1], true, ptsrc_list[i]->srcflux, true);
+							ptsrc_params = &ptsrc_list[i]->ptsrc_params;
+							output_images_single_source(ptsrc_params->pos[0], ptsrc_params->pos[1], true, ptsrc_params->srcflux, true);
 						}
 						if (different_zsrc) {
 							reset_grid();
@@ -8167,7 +8169,8 @@ void QLens::process_commands(bool read_file)
 							reset_grid();
 							create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[dataset]]);
 						}
-						output_images_single_source(ptsrc_list[dataset]->pos[0], ptsrc_list[dataset]->pos[1], true, ptsrc_list[dataset]->srcflux, true);
+						ptsrc_params = &ptsrc_list[dataset]->ptsrc_params;
+						output_images_single_source(ptsrc_params->pos[0], ptsrc_params->pos[1], true, ptsrc_params->srcflux, true);
 						if (ptsrc_redshifts[dataset] != source_redshift) {
 							reset_grid();
 							//create_grid(false);
@@ -8190,10 +8193,12 @@ void QLens::process_commands(bool read_file)
 					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves");
 					if (nwords != 2) Complain("command 'fit imginfo' does not require any arguments");
 
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(false);
-					if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
+					PtSrcParams<double> *ptsrc_params;
 					for (int i=0; i < n_ptsrc; i++) {
-						plot_srcpts_from_image_data(i,NULL,ptsrc_list[i]->pos[0],ptsrc_list[i]->pos[1],ptsrc_list[i]->srcflux);
+						ptsrc_params = &ptsrc_list[i]->ptsrc_params;
+						plot_srcpts_from_image_data(i,NULL,ptsrc_params->pos[0],ptsrc_params->pos[1],ptsrc_params->srcflux);
 					}
 				}
 				else if (words[1]=="plotsrc")
@@ -8249,8 +8254,8 @@ void QLens::process_commands(bool read_file)
 					if ((show_cc) and (plot_critical_curves("crit.dat")==false)) Complain("could not plot critical curves and caustics");
 					if ((nwords != 3) and (nwords != 2)) Complain("command 'fit plotsrc' requires either zero or one argument (source_filename)");
 
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(false);
-					if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 
 					if (mpi_id==0) cout << endl;
 					string srcname="srcs.dat";
@@ -8265,29 +8270,32 @@ void QLens::process_commands(bool read_file)
 						open_output_file(srcfit,"srcfit.dat");
 						open_output_file(srcfile,srcname);
 					}
+					PtSrcParams<double> *ptsrc_params;
 					if (!show_multiple) {
+						ptsrc_params = &ptsrc_list[dataset]->ptsrc_params;
 						if (mpi_id==0) {
 							if (output_to_text_files) { srcfile << "# "; }
 							srcfile << "\"dataset " << dataset << "\"" << endl;
 						}
-						if (plot_srcpts_from_image_data(dataset,&srcfile,ptsrc_list[dataset]->pos[0],ptsrc_list[dataset]->pos[1],ptsrc_list[dataset]->srcflux)==true) {
+						if (plot_srcpts_from_image_data(dataset,&srcfile,ptsrc_params->pos[0],ptsrc_params->pos[1],ptsrc_params->srcflux)==true) {
 							if (mpi_id==0) {
 								srcfit << "\"fit srcpt " << dataset << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[dataset]] << ")\"" << endl;
-								srcfit << ptsrc_list[dataset]->pos[0] << "\t" << ptsrc_list[dataset]->pos[1] << endl << endl << endl;
+								srcfit << ptsrc_params->pos[0] << "\t" << ptsrc_params->pos[1] << endl << endl << endl;
 								srcfile << endl << endl;
 							}
 						}
 					} else {
 						for (int i=min_dataset; i <= max_dataset; i++) {
+							ptsrc_params = &ptsrc_list[i]->ptsrc_params;
 							if (mpi_id==0) {
 								if (output_to_text_files) { srcfile << "# "; }
 								srcfile << "\"dataset " << i << "\"" << endl;
-								srcfile << ptsrc_list[i]->pos[0] << "\t" << ptsrc_list[i]->pos[1] << " # from fit" << endl;
+								srcfile << ptsrc_params->pos[0] << "\t" << ptsrc_params->pos[1] << " # from fit" << endl;
 							}
-							if (plot_srcpts_from_image_data(i,&srcfile,ptsrc_list[i]->pos[0],ptsrc_list[i]->pos[1],ptsrc_list[i]->srcflux)==true) {
+							if (plot_srcpts_from_image_data(i,&srcfile,ptsrc_params->pos[0],ptsrc_params->pos[1],ptsrc_params->srcflux)==true) {
 								if (mpi_id==0) {
 									srcfit << "\"fit srcpt " << i << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[i]] << ")\"" << endl;
-									srcfit << ptsrc_list[i]->pos[0] << "\t" << ptsrc_list[i]->pos[1] << endl << endl << endl;
+									srcfit << ptsrc_params->pos[0] << "\t" << ptsrc_params->pos[1] << endl << endl << endl;
 									srcfile << endl << endl;
 								}
 							}
@@ -8402,8 +8410,8 @@ void QLens::process_commands(bool read_file)
 						create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[min_dataset]],ptsrc_beta_factors[ptsrc_redshift_idx[min_dataset]]);
 					}
 					if ((nwords != 4) and (nwords != 2)) Complain("command 'fit plotimg' requires either zero or two arguments (source_filename, image_filename)");
-					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux<double>(false);
-					if (use_analytic_bestfit_src) set_analytic_sourcepts<double>(false);
+					if ((include_flux_chisq) and (analytic_source_flux)) set_analytic_srcflux(false);
+					if (use_analytic_bestfit_src) set_analytic_sourcepts(false);
 					if (mpi_id==0) cout << endl;
 					string imgname="imgs.dat", srcname="srcs.dat";
 					bool output_to_text_files = false;
@@ -8421,13 +8429,15 @@ void QLens::process_commands(bool read_file)
 						open_output_file(imgfile,imgname);
 						open_output_file(srcfile,srcname);
 					}
+					PtSrcParams<double> *ptsrc_params;
 					if (!show_multiple) {
+						ptsrc_params = &ptsrc_list[dataset]->ptsrc_params;
 						if (mpi_id==0) {
 							if (output_to_text_files) { imgfile << "# "; srcfile << "# "; }
 							imgfile << "\"image set " << dataset << "\"" << endl;
 							srcfile << "\"source " << dataset << "\"" << endl;
 						}
-						if (plot_images_single_source(ptsrc_list[dataset]->pos[0], ptsrc_list[dataset]->pos[1], verbal_mode, imgfile, srcfile, ptsrc_list[dataset]->srcflux, true)==true) {
+						if (plot_images_single_source(ptsrc_params->pos[0], ptsrc_params->pos[1], verbal_mode, imgfile, srcfile, ptsrc_params->srcflux, true)==true) {
 							if (mpi_id==0) {
 								imgout << "\"dataset " << dataset << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[dataset]] << ")\"" << endl;
 								point_image_data[dataset].write_to_file(imgout);
@@ -8439,6 +8449,7 @@ void QLens::process_commands(bool read_file)
 					} else {
 						reset_grid();
 						for (int i=min_dataset; i <= max_dataset; i++) {
+							ptsrc_params = &ptsrc_list[i]->ptsrc_params;
 							if ((i == min_dataset) or (ptsrc_zfactors[ptsrc_redshift_idx[i]] != ptsrc_zfactors[ptsrc_redshift_idx[i-1]]))
 								create_grid(false,ptsrc_zfactors[ptsrc_redshift_idx[i]],ptsrc_beta_factors[ptsrc_redshift_idx[i]]);
 							if (mpi_id==0) {
@@ -8446,7 +8457,7 @@ void QLens::process_commands(bool read_file)
 								imgfile << "\"image set " << i << "\"" << endl;
 								srcfile << "\"source " << i << "\"" << endl;
 							}
-							if (plot_images_single_source(ptsrc_list[i]->pos[0], ptsrc_list[i]->pos[1], verbal_mode, imgfile, srcfile, ptsrc_list[i]->srcflux, true)==true) {
+							if (plot_images_single_source(ptsrc_params->pos[0], ptsrc_params->pos[1], verbal_mode, imgfile, srcfile, ptsrc_params->srcflux, true)==true) {
 								if (mpi_id==0) {
 									imgout << "\"dataset " << i << " (z_{s}=" << ptsrc_redshifts[ptsrc_redshift_idx[i]] << ")\"" << endl;
 									point_image_data[i].write_to_file(imgout);
@@ -8622,7 +8633,7 @@ void QLens::process_commands(bool read_file)
 						get_n_fit_parameters(npar);
 						param_num = lensmodel_fit_parameters + srcmodel_fit_parameters;
 						add_ptimage_data_from_unlensed_sourcepts(true,param_num,2);
-						if (nlens > 0) set_analytic_sourcepts<double>(); // just to have a starting guess for the source point
+						if (nlens > 0) set_analytic_sourcepts(); // just to have a starting guess for the source point
 					}
 				}
 				else if (words[1]=="chisq")

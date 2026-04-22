@@ -5,17 +5,49 @@
 #include <vector>
 #include <string>
 
+#ifdef USE_STAN
+#include <stan/math.hpp>
+#endif
+
 class QLens;
 
+template <typename QScalar>
 class ModelParams
 {
+	public:
+	QScalar **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
+
+	ModelParams() {
+		param = NULL;
+	}
+};
+
+class Model
+{
 	// This is the base class inherited by pixellated source and point source objects (lens/source analytic profiles
-	// use separate functions for handling parameters)
+	// use separate functions for handling parameters) as well as the cosmology class and qlens class.
 	protected:
 	QLens* qlens;
 
 	public:
-	double **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
+	ModelParams<double>* modelparams; // this will point to the corresponding lensparams in the inherited classes
+#ifdef USE_STAN
+	ModelParams<stan::math::var>* modelparams_dif; // this will point to the corresponding lensparams in the inherited classes
+#endif
+
+	template <typename QScalar>
+	ModelParams<QScalar>& assign_modelparam_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return (*modelparams_dif);
+		else
+#endif
+		return (*modelparams);
+	}
+
+	double **param; // this is about to get replaced by modelparams.param
+
 	int n_params, n_vary_params, n_active_params;
 	int entry_number; // if this object is in an array, keeps track of where it is in list
 	boolvector vary_params;
@@ -30,7 +62,15 @@ class ModelParams
 	bool include_limits;
 	Vector<double> lower_limits, upper_limits;
 
-	ModelParams() { param = NULL; qlens = NULL; entry_number = -1; }
+	Model() {
+		modelparams = NULL;
+#ifdef USE_STAN
+		modelparams_dif = NULL;
+#endif
+		param = NULL;
+		qlens = NULL;
+		entry_number = -1;
+	}
 	void set_qlens(QLens* qlensptr) { qlens = qlensptr; }
 	void setup_parameter_arrays(const int npar);
 	virtual void setup_parameters(const bool initial_setup) {} 
@@ -39,7 +79,10 @@ class ModelParams
 	virtual bool register_vary_parameters_in_qlens();
 	virtual void register_limits_in_qlens();
 	virtual void update_fitparams_in_qlens();
-	void copy_param_arrays(const ModelParams* params_in);
+#ifdef USE_STAN
+	virtual void sync_autodif_parameters() {}
+#endif
+	void copy_param_arrays(const Model* params_in);
 	void update_active_params(const int id) {
 		boolvector dummy;
 		update_active_params(id,dummy);
@@ -61,7 +104,9 @@ class ModelParams
 		}
 	}
 
-	void update_fit_parameters(const double* fitparams, int &index);
+	template <typename QScalar>
+	void update_fit_parameters(const QScalar* fitparams, int &index);
+	void update_fit_parameters_doub(const double* fitparams, int &index);  // temporary for objects that don't have autodif implemented yet
 	bool update_specific_parameter(const std::string name_in, const double& value);
 	bool set_varyflags(const boolvector& vary_in);
 	bool update_specific_varyflag(const std::string name_in, const bool& vary_in);

@@ -142,7 +142,7 @@ class CartesianSourcePixel
 	~CartesianSourcePixel();
 };
 
-class CartesianSourceGrid : public CartesianSourcePixel, public ModelParams
+class CartesianSourceGrid : public CartesianSourcePixel, public Model
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
@@ -299,7 +299,7 @@ class DelaunayGrid : private Sort
 	~DelaunayGrid();
 };
 
-class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
+class DelaunaySourceGrid : public DelaunayGrid, public Model
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
@@ -332,7 +332,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
 
 	public:
 	DelaunaySourceGrid(QLens* qlens_in, const int band = 0, const double zsrc_in = -1);
-	DelaunaySourceGrid(const DelaunaySourceGrid* pixsrc_in) : ModelParams(), DelaunayGrid() {
+	DelaunaySourceGrid(const DelaunaySourceGrid* pixsrc_in) : Model(), DelaunayGrid() {
 		qlens = pixsrc_in->qlens;
 		model_name = pixsrc_in->model_name;
 		setup_parameters(true);
@@ -382,7 +382,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public ModelParams
 	~DelaunaySourceGrid();
 };
 
-class LensPixelGrid : public DelaunayGrid, public ModelParams
+class LensPixelGrid : public DelaunayGrid, public Model
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
@@ -698,7 +698,7 @@ class ImagePixelGrid : private Sort
 	void get_grid_params(double& xmin_in, double& xmax_in, double& ymin_in, double& ymax_in, int& npx, int& npy) { xmin_in = xmin; xmax_in = xmax; ymin_in = ymin; ymax_in = ymax; npx = x_N; npy = y_N; }
 };
 
-class PSF : public ModelParams
+class PSF : public Model
 {
 	friend class QLens;
 	friend class ImagePixelGrid;

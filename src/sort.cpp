@@ -1,9 +1,14 @@
 #include "sort.h"
 #include "errors.h"
 
+#ifdef USE_STAN
+#include <stan/math.hpp>
+#endif
+
 #define SWAP(a,b) temp=(a);(a)=(b);(b)=temp;
 
-void Sort::sort(const int n, double arr[])
+template <typename QScalar>
+void Sort::sort(const int n, QScalar arr[])
 {
 	const int M = 7;
 	const int nstack = 50;
@@ -11,7 +16,7 @@ void Sort::sort(const int n, double arr[])
 	int i, j, k;
 	int ir = n - 1, l = 0;
 	int jstack = -1;
-	double a, temp;
+	QScalar a, temp;
 
 	int *istack = new int[nstack];
 	for (;;) {
@@ -67,8 +72,13 @@ void Sort::sort(const int n, double arr[])
 		}
 	}
 }
+template void Sort::sort<double>(const int n, double arr[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const int n, stan::math::var arr[]);
+#endif
 
-void Sort::sort(const int n, double arr[], double brr[], double crr[], double drr[], double err[]) // This is why you should use templates. Ugh
+template <typename QScalar>
+void Sort::sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[], QScalar drr[], QScalar err[]) // This is why you should use templates. Ugh
 {
 	const int M = 7;
 	const int nstack = 50;
@@ -76,7 +86,7 @@ void Sort::sort(const int n, double arr[], double brr[], double crr[], double dr
 	int i, j, k;
 	int ir = n - 1, l = 0;
 	int jstack = -1;
-	double a, b, c, d, e, temp;
+	QScalar a, b, c, d, e, temp;
 
 	int *istack = new int[nstack];
 	for (;;) {
@@ -176,8 +186,15 @@ void Sort::sort(const int n, double arr[], double brr[], double crr[], double dr
 		}
 	}
 }
+template void Sort::sort<double>(const int n, double arr[], double brr[], double crr[], double drr[], double err[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const int n, stan::math::var arr[], stan::math::var brr[], stan::math::var crr[], stan::math::var drr[], stan::math::var err[]);
+#endif
 
-void Sort::sort(const int n, double arr[], double brr[], double crr[], int drr[]) // This is why you should use templates. Ugh
+#define SWAPI(a,b) tempi=(a);(a)=(b);(b)=tempi;
+
+template <typename QScalar>
+void Sort::sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[], int drr[]) // This is why you should use templates. Ugh
 {
 	const int M = 7;
 	const int nstack = 50;
@@ -185,7 +202,8 @@ void Sort::sort(const int n, double arr[], double brr[], double crr[], int drr[]
 	int i, j, k;
 	int ir = n - 1, l = 0;
 	int jstack = -1;
-	double a, b, c, d, temp;
+	QScalar a, b, c, temp;
+	int d, tempi;
 
 	int *istack = new int[nstack];
 	for (;;) {
@@ -218,24 +236,24 @@ void Sort::sort(const int n, double arr[], double brr[], double crr[], int drr[]
 			SWAP(arr[k],arr[l+1])
 			SWAP(brr[k],brr[l+1])
 			SWAP(crr[k],crr[l+1])
-			SWAP(drr[k],drr[l+1])
+			SWAPI(drr[k],drr[l+1])
 			if (arr[l] > arr[ir]) {
 				SWAP(arr[l],arr[ir])
 				SWAP(brr[l],brr[ir])
 				SWAP(crr[l],crr[ir])
-				SWAP(drr[l],drr[ir])
+				SWAPI(drr[l],drr[ir])
 			}
 			if (arr[l+1] > arr[ir]) {
 				SWAP(arr[l+1],arr[ir])
 				SWAP(brr[l+1],brr[ir])
 				SWAP(crr[l+1],crr[ir])
-				SWAP(drr[l+1],drr[ir])
+				SWAPI(drr[l+1],drr[ir])
 			}
 			if (arr[l] > arr[l+1]) {
 				SWAP(arr[l],arr[l+1])
 				SWAP(brr[l],brr[l+1])
 				SWAP(crr[l],crr[l+1])
-				SWAP(drr[l],drr[l+1])
+				SWAPI(drr[l],drr[l+1])
 			}
 			i = l + 1;
 			j = ir;
@@ -250,7 +268,7 @@ void Sort::sort(const int n, double arr[], double brr[], double crr[], int drr[]
 				SWAP(arr[i],arr[j])
 				SWAP(brr[i],brr[j])
 				SWAP(crr[i],crr[j])
-				SWAP(drr[i],drr[j])
+				SWAPI(drr[i],drr[j])
 			}
 			arr[l+1] = arr[j];
 			arr[j] = a;
@@ -274,10 +292,15 @@ void Sort::sort(const int n, double arr[], double brr[], double crr[], int drr[]
 		}
 	}
 }
+template void Sort::sort<double>(const int n, double arr[], double brr[], double crr[], int drr[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const int n, stan::math::var arr[], stan::math::var brr[], stan::math::var crr[], int drr[]);
+#endif
 
 
 
-void Sort::sort(const int n, double arr[], double brr[], double crr[]) // This is why you should use templates. Ugh
+template <typename QScalar>
+void Sort::sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[]) // This is why you should use templates. Ugh
 {
 	const int M = 7;
 	const int nstack = 50;
@@ -285,7 +308,7 @@ void Sort::sort(const int n, double arr[], double brr[], double crr[]) // This i
 	int i, j, k;
 	int ir = n - 1, l = 0;
 	int jstack = -1;
-	double a, b, c, temp;
+	QScalar a, b, c, temp;
 
 	int *istack = new int[nstack];
 	for (;;) {
@@ -363,10 +386,15 @@ void Sort::sort(const int n, double arr[], double brr[], double crr[]) // This i
 		}
 	}
 }
+template void Sort::sort<double>(const int n, double arr[], double brr[], double crr[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const int n, stan::math::var arr[], stan::math::var brr[], stan::math::var crr[]);
+#endif
 
 
 
-void Sort::sort(const unsigned long n, double arr[], double brr[])
+template <typename QScalar>
+void Sort::sort(const unsigned long n, QScalar arr[], QScalar brr[])
 {
 	const int M = 7;
 	const int nstack = 50;
@@ -374,7 +402,7 @@ void Sort::sort(const unsigned long n, double arr[], double brr[])
 	long i, j, k;
 	long ir = n - 1, l = 0;
 	long jstack = -1;
-	double a, b, temp;
+	QScalar a, b, temp;
 
 	long *istack = new long[nstack];
 	for (;;) {
@@ -441,8 +469,13 @@ void Sort::sort(const unsigned long n, double arr[], double brr[])
 		}
 	}
 }
+template void Sort::sort<double>(const unsigned long n, double arr[], double brr[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const unsigned long n, stan::math::var arr[], stan::math::var brr[]);
+#endif
 
-void Sort::sort(const int n, double arr[], double brr[])
+template <typename QScalar>
+void Sort::sort(const int n, QScalar arr[], QScalar brr[])
 {
 	const int M = 7;
 	const int nstack = 50;
@@ -450,7 +483,7 @@ void Sort::sort(const int n, double arr[], double brr[])
 	int i, j, k;
 	int ir = n - 1, l = 0;
 	int jstack = -1;
-	double a, b, temp;
+	QScalar a, b, temp;
 
 	int *istack = new int[nstack];
 	for (;;) {
@@ -517,10 +550,13 @@ void Sort::sort(const int n, double arr[], double brr[])
 		}
 	}
 }
+template void Sort::sort<double>(const int n, double arr[], double brr[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const int n, stan::math::var arr[], stan::math::var brr[]);
+#endif
 
-#define SWAPI(a,b) tempi=(a);(a)=(b);(b)=tempi;
-
-void Sort::sort(const int n, double arr[], int brr[])
+template <typename QScalar>
+void Sort::sort(const int n, QScalar arr[], int brr[])
 {
 	const int M = 7;
 	const int nstack = 50;
@@ -528,7 +564,7 @@ void Sort::sort(const int n, double arr[], int brr[])
 	int i, j, k;
 	int ir = n - 1, l = 0;
 	int jstack = -1;
-	double a, temp;
+	QScalar a, temp;
 	int b, tempi;
 
 	int *istack = new int[nstack];
@@ -596,7 +632,12 @@ void Sort::sort(const int n, double arr[], int brr[])
 		}
 	}
 }
+template void Sort::sort<double>(const int n, double arr[], int brr[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const int n, stan::math::var arr[], int brr[]);
+#endif
 
+template <typename QScalar>
 void Sort::sort(const int n, int arr[], int brr[])
 {
 	const int M = 7;
@@ -672,8 +713,13 @@ void Sort::sort(const int n, int arr[], int brr[])
 		}
 	}
 }
+template void Sort::sort<double>(const int n, int arr[], int brr[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const int n, int arr[], int brr[]);
+#endif
 
-void Sort::sort(const int n, double arr[], int brr[], int crr[])
+template <typename QScalar>
+void Sort::sort(const int n, QScalar arr[], int brr[], int crr[])
 {
 	const int M = 7;
 	const int nstack = 50;
@@ -681,7 +727,7 @@ void Sort::sort(const int n, double arr[], int brr[], int crr[])
 	int i, j, k;
 	int ir = n - 1, l = 0;
 	int jstack = -1;
-	double a, temp;
+	QScalar a, temp;
 	int b, c, tempi;
 
 	int *istack = new int[nstack];
@@ -760,8 +806,13 @@ void Sort::sort(const int n, double arr[], int brr[], int crr[])
 		}
 	}
 }
+template void Sort::sort<double>(const int n, double arr[], int brr[], int crr[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const int n, stan::math::var arr[], int brr[], int crr[]);
+#endif
 
-void Sort::sort(const int n, int arr[], double brr[])
+template <typename QScalar>
+void Sort::sort(const int n, int arr[], QScalar brr[])
 {
 	const int M = 7;
 	const int nstack = 50;
@@ -770,7 +821,7 @@ void Sort::sort(const int n, int arr[], double brr[])
 	int ir = n - 1, l = 0;
 	int jstack = -1;
 	int a, tempi;
-	double b, temp;
+	QScalar b, temp;
 
 	int *istack = new int[nstack];
 	for (;;) {
@@ -837,6 +888,10 @@ void Sort::sort(const int n, int arr[], double brr[])
 		}
 	}
 }
+template void Sort::sort<double>(const int n, int arr[], double brr[]);
+#ifdef USE_STAN
+template void Sort::sort<stan::math::var>(const int n, int arr[], stan::math::var brr[]);
+#endif
 
 #undef SWAPI
 #undef SWAP

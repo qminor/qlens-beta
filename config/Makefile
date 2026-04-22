@@ -33,8 +33,10 @@ OPTS_NO_OPT = -Wno-write-strings -O0 -std=c++17
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FITPACK
 FLAGS = -DUSE_READLINE -DUSE_STAN -D_REENTRANT
+#FLAGS = -DUSE_READLINE 
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
 OTHERLIBS =  /Users/qminor/math/lib/tbb/libtbb.dylib -lm -lreadline
+#OTHERLIBS =  -lm -lreadline
 LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 
 # Version with MUMPS
@@ -141,18 +143,6 @@ powell.o: powell.h powell.cpp
 sort.o: sort.h sort.cpp
 	$(CC) -c sort.cpp
 
-#gauss.o: gauss.cpp gauss.h
-	#$(CC) -c gauss.cpp
-
-#romberg.o: romberg.cpp romberg.h
-	#$(CC) -c romberg.cpp
-
-#qspline.o: qspline.cpp spline.h errors.h
-	#$(CC) -c qspline.cpp
-
-#spline.o: spline.cpp spline.h errors.h
-	#$(CC) -c spline.cpp
-
 trirectangle.o: trirectangle.cpp lensvec.h trirectangle.h
 	$(CC) -c trirectangle.cpp
 
@@ -161,9 +151,6 @@ mcmceval.o: mcmceval.cpp mcmceval.h mathfuncs.h random.h errors.h
 
 mkdist.o: mkdist.cpp mcmceval.h errors.h
 	$(CC) -c mkdist.cpp
-
-#hyp_2F1.o: hyp_2F1.cpp hyp_2F1.h complex_functions.h
-	#$(CC) -c hyp_2F1.cpp
 
 cosmo.o: cosmo.cpp cosmo.h
 	$(CC) -c cosmo.cpp

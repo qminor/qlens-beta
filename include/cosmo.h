@@ -46,7 +46,7 @@ struct CosmologyParams
 	void remove_comments(std::string& instring);
 };
 
-class Cosmology : public ModelParams, public Brent
+class Cosmology : public Model, public Brent
 {
 	private:
 	double omega_m, omega_b, omega_lambda, hubble, hubble_length, growth_factor, dcrit0;
@@ -127,7 +127,7 @@ class Cosmology : public ModelParams, public Brent
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
 		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s,true);
 	}
-	void setup_parameters(const bool initial_setup);   // don't need this, unless we want to work with ModelParams pointers in lens.cpp for parameter manipulation?
+	void setup_parameters(const bool initial_setup);   // don't need this, unless we want to work with Model pointers in lens.cpp for parameter manipulation?
 	void update_meta_parameters(const bool varied_only_fitparams); 
 	void get_parameter_numbers_from_qlens(int& pi, int& pf);
 	bool register_vary_parameters_in_qlens();
@@ -157,7 +157,8 @@ class Cosmology : public ModelParams, public Brent
 
 	void plot_mc_relation_dutton_moline(const double z, const double xsub);
 	double median_concentration_bullock(const double mass, const double z);
-	double median_concentration_dutton(const double mass, const double z);
+	template <typename QScalar>
+	QScalar median_concentration_dutton(const QScalar mass, const QScalar z);
 	double mstar(const double z);
 	double sigma_root(const double mass);
 	double delta_z(const double z);
@@ -178,10 +179,14 @@ class Cosmology : public ModelParams, public Brent
 	double angular_diameter_distance_exact(const double z) { return (angular_radius(comoving_distance_exact(z)) / (1+z)); }
 	double luminosity_distance_exact(const double z) { return (angular_radius(comoving_distance_exact(z)) * (1+z)); }
 
-	double critical_density(const double z);
-	double matter_density(const double z) { return omega_m*dcrit0*CUBE(1+z); }
-	void get_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, double &mvir, double &rvir);
-	void get_cored_halo_parameters_from_rs_ds(const double z, const double rs, const double ds, const double beta, double &mvir, double &rvir);
+	template <typename QScalar>
+	QScalar critical_density(const QScalar z);
+	template <typename QScalar>
+	QScalar matter_density(const QScalar z) { return omega_m*dcrit0*CUBE(1+z); }
+	template <typename QScalar>
+	void get_halo_parameters_from_rs_ds(const QScalar z, const QScalar rs, const QScalar ds, QScalar &mvir, QScalar &rvir);
+	template <typename QScalar>
+	void get_cored_halo_parameters_from_rs_ds(const QScalar z, const QScalar rs, const QScalar ds, const QScalar beta, QScalar &mvir, QScalar &rvir);
 	double cored_concentration_root_equation(const double c);
 
 	double concentration_root_equation(const double c);

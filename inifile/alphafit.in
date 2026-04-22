@@ -9,7 +9,7 @@
 lens clear              # Just in case we were doing something else before this
 imgdata clear           # Just in case we already had image data loaded before this
 
-fit label alphafit      # This labels the files that will be produced by the lens fitting
+fit label alphafitd      # This labels the files that will be produced by the lens fitting
 fit method simplex      # This is the default fit method (downhill simplex method), which minimizes the chi-square function
 chisqlog off  	         # if turned on, this saves all the chi-square function evaluations in file "<label>.log"
 sci_notation off        # This is just up to your personal preference

@@ -5,6 +5,8 @@ q = QLens(cosmo)
 (lens,ptsrc,ptimgdata) = q.ptimg_objects()   # this is so we can enter 'lens' instead of 'q.lens', 'ptsrc' instead of 'q.ptsrc', etc.
 (params,dparams) = q.param_objects()         # same as above; we can enter 'params' instead of 'q.params', etc.
 
+show_commands()
+
 q.sci_notation = False
 
 ptimgdata.load("alphafit.dat") # this function will become obsolete once the ptimgdata class is wrapped

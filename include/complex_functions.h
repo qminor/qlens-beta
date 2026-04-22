@@ -92,11 +92,15 @@ return max (abs (real (z)),abs (imag (z)));
 // Otherwise, false is returned
 
 template <typename QScalar>
-bool isfinite (const std::complex<QScalar> &z)
+bool isitfinite (const std::complex<QScalar> &z)
 {
+	using std::isfinite;
+#ifdef USING_STAN
+	using stan::math::isfinite;
+#endif
   const QScalar x = real (z), y = imag (z);
 
-  return (std::isfinite (x) && std::isfinite (y));
+  return (isfinite (x) && isfinite (y));
 }
 
 template <typename QScalar>
@@ -362,7 +366,7 @@ std::complex<QScalar> log1p (const std::complex<QScalar> &z)
 template <typename QScalar>
 std::complex<QScalar> log_Gamma (const std::complex<QScalar> &z)
 {
-  if (!isfinite (z)) std::cout<<"z is not finite in log_Gamma."<<std::endl, abort ();
+  if (!isitfinite (z)) std::cout<<"z is not finite in log_Gamma."<<std::endl, abort ();
 
   const QScalar x = real (z),y = imag (z);
 
@@ -416,7 +420,7 @@ std::complex<QScalar> log_Gamma (const std::complex<QScalar> &z)
 template <typename QScalar>
 std::complex<QScalar> Gamma_inv (const std::complex<QScalar> &z)
 {
-  if (!isfinite (z)) std::cout<<"z is not finite in Gamma_inv."<<std::endl, abort ();
+  if (!isitfinite (z)) std::cout<<"z is not finite in Gamma_inv."<<std::endl, abort ();
 
   const QScalar x = real (z);
 

@@ -15,6 +15,11 @@ const double M_4PI = 12.566370614359172;
 const double ln10 = 2.302585092994046;
 const double EULER = 2.718281828459045;
 
+template <typename T>
+inline T minval(const T &a, const T &b) { return (a < b ? a : b); }
+template <typename T>
+inline T maxval(const T &a, const T &b) { return (a > b ? a : b); }
+
 inline double dmin(const double &a, const double &b) { return (a < b ? a : b); }
 inline double dmax(const double &a, const double &b) { return (a > b ? a : b); }
 inline int imin(const int &a, const int &b) { return (a < b ? a : b); }
@@ -29,8 +34,10 @@ T QUARTIC(const T s) { return s*s*s*s; }
 inline int sign(const double &a) { return (a < 0 ? -1 : a > 0 ? 1 : 0); }
 inline bool sign_bool(const double &a) { return (a < 0 ? false : a > 0 ? true : true); }
 inline double norm(const double a, const double b) { return std::sqrt(a*a+b*b); }
-inline double degrees_to_radians(const double theta) { return (0.017453292519943295*theta); }
-inline double radians_to_degrees(const double theta) { return (57.29577951308232*theta); }
+template <typename T>
+inline T degrees_to_radians(const T theta) { return (0.017453292519943295*theta); }
+template <typename T>
+inline T radians_to_degrees(const T theta) { return (57.29577951308232*theta); }
 
 inline double get_angle(double a, double b) {
 	double angle = std::atan(std::abs(b/a));

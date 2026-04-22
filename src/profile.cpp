@@ -20,14 +20,21 @@ using namespace std;
 LensProfile::LensProfile(const char *splinefile, const double zlens_in, const double zsrc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const double &qx_in, const double &f_in, Cosmology* cosmo_in)
 {
 	lensparams = &lensparams_spl;
+#ifdef USE_STAN
+	lensparams_dif = &lensparams_spl_dif;
+#endif
 	setup_lens_properties();
 	set_redshifts(zlens_in,zsrc_in);
 	setup_cosmology(cosmo_in);
 
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 	lensparams_spl.qx_parameter = qx_in;
 	lensparams_spl.f_parameter = f_in;
 	lensparams_spl.kspline.input(splinefile);
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
+
 	zfac = 1.0;
 
 	set_integration_pointers();
@@ -44,6 +51,20 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 {
 	set_null_ptrs_and_values(); // sets pointers to NULL to make sure qlens doesn't try to delete them during setup
 	lensparams->param = NULL;
+	lensparams->zlens = 0; // makes clear that the redshift hasn't been set yet
+	lensparams->fourier_integral_left_cos_spline = NULL;
+	lensparams->fourier_integral_left_sin_spline = NULL;
+	lensparams->fourier_integral_right_cos_spline = NULL;
+	lensparams->fourier_integral_right_sin_spline = NULL;
+#ifdef USE_STAN
+	lensparams_dif->param = NULL;
+	lensparams_dif->zlens = 0; // makes clear that the redshift hasn't been set yet
+	lensparams_dif->fourier_integral_left_cos_spline = NULL;
+	lensparams_dif->fourier_integral_left_sin_spline = NULL;
+	lensparams_dif->fourier_integral_right_cos_spline = NULL;
+	lensparams_dif->fourier_integral_right_sin_spline = NULL;
+
+#endif
 	center_defined = true;
 	parameter_mode = pmode_in;
 	lens_subclass = subclass_in; // automatically set to -1 by default if there are no subclasses defined
@@ -68,6 +89,9 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
 	assign_param_pointers();
+#ifdef USE_STAN
+	assign_param_pointers_autodif();
+#endif
 	assign_paramnames();
 
 	include_limits = false;
@@ -77,12 +101,18 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 
 void LensProfile::set_redshifts(const double zlens_in, const double zsrc_in)
 {
-	if (zlens==0) {
+	if (lensparams->zlens==0) {
 		// only set zlens, etc. if they haven't been set before. After zlens is set, it should only be changed by doing update_parameters(...)
-		zlens = zlens_in;
+		lensparams->zlens = zlens_in;
 		zlens_current = zlens_in;
 		zsrc_ref = zsrc_in;
 	}
+#ifdef USE_STAN
+	if (lensparams_dif->zlens==0) {
+		// only set zlens, etc. if they haven't been set before. After zlens is set, it should only be changed by doing update_parameters(...)
+		lensparams_dif->zlens = zlens_in;
+	}
+#endif
 }
 
 void LensProfile::setup_cosmology(Cosmology* cosmo_in)
@@ -90,8 +120,8 @@ void LensProfile::setup_cosmology(Cosmology* cosmo_in)
 	if (cosmo != cosmo_in) {
 		if (cosmo_in != NULL) {
 			cosmo = cosmo_in;
-			sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-			kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
+			sigma_cr = cosmo->sigma_crit_arcsec(lensparams->zlens,zsrc_ref);
+			kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(lensparams->zlens);
 		}
 	}
 }
@@ -111,6 +141,10 @@ LensProfile::LensProfile(const LensProfile* lens_in)
 	zfac = lens_in->zfac;
 
 	copy_base_lensdata(lens_in);
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
+
 	set_integration_pointers();
 }
 
@@ -122,7 +156,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	model_name = lens_in->model_name;
 	lens_number = lens_in->lens_number;
 	center_defined = lens_in->center_defined;
-	zlens = lens_in->zlens;
+	lensparams->zlens = lens_in->lensparams->zlens;
 	zsrc_ref = lens_in->zsrc_ref;
 	sigma_cr = lens_in->sigma_cr;
 	kpc_to_arcsec = lens_in->kpc_to_arcsec;
@@ -166,7 +200,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 
 	f_major_axis = lens_in->f_major_axis;
 	angle_param_exists = lens_in->angle_param_exists;
-	if (angle_param_exists) set_angle_radians(lens_in->lensparams->theta);
+	if (angle_param_exists) set_angle_radians<double>(lens_in->lensparams->theta);
 	lensparams->x_center = lens_in->lensparams->x_center;
 	lensparams->y_center = lens_in->lensparams->y_center;
 	if ((lensed_center_coords) or (transform_center_coords_to_pixsrc_frame)) {
@@ -176,8 +210,8 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	n_fourier_modes = lens_in->n_fourier_modes;
 	if (n_fourier_modes > 0) {
 		fourier_mode_mvals.input(lens_in->fourier_mode_mvals);
-		fourier_mode_cosamp.input(lens_in->fourier_mode_cosamp);
-		fourier_mode_sinamp.input(lens_in->fourier_mode_sinamp);
+		lensparams->fourier_mode_cosamp.input(lens_in->lensparams->fourier_mode_cosamp);
+		lensparams->fourier_mode_sinamp.input(lens_in->lensparams->fourier_mode_sinamp);
 		fourier_mode_paramnum.input(lens_in->fourier_mode_paramnum);
 	}
 	if (ellipticity_gradient) {
@@ -249,17 +283,22 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 	lensparams->param = new double*[n_params];
 	copy_parameter_anchors(lens_in);
 	assign_param_pointers();
+#ifdef USE_STAN
+	sync_autodif_parameters();
+	lensparams_dif->param = new stan::math::var*[n_params];
+	assign_param_pointers_autodif();
+#endif
 }
 
 void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 {
-	zlens = sb_in->zsrc;
-	zlens_current = zlens;
+	lensparams->zlens = sb_in->zsrc;
+	zlens_current = lensparams->zlens;
 	lensparams->q = sb_in->q;
 	lensparams->epsilon1 = sb_in->epsilon1;
 	lensparams->epsilon2 = sb_in->epsilon2;
 	angle_param_exists = sb_in->angle_param_exists;
-	if (angle_param_exists) set_angle_radians(sb_in->theta);
+	if (angle_param_exists) set_angle_radians<double>(sb_in->theta);
 	lensparams->x_center = sb_in->x_center;
 	lensparams->y_center = sb_in->y_center;
 	ellipticity_mode = sb_in->ellipticity_mode;
@@ -269,8 +308,8 @@ void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 	n_fourier_modes = sb_in->n_fourier_modes;
 	if (n_fourier_modes > 0) {
 		fourier_mode_mvals.input(sb_in->fourier_mode_mvals);
-		fourier_mode_cosamp.input(sb_in->fourier_mode_cosamp);
-		fourier_mode_sinamp.input(sb_in->fourier_mode_sinamp);
+		lensparams->fourier_mode_cosamp.input(sb_in->fourier_mode_cosamp);
+		lensparams->fourier_mode_sinamp.input(sb_in->fourier_mode_sinamp);
 		fourier_mode_paramnum.input(sb_in->fourier_mode_paramnum);
 		int n_new_params = n_params + 2*n_fourier_modes;
 		set_nparams_and_anchordata(n_new_params);
@@ -340,7 +379,20 @@ void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 	}
 	assign_paramnames();
 	assign_param_pointers();
+#ifdef USE_STAN
+	assign_param_pointers_autodif();
+#endif
 }
+
+#ifdef USE_STAN
+void LensProfile::sync_autodif_parameters()
+{
+	sync_autodif_geometric_parameters();
+	lensparams_spl_dif.qx_parameter = lensparams_spl.qx_parameter;
+	lensparams_spl_dif.f_parameter = lensparams_spl.f_parameter;
+	//lensparams_spl_dif.kspline.input(lensparams_spl.kspline);
+}
+#endif
 
 void LensProfile::set_nparams_and_anchordata(const int &n_params_in, const bool resize)
 {
@@ -394,6 +446,9 @@ void LensProfile::set_nparams_and_anchordata(const int &n_params_in, const bool 
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]) n_vary_params++;
 	}
+#ifdef USE_STAN
+	lensparams_dif->param = new stan::math::var*[n_params];
+#endif
 }
 
 bool LensProfile::anchor_center_to_lens(const int &center_anchor_lens_number)
@@ -403,6 +458,10 @@ bool LensProfile::anchor_center_to_lens(const int &center_anchor_lens_number)
 	center_anchor_lens = qlens->lens_list[center_anchor_lens_number];
 	lensparams->x_center = center_anchor_lens->lensparams->x_center;
 	lensparams->y_center = center_anchor_lens->lensparams->y_center;
+#ifdef USE_STAN
+	lensparams_dif->x_center = center_anchor_lens->lensparams_dif->x_center;
+	lensparams_dif->y_center = center_anchor_lens->lensparams_dif->y_center;
+#endif
 	return true;
 }
 
@@ -429,10 +488,13 @@ bool LensProfile::setup_transform_center_coords_to_pixsrc_frame(const double dxc
 	if (ellipticity_mode == -1) die("can only transform center coords for elliptical lens");
 	if (!transform_center_coords_to_pixsrc_frame) transform_center_coords_to_pixsrc_frame = true;
 	assign_param_pointers();
+#ifdef USE_STAN
+	assign_param_pointers_autodif();
+#endif
 	assign_paramnames();
 	lensparams->xc_prime = dxc;
 	lensparams->yc_prime = dyc;
-	update_center_from_pixsrc_coords(qlensptr);
+	update_center_from_pixsrc_coords<double>(qlensptr);
 	return true;
 }
 
@@ -697,6 +759,10 @@ void LensProfile::update_parameters(const double* params)
 		else *(p.param[i]) = params[i];
 	}
 	update_meta_parameters();
+#ifdef USE_STAN
+	sync_autodif_parameters();
+	update_meta_parameters_autodif();
+#endif
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 	if (qlens != NULL) {
@@ -721,10 +787,6 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 		update_parameters(newparams);
 	}
 	delete[] newparams;
-	if (qlens != NULL) {
-		qlens->update_anchored_parameters_and_redshift_data();
-		qlens->update_lens_fitparams(lens_number);
-	}
 	return found_match;
 }
 
@@ -741,10 +803,6 @@ bool LensProfile::update_specific_parameter(const int paramnum, const double& va
 	}
 	update_parameters(newparams);
 	delete[] newparams;
-	if (qlens != NULL) {
-		qlens->update_anchored_parameters_and_redshift_data();
-		qlens->update_lens_fitparams(lens_number);
-	}
 	return true;
 }
 
@@ -754,31 +812,58 @@ void LensProfile::update_ellipticity_parameter(const double eparam)
 	// This function is only used by the "qtab" model at the moment
 	*(p.param[ellipticity_paramnum]) = eparam;
 	update_meta_parameters();
+#ifdef USE_STAN
+	sync_autodif_parameters();
+	update_meta_parameters_autodif();
+#endif
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 }
 
 // Perhaps should have a function at the model level, called here that reports a "false" status if parameter values are crazy!
-void LensProfile::update_fit_parameters(const double* fitparams, int &index, bool& status)
+template <typename QScalar>
+void LensProfile::update_fit_parameters(const QScalar* fitparams, int &index, bool& status)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if (n_vary_params > 0) {
 		for (int i=0; i < n_params; i++) {
 			if (vary_params[i]==true) {
 				if (angle_param[i]) {
 					// the costheta, sintheta meta-parameters will be set in update_ellipticity_meta_parameters, which is called from update_meta_parameters for elliptical models
 					*(p.param[i]) = degrees_to_radians(fitparams[index++]);
-					update_angle_meta_params();
+					update_angle_meta_params<QScalar>();
 				}
 				else *(p.param[i]) = fitparams[index++];
 			}
 		}
+		
 		update_meta_parameters();
+#ifdef USE_STAN
+		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency. Maybe revisit this later? Might not be necessary
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			for (int i=0; i < n_params; i++) {
+				if (vary_params[i]==true) {
+					*(lensparams->param[i]) = (*(lensparams_dif->param[i])).val();
+				}
+			}
+		} else {
+			for (int i=0; i < n_params; i++) {
+				if (vary_params[i]==true) {
+					*(lensparams_dif->param[i]) = (*(lensparams->param[i]));
+				}
+			}
+		}
+		update_meta_parameters_autodif();
+#endif
 		set_integration_pointers();
 		set_model_specific_integration_pointers();
 	}
 	// NOTE: to save time, we do not update the qlens->param_list here, since this function is only run during model fitting
 }
+template void LensProfile::update_fit_parameters<double>(const double* fitparams, int &index, bool& status);
+#ifdef USE_STAN
+template void LensProfile::update_fit_parameters<stan::math::var>(const stan::math::var* fitparams, int &index, bool& status);
+#endif
 
 void LensProfile::update_anchored_parameters()
 {
@@ -786,14 +871,20 @@ void LensProfile::update_anchored_parameters()
 	if (at_least_one_param_anchored) {
 		for (int i=0; i < n_params; i++) {
 			if (anchor_parameter_to_lens[i]) {
-				(*p.param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_lens[i]->lensparams->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+				(*lensparams->param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_lens[i]->lensparams->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+#ifdef USE_STAN
+				(*lensparams_dif->param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_lens[i]->lensparams_dif->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+#endif
 				if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
 			} else if (anchor_parameter_to_source[i]) {
-				(*p.param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+				(*lensparams->param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
 				if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
 			}
 		}
 		update_meta_parameters();
+#ifdef USE_STAN
+		update_meta_parameters_autodif();
+#endif
 		set_integration_pointers();
 		set_model_specific_integration_pointers();
 	}
@@ -804,6 +895,10 @@ void LensProfile::update_anchor_center()
 	if (center_anchored) {
 		lensparams->x_center = center_anchor_lens->lensparams->x_center;
 		lensparams->y_center = center_anchor_lens->lensparams->y_center;
+#ifdef USE_STAN
+		lensparams_dif->x_center = center_anchor_lens->lensparams_dif->x_center;
+		lensparams_dif->y_center = center_anchor_lens->lensparams_dif->y_center;
+#endif
 	}
 }
 
@@ -1144,18 +1239,24 @@ void LensProfile::set_geometric_paramnames(int qi)
 	paramnames[qi] = "z"; latex_paramnames[qi] = "z"; latex_param_subscripts[qi] = "l"; qi++;
 }
 
-void LensProfile::assign_param_pointers()
+template <typename QScalar>
+void LensProfile::assign_param_pointers_impl()
 {
-	LensSpline_Params<double>& p = assign_lensspline_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
+	LensSpline_Params<QScalar>& p = assign_lensspline_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	p.param[0] = &p.qx_parameter;
 	p.param[1] = &p.f_parameter;
-	set_geometric_param_pointers(lensprofile_nparams);
+	set_geometric_param_pointers<QScalar>(lensprofile_nparams);
 }
+template void LensProfile::assign_param_pointers_impl<double>();
+#ifdef USE_STAN
+template void LensProfile::assign_param_pointers_impl<stan::math::var>();
+#endif
 
+template <typename QScalar>
 void LensProfile::set_geometric_param_pointers(int qi)
 {
 	// Sets parameter pointers for ellipticity (or axis ratio) and angle
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 
 	if (!ellipticity_gradient) {
 		if (use_ellipticity_components) {
@@ -1183,22 +1284,26 @@ void LensProfile::set_geometric_param_pointers(int qi)
 		}
 	} else {
 		angle_param_exists = true;
-		set_geometric_param_pointers_egrad(p.param,angle_param,qi); // NOTE: if fourier_gradient is turned on, the Fourier parameter pointers are also set in this function
+		//set_geometric_param_pointers_egrad(p.param,angle_param,qi); // NOTE: if fourier_gradient is turned on, the Fourier parameter pointers are also set in this function
 		// Still need to make lensed_center_coords compatible with egrad (or else forbid having both turned on!!!)
 	}
 	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
 		for (int i=0; i < n_fourier_modes; i++) {
-			p.param[qi++] = &fourier_mode_cosamp[i];
-			p.param[qi++] = &fourier_mode_sinamp[i];
+			p.param[qi++] = &p.fourier_mode_cosamp[i];
+			p.param[qi++] = &p.fourier_mode_sinamp[i];
 		}
 	}
-	p.param[qi++] = &zlens;
+	p.param[qi++] = &p.zlens;
 }
+template void LensProfile::set_geometric_param_pointers<double>(int qi);
+#ifdef USE_STAN
+template void LensProfile::set_geometric_param_pointers<stan::math::var>(int qi);
+#endif
 
-void LensProfile::set_geometric_parameters(const double &par1_in, const double &par2_in, const double &xc_in, const double &yc_in)
+template <typename QScalar>
+void LensProfile::set_geometric_parameters(const QScalar &par1_in, const QScalar &par2_in, const QScalar &xc_in, const QScalar &yc_in)
 {
-	/* TRYING OUT THE LENSPARAMS VERSION */
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if (use_ellipticity_components) {
 		p.epsilon1 = par1_in;
 		p.epsilon2 = par2_in;
@@ -1212,34 +1317,46 @@ void LensProfile::set_geometric_parameters(const double &par1_in, const double &
 	} else {
 		p.xc_prime = xc_in;
 		p.yc_prime = yc_in;
-		set_center_if_lensed_coords();
+		set_center_if_lensed_coords<QScalar>();
 	}
-	update_ellipticity_meta_parameters();
-
-	/*
-	LensParams<stan::math::var>& p2 = assign_lensparam_object<stan::math::var>();
-	if (use_ellipticity_components) {
-		p2.epsilon1 = par1_in;
-		p2.epsilon2 = par2_in;
-	} else {
-		set_ellipticity_parameter(par1_in);
-		p2.theta = degrees_to_radians(par2_in);
-	}
-	if ((!lensed_center_coords) and (!transform_center_coords_to_pixsrc_frame)) {
-		p2.x_center = xc_in;
-		p2.y_center = yc_in;
-	} else {
-		p2.xc_prime = xc_in;
-		p2.yc_prime = yc_in;
-		set_center_if_lensed_coords();
-	}
-	*/
-
+	update_ellipticity_meta_parameters<QScalar>();
 }
+template void LensProfile::set_geometric_parameters<double>(const double &par1_in, const double &par2_in, const double &xc_in, const double &yc_in);
+#ifdef USE_STAN
+template void LensProfile::set_geometric_parameters<stan::math::var>(const stan::math::var &par1_in, const stan::math::var &par2_in, const stan::math::var &xc_in, const stan::math::var &yc_in);
+#endif
 
-void LensProfile::set_ellipticity_parameter(const double &param_in)
+#ifdef USE_STAN
+void LensProfile::sync_autodif_geometric_parameters()
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	lensparams_dif->zlens = lensparams->zlens;
+	if (use_ellipticity_components) {
+		lensparams_dif->epsilon1 = lensparams->epsilon1;
+		lensparams_dif->epsilon2 = lensparams->epsilon2;
+	} else {
+		lensparams_dif->epsilon = lensparams->epsilon;
+	}
+	lensparams_dif->q = lensparams->q;
+	lensparams_dif->theta = lensparams->theta;
+	lensparams_dif->x_center = lensparams->x_center;
+	lensparams_dif->y_center = lensparams->y_center;
+	if ((lensed_center_coords) or (transform_center_coords_to_pixsrc_frame)) {
+		lensparams_dif->xc_prime = lensparams->xc_prime;
+		lensparams_dif->yc_prime = lensparams->yc_prime;
+	}
+	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
+		for (int i=0; i < n_fourier_modes; i++) {
+			lensparams_dif->fourier_mode_cosamp[i] = lensparams->fourier_mode_cosamp[i];
+			lensparams_dif->fourier_mode_sinamp[i] = lensparams->fourier_mode_cosamp[i];
+		}
+	}
+}
+#endif
+
+template <typename QScalar>
+void LensProfile::set_ellipticity_parameter(const QScalar &param_in)
+{
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if (ellipticity_mode==0) {
 		p.q = param_in; // axis ratio q = b/a
 	} else if (ellipticity_mode==1) {
@@ -1247,7 +1364,6 @@ void LensProfile::set_ellipticity_parameter(const double &param_in)
 	} else if (ellipticity_mode==2) {
 		p.epsilon = param_in; // axis ratio q = b/a
 		p.q = (1-p.epsilon)/(1+p.epsilon);
-			cout << "q=" << p.q << endl;
 	} else if (ellipticity_mode==3) {
 		p.epsilon = param_in; // axis ratio q = b/a
 		p.q = sqrt((1-p.epsilon)/(1+p.epsilon));
@@ -1255,18 +1371,27 @@ void LensProfile::set_ellipticity_parameter(const double &param_in)
 	if (p.q > 1) p.q = 1.0; // don't allow q>1
 	if (p.q<=0) p.q = 0.001; // just to avoid catastrophe
 }
+template void LensProfile::set_ellipticity_parameter<double>(const double &param_in);
+#ifdef USE_STAN
+template void LensProfile::set_ellipticity_parameter<stan::math::var>(const stan::math::var &param_in);
+#endif
 
+template <typename QScalar>
 void LensProfile::set_center_if_lensed_coords()
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if (lensed_center_coords) {
 		if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
-		lensvector<double> xl;
-		qlens->map_to_lens_plane<double>(qlens->lens_redshift_idx[lens_number],p.xc_prime,p.yc_prime,xl,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
+		lensvector<QScalar> xl;
+		qlens->map_to_lens_plane<QScalar>(qlens->lens_redshift_idx[lens_number],p.xc_prime,p.yc_prime,xl,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
 		p.x_center = xl[0];
 		p.y_center = xl[1];
 	}
 }
+template void LensProfile::set_center_if_lensed_coords<double>();
+#ifdef USE_STAN
+template void LensProfile::set_center_if_lensed_coords<stan::math::var>();
+#endif
 
 double LensProfile::concentration_prior()
 {
@@ -1277,6 +1402,9 @@ void LensProfile::change_pmode(const int pmode_in) // WARNING! This does not che
 {
 	parameter_mode = pmode_in;
 	assign_param_pointers();
+#ifdef USE_STAN
+	assign_param_pointers_autodif();
+#endif
 	assign_paramnames();
 	update_meta_parameters_and_pointers();
 }
@@ -1288,7 +1416,7 @@ bool LensProfile::output_cosmology_info(const int lens_number)
 	mass_converged = calculate_total_scaled_mass(mtot);
 	if (mass_converged) {
 		rhalf_converged = calculate_half_mass_radius(rhalf,mtot);
-		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
+		sigma_cr = cosmo->sigma_crit_arcsec(lensparams->zlens,zsrc_ref);
 		mtot *= sigma_cr;
 		if (lens_number != -1) cout << "Lens " << lens_number << ":\n";
 		cout << "total mass: " << mtot << " M_sol" << endl;
@@ -1519,9 +1647,10 @@ double LensProfile::rho3d_w_integrand(const double w)
 	return kappa_rsq_deriv(mass_intval/wsq)/(wsq*sqrt(1-wsq));
 }
 
-void LensProfile::set_angle_from_components(const double &comp1, const double &comp2)
+template <typename QScalar>
+void LensProfile::set_angle_from_components(const QScalar &comp1, const QScalar &comp2)
 {
-	double angle;
+	QScalar angle;
 	if (comp1==0) {
 		if (comp2 > 0) angle = M_HALFPI;
 		else if (comp2==0) angle = 0.0;
@@ -1541,14 +1670,21 @@ void LensProfile::set_angle_from_components(const double &comp1, const double &c
 	if (orient_major_axis_north) angle -= M_HALFPI;
 	while (angle > M_HALFPI) angle -= M_PI;
 	while (angle <= -M_HALFPI) angle += M_PI;
-	set_angle_radians(angle);
+	set_angle_radians<QScalar>(angle);
 }
+template void LensProfile::set_angle_from_components<double>(const double &comp1, const double &comp2);
+#ifdef USE_STAN
+template void LensProfile::set_angle_from_components<stan::math::var>(const stan::math::var &comp1, const stan::math::var &comp2);
+#endif
 
 void LensProfile::update_meta_parameters_and_pointers()
 {
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 	update_meta_parameters();
+#ifdef USE_STAN
+	update_meta_parameters_autodif();
+#endif
 }
 
 void LensProfile::set_model_specific_integration_pointers() {} // gets overloaded by some models
@@ -1559,18 +1695,27 @@ void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q
 	kapavgptr_rsq_spherical = &LensProfile::kappa_avg_spherical_integral<double>;
 	potptr_rsq_spherical = &LensProfile::potential_spherical_integral<double>;
 	if ((lensparams->q==1.0) and (!ellipticity_gradient)) {
-		potptr = &LensProfile::potential_spherical_default;
-		defptr = &LensProfile::deflection_spherical_default;
-		hessptr = &LensProfile::hessian_spherical_default;
+		potptr = &LensProfile::potential_spherical_default<double>;
+		defptr = &LensProfile::deflection_spherical_default<double>;
+		hessptr = &LensProfile::hessian_spherical_default<double>;
 	} else {
-		defptr = &LensProfile::deflection_numerical;
-		hessptr = &LensProfile::hessian_numerical;
+		defptr = &LensProfile::deflection_numerical<double>;
+		hessptr = &LensProfile::hessian_numerical<double>;
 	}
-	def_and_hess_ptr = &LensProfile::deflection_and_hessian_together;
+	def_and_hess_ptr = &LensProfile::deflection_and_hessian_together<double>;
 
 #ifdef USE_STAN
 	kapavgptr_rsq_spherical_autodif = &LensProfile::kappa_avg_spherical_integral<stan::math::var>;
 	potptr_rsq_spherical_autodif = &LensProfile::potential_spherical_integral<stan::math::var>;
+	if ((lensparams_dif->q==1.0) and (!ellipticity_gradient)) {
+		potptr_autodif = &LensProfile::potential_spherical_default<stan::math::var>;
+		defptr_autodif = &LensProfile::deflection_spherical_default<stan::math::var>;
+		hessptr_autodif = &LensProfile::hessian_spherical_default<stan::math::var>;
+	} else {
+		defptr_autodif = &LensProfile::deflection_numerical<stan::math::var>;
+		hessptr_autodif = &LensProfile::hessian_numerical<stan::math::var>;
+	}
+	def_and_hess_ptr_autodif = &LensProfile::deflection_and_hessian_together<stan::math::var>;
 #endif
 }
 
@@ -1605,28 +1750,45 @@ template double LensProfile::kappa_rsq_deriv_impl<double>(const double rsq);
 template stan::math::var LensProfile::kappa_rsq_deriv_impl<stan::math::var>(const stan::math::var rsq);
 #endif
 
-void LensProfile::deflection_from_elliptical_potential(const double x, const double y, lensvector<double>& def)
+template <typename QScalar>
+void LensProfile::deflection_from_elliptical_potential(const QScalar x, const QScalar y, lensvector<QScalar>& def)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double kapavg = (this->*kapavgptr_rsq_spherical)((1-p.epsilon)*x*x + (1+p.epsilon)*y*y);
+	QScalar kapavg;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+		kapavg = (this->*kapavgptr_rsq_spherical_autodif)((1-p.epsilon)*x*x + (1+p.epsilon)*y*y);
+	else
+#endif
+	kapavg = (this->*kapavgptr_rsq_spherical)((1-p.epsilon)*x*x + (1+p.epsilon)*y*y);
 
 	def[0] = kapavg*(1-p.epsilon)*x;
 	def[1] = kapavg*(1+p.epsilon)*y;
 }
+template void LensProfile::deflection_from_elliptical_potential<double>(const double x, const double y, lensvector<double>& def);
+#ifdef USE_STAN
+template void LensProfile::deflection_from_elliptical_potential<stan::math::var>(const stan::math::var x, const stan::math::var y, lensvector<stan::math::var>& def);
+#endif
 
-void LensProfile::hessian_from_elliptical_potential(const double x, const double y, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::hessian_from_elliptical_potential(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kap;
+	QScalar cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kap;
 	exsq = (1-p.epsilon)*x*x; // elliptical x^2
 	eysq = (1+p.epsilon)*y*y; // elliptical y^2
 	rsq = exsq+eysq; // elliptical r^2
 	cos2phi = (exsq - eysq) / rsq;
 	sin2phi = 2*p.q*(1+p.epsilon)*x*y/rsq;
 	kap_r = kappa_rsq(rsq);
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+		shearmag = ((this->*kapavgptr_rsq_spherical_autodif)(rsq)) - kap_r; // shear from the spherical model
+	else
+#endif
 	shearmag = ((this->*kapavgptr_rsq_spherical)(rsq)) - kap_r; // shear from the spherical model
 	kap = kap_r + p.epsilon*shearmag*cos2phi;
 	gamma1 = -p.epsilon*kap_r - shearmag*cos2phi;
@@ -1637,32 +1799,52 @@ void LensProfile::hessian_from_elliptical_potential(const double x, const double
 	hess[1][0] = gamma2;
 	if ((shearmag * 0.0) != 0.0) die("die2");
 }
+template void LensProfile::hessian_from_elliptical_potential<double>(const double x, const double y, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::hessian_from_elliptical_potential<stan::math::var>(const stan::math::var x, const stan::math::var y, lensmatrix<stan::math::var>& hess);
+#endif
 
-double LensProfile::kappa_from_elliptical_potential(const double x, const double y)
+template <typename QScalar>
+QScalar LensProfile::kappa_from_elliptical_potential(const QScalar x, const QScalar y)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double cos2phi, exsq, eysq, rsq, kap_r, shearmag;
+	QScalar cos2phi, exsq, eysq, rsq, kap_r, shearmag;
 	exsq = (1-p.epsilon)*x*x; // elliptical x^2
 	eysq = (1+p.epsilon)*y*y; // elliptical y^2
 	rsq = exsq+eysq; // elliptical r^2
 	cos2phi = (exsq - eysq) / rsq;
 
 	kap_r = kappa_rsq(rsq);
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+		shearmag = (this->*kapavgptr_rsq_spherical_autodif)(rsq) - kap_r;
+	else
+#endif
 	shearmag = (this->*kapavgptr_rsq_spherical)(rsq) - kap_r;
 
 	return (kap_r + p.epsilon*shearmag*cos2phi);
 }
+template double LensProfile::kappa_from_elliptical_potential<double>(const double x, const double y);
+#ifdef USE_STAN
+template stan::math::var LensProfile::kappa_from_elliptical_potential<stan::math::var>(const stan::math::var x, const stan::math::var y);
+#endif
 
-void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential(const double x, const double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential(const QScalar x, const QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// Formulas derived in Dumet-Montoya et al. (2012)
-	double cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kapavg;
+	QScalar cos2phi, sin2phi, exsq, eysq, rsq, gamma1, gamma2, kap_r, shearmag, kapavg;
 	exsq = (1-p.epsilon)*x*x; // elliptical x^2
 	eysq = (1+p.epsilon)*y*y; // elliptical y^2
 	rsq = exsq+eysq; // elliptical r^2
 
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+		kapavg = (this->*kapavgptr_rsq_spherical_autodif)(rsq);
+	else
+#endif
 	kapavg = (this->*kapavgptr_rsq_spherical)(rsq);
 
 	def[0] = kapavg*(1-p.epsilon)*x;
@@ -1680,12 +1862,20 @@ void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential(const d
 	hess[0][1] = gamma2;
 	hess[1][0] = gamma2;
 }
+template void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential<double>(const double x, const double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::kappa_deflection_and_hessian_from_elliptical_potential<stan::math::var>(const stan::math::var x, const stan::math::var y, stan::math::var& kap, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess);
+#endif
 
 void LensProfile::shift_angle_90()
 {
 	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
 	lensparams->theta += M_HALFPI;
 	while (lensparams->theta > M_PI) lensparams->theta -= M_PI;
+#ifdef USE_STAN
+	lensparams_dif->theta += M_HALFPI;
+	while (lensparams_dif->theta > M_PI) lensparams_dif->theta -= M_PI;
+#endif
 }
 
 void LensProfile::shift_angle_minus_90()
@@ -1693,56 +1883,76 @@ void LensProfile::shift_angle_minus_90()
 	// do this if the major axis orientation is changed (so the lens angles values are changed appropriately, even though the lens doesn't change)
 	lensparams->theta -= M_HALFPI;
 	while (lensparams->theta <= -M_PI) lensparams->theta += M_PI;
+#ifdef USE_STAN
+	lensparams_dif->theta -= M_HALFPI;
+	while (lensparams_dif->theta <= -M_PI) lensparams_dif->theta += M_PI;
+#endif
 }
 
 void LensProfile::reset_angle_modulo_2pi()
 {
 	while (lensparams->theta < -M_PI/2) lensparams->theta += 2*M_PI;
 	while (lensparams->theta > 2*M_PI) lensparams->theta -= 2*M_PI;
+#ifdef USE_STAN
+	while (lensparams_dif->theta < -M_PI/2) lensparams_dif->theta += 2*M_PI;
+	while (lensparams_dif->theta > 2*M_PI) lensparams_dif->theta -= 2*M_PI;
+#endif
 }
 
-void LensProfile::set_angle(const double &theta_degrees)
+template <typename QScalar>
+void LensProfile::set_angle(const QScalar &theta_degrees)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	p.theta = degrees_to_radians(theta_degrees);
 	// trig functions are stored to save computation time later
 	p.costheta = cos(p.theta);
 	p.sintheta = sin(p.theta);
 	if (orient_major_axis_north==true) {
 		// this effectively alters theta by 90 degrees, so that the major axis will point along "north" (i.e. the y-axis)
-		double tmp = p.sintheta;
+		QScalar tmp = p.sintheta;
 		p.sintheta = p.costheta;
 		p.costheta = -tmp;
 	}
 }
+template void LensProfile::set_angle<double>(const double &theta_degrees);
+#ifdef USE_STAN
+template void LensProfile::set_angle<stan::math::var>(const stan::math::var &theta_degrees);
+#endif
 
-void LensProfile::set_angle_radians(const double &theta_in)
+template <typename QScalar>
+void LensProfile::set_angle_radians(const QScalar &theta_in)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	p.theta = theta_in;
 	// trig functions are stored to save computation time later
 	p.costheta = cos(p.theta);
 	p.sintheta = sin(p.theta);
 	if (orient_major_axis_north==true) {
 		// this effectively alters theta by 90 degrees, so that the major axis will point along "north" (i.e. the y-axis)
-		double tmp = p.sintheta;
+		QScalar tmp = p.sintheta;
 		p.sintheta = p.costheta;
 		p.costheta = -tmp;
 	}
 }
+template void LensProfile::set_angle_radians<double>(const double &theta_in);
+#ifdef USE_STAN
+template void LensProfile::set_angle_radians<stan::math::var>(const stan::math::var &theta_in);
+#endif
 
 void LensProfile::update_cosmology_meta_parameters(const bool force_update)
 {
-	if ((cosmo != NULL) and ((force_update) or (zlens != zlens_current) or (cosmo->get_n_vary_params() > 0))) {
-		sigma_cr = cosmo->sigma_crit_arcsec(zlens,zsrc_ref);
-		kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(zlens);
-		if (zlens != zlens_current) zlens_current = zlens;
+	LensParams<double>& p = assign_lensparam_object<double>();
+	if ((cosmo != NULL) and ((force_update) or (p.zlens != zlens_current) or (cosmo->get_n_vary_params() > 0))) {
+		sigma_cr = cosmo->sigma_crit_arcsec(p.zlens,zsrc_ref);
+		kpc_to_arcsec = 206.264806/cosmo->angular_diameter_distance(p.zlens);
+		if (p.zlens != zlens_current) zlens_current = p.zlens;
 	}
 }
 
+template <typename QScalar>
 void LensProfile::calculate_ellipticity_components()
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if ((ellipticity_mode != -1) and (use_ellipticity_components)) {
 		p.theta_eff = (orient_major_axis_north) ? p.theta + M_HALFPI : p.theta;
 		if ((ellipticity_mode==0) or (ellipticity_mode==1)) p.epsilon = 1-p.q;
@@ -1750,10 +1960,18 @@ void LensProfile::calculate_ellipticity_components()
 		p.epsilon2 = p.epsilon*sin(2*p.theta_eff);
 	}
 }
+template void LensProfile::calculate_ellipticity_components<double>();
+#ifdef USE_STAN
+template void LensProfile::calculate_ellipticity_components<stan::math::var>();
+#endif
 
+template <typename QScalar>
 void LensProfile::update_ellipticity_meta_parameters()
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)
 	if (use_ellipticity_components) {
 		if ((ellipticity_mode==0) or (ellipticity_mode==1)) set_ellipticity_parameter(1 - sqrt(SQR(p.epsilon1) + SQR(p.epsilon2)));
@@ -1766,26 +1984,44 @@ void LensProfile::update_ellipticity_meta_parameters()
 
 	if (!ellipticity_gradient) {
 		if (ellipticity_mode==0) {
-			lensparams->epsilon = 1 - lensparams->q;
+			p.epsilon = 1 - p.q;
 			f_major_axis = 1.0; // defined such that a = xi, and b = xi*q
 		} else if (ellipticity_mode==1) {
-			lensparams->epsilon = 1 - lensparams->q;
+			p.epsilon = 1 - p.q;
 			// if ellipticity components are being used, we are automatically using the following major axis scaling
-			f_major_axis = 1.0/sqrt(lensparams->q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+				f_major_axis = 1.0/sqrt((p.q).val()); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+			else
+#endif
+			f_major_axis = 1.0/sqrt(p.q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
 		} else if (ellipticity_mode==2) {
-			lensparams->q = (1-lensparams->epsilon)/(1+lensparams->epsilon);
-			f_major_axis = 1.0/sqrt(lensparams->q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+			p.q = (1-p.epsilon)/(1+p.epsilon);
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+				f_major_axis = 1.0/sqrt((p.q).val()); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+			else
+#endif
+			f_major_axis = 1.0/sqrt(p.q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
 		} else if (ellipticity_mode==3) {
-			lensparams->q = sqrt((1-lensparams->epsilon)/(1+lensparams->epsilon));
-			f_major_axis = sqrt((1+lensparams->q*lensparams->q)/2)/lensparams->q; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
+			p.q = sqrt((1-p.epsilon)/(1+p.epsilon));
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				double qval = (p.q).val();
+				f_major_axis = sqrt((1+qval*qval)/2)/qval; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
+			}
+			else
+#endif
+			f_major_axis = sqrt((1+p.q*p.q)/2)/p.q; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
 		}
-		if (!use_ellipticity_components) update_angle_meta_params(); // sets the costheta, sintheta meta-parameters
+		if (!use_ellipticity_components) update_angle_meta_params<QScalar>(); // sets the costheta, sintheta meta-parameters
 	} else {
-		lensparams->q = geometric_param[0][0];
-		if (lensparams->q > 1.0) lensparams->q = 1.0;
-		lensparams->theta = geometric_param[1][0];
-		lensparams->x_center = geometric_param[2][0];
-		lensparams->y_center = geometric_param[3][0];
+		/*
+		p.q = geometric_param[0][0];
+		if (p.q > 1.0) p.q = 1.0;
+		p.theta = geometric_param[1][0];
+		p.x_center = geometric_param[2][0];
+		p.y_center = geometric_param[3][0];
 		update_egrad_meta_parameters();
 		check_for_overlapping_contours();
 		if (qlens != NULL) {
@@ -1796,12 +2032,18 @@ void LensProfile::update_ellipticity_meta_parameters()
 				qlens->contours_overlap = false;
 			}
 		}
+		*/
 	}
 }
+template void LensProfile::update_ellipticity_meta_parameters<double>();
+#ifdef USE_STAN
+template void LensProfile::update_ellipticity_meta_parameters<stan::math::var>();
+#endif
 
+template <typename QScalar>
 void LensProfile::update_center_from_pixsrc_coords(QLens* qlensptr)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	double xcs, ycs;
 	//cout << "lens " << lens_number << " finding approx source size... " << endl;
 	// generalize this later so it can be anchored to an image_pixel_grid with the appropriate zsrc_i (doesn't have to be 0)
@@ -1810,105 +2052,132 @@ void LensProfile::update_center_from_pixsrc_coords(QLens* qlensptr)
 	p.x_center = xcs + p.xc_prime;
 	p.y_center = ycs + p.yc_prime;
 }
+template void LensProfile::update_center_from_pixsrc_coords<double>(QLens* qlensptr);
+#ifdef USE_STAN
+template void LensProfile::update_center_from_pixsrc_coords<stan::math::var>(QLens* qlensptr);
+#endif
 
-
+template <typename QScalar>
 void LensProfile::update_angle_meta_params()
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// trig functions are stored to save computation time later
 	p.costheta = cos(p.theta);
 	p.sintheta = sin(p.theta);
 	if (orient_major_axis_north==true) {
 		// this effectively alters theta by 90 degrees, so that the major axis will point along "north" (i.e. the y-axis)
-		double tmp = p.sintheta;
+		QScalar tmp = p.sintheta;
 		p.sintheta = p.costheta;
 		p.costheta = -tmp;
 	}
 }
+template void LensProfile::update_angle_meta_params<double>();
+#ifdef USE_STAN
+template void LensProfile::update_angle_meta_params<stan::math::var>();
+#endif
 
-void LensProfile::rotate(double &x, double &y)
+template <typename QScalar>
+void LensProfile::rotate(QScalar &x, QScalar &y)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// perform a counter-clockwise rotation of the coordinate system to match the coordinate system of the rotated galaxy
-	double xp = x*p.costheta + y*p.sintheta;
+	QScalar xp = x*p.costheta + y*p.sintheta;
 	y = -x*p.sintheta + y*p.costheta;
 	x = xp;
 }
+template void LensProfile::rotate<double>(double &x, double &y);
+#ifdef USE_STAN
+template void LensProfile::rotate<stan::math::var>(stan::math::var &x, stan::math::var &y);
+#endif
 
-void LensProfile::rotate_back(double &x, double &y)
+template <typename QScalar>
+void LensProfile::rotate_back(QScalar &x, QScalar &y)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// perform a clockwise rotation of the coordinate system to transform from the coordinate system of the rotated galaxy
-	double xp = x*p.costheta - y*p.sintheta;
+	QScalar xp = x*p.costheta - y*p.sintheta;
 	y = x*p.sintheta + y*p.costheta;
 	x = xp;
 }
+template void LensProfile::rotate_back<double>(double &x, double &y);
+#ifdef USE_STAN
+template void LensProfile::rotate_back<stan::math::var>(stan::math::var &x, stan::math::var &y);
+#endif
 
-double LensProfile::elliptical_radius(double x, double y)
+template <typename QScalar>
+QScalar LensProfile::elliptical_radius(QScalar x, QScalar y)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// switch to coordinate system centered on lens profile
 	x -= p.x_center;
 	y -= p.y_center;
 	if ((!ellipticity_gradient) and (p.sintheta != 0)) rotate(x,y);
-	double ans=0.0, xisq;
+	QScalar ans=0.0, xisq;
 
 	if ((ellipticity_mode==3) and (p.q != 1)) {
 		die("cannot get ellipticity radius in emode=3 since ellipticity is in the potential");
 	} else {
-		double xisq;
+		QScalar xisq;
 		if (!ellipticity_gradient) {
 			xisq = (x*x + y*y/(p.q*p.q))/(f_major_axis*f_major_axis);
 		} else {
-			xisq = SQR(elliptical_radius_root(x,y));
+			//xisq = SQR(elliptical_radius_root(x,y));
 		}
 		ans = sqrt(xisq);
 	}
 	return ans;
 }
+template double LensProfile::elliptical_radius<double>(double x, double y);
+#ifdef USE_STAN
+template stan::math::var LensProfile::elliptical_radius<stan::math::var>(stan::math::var x, stan::math::var y);
+#endif
 
-double LensProfile::kappa(double x, double y)
+template <typename QScalar>
+QScalar LensProfile::kappa_impl(QScalar x, QScalar y)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// switch to coordinate system centered on lens profile
 	x -= p.x_center;
 	y -= p.y_center;
 	if ((!ellipticity_gradient) and (p.sintheta != 0)) rotate(x,y);
-	double ans;
+	QScalar ans;
 
 	if ((ellipticity_mode==3) and (p.q != 1)) {
 		return kappa_from_elliptical_potential(x,y);
 	} else {
-		double xisq, fourier_factor = 0;
+		QScalar xisq, fourier_factor = 0;
 		if (!ellipticity_gradient) {
 			xisq = (x*x + y*y/(p.q*p.q))/(f_major_axis*f_major_axis);
 		} else {
-			xisq = SQR(elliptical_radius_root(x,y));
+			//xisq = SQR(elliptical_radius_root(x,y));
 		}
 		ans = kappa_rsq(xisq);
 	}
 	if (n_fourier_modes > 0) ans += kappa_from_fourier_modes(x,y);
 	return ans;
 }
+template double LensProfile::kappa_impl<double>(double x, double y);
+#ifdef USE_STAN
+template stan::math::var LensProfile::kappa_impl<stan::math::var>(stan::math::var x, stan::math::var y);
+#endif
 
-void LensProfile::deflection(double x, double y, lensvector<double>& def)
+template <typename QScalar>
+void LensProfile::deflection_impl(QScalar x, QScalar y, lensvector<QScalar>& def)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 
 	// switch to coordinate system centered on lens profile
-	//if (x*0.0 != 0.0) die("x is fucked going into def function");
-	//cout << "CENTER: " << x_center << " " << y_center << endl;
-	//if (x_center==1e30) die("x_center has not been set for lens %i",lens_number);
-	//if (y_center==1e30) die("y_center has not been set for lens %i",lens_number);
 	x -= p.x_center;
 	y -= p.y_center;
-	//if (x_center*0.0 != 0.0) die("center is fucked");
-	//if (x*0.0 != 0.0) die("x is fucked but not center");
 	if ((!ellipticity_gradient) and (p.sintheta != 0)) rotate(x,y);
-	//if (x*0.0 != 0.0) die("fucked after rotation");
 	if ((ellipticity_mode==3) and (p.q != 1)) {
 		deflection_from_elliptical_potential(x,y,def);
 	} else {
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+			(this->*defptr_autodif)(x,y,def);
+		else
+#endif
 		(this->*defptr)(x,y,def);
 	}
 
@@ -1917,10 +2186,15 @@ void LensProfile::deflection(double x, double y, lensvector<double>& def)
 	}
 	if ((!ellipticity_gradient) and (p.sintheta != 0)) def.rotate_back(p.costheta,p.sintheta);
 }
+template void LensProfile::deflection_impl<double>(double x, double y, lensvector<double>& def);
+#ifdef USE_STAN
+template void LensProfile::deflection_impl<stan::math::var>(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def);
+#endif
 
-void LensProfile::hessian(double x, double y, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::hessian_impl(QScalar x, QScalar y, lensmatrix<QScalar>& hess)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 
 	// switch to coordinate system centered on lens profile
 	x -= p.x_center;
@@ -1929,6 +2203,11 @@ void LensProfile::hessian(double x, double y, lensmatrix<double>& hess)
 	if ((ellipticity_mode==3) and (p.q != 1)) {
 		hessian_from_elliptical_potential(x,y,hess);
 	} else {
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+			(this->*hessptr_autodif)(x,y,hess);
+		else
+#endif
 		(this->*hessptr)(x,y,hess);
 	}
 	if (n_fourier_modes > 0) {
@@ -1936,24 +2215,46 @@ void LensProfile::hessian(double x, double y, lensmatrix<double>& hess)
 	}
 	if ((!ellipticity_gradient) and (p.sintheta != 0)) hess.rotate_back(p.costheta,p.sintheta);
 }
+template void LensProfile::hessian_impl<double>(double x, double y, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::hessian_impl<stan::math::var>(stan::math::var x, stan::math::var y, lensmatrix<stan::math::var>& hess);
+#endif
 
-double LensProfile::potential(double x, double y)
+template <typename QScalar>
+QScalar LensProfile::potential_impl(QScalar x, QScalar y)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// switch to coordinate system centered on lens profile
 	x -= p.x_center;
 	y -= p.y_center;
 	if ((!ellipticity_gradient) and (p.sintheta != 0)) rotate(x,y);
-	if (ellipticity_mode==3) {
-		return (this->*potptr_rsq_spherical)((1-p.epsilon)*x*x + (1+p.epsilon)*y*y); // ellipticity is put into the potential in this mode
-	} else {
-		return (this->*potptr)(x,y);
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		if (ellipticity_mode==3) {
+			return (this->*potptr_rsq_spherical_autodif)((1-p.epsilon)*x*x + (1+p.epsilon)*y*y); // ellipticity is put into the potential in this mode
+		} else {
+			return (this->*potptr_autodif)(x,y);
+		}
+	}
+	else
+#endif
+	{
+		if (ellipticity_mode==3) {
+			return (this->*potptr_rsq_spherical)((1-p.epsilon)*x*x + (1+p.epsilon)*y*y); // ellipticity is put into the potential in this mode
+		} else {
+			return (this->*potptr)(x,y);
+		}
 	}
 }
+template double LensProfile::potential_impl<double>(double x, double y);
+#ifdef USE_STAN
+template stan::math::var LensProfile::potential_impl<stan::math::var>(stan::math::var x, stan::math::var y);
+#endif
 
-void LensProfile::kappa_and_potential_derivatives(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::kappa_and_potential_derivatives_impl(QScalar x, QScalar y, QScalar& kap, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
-	LensParams<double>& p = assign_lensparam_object<double>();
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// switch to coordinate system centered on lens profile
 	x -= p.x_center;
 	y -= p.y_center;
@@ -1962,6 +2263,11 @@ void LensProfile::kappa_and_potential_derivatives(double x, double y, double& ka
 		kappa_deflection_and_hessian_from_elliptical_potential(x,y,kap,def,hess);
 	} else {
 		kap = kappa_rsq((x*x + y*y/(p.q*p.q))/(f_major_axis*f_major_axis));
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+			(this->*def_and_hess_ptr_autodif)(x,y,def,hess);
+		else
+#endif
 		(this->*def_and_hess_ptr)(x,y,def,hess);
 	}
 	if (n_fourier_modes > 0) {
@@ -1972,22 +2278,32 @@ void LensProfile::kappa_and_potential_derivatives(double x, double y, double& ka
 		def.rotate_back(p.costheta,p.sintheta);
 		hess.rotate_back(p.costheta,p.sintheta);
 	}
-	//double kapcheck = (hess[0][0]+hess[1][1])/2;
+	//QScalar kapcheck = (hess[0][0]+hess[1][1])/2;
 	//if ((!ellipticity_gradient) and (sintheta != 0)) rotate_back(x,y);
-	//double kapcheck2 = kappa(x,y);
+	//QScalar kapcheck2 = kappa(x,y);
 	//if (abs(kapcheck-kapcheck2) > 1e-3*abs(kapcheck2)) cout << "KAPPACHECK: " << kapcheck << " " << kapcheck2 << "(x=" << x << "," << y << ")" << endl;
 
 }
+template void LensProfile::kappa_and_potential_derivatives_impl<double>(double x, double y, double& kap, lensvector<double>& def, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::kappa_and_potential_derivatives_impl<stan::math::var>(stan::math::var x, stan::math::var y, stan::math::var& kap, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess);
+#endif
 
-void LensProfile::potential_derivatives(double x, double y, lensvector<double>& def, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::potential_derivatives_impl(QScalar x, QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
-	double kap;
-	kappa_and_potential_derivatives(x,y,kap,def,hess); // including kappa has no noticeable extra overhead
+	QScalar kap;
+	kappa_and_potential_derivatives_impl(x,y,kap,def,hess); // including kappa has no noticeable extra overhead
 }
+template void LensProfile::potential_derivatives_impl<double>(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::potential_derivatives_impl<stan::math::var>(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess);
+#endif
 
-void LensProfile::deflection_and_hessian_together(const double x, const double y, lensvector<double> &def, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::deflection_and_hessian_together(const QScalar x, const QScalar y, lensvector<QScalar> &def, lensmatrix<QScalar>& hess)
 {
-	if ((defptr == &LensProfile::deflection_numerical) and (hessptr == &LensProfile::hessian_numerical)) {
+	if ((defptr == &LensProfile::deflection_numerical<double>) and (hessptr == &LensProfile::hessian_numerical<double>)) {
 		if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
 			def[0]=0;
 			def[1]=0;
@@ -1999,11 +2315,24 @@ void LensProfile::deflection_and_hessian_together(const double x, const double y
 		}
 		deflection_and_hessian_numerical(x,y,def,hess); // saves time to calculate deflection & hessian together, because they have two integrals in common
 	} else {
-		(this->*defptr)(x,y,def);
-		(this->*hessptr)(x,y,hess);
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			(this->*defptr_autodif)(x,y,def);
+			(this->*hessptr_autodif)(x,y,hess);
+		}
+		else
+#endif
+		{
+			(this->*defptr)(x,y,def);
+			(this->*hessptr)(x,y,hess);
+		}
 	}
 	// /************ ADD HESSIAN FROM FOURIER MODES ************/ 
 }
+template void LensProfile::deflection_and_hessian_together<double>(const double x, const double y, lensvector<double> &def, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::deflection_and_hessian_together<stan::math::var>(const stan::math::var x, const stan::math::var y, lensvector<stan::math::var> &def, lensmatrix<stan::math::var>& hess);
+#endif
 
 void LensProfile::kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap)
 {
@@ -2026,12 +2355,18 @@ void LensProfile::add_fourier_mode(const int m_in, const double amp_in, const do
 {
 	n_fourier_modes++;
 	fourier_mode_mvals.resize(n_fourier_modes);
-	fourier_mode_cosamp.resize(n_fourier_modes);
-	fourier_mode_sinamp.resize(n_fourier_modes);
+	lensparams->fourier_mode_cosamp.resize(n_fourier_modes);
+	lensparams->fourier_mode_sinamp.resize(n_fourier_modes);
+	lensparams->fourier_mode_cosamp[n_fourier_modes-1] = amp_in;
+	lensparams->fourier_mode_sinamp[n_fourier_modes-1] = amp2_in;
+#ifdef USE_STAN
+	lensparams_dif->fourier_mode_cosamp.resize(n_fourier_modes);
+	lensparams_dif->fourier_mode_sinamp.resize(n_fourier_modes);
+	lensparams_dif->fourier_mode_cosamp[n_fourier_modes-1] = amp_in;
+	lensparams_dif->fourier_mode_sinamp[n_fourier_modes-1] = amp2_in;
+#endif
 	fourier_mode_paramnum.resize(n_fourier_modes);
 	fourier_mode_mvals[n_fourier_modes-1] = m_in;
-	fourier_mode_cosamp[n_fourier_modes-1] = amp_in;
-	fourier_mode_sinamp[n_fourier_modes-1] = amp2_in;
 	fourier_mode_paramnum[n_fourier_modes-1] = n_params;
 	n_params += 2;
 	vary_params.resize(n_params);
@@ -2056,6 +2391,11 @@ void LensProfile::add_fourier_mode(const int m_in, const double amp_in, const do
 	lensparams->param = new double*[n_params];
 	reset_anchor_lists();
 	assign_param_pointers();
+#ifdef USE_STAN
+	delete[] lensparams_dif->param;
+	lensparams_dif->param = new stan::math::var*[n_params];
+	assign_param_pointers_autodif();
+#endif
 	assign_paramnames();
 }
 
@@ -2081,13 +2421,22 @@ void LensProfile::remove_fourier_modes()
 
 	n_fourier_modes = 0;
 	fourier_mode_mvals.resize(n_fourier_modes);
-	fourier_mode_sinamp.resize(n_fourier_modes);
-	fourier_mode_cosamp.resize(n_fourier_modes);
+	lensparams->fourier_mode_sinamp.resize(n_fourier_modes);
+	lensparams->fourier_mode_cosamp.resize(n_fourier_modes);
+#ifdef USE_STAN
+	lensparams_dif->fourier_mode_sinamp.resize(n_fourier_modes);
+	lensparams_dif->fourier_mode_cosamp.resize(n_fourier_modes);
+#endif
 	fourier_mode_paramnum.resize(n_fourier_modes);
 
 	delete[] lensparams->param;
 	lensparams->param = new double*[n_params];
 	assign_param_pointers();
+#ifdef USE_STAN
+	delete[] lensparams_dif->param;
+	lensparams_dif->param = new stan::math::var*[n_params];
+	assign_param_pointers_autodif();
+#endif
 }
 
 bool LensProfile::enable_ellipticity_gradient(Vector<double>& efunc_params, const int egrad_mode, const int n_bspline_coefs, const Vector<double>& knots, const double ximin, const double ximax, const double xiref, const bool linear_xivals, const bool copy_vary_settings, boolvector* vary_egrad)
@@ -2145,9 +2494,14 @@ bool LensProfile::enable_ellipticity_gradient(Vector<double>& efunc_params, cons
 
 	reset_anchor_lists();
 	assign_param_pointers();
+#ifdef USE_STAN
+	delete[] lensparams_dif->param;
+	lensparams_dif->param = new stan::math::var*[n_params];
+	assign_param_pointers_autodif();
+#endif
 	assign_paramnames();
 
-	update_ellipticity_meta_parameters();
+	update_ellipticity_meta_parameters<double>();
 	set_integration_pointers();
 	set_model_specific_integration_pointers();
 	if (qlens != NULL) qlens->ellipticity_gradient = true;
@@ -2248,6 +2602,11 @@ bool LensProfile::enable_fourier_gradient(Vector<double>& fourier_params, const 
 
 	reset_anchor_lists();
 	assign_param_pointers();
+#ifdef USE_STAN
+	delete[] lensparams_dif->param;
+	lensparams_dif->param = new stan::math::var*[n_params];
+	assign_param_pointers_autodif();
+#endif
 	assign_paramnames();
 
 	if (qlens != NULL) qlens->ellipticity_gradient = true;
@@ -2391,38 +2750,61 @@ void LensProfile::plot_kappa_profile(const int n_rvals, double* rvals, double* k
 	}
 }
 
-void LensProfile::deflection_spherical_default(const double x, const double y, lensvector<double>& def)
+template <typename QScalar>
+void LensProfile::deflection_spherical_default(const QScalar x, const QScalar y, lensvector<QScalar>& def)
 {
-	double kapavg = (this->*kapavgptr_rsq_spherical)(x*x+y*y);
+	QScalar kapavg;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+		kapavg = (this->*kapavgptr_rsq_spherical_autodif)(x*x+y*y);
+	else
+#endif
+	kapavg = (this->*kapavgptr_rsq_spherical)(x*x+y*y);
 
 	def[0] = kapavg*x;
 	def[1] = kapavg*y;
 }
+template void LensProfile::deflection_spherical_default<double>(const double x, const double y, lensvector<double>& def);
+#ifdef USE_STAN
+template void LensProfile::deflection_spherical_default<stan::math::var>(const stan::math::var x, const stan::math::var y, lensvector<stan::math::var>& def);
+#endif
 
-double LensProfile::potential_spherical_default(const double x, const double y)
+template <typename QScalar>
+QScalar LensProfile::potential_spherical_default(const QScalar x, const QScalar y)
 {
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+		return (this->*potptr_rsq_spherical_autodif)(x*x+y*y); // ellipticity is put into the potential in this mode
+	else
+#endif
 	return (this->*potptr_rsq_spherical)(x*x+y*y); // ellipticity is put into the potential in this mode
 }
+template double LensProfile::potential_spherical_default<double>(const double x, const double y);
+#ifdef USE_STAN
+template stan::math::var LensProfile::potential_spherical_default<stan::math::var>(const stan::math::var x, const stan::math::var y);
+#endif
 
 template <typename QScalar>
 QScalar LensProfile::kapavg_spherical_generic(const QScalar rsq)
 {
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		cout << "WTF is going wrong?" << endl;
+	if constexpr (std::is_same_v<QScalar, stan::math::var>)
 		return (this->*kapavgptr_rsq_spherical_autodif)(rsq);
-	}
 	else
 #endif
 	return (this->*kapavgptr_rsq_spherical)(rsq);
 }
+template double LensProfile::kapavg_spherical_generic<double>(const double rsq);
+#ifdef USE_STAN
+template stan::math::var LensProfile::kapavg_spherical_generic<stan::math::var>(const stan::math::var rsq);
+#endif
 
 template <typename QScalar>
 QScalar LensProfile::kappa_avg_spherical_integral(const QScalar rsq)
 {
-#ifdef USE_STAN
-	cout << "HERGGLEHARGLE?" << endl;
-#endif
+//#ifdef USE_STAN
+	//cout << "HERGGLEHARGLE?" << endl;
+//#endif
 	QScalar ans;
 
 	if (integral_method == Romberg_Integration)
@@ -2465,11 +2847,16 @@ template double LensProfile::mass_enclosed_spherical_integrand<double>(const dou
 template stan::math::var LensProfile::mass_enclosed_spherical_integrand<stan::math::var>(const stan::math::var u);
 #endif
 
-
-void LensProfile::hessian_spherical_default(const double x, const double y, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::hessian_spherical_default(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess)
 {
-	double rsq, kappa_avg, r_dfdr;
+	QScalar rsq, kappa_avg, r_dfdr;
 	rsq = x*x+y*y;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>)
+		kappa_avg = (this->*kapavgptr_rsq_spherical_autodif)(rsq);
+	else
+#endif
 	kappa_avg = (this->*kapavgptr_rsq_spherical)(rsq);
 	r_dfdr = 2*(kappa_rsq(rsq) - kappa_avg)/rsq; // Here, r_dfdr = (1/r)*d/dr(kappa_avg)
 
@@ -2478,6 +2865,10 @@ void LensProfile::hessian_spherical_default(const double x, const double y, lens
 	hess[0][1] = x*y*r_dfdr;
 	hess[1][0] = hess[0][1];
 }
+template void LensProfile::hessian_spherical_default<double>(const double x, const double y, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::hessian_spherical_default<stan::math::var>(const stan::math::var x, const stan::math::var y, lensmatrix<stan::math::var>& hess);
+#endif
 
 template <typename QScalar>
 QScalar LensProfile::potential_spherical_integral(const QScalar rsq)
@@ -2487,20 +2878,15 @@ QScalar LensProfile::potential_spherical_integral(const QScalar rsq)
 	QScalar ans;
 	LensIntegral<QScalar> lens_integral(this,sqrt(rsq),0,1.0);
 	ans = 0.5*lens_integral.i_integral(converged);
-
-#ifdef USE_STAN
-	stan::math::var anss;
-	LensIntegral<stan::math::var> lens_integral_stan(this,sqrt(rsq),0,1.0);
-	cout << "HI3" << endl;
-	anss = 0.5*lens_integral_stan.i_integral(converged);
-	cout << "ans=" << ans << endl;
-	cout << "stan ans=" << anss << endl;
-#endif
-
 	return ans;
 }
+template double LensProfile::potential_spherical_integral<double>(const double rsq);
+#ifdef USE_STAN
+template stan::math::var LensProfile::potential_spherical_integral<stan::math::var>(const stan::math::var rsq);
+#endif
 
-void LensProfile::deflection_numerical(const double x, const double y, lensvector<double>& def)
+template <typename QScalar>
+void LensProfile::deflection_numerical(const QScalar x, const QScalar y, lensvector<QScalar>& def)
 {
 	if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
 		// return zero deflection, since there's a risk of getting 'NaN' if the center of the profile is evaluated
@@ -2512,7 +2898,7 @@ void LensProfile::deflection_numerical(const double x, const double y, lensvecto
 	bool converged;
 	if (!ellipticity_gradient) {
 		//cout << "NOT DOING EGRAD" << endl;
-		LensIntegral<double> lens_integral(this,x,y,lensparams->q);
+		LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
 		def[0] = x*lens_integral.j_integral(0,converged);
 		warn_if_not_converged(converged,x,y);
 		def[1] = y*lens_integral.j_integral(1,converged);
@@ -2521,7 +2907,7 @@ void LensProfile::deflection_numerical(const double x, const double y, lensvecto
 	} else {
 		//cout << "DOING EGRAD" << endl;
 		/*
-		double jint0, jint1, jint2;
+		QScalar jint0, jint1, jint2;
 		//cout << "FIRST INTEGRAL" << endl;
 		jint0 = lens_integral.j_integral_egrad(0,converged);
 		warn_if_not_converged(converged,x,y);
@@ -2543,11 +2929,11 @@ void LensProfile::deflection_numerical(const double x, const double y, lensvecto
 		warn_if_not_converged(converged,x,y);
 		*/
 
-		LensIntegral<double> lens_integral2(this,x,y,lensparams->q,2);
-		lens_integral2.jprime_integral_egrad_mult(def.array(),converged);
+		LensIntegral<QScalar> lens_integral2(this,x,y,lensparams->q,2);
+		//lens_integral2.jprime_integral_egrad_mult(def.array(),converged);
 		warn_if_not_converged(converged,x,y);
 		/*
-		double defcheck[2];
+		QScalar defcheck[2];
 		lens_integral2.jprime_integral_egrad_mult(defcheck,converged);
 		if (abs(def[0]-defcheck[0]) > 1e-3) {
 			cout << "UH-OH! DEFCHECK_defx: " << def[0] << " " << defcheck[0] << endl;
@@ -2558,8 +2944,13 @@ void LensProfile::deflection_numerical(const double x, const double y, lensvecto
 		*/
 	}
 }
+template void LensProfile::deflection_numerical<double>(const double x, const double y, lensvector<double>& def);
+#ifdef USE_STAN
+template void LensProfile::deflection_numerical<stan::math::var>(const stan::math::var x, const stan::math::var y, lensvector<stan::math::var>& def);
+#endif
 
-void LensProfile::hessian_numerical(const double x, const double y, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::hessian_numerical(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess)
 {
 	if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
 		hess[0][0]=0;
@@ -2571,8 +2962,8 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix<d
 
 	bool converged;
 	if (!ellipticity_gradient) {
-		LensIntegral<double> lens_integral(this,x,y,lensparams->q);
-		double jint0, jint1;
+		LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
+		QScalar jint0, jint1;
 		jint0 = lens_integral.j_integral(0,converged);
 		warn_if_not_converged(converged,x,y);
 		jint1 = lens_integral.j_integral(1,converged);
@@ -2583,19 +2974,19 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix<d
 		warn_if_not_converged(converged,x,y);
 		hess[0][1] = 2*x*y*lens_integral.k_integral(1,converged);
 		warn_if_not_converged(converged,x,y);
-		//double hess00 = lens_integral.k_integral(0,converged);
-		//double hess01 = lens_integral.k_integral(1,converged);
-		//double hess11 = lens_integral.k_integral(2,converged);
+		//QScalar hess00 = lens_integral.k_integral(0,converged);
+		//QScalar hess01 = lens_integral.k_integral(1,converged);
+		//QScalar hess11 = lens_integral.k_integral(2,converged);
 		/*
-		double kap2 = 2*kappa_rsq((x*x + y*y/(lensparams->q*lensparams->q))/(f_major_axis*f_major_axis));
-		double laplacian = hess[0][0] + hess[1][1];
+		QScalar kap2 = 2*kappa_rsq((x*x + y*y/(lensparams->q*lensparams->q))/(f_major_axis*f_major_axis));
+		QScalar laplacian = hess[0][0] + hess[1][1];
 		//if (abs(laplacian-kap2) > 1e-3*abs(kap2)) {
 			//cout << "Check Laplacian (e=const): " << laplacian << " " << kap2 << " (x=" << x << "," << y << ")" << " errorfrac=" << (abs(laplacian-kap2)/kap2) << endl;
-			double oldtol = cc_tolerance;
+			QScalar oldtol = cc_tolerance;
 			set_integral_tolerance(1e-6);
-			double jint0check = lens_integral.j_integral(0,converged);
+			QScalar jint0check = lens_integral.j_integral(0,converged);
 			warn_if_not_converged(converged,x,y);
-			double jint1check = lens_integral.j_integral(1,converged);
+			QScalar jint1check = lens_integral.j_integral(1,converged);
 			warn_if_not_converged(converged,x,y);
 			if (abs((jint0-jint0check)/jint0check) > 1e-3)
 			cout << "j0: " << jint0 << " " << jint0check << " " << (abs((jint0-jint0check)/jint0check)) << " (x=" << x << "," << y << ")" << endl;
@@ -2608,9 +2999,9 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix<d
 		//cout << "HESS: " << hess[0][0] << " " << hess[1][1] << " " << hess[0][1] << endl;
 	} else {
 		/*
-		LensIntegral<double> lens_integral(this,x,y,lensparams->q);
-		double jint0, jint1, jint2;
-		double kint0, kint1, kint2;
+		LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
+		QScalar jint0, jint1, jint2;
+		QScalar kint0, kint1, kint2;
 		jint0 = lens_integral.j_integral_egrad(0,converged);
 		warn_if_not_converged(converged,x,y);
 		jint1 = lens_integral.j_integral_egrad(1,converged);
@@ -2640,28 +3031,28 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix<d
 		//hess[1][1] = 2*lens_integral.k_integral_egrad(2,converged) + jint2;
 		//warn_if_not_converged(converged,x,y);
 
-		LensIntegral<double> lens_integral3(this,x,y,lensparams->q,3);
-		double jint[3], kint[3];
-		lens_integral3.j_integral_egrad_mult(jint,converged);
+		LensIntegral<QScalar> lens_integral3(this,x,y,lensparams->q,3);
+		QScalar jint[3], kint[3];
+		//lens_integral3.j_integral_egrad_mult(jint,converged);
 		warn_if_not_converged(converged,x,y);
-		lens_integral3.k_integral_egrad_mult(kint,converged);
+		//lens_integral3.k_integral_egrad_mult(kint,converged);
 		warn_if_not_converged(converged,x,y);
 		hess[0][0] = 2*kint[0] + jint[0];
 		hess[0][1] = 2*kint[1] + jint[1];
 		hess[1][1] = 2*kint[2] + jint[2];
 
 		//cout << "kint0=" << kint0 << " Kint0=" << kint[0] << ", kint1=" << kint1 << " Kint1=" << kint[1] << " kint2=" << kint2 << " Kint2=" << kint[2] << endl;
-		//double hess00 = 2*kint[0] + jint[0];
-		//double hess01 = 2*kint[1] + jint[1];
-		//double hess11 = 2*kint[2] + jint[2];
+		//QScalar hess00 = 2*kint[0] + jint[0];
+		//QScalar hess01 = 2*kint[1] + jint[1];
+		//QScalar hess11 = 2*kint[2] + jint[2];
 
-		//double hess00 = lens_integral.k_integral_egrad(0,converged);
-		//double hess01 = lens_integral.k_integral_egrad(1,converged);
-		//double hess11 = lens_integral.k_integral_egrad(2,converged);
+		//QScalar hess00 = lens_integral.k_integral_egrad(0,converged);
+		//QScalar hess01 = lens_integral.k_integral_egrad(1,converged);
+		//QScalar hess11 = lens_integral.k_integral_egrad(2,converged);
 		//cout << "hess00=" << hess00 << " hess01=" << hess01 << " hess11=" << hess11 << "Hess00=" << hess[0][0] << " Hess01=" << hess[0][1] << " Hess11=" << hess[1][1] << endl;
 		/*
-		double kap2 = 2*kappa(x,y);
-		double laplacian = hess[0][0] + hess[1][1];
+		QScalar kap2 = 2*kappa(x,y);
+		QScalar laplacian = hess[0][0] + hess[1][1];
 		if (abs(laplacian-kap2) > 1e-3*abs(kap2)) {
 			cout << "Check Laplacian: " << laplacian << " " << kap2 << " (x=" << x << "," << y << ")" << " errorfrac=" << (abs(laplacian-kap2)/kap2) << endl;
 		}
@@ -2672,18 +3063,23 @@ void LensProfile::hessian_numerical(const double x, const double y, lensmatrix<d
 	hess[1][0] = hess[0][1];
 
 }
+template void LensProfile::hessian_numerical<double>(const double x, const double y, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::hessian_numerical<stan::math::var>(const stan::math::var x, const stan::math::var y, lensmatrix<stan::math::var>& hess);
+#endif
 
-void LensProfile::deflection_and_hessian_numerical(const double x, const double y, lensvector<double>& def, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::deflection_and_hessian_numerical(const QScalar x, const QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
 	// You should make it save the kappa and kappa' values evaluated during J0 and K0 so it doesn't have to evaluate them again for
 	// J1, K1 and K2 (unless higher order quadrature is required for convergence, in which case extra evaluations must be done). This
 	// will save a significant amount of time, but might take some doing to implement
 
 	bool converged;
-	LensIntegral<double> lens_integral(this,x,y,lensparams->q);
+	LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
 	if (!ellipticity_gradient) {
 		//cout << "NOT DOING EGRAD" << endl;
-		double jint0, jint1;
+		QScalar jint0, jint1;
 		jint0 = lens_integral.j_integral(0,converged);
 		warn_if_not_converged(converged,x,y);
 		jint1 = lens_integral.j_integral(1,converged);
@@ -2696,19 +3092,19 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 		warn_if_not_converged(converged,x,y);
 		hess[0][1] = 2*x*y*lens_integral.k_integral(1,converged);
 		warn_if_not_converged(converged,x,y);
-		//double hess00 = lens_integral.k_integral(0,converged);
-		//double hess01 = lens_integral.k_integral(1,converged);
-		//double hess11 = lens_integral.k_integral(2,converged);
+		//QScalar hess00 = lens_integral.k_integral(0,converged);
+		//QScalar hess01 = lens_integral.k_integral(1,converged);
+		//QScalar hess11 = lens_integral.k_integral(2,converged);
 		//cout << "CHECK: hess00=" << (hess00*x*x) << " hess01=" << (hess01*x*y) << " hess11=" << (hess11*y*y) << endl;
 		/*
-		double kap2 = 2*kappa_rsq((x*x + y*y/(lensparams->q*lensparams->q))/(f_major_axis*f_major_axis));
-		double laplacian = hess[0][0] + hess[1][1];
+		QScalar kap2 = 2*kappa_rsq((x*x + y*y/(lensparams->q*lensparams->q))/(f_major_axis*f_major_axis));
+		QScalar laplacian = hess[0][0] + hess[1][1];
 		if (abs(laplacian-kap2) > 1e-3*abs(kap2)) cout << "Check Laplacian (e=const): " << laplacian << " " << kap2 << " (x=" << x << "," << y << ")" << " errorfrac=" << (abs(laplacian-kap2)/kap2) << endl;
-		double oldtol = cc_tolerance;
+		QScalar oldtol = cc_tolerance;
 		set_integral_tolerance(1e-6);
-		double jint0check = lens_integral.j_integral(0,converged);
+		QScalar jint0check = lens_integral.j_integral(0,converged);
 		warn_if_not_converged(converged,x,y);
-		double jint1check = lens_integral.j_integral(1,converged);
+		QScalar jint1check = lens_integral.j_integral(1,converged);
 		warn_if_not_converged(converged,x,y);
 		if (abs((jint0-jint0check)/jint0check) > 1e-3)
 		cout << "j0: " << jint0 << " " << jint0check << " " << (abs((jint0-jint0check)/jint0check)) << " (x=" << x << "," << y << ")" << endl;
@@ -2722,7 +3118,7 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 	} else {
 		//cout << "DOING EGRAD" << endl;
 		/*
-		double jint0, jint1, jint2;
+		QScalar jint0, jint1, jint2;
 		jint0 = lens_integral.j_integral_egrad(0,converged);
 		warn_if_not_converged(converged,x,y);
 		jint1 = lens_integral.j_integral_egrad(1,converged);
@@ -2739,25 +3135,25 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 		warn_if_not_converged(converged,x,y);
 */
 
-		LensIntegral<double> lens_integral3(this,x,y,lensparams->q,3);
-		double jint[3], kint[3];
-		lens_integral3.j_integral_egrad_mult(jint,converged);
+		LensIntegral<QScalar> lens_integral3(this,x,y,lensparams->q,3);
+		QScalar jint[3], kint[3];
+		//lens_integral3.j_integral_egrad_mult(jint,converged);
 		warn_if_not_converged(converged,x,y);
 		def[0] = x*jint[0] + y*jint[1];
 		def[1] = x*jint[1] + y*jint[2];
-		lens_integral3.k_integral_egrad_mult(kint,converged);
+		//lens_integral3.k_integral_egrad_mult(kint,converged);
 		warn_if_not_converged(converged,x,y);
 		hess[0][0] = 2*kint[0] + jint[0];
 		hess[0][1] = 2*kint[1] + jint[1];
 		hess[1][1] = 2*kint[2] + jint[2];
 
-		//double hess00 = lens_integral.k_integral_egrad(0,converged);
-		//double hess01 = lens_integral.k_integral_egrad(1,converged);
-		//double hess11 = lens_integral.k_integral_egrad(2,converged);
+		//QScalar hess00 = lens_integral.k_integral_egrad(0,converged);
+		//QScalar hess01 = lens_integral.k_integral_egrad(1,converged);
+		//QScalar hess11 = lens_integral.k_integral_egrad(2,converged);
 		//cout << "hess00=" << hess00 << " hess01=" << hess01 << " hess11=" << hess11 << endl;
 		/*
-		double kap2 = 2*kappa(x,y);
-		double laplacian = hess[0][0] + hess[1][1];
+		QScalar kap2 = 2*kappa(x,y);
+		QScalar laplacian = hess[0][0] + hess[1][1];
 		if ((abs(laplacian-kap2) > 1e-3*abs(kap2))) {
 			cout << "Check Laplacian: " << laplacian << " " << kap2 << " (x=" << x << "," << y << ")" << " errorfrac=" << (abs(laplacian-kap2)/kap2) << endl;
 		}
@@ -2765,20 +3161,40 @@ void LensProfile::deflection_and_hessian_numerical(const double x, const double 
 	}
 	hess[1][0] = hess[0][1];
 }
+template void LensProfile::deflection_and_hessian_numerical<double>(const double x, const double y, lensvector<double>& def, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::deflection_and_hessian_numerical<stan::math::var>(const stan::math::var x, const stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess);
+#endif
 
-void LensProfile::warn_if_not_converged(const bool& converged, const double &x, const double &y)
+template <typename QScalar>
+void LensProfile::warn_if_not_converged(const bool& converged, const QScalar &x, const QScalar &y)
 {
 	if ((!converged) and (integration_warnings)) {
 		if ((integral_method==Gauss_Patterson_Quadrature) or (integral_method==Fejer_Quadrature)) {
 			if (qlens->mpi_id==0) {
-				if (integral_method==Gauss_Patterson_Quadrature) {
-					cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << ")";
-					if (GaussQuad::numberOfPoints >= 511) cout << "; switched to Gauss-Legendre quadrature              " << endl;
-					else cout << endl;	
-				} else if (integral_method==Fejer_Quadrature) {
-					cout << "*WARNING*: Fejer quadrature did not converge (x=" << x << ",y=" << y << ")" << endl;
+#ifdef USE_STAN
+				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+
+					if (integral_method==Gauss_Patterson_Quadrature) {
+						cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x.val() << ",y=" << y.val() << ")";
+						if (GaussQuad::numberOfPoints >= 511) cout << "; switched to Gauss-Legendre quadrature              " << endl;
+						else cout << endl;	
+					} else if (integral_method==Fejer_Quadrature) {
+						cout << "*WARNING*: Fejer quadrature did not converge (x=" << x.val() << ",y=" << y.val() << ")" << endl;
+					}
+					else cout << endl;
+				} else
+#endif
+				{
+					if (integral_method==Gauss_Patterson_Quadrature) {
+						cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << ")";
+						if (GaussQuad::numberOfPoints >= 511) cout << "; switched to Gauss-Legendre quadrature              " << endl;
+						else cout << endl;	
+					} else if (integral_method==Fejer_Quadrature) {
+						cout << "*WARNING*: Fejer quadrature did not converge (x=" << x << ",y=" << y << ")" << endl;
+					}
+					else cout << endl;
 				}
-				else cout << endl;
 				cout << "Lens: " << model_name << ", Params: ";
 				for (int i=0; i < n_params; i++) {
 					cout << paramnames[i] << "=";
@@ -2794,33 +3210,44 @@ void LensProfile::warn_if_not_converged(const bool& converged, const double &x, 
 		}
 	}
 }
+template void LensProfile::warn_if_not_converged<double>(const bool& converged, const double &x, const double &y);
+#ifdef USE_STAN
+template void LensProfile::warn_if_not_converged<stan::math::var>(const bool& converged, const stan::math::var &x, const stan::math::var &y);
+#endif
 
-double LensProfile::potential_numerical(const double x, const double y)
+template <typename QScalar>
+QScalar LensProfile::potential_numerical(const QScalar x, const QScalar y)
 {
 	if ((!ellipticity_gradient) and (this->kapavgptr_rsq_spherical==NULL)) return 0.0; // for the integral without egrad, cannot calculate potential without a spherical deflection defined
 	bool converged;
-	double ans;
-	LensIntegral<double> lens_integral(this,x,y,lensparams->q);
+	QScalar ans;
+	LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
 	if (!ellipticity_gradient) {
 		ans = 0.5*lens_integral.i_integral(converged);
 		warn_if_not_converged(converged,x,y);
 	} else {
-		ans = 0.5*lens_integral.i_integral_egrad(converged);
+		//ans = 0.5*lens_integral.i_integral_egrad(converged);
 		warn_if_not_converged(converged,x,y);
 	}
 	return ans;
 }
+template double LensProfile::potential_numerical<double>(const double x, const double y);
+#ifdef USE_STAN
+template stan::math::var LensProfile::potential_numerical<stan::math::var>(const stan::math::var x, const stan::math::var y);
+#endif
 
 bool LensProfile::core_present() { return false; }
 
 
 /************************************* Fourier perturbation algorithms *************************************/
 
-double LensProfile::kappa_from_fourier_modes(const double x, const double y)
+template <typename QScalar>
+QScalar LensProfile::kappa_from_fourier_modes(const QScalar x, const QScalar y)
 {
-	double fourier_factor = 0;
-	double rsq = x*x + y*y;
-	double phi;
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
+	QScalar fourier_factor = 0;
+	QScalar rsq = x*x + y*y;
+	QScalar phi;
 	if (!ellipticity_gradient) {
 		// it is assumed here that coordinates have already been rotated so that major axis is along x
 		phi = atan(y/x);
@@ -2828,12 +3255,13 @@ double LensProfile::kappa_from_fourier_modes(const double x, const double y)
 		else if (y < 0) phi += M_2PI;
 
 		for (int i=0; i < n_fourier_modes; i++) {
-			fourier_factor += fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi) + fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi);
+			fourier_factor += p.fourier_mode_cosamp[i]*cos(fourier_mode_mvals[i]*phi) + p.fourier_mode_sinamp[i]*sin(fourier_mode_mvals[i]*phi);
 		}
 	} else {
-		double phi0 = (this->*egrad_ptr)(sqrt(rsq),geometric_param[1],1);
+		/*
+		QScalar phi0 = (this->*egrad_ptr)(sqrt(rsq),geometric_param[1],1);
 
-		double costh, sinth, xp, yp, phi;
+		QScalar costh, sinth, xp, yp, phi;
 		costh = cos(phi0);
 		sinth = sin(phi0);
 		xp = x*costh + y*sinth;
@@ -2843,16 +3271,16 @@ double LensProfile::kappa_from_fourier_modes(const double x, const double y)
 		if (xp < 0) phi += M_PI;
 		else if (yp < 0) phi += M_2PI;
 
-		double *cosamps;
-		double *sinamps;
+		QScalar *cosamps;
+		QScalar *sinamps;
 		if (fourier_gradient) {
-			cosamps = new double[n_fourier_modes];
-			sinamps = new double[n_fourier_modes];
+			cosamps = new QScalar[n_fourier_modes];
+			sinamps = new QScalar[n_fourier_modes];
 			fourier_mode_function(sqrt(rsq),cosamps,sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
 		} else {
 			// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
-			cosamps = fourier_mode_cosamp.array();
-			sinamps = fourier_mode_sinamp.array();
+			cosamps = p.fourier_mode_cosamp.array();
+			sinamps = p.fourier_mode_sinamp.array();
 		}
 		for (int i=0; i < n_fourier_modes; i++) {
 			fourier_factor += cosamps[i]*cos(fourier_mode_mvals[i]*phi) + sinamps[i]*sin(fourier_mode_mvals[i]*phi);
@@ -2862,50 +3290,58 @@ double LensProfile::kappa_from_fourier_modes(const double x, const double y)
 			delete[] cosamps;
 			delete[] sinamps;
 		}
+		*/
 	}
 	//NOTE: this doesn't work for emode=3 (can't use kappa_rsq_deriv). extend later?
 	return 2*fourier_factor*kappa_rsq_deriv(rsq)*rsq; // this allows it to approximate perturbing the elliptical radius (via first order term in Taylor expansion in (r + dr))
 }
+template double LensProfile::kappa_from_fourier_modes<double>(const double x, const double y);
+#ifdef USE_STAN
+template stan::math::var LensProfile::kappa_from_fourier_modes<stan::math::var>(const stan::math::var x, const stan::math::var y);
+#endif
 
-void LensProfile::add_deflection_from_fourier_modes(const double x, const double y, lensvector<double>& def)
+template <typename QScalar>
+void LensProfile::add_deflection_from_fourier_modes(const QScalar x, const QScalar y, lensvector<QScalar>& def)
 {
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if (n_fourier_modes==0) return;
-	double r = sqrt(x*x+y*y);
-	double ileft_cos, iright_cos, ileft_sin, iright_sin, potc, dpotc_dr, pots, dpots_dr, def_r, def_phi, m, rmfac, cosm, sinm;
+	QScalar r = sqrt(x*x+y*y);
+	QScalar ileft_cos, iright_cos, ileft_sin, iright_sin, potc, dpotc_dr, pots, dpots_dr, def_r, def_phi, rmfac, cosm, sinm;
+	int m;
 
 	bool converged;
-	LensIntegral<double> lens_integral(this,x,y);
+	LensIntegral<QScalar> lens_integral(this,x,y);
 	if (fourier_gradient) {
-		lens_integral.cosamps = new double[n_fourier_modes];
-		lens_integral.sinamps = new double[n_fourier_modes];
+		lens_integral.cosamps = new QScalar[n_fourier_modes];
+		lens_integral.sinamps = new QScalar[n_fourier_modes];
 		//fourier_mode_function(r,lens_integral.cosamps,lens_integral.sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
 	} else {
 		// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
-		lens_integral.cosamps = fourier_mode_cosamp.array();
-		lens_integral.sinamps = fourier_mode_sinamp.array();
+		lens_integral.cosamps = p.fourier_mode_cosamp.array();
+		lens_integral.sinamps = p.fourier_mode_sinamp.array();
 	}
 
 	if (ellipticity_gradient) {
-		lens_integral.phi0 = (this->*egrad_ptr)(r,geometric_param[1],1);
+		//lens_integral.phi0 = (this->*egrad_ptr)(r,geometric_param[1],1);
 	}
 
-	double phi; // used for Fourier modes
+	QScalar phi; // used for Fourier modes
 	phi = atan(y/x);
 	if (x < 0) phi += M_PI;
 	else if (y < 0) phi += M_2PI;
 
 	for (int i=0; i < n_fourier_modes; i++) {
 		m = fourier_mode_mvals[i];
-		if ((fourier_integrals_splined) and fourier_integral_left_cos_spline[i].in_range(r)) {
-			ileft_cos = fourier_integral_left_cos_spline[i].splint(r);
-			iright_cos = fourier_integral_right_cos_spline[i].splint(r);
-			ileft_sin = fourier_integral_left_sin_spline[i].splint(r);
-			iright_sin = fourier_integral_right_sin_spline[i].splint(r);
+		if ((fourier_integrals_splined) and p.fourier_integral_left_cos_spline[i].in_range(r)) {
+			ileft_cos = p.fourier_integral_left_cos_spline[i].splint(r);
+			iright_cos = p.fourier_integral_right_cos_spline[i].splint(r);
+			ileft_sin = p.fourier_integral_left_sin_spline[i].splint(r);
+			iright_sin = p.fourier_integral_right_sin_spline[i].splint(r);
 			//cout << "USED THE SPLINE! x=" << x << " y=" << y << " r=" << r << endl;
 		} else {
 			lens_integral.calculate_fourier_integrals(m,i,false,r,ileft_sin,iright_sin,converged);
 			lens_integral.calculate_fourier_integrals(m,i,true,r,ileft_cos,iright_cos,converged);
-			//if (!converged) warn("FUCK x=%g y=%g r=%g ilc=%g irc=%g ils=%g irs=%g",x,y,r,ileft_cos,iright_cos,ileft_sin,iright_sin);
+			//if (!converged) warn("fourier integrals did not converge: x=%g y=%g r=%g ilc=%g irc=%g ils=%g irs=%g",x,y,r,ileft_cos,iright_cos,ileft_sin,iright_sin);
 		}
 
 		rmfac = pow(r,m);
@@ -2925,12 +3361,18 @@ void LensProfile::add_deflection_from_fourier_modes(const double x, const double
 		delete[] lens_integral.sinamps;
 	}
 }
+template void LensProfile::add_deflection_from_fourier_modes<double>(const double x, const double y, lensvector<double>& def);
+#ifdef USE_STAN
+template void LensProfile::add_deflection_from_fourier_modes<stan::math::var>(const stan::math::var x, const stan::math::var y, lensvector<stan::math::var>& def);
+#endif
 
-void LensProfile::add_hessian_from_fourier_modes(const double x, const double y, lensmatrix<double>& hess)
+template <typename QScalar>
+void LensProfile::add_hessian_from_fourier_modes(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess)
 {
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if (n_fourier_modes==0) return;
-	double r = sqrt(x*x+y*y);
-	double cosphi, sinphi, cossq, sinsq, sincos;
+	QScalar r = sqrt(x*x+y*y);
+	QScalar cosphi, sinphi, cossq, sinsq, sincos;
 	cosphi = x/r;
 	sinphi = y/r;
 	cossq = cosphi*cosphi;
@@ -2938,36 +3380,37 @@ void LensProfile::add_hessian_from_fourier_modes(const double x, const double y,
 	sincos = cosphi*sinphi;
 
 	bool converged;
-	LensIntegral<double> lens_integral(this,x,y);
+	LensIntegral<QScalar> lens_integral(this,x,y);
 	if (fourier_gradient) {
-		lens_integral.cosamps = new double[n_fourier_modes];
-		lens_integral.sinamps = new double[n_fourier_modes];
+		lens_integral.cosamps = new QScalar[n_fourier_modes];
+		lens_integral.sinamps = new QScalar[n_fourier_modes];
 		//fourier_mode_function(r,lens_integral.cosamps,lens_integral.sinamps); // lensing multipoles depend on r, not xi, so we follow the same restriction here
 	} else {
 		// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
-		lens_integral.cosamps = fourier_mode_cosamp.array();
-		lens_integral.sinamps = fourier_mode_sinamp.array();
+		lens_integral.cosamps = p.fourier_mode_cosamp.array();
+		lens_integral.sinamps = p.fourier_mode_sinamp.array();
 	}
 
 	if (ellipticity_gradient) {
-		lens_integral.phi0 = (this->*egrad_ptr)(r,geometric_param[1],1);
+		//lens_integral.phi0 = (this->*egrad_ptr)(r,geometric_param[1],1);
 	}
 
-	double ileft_cos, iright_cos, ileft_sin, iright_sin, potc, dpotc_dr, pots, dpots_dr, def_r, def_phi, m, rmfac, cosm, sinm;
-	double hess_pp, hess_rr, hess_pr, hess_rp, rpterm, offdiag, kapm;
+	QScalar ileft_cos, iright_cos, ileft_sin, iright_sin, potc, dpotc_dr, pots, dpots_dr, def_r, def_phi, rmfac, cosm, sinm;
+	QScalar hess_pp, hess_rr, hess_pr, hess_rp, rpterm, offdiag, kapm;
+	int m;
 
-	double phi; // used for Fourier modes
+	QScalar phi; // used for Fourier modes
 	phi = atan(y/x);
 	if (x < 0) phi += M_PI;
 	else if (y < 0) phi += M_2PI;
 
 	for (int i=0; i < n_fourier_modes; i++) {
 		m = fourier_mode_mvals[i];
-		if ((fourier_integrals_splined) and fourier_integral_left_cos_spline[i].in_range(r)) {
-			ileft_cos = fourier_integral_left_cos_spline[i].splint(r);
-			iright_cos = fourier_integral_right_cos_spline[i].splint(r);
-			ileft_sin = fourier_integral_left_sin_spline[i].splint(r);
-			iright_sin = fourier_integral_right_sin_spline[i].splint(r);
+		if ((fourier_integrals_splined) and p.fourier_integral_left_cos_spline[i].in_range(r)) {
+			ileft_cos = p.fourier_integral_left_cos_spline[i].splint(r);
+			iright_cos = p.fourier_integral_right_cos_spline[i].splint(r);
+			ileft_sin = p.fourier_integral_left_sin_spline[i].splint(r);
+			iright_sin = p.fourier_integral_right_sin_spline[i].splint(r);
 		} else {
 			lens_integral.calculate_fourier_integrals(m,i,false,r,ileft_sin,iright_sin,converged);
 			lens_integral.calculate_fourier_integrals(m,i,true,r,ileft_cos,iright_cos,converged);
@@ -3001,31 +3444,37 @@ void LensProfile::add_hessian_from_fourier_modes(const double x, const double y,
 		delete[] lens_integral.sinamps;
 	}
 }
+template void LensProfile::add_hessian_from_fourier_modes<double>(const double x, const double y, lensmatrix<double>& hess);
+#ifdef USE_STAN
+template void LensProfile::add_hessian_from_fourier_modes<stan::math::var>(const stan::math::var x, const stan::math::var y, lensmatrix<stan::math::var>& hess);
+#endif
 
-void LensProfile::spline_fourier_mode_integrals(const double rmin, const double rmax)
+template <typename QScalar>
+void LensProfile::spline_fourier_mode_integrals(const QScalar rmin, const QScalar rmax)
 {
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if (n_fourier_modes==0) return;
 	if (!fourier_integrals_splined) {
-		fourier_integral_left_cos_spline = new Spline<double>[n_fourier_modes];
-		fourier_integral_right_cos_spline = new Spline<double>[n_fourier_modes];
-		fourier_integral_left_sin_spline = new Spline<double>[n_fourier_modes];
-		fourier_integral_right_sin_spline = new Spline<double>[n_fourier_modes];
+		p.fourier_integral_left_cos_spline = new Spline<QScalar>[n_fourier_modes];
+		p.fourier_integral_right_cos_spline = new Spline<QScalar>[n_fourier_modes];
+		p.fourier_integral_left_sin_spline = new Spline<QScalar>[n_fourier_modes];
+		p.fourier_integral_right_sin_spline = new Spline<QScalar>[n_fourier_modes];
 	}
 
 	int i,j,m;
 
-	double **ileft_cos = new double*[n_fourier_modes];
-	double **iright_cos = new double*[n_fourier_modes];
-	double **ileft_sin = new double*[n_fourier_modes];
-	double **iright_sin = new double*[n_fourier_modes];
+	QScalar **ileft_cos = new QScalar*[n_fourier_modes];
+	QScalar **iright_cos = new QScalar*[n_fourier_modes];
+	QScalar **ileft_sin = new QScalar*[n_fourier_modes];
+	QScalar **iright_sin = new QScalar*[n_fourier_modes];
 	for (j=0; j < n_fourier_modes; j++) {
-		ileft_cos[j] = new double[fourier_spline_npoints];
-		iright_cos[j] = new double[fourier_spline_npoints];
-		ileft_sin[j] = new double[fourier_spline_npoints];
-		iright_sin[j] = new double[fourier_spline_npoints];
+		ileft_cos[j] = new QScalar[fourier_spline_npoints];
+		iright_cos[j] = new QScalar[fourier_spline_npoints];
+		ileft_sin[j] = new QScalar[fourier_spline_npoints];
+		iright_sin[j] = new QScalar[fourier_spline_npoints];
 	}
-	double *rvals = new double[fourier_spline_npoints];
-	double r, rstep = (rmax-rmin)/(fourier_spline_npoints-1);
+	QScalar *rvals = new QScalar[fourier_spline_npoints];
+	QScalar r, rstep = (rmax-rmin)/(fourier_spline_npoints-1);
 	for (r=rmin, i=0; i < fourier_spline_npoints; i++, r += rstep) {
 		rvals[i] = r;
 	}
@@ -3039,17 +3488,17 @@ void LensProfile::spline_fourier_mode_integrals(const double rmin, const double 
 		nthreads = omp_get_num_threads();
 	}
 #endif
-	LensIntegral<double> *lens_integral = new LensIntegral<double>[nthreads];
+	LensIntegral<QScalar> *lens_integral = new LensIntegral<QScalar>[nthreads];
 
 	for (i=0; i < nthreads; i++) {
 		lens_integral[i].initialize(this);
 		if (fourier_gradient) {
-			lens_integral[i].cosamps = new double[n_fourier_modes];
-			lens_integral[i].sinamps = new double[n_fourier_modes];
+			lens_integral[i].cosamps = new QScalar[n_fourier_modes];
+			lens_integral[i].sinamps = new QScalar[n_fourier_modes];
 		} else {
 			// No need to create new arrays, just have them point to fourier_mode_cosamp and fourier_mode_sinamp
-			lens_integral[i].cosamps = fourier_mode_cosamp.array();
-			lens_integral[i].sinamps = fourier_mode_sinamp.array();
+			lens_integral[i].cosamps = p.fourier_mode_cosamp.array();
+			lens_integral[i].sinamps = p.fourier_mode_sinamp.array();
 		}
 	}
 
@@ -3065,7 +3514,7 @@ void LensProfile::spline_fourier_mode_integrals(const double rmin, const double 
 		#pragma omp for private(i,j) schedule(static)
 		for (i=0; i < fourier_spline_npoints; i++) {
 			if (ellipticity_gradient) {
-				lens_integral[thread].phi0 = (this->*egrad_ptr)(rvals[i],geometric_param[1],1);
+				//lens_integral[thread].phi0 = (this->*egrad_ptr)(rvals[i],geometric_param[1],1);
 			}
 
 			for (j=0; j < n_fourier_modes; j++) {
@@ -3075,10 +3524,10 @@ void LensProfile::spline_fourier_mode_integrals(const double rmin, const double 
 		}
 	}
 	for (j=0; j < n_fourier_modes; j++) {
-		fourier_integral_left_cos_spline[j].input(rvals,ileft_cos[j],fourier_spline_npoints);
-		fourier_integral_right_cos_spline[j].input(rvals,iright_cos[j],fourier_spline_npoints);
-		fourier_integral_left_sin_spline[j].input(rvals,ileft_sin[j],fourier_spline_npoints);
-		fourier_integral_right_sin_spline[j].input(rvals,iright_sin[j],fourier_spline_npoints);
+		p.fourier_integral_left_cos_spline[j].input(rvals,ileft_cos[j],fourier_spline_npoints);
+		p.fourier_integral_right_cos_spline[j].input(rvals,iright_cos[j],fourier_spline_npoints);
+		p.fourier_integral_left_sin_spline[j].input(rvals,ileft_sin[j],fourier_spline_npoints);
+		p.fourier_integral_right_sin_spline[j].input(rvals,iright_sin[j],fourier_spline_npoints);
 	}
 	for (j=0; j < n_fourier_modes; j++) {
 		delete[] ileft_cos[j];
@@ -3101,6 +3550,10 @@ void LensProfile::spline_fourier_mode_integrals(const double rmin, const double 
 	delete[] lens_integral;
 	fourier_integrals_splined = true;
 }
+template void LensProfile::spline_fourier_mode_integrals<double>(const double rmin, const double rmax);
+#ifdef USE_STAN
+template void LensProfile::spline_fourier_mode_integrals<stan::math::var>(const stan::math::var rmin, const stan::math::var rmax);
+#endif
 
 /*********************************** Functions for printing lens/parameter information *************************************/
 
@@ -3129,7 +3582,7 @@ void LensProfile::print_parameters()
 	if (ellipticity_mode==3) cout << "pseudo-";
 	cout << model_name << "(";
 	if (lens_subclass != -1) cout << subclass_label << "=" << lens_subclass << ",";
-	cout << "z=" << zlens << "): ";
+	cout << "z=" << lensparams->zlens << "): ";
 	for (int i=0; i < n_params-1; i++) {
 		cout << paramnames[i] << "=";
 		if (angle_param[i]) cout << radians_to_degrees(*(lensparams->param[i])) << " degrees";
@@ -3186,7 +3639,7 @@ string LensProfile::get_parameters_string()
 	if (ellipticity_mode==3) paramstring += "pseudo-";
 	paramstring += model_name + "(";
 	if (lens_subclass != -1) paramstring += subclass_label + "=" + mkstring_int(lens_subclass) + ",";
-	paramstring += "z=" + mkstring_doub(zlens) + "): ";
+	paramstring += "z=" + mkstring_doub(lensparams->zlens) + "): ";
 	for (int i=0; i < n_params-1; i++) {
 		paramstring += paramnames[i] + "=";
 		if (angle_param[i]) paramstring += mkstring_doub(radians_to_degrees(*(lensparams->param[i]))) + " degrees";

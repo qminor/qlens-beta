@@ -4,9 +4,9 @@
 
 using namespace std;
 
-/********* Functions in class ModelParams (which is inherited by PointSource, SourcePixelGrid, DelaunayGrid *********/
+/********* Functions in class Model (which is inherited by PointSource, SourcePixelGrid, DelaunayGrid *********/
 
-void ModelParams::setup_parameter_arrays(const int npar)
+void Model::setup_parameter_arrays(const int npar)
 {
 	n_params = npar; // number of all possible parameters that can be varied (not necessarily at the same time)
 	include_limits = false; // default
@@ -22,8 +22,19 @@ void ModelParams::setup_parameter_arrays(const int npar)
 	penalty_upper_limits.input(n_params);
 	lower_limits.input(n_params);
 	upper_limits.input(n_params);
+	if (modelparams != NULL) {
+		if (modelparams->param != NULL) delete[] modelparams->param;
+		modelparams->param = new double*[n_params];
+	}
+#ifdef USE_STAN
+	if (modelparams_dif != NULL) {
+		if (modelparams_dif->param != NULL) delete[] modelparams_dif->param;
+		modelparams_dif->param = new stan::math::var*[n_params];
+	}
+#endif
 	if (param != NULL) delete[] param;
 	param = new double*[n_params];
+
 	n_vary_params = 0;
 	for (int i=0; i < n_params; i++) {
 		scale_stepsize_by_param_value[i] = false; // the choices after initialization (below) will never change (judgment call determined by the type of parameter)
@@ -35,7 +46,7 @@ void ModelParams::setup_parameter_arrays(const int npar)
 	}
 }
 
-void ModelParams::copy_param_arrays(const ModelParams* params_in)
+void Model::copy_param_arrays(const Model* params_in)
 {
 	// REMEMBER: you must still run setup_parameters() in the inherited class to initialize and assign the pointers before running this!
 	// note, we do not copy n_params, nor resize most of the vectors, because it is assumed that this has been setup already in setup_parameters()
@@ -54,7 +65,44 @@ void ModelParams::copy_param_arrays(const ModelParams* params_in)
 	upper_limits.input(params_in->upper_limits);
 }
 
-void ModelParams::update_fit_parameters(const double* fitparams, int &index)
+template <typename QScalar>
+void Model::update_fit_parameters(const QScalar* fitparams, int &index)
+{
+	ModelParams<QScalar>& p = assign_modelparam_object<QScalar>();
+	if (n_vary_params > 0) {
+		for (int i=0; i < n_params; i++) {
+			if ((active_params[i]) and (vary_params[i]==true)) {
+				//cout << "Updating parameter " << i << " of model" << endl;
+				*(p.param[i]) = fitparams[index++];
+			}
+		}
+		update_meta_parameters(true);
+		/*
+#ifdef USE_STAN
+		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency. Maybe revisit this later? Might not be necessary
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			for (int i=0; i < n_params; i++) {
+				if ((active_params[i]) and (vary_params[i]==true)) {
+					*(modelparams->param[i]) = (*(modelparams_dif->param[i])).val();
+				}
+			}
+		} else {
+			for (int i=0; i < n_params; i++) {
+				if ((active_params[i]) and (vary_params[i]==true)) {
+					*(modelparams_dif->param[i]) = (*(modelparams->param[i]));
+				}
+			}
+		}
+#endif
+		*/
+	}
+}
+template void Model::update_fit_parameters<double>(const double* fitparams, int &index);
+#ifdef USE_STAN
+template void Model::update_fit_parameters<stan::math::var>(const stan::math::var* fitparams, int &index);
+#endif
+
+void Model::update_fit_parameters_doub(const double* fitparams, int &index)
 {
 	if (n_vary_params > 0) {
 		for (int i=0; i < n_params; i++) {
@@ -66,28 +114,33 @@ void ModelParams::update_fit_parameters(const double* fitparams, int &index)
 	}
 }
 
-bool ModelParams::update_specific_parameter(const string name_in, const double& value)
+bool Model::update_specific_parameter(const string name_in, const double& value)
 {
+	ModelParams<double>& p = assign_modelparam_object<double>();
 	bool found_match = false;
 	for (int i=0; i < n_params; i++) {
 		if ((active_params[i]) and (paramnames[i]==name_in)) {
-			*(param[i]) = value;
+			*(p.param[i]) = value;
 			found_match = true;
 			update_meta_parameters(false);
 			break;
 		}
 	}
+#ifdef USE_STAN
+	sync_autodif_parameters();
+	//update_meta_parameters_autodif();
+#endif
 	update_fitparams_in_qlens();
 	return found_match;
 }
 
-void ModelParams::update_fitparams_in_qlens()
+void Model::update_fitparams_in_qlens()
 {
 	// this is a virtual function that must be defined for each inherited class
 	return;
 }
 
-void ModelParams::get_parameter_number(const string name_in, int& paramnum)
+void Model::get_parameter_number(const string name_in, int& paramnum)
 {
 	paramnum = -1;
 	for (int i=0; i < n_params; i++) {
@@ -98,7 +151,7 @@ void ModelParams::get_parameter_number(const string name_in, int& paramnum)
 	}
 }
 
-void ModelParams::get_parameter_vary_index(const string name_in, int& index)
+void Model::get_parameter_vary_index(const string name_in, int& index)
 {
 	index = 0;
 	for (int i=0; i < n_params; i++) {
@@ -109,7 +162,7 @@ void ModelParams::get_parameter_vary_index(const string name_in, int& index)
 	}
 }
 
-bool ModelParams::set_varyflags(const boolvector& vary_in)
+bool Model::set_varyflags(const boolvector& vary_in)
 {
 	if (vary_in.size() != n_active_params) {
 		return false;
@@ -133,19 +186,19 @@ bool ModelParams::set_varyflags(const boolvector& vary_in)
 	return true;
 }
 
-void ModelParams::get_parameter_numbers_from_qlens(int& pi, int& pf)
+void Model::get_parameter_numbers_from_qlens(int& pi, int& pf)
 {
 	// this is a virtual function that must be defined for each inherited class
 	return;
 }
 
-bool ModelParams::register_vary_parameters_in_qlens()
+bool Model::register_vary_parameters_in_qlens()
 {
 	// this is a virtual function that must be defined for each inherited class
 	return true;
 }
 
-bool ModelParams::update_specific_varyflag(const string name_in, const bool& vary_in)
+bool Model::update_specific_varyflag(const string name_in, const bool& vary_in)
 {
 	if (n_active_params==0) return false;
 	int param_i = -1;
@@ -167,7 +220,7 @@ bool ModelParams::update_specific_varyflag(const string name_in, const bool& var
 	return (param_i != -1);
 }
 
-void ModelParams::set_limits(const dvector& lower, const dvector& upper)
+void Model::set_limits(const dvector& lower, const dvector& upper)
 {
 	if (lower.size() != n_vary_params) die("lower limits array does not match number of variable parameters in source object (%i vs %i)",lower.size(),n_vary_params);
 	include_limits = true;
@@ -183,7 +236,7 @@ void ModelParams::set_limits(const dvector& lower, const dvector& upper)
 	register_limits_in_qlens();
 }
 
-void ModelParams::update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index)
+void Model::update_limits(const double* lower, const double* upper, const bool* limits_changed, int& index)
 {
 	// in this case, the limits are being updated from the fitparams list, so there is no need to call register_lens_prior_limits
 	include_limits = true;
@@ -196,7 +249,7 @@ void ModelParams::update_limits(const double* lower, const double* upper, const 
 	}
 }
 
-bool ModelParams::set_limits_specific_parameter(const string name_in, const double& lower, const double& upper)
+bool Model::set_limits_specific_parameter(const string name_in, const double& lower, const double& upper)
 {
 	int param_i = -1;
 	int i;
@@ -216,27 +269,27 @@ bool ModelParams::set_limits_specific_parameter(const string name_in, const doub
 	return (param_i != -1);
 }
 
-void ModelParams::register_limits_in_qlens()
+void Model::register_limits_in_qlens()
 {
 	// this is a virtual function that must be defined for each inherited class
 	return;
 }
 
-void ModelParams::get_fit_parameters(double *fitparams, int &index)
+void Model::get_fit_parameters(double *fitparams, int &index)
 {
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]==true) {
-			fitparams[index++] = *(param[i]);
+			fitparams[index++] = *(modelparams->param[i]);
 		}
 	}
 }
 
-void ModelParams::get_auto_stepsizes(dvector& stepsizes_in, int &index)
+void Model::get_auto_stepsizes(dvector& stepsizes_in, int &index)
 {
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]) {
 			if (scale_stepsize_by_param_value[i]) {
-				stepsizes_in[index++] = stepsizes[i]*(*(param[i]));
+				stepsizes_in[index++] = stepsizes[i]*(*(modelparams->param[i]));
 			} else {
 				stepsizes_in[index++] = stepsizes[i];
 			}
@@ -244,7 +297,7 @@ void ModelParams::get_auto_stepsizes(dvector& stepsizes_in, int &index)
 	}
 }
 
-void ModelParams::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
+void Model::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower, dvector& upper, int &index)
 {
 	for (int i=0; i < n_params; i++) {
 		if (vary_params[i]) {
@@ -261,7 +314,7 @@ void ModelParams::get_auto_ranges(boolvector& use_penalty_limits, dvector& lower
 }
 
 
-void ModelParams::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary)
+void Model::get_fit_parameter_names(vector<string>& paramnames_vary, vector<string> *latex_paramnames_vary, vector<string> *latex_subscripts_vary)
 {
 	int i;
 	for (i=0; i < n_params; i++) {
@@ -273,7 +326,7 @@ void ModelParams::get_fit_parameter_names(vector<string>& paramnames_vary, vecto
 	}
 }
 
-bool ModelParams::check_parameter_name(const string name_in)
+bool Model::check_parameter_name(const string name_in)
 {
 	bool found_match = false;
 	for (int i=0; i < n_params; i++) {
@@ -285,12 +338,12 @@ bool ModelParams::check_parameter_name(const string name_in)
 	return found_match;
 }
 
-bool ModelParams::get_specific_parameter(const string name_in, double& value)
+bool Model::get_specific_parameter(const string name_in, double& value)
 {
 	bool found_match = false;
 	for (int i=0; i < n_params; i++) {
 		if ((active_params[i]) and (paramnames[i]==name_in)) {
-			value = *(param[i]);
+			value = *(modelparams->param[i]);
 			found_match = true;
 			break;
 		}
@@ -298,13 +351,13 @@ bool ModelParams::get_specific_parameter(const string name_in, double& value)
 	return found_match;
 }
 
-bool ModelParams::get_specific_stepsize(const string name_in, double& step)
+bool Model::get_specific_stepsize(const string name_in, double& step)
 {
 	bool found_match = false;
 	for (int i=0; i < n_params; i++) {
 		if ((active_params[i]) and (paramnames[i]==name_in)) {
 			if (scale_stepsize_by_param_value[i]) {
-				step = stepsizes[i]*(*(param[i]));
+				step = stepsizes[i]*(*(modelparams->param[i]));
 			} else {
 				step = stepsizes[i];
 			}
@@ -315,7 +368,7 @@ bool ModelParams::get_specific_stepsize(const string name_in, double& step)
 	return found_match;
 }
 
-bool ModelParams::get_specific_varyflag(const string name_in, bool& flag)
+bool Model::get_specific_varyflag(const string name_in, bool& flag)
 {
 	bool found_match = false;
 	for (int i=0; i < n_params; i++) {
@@ -328,7 +381,7 @@ bool ModelParams::get_specific_varyflag(const string name_in, bool& flag)
 	return found_match;
 }
 
-bool ModelParams::get_specific_limit(const string name_in, double& lower, double& upper)
+bool Model::get_specific_limit(const string name_in, double& lower, double& upper)
 {
 	if (include_limits==false) return false;
 	bool found_match = false;
@@ -343,7 +396,7 @@ bool ModelParams::get_specific_limit(const string name_in, double& lower, double
 	return found_match;
 }
 
-void ModelParams::get_varyflags(boolvector& flags)
+void Model::get_varyflags(boolvector& flags)
 {
 	flags.input(n_vary_params);
 	int index = 0;
@@ -354,7 +407,7 @@ void ModelParams::get_varyflags(boolvector& flags)
 	}
 }
 
-bool ModelParams::get_limits(dvector& lower, dvector& upper)
+bool Model::get_limits(dvector& lower, dvector& upper)
 {
 	int index = 0;
 	if (include_limits==false) return false;
@@ -368,7 +421,7 @@ bool ModelParams::get_limits(dvector& lower, dvector& upper)
 	return true;
 }
 
-bool ModelParams::get_limits(dvector& lower, dvector& upper, int &index)
+bool Model::get_limits(dvector& lower, dvector& upper, int &index)
 {
 	if (include_limits==false) return false;
 	for (int i=0; i < n_params; i++) {
@@ -381,7 +434,7 @@ bool ModelParams::get_limits(dvector& lower, dvector& upper, int &index)
 	return true;
 }
 
-void ModelParams::print_parameters(const bool show_only_varying_params)
+void Model::print_parameters(const bool show_only_varying_params)
 {
 	if (n_active_params == 0) cout << "no active parameters";
 	else {
@@ -390,7 +443,7 @@ void ModelParams::print_parameters(const bool show_only_varying_params)
 			if (active_params[i]) {
 				if ((!show_only_varying_params) or (vary_params[i])) {
 					cout << paramnames[i] << "=";
-					cout << *(param[i]);
+					cout << *(modelparams->param[i]);
 					if (j != n_active_params-1) cout << ", ";
 					j++;
 				}
@@ -400,7 +453,7 @@ void ModelParams::print_parameters(const bool show_only_varying_params)
 	cout << endl;
 }
 
-string ModelParams::mkstring_int(const int i)
+string Model::mkstring_int(const int i)
 {
 	stringstream istr;
 	string istring;
@@ -409,7 +462,7 @@ string ModelParams::mkstring_int(const int i)
 	return istring;
 }
 
-string ModelParams::mkstring_doub(const double db)
+string Model::mkstring_doub(const double db)
 {
 	stringstream dstr;
 	string dstring;
@@ -419,7 +472,7 @@ string ModelParams::mkstring_doub(const double db)
 }
 
 // This function is used by the Python wrapper
-string ModelParams::get_parameters_string()
+string Model::get_parameters_string()
 {
 	string paramstring = "";
 	if (entry_number >= 0) paramstring += mkstring_int(entry_number) + ". ";
@@ -430,7 +483,7 @@ string ModelParams::get_parameters_string()
 		for (int i=0; i < n_params; i++) {
 			if (active_params[i]) {
 				paramstring += paramnames[i] + "=";
-				paramstring += mkstring_doub(*(param[i]));
+				paramstring += mkstring_doub(*(modelparams->param[i]));
 				if (j != n_active_params-1) paramstring += ", ";
 				j++;
 			}
@@ -442,7 +495,7 @@ string ModelParams::get_parameters_string()
 
 
 
-void ModelParams::print_vary_parameters()
+void Model::print_vary_parameters()
 {
 	if (n_vary_params==0) {
 		cout << "   parameters: none\n";

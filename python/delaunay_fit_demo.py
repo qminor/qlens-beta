@@ -6,6 +6,8 @@ q = QLens(cosmo)
 (lens,src,pixsrc,imgdata) = q.pix_objects()   # this is so we can enter 'lens' instead of 'q.lens', 'src' instead of 'q.src', etc.
 (params,dparams) = q.param_objects()         # same as above; we can enter 'params' instead of 'q.params', etc.
 
+show_commands()
+
 q.fit_label = 'delaunay_fit'
 
 sim_hst_data = imgdata.load("sim_hst_image.fits",band=0,pixsize=0.049)

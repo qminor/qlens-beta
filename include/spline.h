@@ -32,6 +32,7 @@ class Spline
 		Spline(T x[], T y[], const int n, const T yp1, const T ypn) { xarray=yarray=yspline=NULL; input(x,y,n,yp1,ypn); }
 		Spline(const dvector& x, const dvector& y) { xarray = yarray = yspline = NULL; input(x, y); }
 		Spline(const char filename[]) { xarray = yarray = yspline = NULL; input(filename); }
+		Spline(const Spline<T>& spline_in) { input(spline_in); }
 		Spline();
 		~Spline();
 		void input(T x[], T y[], const int n);
@@ -42,7 +43,7 @@ class Spline
 		void output(const char filename[]);
 		void output(const std::string filename) { output(filename.c_str()); }
 		void input(const std::string filename) { input(filename.c_str()); }
-		void input(const Spline& spline_in);
+		void input(const Spline<T>& spline_in);
 		void natural_spline(void);
 		void unnatural_spline(T yp1, T ypn);
 		T splint(const T x);
@@ -176,7 +177,7 @@ void Spline<T>::input(T x[], T y[], const int n, const T yp1, const T ypn)
 }
 
 template <typename T>
-void Spline<T>::input(const Spline& spline_in)
+void Spline<T>::input(const Spline<T>& spline_in)
 {
 	if (xarray) delete[] xarray;
 	if (yarray) delete[] yarray;
