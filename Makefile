@@ -28,7 +28,7 @@ CL   := $(CCOMP) $(OPTS)
 core_objects = $(OBJ_DIR)/cosmo.o $(OBJ_DIR)/simplex.o $(OBJ_DIR)/profile.o $(OBJ_DIR)/sbprofile.o $(OBJ_DIR)/egrad.o $(OBJ_DIR)/models.o \
 					$(OBJ_DIR)/params.o $(OBJ_DIR)/modelparams.o $(OBJ_DIR)/lenscalc.o $(OBJ_DIR)/lens.o $(OBJ_DIR)/imgsrch.o $(OBJ_DIR)/pixelgrid.o \
 					$(OBJ_DIR)/cg.o $(OBJ_DIR)/mcmchdr.o $(OBJ_DIR)/errors.o $(OBJ_DIR)/brent.o $(OBJ_DIR)/sort.o \
-					$(OBJ_DIR)/trirectangle.o $(OBJ_DIR)/hyp_2F1.o $(OBJ_DIR)/powell.o $(OBJ_DIR)/mcmceval.o
+					$(OBJ_DIR)/trirectangle.o $(OBJ_DIR)/powell.o $(OBJ_DIR)/mcmceval.o
 
 wrapper_objects = $(OBJ_DIR)/qlens_export.o $(OBJ_DIR)/qlens_wrapper.o $(core_objects)
 
@@ -96,7 +96,7 @@ $(OBJ_DIR)/mcmchdr.o: $(SRC_DIR)/mcmchdr.cpp $(INCLUDE_DIR)/mcmchdr.h $(INCLUDE_
 $(OBJ_DIR)/profile.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/profile.cpp $(INCLUDE_DIR)/lensintegral.h $(INCLUDE_DIR)/lensvec.h
 	$(CC) -c $(SRC_DIR)/profile.cpp -o $(OBJ_DIR)/profile.o
 
-$(OBJ_DIR)/models.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/models.cpp
+$(OBJ_DIR)/models.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/models.cpp $(INCLUDE_DIR)/hyp_2F1.h
 	$(CC) -c $(SRC_DIR)/models.cpp -o $(OBJ_DIR)/models.o
 
 $(OBJ_DIR)/sbprofile.o: $(INCLUDE_DIR)/sbprofile.h $(SRC_DIR)/sbprofile.cpp
@@ -128,9 +128,6 @@ $(OBJ_DIR)/mcmceval.o: $(SRC_DIR)/mcmceval.cpp $(INCLUDE_DIR)/mcmceval.h $(INCLU
 
 $(OBJ_DIR)/mkdist.o: $(SRC_DIR)/mkdist.cpp $(INCLUDE_DIR)/mcmceval.h $(INCLUDE_DIR)/errors.h
 	$(CC) -c $(SRC_DIR)/mkdist.cpp -o $(OBJ_DIR)/mkdist.o
-
-$(OBJ_DIR)/hyp_2F1.o: $(SRC_DIR)/hyp_2F1.cpp $(INCLUDE_DIR)/hyp_2F1.h $(INCLUDE_DIR)/complex_functions.h
-	$(CC) -c $(SRC_DIR)/hyp_2F1.cpp -o $(OBJ_DIR)/hyp_2F1.o
 
 clean_qlens:
 	rm $(BIN_DIR)/qlens $(MODULE) $(wrapper_objects)
