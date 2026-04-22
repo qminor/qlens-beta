@@ -96,9 +96,6 @@ $(OBJ_DIR)/mcmchdr.o: $(SRC_DIR)/mcmchdr.cpp $(INCLUDE_DIR)/mcmchdr.h $(INCLUDE_
 $(OBJ_DIR)/profile.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/profile.cpp $(INCLUDE_DIR)/lensintegral.h $(INCLUDE_DIR)/lensvec.h
 	$(CC) -c $(SRC_DIR)/profile.cpp -o $(OBJ_DIR)/profile.o
 
-$(OBJ_DIR)/models.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/models.cpp $(INCLUDE_DIR)/hyp_2F1.h
-	$(CC) -c $(SRC_DIR)/models.cpp -o $(OBJ_DIR)/models.o
-
 $(OBJ_DIR)/sbprofile.o: $(INCLUDE_DIR)/sbprofile.h $(SRC_DIR)/sbprofile.cpp
 	$(CC) -c $(SRC_DIR)/sbprofile.cpp -o $(OBJ_DIR)/sbprofile.o
 

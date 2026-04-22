@@ -21,6 +21,7 @@ QLENSDIR = $(HOMEDIR)/qlens-beta
 INC := -I$(INCLUDE_DIR)
 CONDA_INC = -I$(CONDA_DIR)/envs/$(ENV_NAME)/include
 CONDA_LIBDIR = $(CONDA_DIR)/envs/$(ENV_NAME)/lib
+EIGEN_INC = $(CONDA_INC)/eigen3
 PYTHON_INC = $(CONDA_INC)/python3.13
 UMFPACK_INC = $(CONDA_INC)/suitesparse
 POLYCHORD_LIBDIR = $(QLENSDIR)/contrib/PolyChordLite/lib
@@ -48,9 +49,9 @@ CCOMP = mpicxx -DUSE_MPI
 OPTS = -Wno-write-strings -fopenmp -O3 -fPIC -std=c++17 
 OPTS_NO_OPT = -Wno-write-strings -fopenmp -fPIC -std=c++17 
 #FLAGS = -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DMULTINEST_MOD -DUSE_POLYCHORD -DUSE_FITPACK -DUSE_MKL -DUSE_MLPACK -DUSE_FFTW -DUSE_COOLEST -DUSE_EIGEN
-FLAGS = -DUSE_FITS -DUSE_OPENMP -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_MKL -DUSE_FFTW -DUSE_MLPACK -DUSE_UMFPACK
+FLAGS = -DUSE_FITS -DUSE_OPENMP -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FFTW -DUSE_MLPACK -DUSE_EIGEN
 
-OTHERLIBS = -Wl,-rpath,$(CONDA_LIBDIR):$(MULTINEST_LIBDIR):$(POLYCHORD_LIBDIR) -lcfitsio -lgfortran -lmpi_mpifh -lmpi -lmultinest_mpi -lchord -larmadillo -lumfpack -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread -lstdc++ -lstdc++fs -lm -ldl 
+OTHERLIBS = -Wl,-rpath,$(CONDA_LIBDIR):$(MULTINEST_LIBDIR):$(POLYCHORD_LIBDIR) -lcfitsio -lgfortran -lmpi_mpifh -lmpi -lmultinest_mpi -lchord -larmadillo -lfftw3 -lstdc++ -lstdc++fs -lm -ldl 
 
 LINKLIBS = -L$(MULTINEST_LIBDIR) -L$(POLYCHORD_LIBDIR) $(ARMADILLO_LIB) -L$(CONDA_LIBDIR) $(OTHERLIBS) 
 
@@ -143,6 +144,9 @@ $(OBJ_DIR)/mcmchdr.o: $(SRC_DIR)/mcmchdr.cpp $(INCLUDE_DIR)/mcmchdr.h $(INCLUDE_
 
 $(OBJ_DIR)/profile.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/profile.cpp $(INCLUDE_DIR)/lensintegral.h $(INCLUDE_DIR)/lensvec.h
 	$(CC) -c $(SRC_DIR)/profile.cpp -o $(OBJ_DIR)/profile.o
+
+$(OBJ_DIR)/models.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/models.cpp $(INCLUDE_DIR)/hyp_2F1.h
+	$(CC) -c $(SRC_DIR)/models.cpp -o $(OBJ_DIR)/models.o
 
 $(OBJ_DIR)/sbprofile.o: $(INCLUDE_DIR)/sbprofile.h $(SRC_DIR)/sbprofile.cpp
 	$(CC) -c $(SRC_DIR)/sbprofile.cpp -o $(OBJ_DIR)/sbprofile.o

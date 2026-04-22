@@ -1012,6 +1012,7 @@ QScalar LensIntegral<QScalar>::GaussIntegrate(QScalar (LensIntegral::*func)(cons
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::PattersonIntegrate(QScalar (LensIntegral::*func)(const QScalar), const QScalar a, const QScalar b, bool& converged)
 {
+	using std::abs;
 	QScalar result=0, result_old;
 	int i, level=0, istep, istart;
 	QScalar absum = (a+b)/2, abdif = (b-a)/2;
@@ -1066,6 +1067,7 @@ QScalar LensIntegral<QScalar>::PattersonIntegrate(QScalar (LensIntegral::*func)(
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::FejerIntegrate(QScalar (LensIntegral::*func)(QScalar), QScalar a, QScalar b, bool &converged)
 {
+	using std::abs;
 	// Fejer's quadrature rule--seems to be require slightly more function eval's than Patterson quadrature, but can allow for more
 	// points in case integrand doesn't converge easily
 	QScalar result = 0, result_old;
@@ -1132,6 +1134,7 @@ void LensIntegral<QScalar>::GaussIntegrate(void (LensIntegral::*func)(const QSca
 template <typename QScalar>
 void LensIntegral<QScalar>::PattersonIntegrate(void (LensIntegral::*func)(const QScalar, QScalar*), const QScalar a, const QScalar b, QScalar* results, const int n_funcs, bool& converged)
 {
+	using std::abs;
 	int i,j,k;
 	bool at_least_one_converged;
 	QScalar *results_old = new QScalar[n_funcs];
@@ -1225,6 +1228,7 @@ void LensIntegral<QScalar>::PattersonIntegrate(void (LensIntegral::*func)(const 
 template <typename QScalar>
 void LensIntegral<QScalar>::FejerIntegrate(void (LensIntegral::*func)(const QScalar, QScalar*), const QScalar a, const QScalar b, QScalar* results, const int n_funcs, bool& converged)
 {
+	using std::abs;
 	// Fejer's quadrature rule--seems to be require slightly more function eval's than Patterson quadrature, but can allow for more
 	// points in case integrand doesn't converge easily
 	int i, j, k, level = 0, istep, istart;
