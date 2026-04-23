@@ -53,7 +53,11 @@ public:
 		GaussQuad::allocate_quadrature_tables(GaussQuad::numberOfPoints);
 		Patterson::allocate_gauss_patterson_tables();
 		Fejer::allocate_cc_quadrature_tables(LensProfile::default_fejer_nlevels,false); // the latter boolean=false tells it to use Fejer quadrature (open interval)
-
+#ifdef USE_STAN
+	GaussLegendre<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::allocate_quadrature_tables(GaussLegendre<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::numberOfPoints);
+	GaussPatterson<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::allocate_gauss_patterson_tables();
+	ClenshawCurtis<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::allocate_cc_quadrature_tables(LensProfile::default_fejer_nlevels,false); // the latter boolean=false tells it to use Fejer quadrature (open interval)
+#endif
 
 #ifdef USE_MPI
 		subgroup_comm = new MPI_Comm[ngroups];
@@ -543,6 +547,11 @@ public:
 		GaussQuad::deallocate_quadrature_tables();
 		Patterson::deallocate_gauss_patterson_tables();
 		Fejer::deallocate_cc_quadrature_tables();
+#ifdef USE_STAN
+	GaussLegendre<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::deallocate_quadrature_tables();
+	GaussPatterson<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::deallocate_gauss_patterson_tables();
+	ClenshawCurtis<std::function<stan::math::var(const stan::math::var)>,stan::math::var>::deallocate_cc_quadrature_tables();
+#endif
 
 #ifdef USE_MPI
 		MPI_Finalize();

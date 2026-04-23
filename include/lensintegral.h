@@ -139,6 +139,10 @@ struct LensIntegral
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::i_integral(bool &converged)
 {
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
 	converged = true; // will change if convergence not achieved
 	QScalar ans;
 	if (profile->integral_method == Romberg_Integration)
@@ -168,6 +172,10 @@ QScalar LensIntegral<QScalar>::i_integral(bool &converged)
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::j_integral(const int nval_in, bool &converged)
 {
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
 	nval_plus_half = nval_in + 0.5;
 	mnval_plus_half = -nval_in + 0.5;
 	converged = true; // will change if convergence not achieved
@@ -200,6 +208,10 @@ QScalar LensIntegral<QScalar>::j_integral(const int nval_in, bool &converged)
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::k_integral(const int nval_in, bool &converged)
 {
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
 	nval_plus_half = nval_in + 0.5;
 	converged = true; // will change if convergence not achieved
 	QScalar ans;
@@ -235,6 +247,10 @@ QScalar LensIntegral<QScalar>::k_integral(const int nval_in, bool &converged)
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::i_integrand_prime(const QScalar w)
 {
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
 	u = w*w;
 	qfac = 1 - epsilon*u;
 	xisq = u*(xsqval + ysqval/qfac)*fsqinv;
@@ -244,6 +260,11 @@ QScalar LensIntegral<QScalar>::i_integrand_prime(const QScalar w)
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::j_integrand_prime(const QScalar w)
 {
+	//using std::pow;
+//#ifdef USE_STAN
+	//using stan::math::pow;
+//#endif
+
 	u = w*w;
 	qfac = 1 - epsilon*u;
 	return (2*w*profile->kappa_rsq(u*(xsqval + ysqval/qfac)*fsqinv) / pow(qfac, nval_plus_half));
@@ -252,6 +273,11 @@ QScalar LensIntegral<QScalar>::j_integrand_prime(const QScalar w)
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::k_integrand_prime(const QScalar w)
 {
+	//using std::pow;
+//#ifdef USE_STAN
+	//using stan::math::pow;
+//#endif
+
 	u = w*w;
 	qfac = 1 - epsilon*u;
 	return fsqinv*(2*w*u*profile->kappa_rsq_deriv(u*(xsqval + ysqval/qfac)*fsqinv) / pow(qfac, nval_plus_half));
@@ -308,6 +334,14 @@ QScalar LensIntegral<QScalar>::k_integrand_v2(const QScalar w)
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::i_integral_egrad(bool &converged)
 {
+	using std::cos;
+	using std::sin;
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+	using stan::math::sqrt;
+#endif
 	converged = true; // will change if convergence not achieved
 	QScalar ans;
 
@@ -359,6 +393,15 @@ QScalar LensIntegral<QScalar>::i_integral_egrad(bool &converged)
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::i_integrand_egrad(const QScalar xi)
 {
+	using std::cos;
+	using std::sin;
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+	using stan::math::sqrt;
+#endif
+
 	xisq = xi*xi;
 	QScalar theta, costh, sinth, xprime, yprime, qufactor, qval;
 	profile->ellipticity_function(xi,epsilon,theta);
@@ -663,6 +706,15 @@ QScalar LensIntegral<QScalar>::jprime_integrand_egrad(const QScalar xi)
 template <typename QScalar>
 void LensIntegral<QScalar>::j_integral_egrad_mult(QScalar *jint, bool &converged)
 {
+	using std::cos;
+	using std::sin;
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+	using stan::math::sqrt;
+#endif
+
 	if (n_mult < 3) die("n_mult must be at least 3 to use j_integral_egrad_mult");
 	converged = true; // will change if convergence not achieved
 	QScalar ans;
@@ -709,6 +761,15 @@ void LensIntegral<QScalar>::j_integral_egrad_mult(QScalar *jint, bool &converged
 template <typename QScalar>
 void LensIntegral<QScalar>::k_integral_egrad_mult(QScalar *kint, bool &converged)
 {
+	using std::cos;
+	using std::sin;
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+	using stan::math::sqrt;
+#endif
+
 	if (n_mult < 3) die("n_mult must be at least 3 to use k_integral_egrad_mult");
 	converged = true; // will change if convergence not achieved
 	QScalar ans;
@@ -733,6 +794,15 @@ void LensIntegral<QScalar>::k_integral_egrad_mult(QScalar *kint, bool &converged
 template <typename QScalar>
 void LensIntegral<QScalar>::jprime_integral_egrad_mult(QScalar *jint, bool &converged)
 {
+	using std::cos;
+	using std::sin;
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+	using stan::math::sqrt;
+#endif
+
 	if (n_mult < 2) die("n_mult must be at least 2 to use jprime_integral_egrad_mult");
 	// If we only need the deflection, and not the hessian, these integrals are faster because it's just two integrals J_0' and J_1'
 	converged = true; // will change if convergence not achieved
@@ -784,6 +854,15 @@ void LensIntegral<QScalar>::jprime_integral_egrad_mult(QScalar *jint, bool &conv
 template <typename QScalar>
 void LensIntegral<QScalar>::j_integrand_egrad_mult(const QScalar xi, QScalar* jint)
 {
+	using std::cos;
+	using std::sin;
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+	using stan::math::sqrt;
+#endif
+
 	xisq = xi*xi;
 	QScalar theta, costh, sinth, xprime, yprime, qufactor, qval, jfac;
 	profile->ellipticity_function(xi,epsilon,theta);
@@ -822,6 +901,15 @@ void LensIntegral<QScalar>::j_integrand_egrad_mult(const QScalar xi, QScalar* ji
 template <typename QScalar>
 void LensIntegral<QScalar>::k_integrand_egrad_mult(const QScalar xi, QScalar* kint)
 {
+	using std::cos;
+	using std::sin;
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+	using stan::math::sqrt;
+#endif
+
 	xisq = xi*xi;
 	QScalar theta, costh, sinth, xprime, yprime, qval, kfac, qufactor, dxisq;
 	profile->ellipticity_function(xi,epsilon,theta);
@@ -858,6 +946,15 @@ void LensIntegral<QScalar>::k_integrand_egrad_mult(const QScalar xi, QScalar* ki
 template <typename QScalar>
 void LensIntegral<QScalar>::jprime_integrand_egrad_mult(const QScalar xi, QScalar* jint)
 {
+	using std::cos;
+	using std::sin;
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+	using stan::math::sqrt;
+#endif
+
 	xisq = xi*xi;
 	QScalar theta, costh, sinth, xprime, yprime, qufactor, qval, jfac;
 	profile->ellipticity_function(xi,epsilon,theta);
@@ -949,6 +1046,13 @@ void LensIntegral<QScalar>::calculate_fourier_integrals(const int mval_in, const
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::fourier_kappa_m(const QScalar r, const QScalar phi, const int mval_in, const int fourier_ival_in)
 {
+	using std::cos;
+	using std::sin;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
+
 	QScalar ans, mphi;
 	mval = mval_in;
 	fourier_ival = fourier_ival_in;
@@ -964,6 +1068,13 @@ QScalar LensIntegral<QScalar>::fourier_kappa_m(const QScalar r, const QScalar ph
 template <typename QScalar>
 inline QScalar LensIntegral<QScalar>::fourier_kappa_perturbation(const QScalar r)
 {
+	using std::cos;
+	using std::sin;
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
+
 	if (profile->ellipticity_gradient) {
 		//phi0 = profile->angle_function(r);
 	}
@@ -987,12 +1098,20 @@ inline QScalar LensIntegral<QScalar>::fourier_kappa_perturbation(const QScalar r
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::ileft_integrand(const QScalar r)
 {
+	//using std::pow;
+//#ifdef USE_STAN
+	//using stan::math::pow;
+//#endif
 	return pow(r,mval+1)*fourier_kappa_perturbation(r);
 }
 
 template <typename QScalar>
 QScalar LensIntegral<QScalar>::iright_integrand(const QScalar u) // here, u = 1/r
 {
+	//using std::pow;
+//#ifdef USE_STAN
+	//using stan::math::pow;
+//#endif
 	return pow(u,mval-3)*fourier_kappa_perturbation(1.0/u);
 }
 

@@ -6825,6 +6825,10 @@ double QLens::cc_xi_parameter(int cc_num)
 
 double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 {
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
 	double r_ein,zfac,xi_param;
 	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
@@ -6871,7 +6875,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	double dkappa, dshear;
 	double x_phi2, y_phi2, r_phi2;
 	double new_kappaval, new_sheartot, new_shear_angle, shear_deriv, kappa_deriv;
-	const double h = 1e-4;
+	const double h = 1e-6;
 
 	rvals = new double[npts+1];
 	phivals = new double[npts+1];
@@ -6900,9 +6904,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	lensvector<double> point(x_phi,y_phi);
 
 	// get kappa and derivative of kappa for each lens that is included
-	kappaval = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
 	shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
-
 	theta_perp_shear = degrees_to_radians(shear_angle-90);
 
 	x_phi2 = x_phi + h*cos(theta_perp_shear);
@@ -6920,6 +6922,28 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 		//cout << "new r_phi2: " << r_phi2 << endl;
 	}
 
+#ifdef USE_STAN
+	stan::math::var theta_perp_stan = theta_perp_shear;
+	stan::math::var tt = 0, uu = 0;
+	stan::math::var x_phi_stan, y_phi_stan, x_phi_stan2, y_phi_stan2, kappaval_stan, sheartot_stan, shear_angle_stan;
+	//stan::math::var uu = 0;
+	x_phi_stan = x_phi + tt*cos(theta_perp_stan);
+	y_phi_stan = y_phi + tt*sin(theta_perp_stan);
+	lensvector<stan::math::var> pt_stan(x_phi_stan,y_phi_stan);
+	x_phi_stan2 = x_phi + uu*cos(theta_perp_stan);
+	y_phi_stan2 = y_phi + uu*sin(theta_perp_stan);
+	lensvector<stan::math::var> pt_stan2(x_phi_stan2,y_phi_stan2);
+
+	kappaval_stan = kappa<stan::math::var>(x_phi_stan,y_phi_stan,reference_zfactors,default_zsrc_beta_factors);
+	shear<stan::math::var>(pt_stan2,sheartot_stan,shear_angle_stan,0,reference_zfactors,default_zsrc_beta_factors);
+
+	kappaval = kappaval_stan.val();
+	kappaval_stan.grad();
+	dkappa = tt.adj();
+	sheartot_stan.grad();
+	dshear = uu.adj();
+
+	// the next part is just for checking against the numerical derivative; you can comment these lines out later
 	lensvector<double> point2(x_phi2, y_phi2);
 
 	kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
@@ -6927,17 +6951,30 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 
 	// calculate xi from here, taking numerical derivatives
 	// just take a forward difference for now
-	dkappa = (kappaval2 - kappaval)/h;
-	dshear = (sheartot2 - sheartot)/h;
+	double kappaval_check = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+	double dkappa_check = (kappaval2 - kappaval)/h;
+	double dshear_check = (sheartot2 - sheartot)/h;
 
-	//cout << "this is dkappa: " << dkappa << endl;
-	//cout << "this is dsehar: " << dshear << endl;
+	cout << "this is dkappa: " << dkappa << " and dkappa_check=" << dkappa_check <<endl;
+	cout << "this is dshear: " << dshear << " and dshear_check=" << dshear_check <<endl;
+	cout << "this is kappaval_stan: " << kappaval << " and kappaval_check=" << kappaval_check <<endl;
+#else
+	lensvector<double> point2(x_phi2, y_phi2);
 
-	double x0 = 0;
-	double y0 = 0;
+	kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+	shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
 
-	double test_x0_2 = x0 + h*cos(theta_perp_shear);
-	double test_y0_2 = y0 + h*sin(theta_perp_shear);
+	// calculate xi from here, taking numerical derivatives
+	// just take a forward difference for now
+	double dkappa = (kappaval2 - kappaval)/h;
+	double dshear = (sheartot2 - sheartot)/h;
+#endif
+
+	//double x0 = 0;
+	//double y0 = 0;
+
+	//double test_x0_2 = x0 + h*cos(theta_perp_shear);
+	//double test_y0_2 = y0 + h*sin(theta_perp_shear);
 
 	//cout << "this is x0_1: " << 
 	//cout << "this is x0_2: " << test_x0_2 << " and this is y0_2: " << test_y0_2 << endl;
@@ -6950,7 +6987,6 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 		//cout << "this is x1: " << x_phi << " and this is y1: " << y_phi << endl;
 		//cout << "this is x2: " << x_phi2 << "and this is y2: " << y_phi2 << endl;
 	//}
-
 
 	xifac = r_ein * (dkappa - dshear)/(1-kappaval);
 

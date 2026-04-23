@@ -1677,8 +1677,8 @@ PYBIND11_MODULE(qlens, m) {
 				string outstring = a.get_parameters_string();
 				return("\n" + outstring);
 		})
-		.def("kappa", &LensProfile::kappa)
-		.def("potential", &LensProfile::potential)
+		//.def("kappa", &LensProfile::kappa)
+		//.def("potential", &LensProfile::potential)
 		.def("deflection", [](LensProfile &current, const double x, const double y){ 
 			py::list def(2);
 			lensvector<double> def_vec;

@@ -4846,6 +4846,13 @@ template stan::math::var SersicLens::kappa_rsq_impl<stan::math::var>(const stan:
 template <typename QScalar>
 QScalar SersicLens::kappa_rsq_deriv_impl(const QScalar rsq)
 {
+	using std::exp;
+	using std::pow;
+#ifdef USE_STAN
+	using stan::math::exp;
+	using stan::math::pow;
+#endif
+
 	Sersic_Params<QScalar>& p = assign_sersic_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	return -p.kappa0*exp(-p.b*pow(rsq/(p.re*p.re),0.5/p.n))*p.b*pow(p.re,-1.0/p.n)*pow(rsq,0.5/p.n-1)/(2*p.n);
 }
