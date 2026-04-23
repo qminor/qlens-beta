@@ -6966,8 +6966,8 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 
 	// calculate xi from here, taking numerical derivatives
 	// just take a forward difference for now
-	double dkappa = (kappaval2 - kappaval)/h;
-	double dshear = (sheartot2 - sheartot)/h;
+	dkappa = (kappaval2 - kappaval)/h;
+	dshear = (sheartot2 - sheartot)/h;
 #endif
 
 	//double x0 = 0;
@@ -10579,6 +10579,7 @@ double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 	return chisq_bestfit;
 }
 
+#ifdef USE_EIGEN
 	template <typename QScalar>
 	class LogLikeGrad_Func
 	{
@@ -10598,20 +10599,20 @@ double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 		void set_function(QScalar (QLens::*func_in)(const QScalar*)) { func = func_in; }
 		double operator()(const VectorXd& params, VectorXd& grad) {
 			double logl0;
-//#ifdef USE_STAN
-			//if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-				//stan::math::var* params_stan = new stan::math::var[n];
-				//for (int i=0; i < n; i++) params_stan[i] = params(i);
-				//stan::math::var loglike_stan = (qptr->*func(params_stan));
-				//loglike_stan.grad();
-				//for (int i=0; i < n; i++) {
-					//grad(i) = params_stan[i].adj();
-				//}
-				//logl0 = loglike_stan.val();
-				//delete[] params_stan;
-			//}
-			//else
-//#endif
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				stan::math::var* params_stan = new stan::math::var[n];
+				for (int i=0; i < n; i++) params_stan[i] = params(i);
+				stan::math::var loglike_stan = (qptr->*func(params_stan));
+				loglike_stan.grad();
+				for (int i=0; i < n; i++) {
+					grad(i) = params_stan[i].adj();
+				}
+				logl0 = loglike_stan.val();
+				delete[] params_stan;
+			}
+			else
+#endif
 			{
 				logl0 = (qptr->*func)(params.data());
 				ridders_method(params,grad);
@@ -10670,6 +10671,7 @@ double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 			delete[] x;
 		}
 	};
+#endif
 
 double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 {
@@ -10687,14 +10689,14 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 
 
 	double (QLens::*loglikeptr)(const double*);
-//#ifdef USE_STAN
-	//stan::math::var (QLens::*loglikeptr_stan)(const stan::math::var*);
-//#endif
+#ifdef USE_STAN
+	stan::math::var (QLens::*loglikeptr_stan)(const stan::math::var*);
+#endif
 	if (source_fit_mode==Point_Source) {
 		loglikeptr = &QLens::fitmodel_loglike_point_source;
-//#ifdef USE_STAN
-		//loglikeptr_stan = &QLens::fitmodel_loglike_point_source;
-//#endif
+#ifdef USE_STAN
+		loglikeptr_stan = &QLens::fitmodel_loglike_point_source<stan::math::var>;
+#endif
 	} else {
 		loglikeptr = &QLens::fitmodel_loglike_extended_source;
 	}
@@ -10705,10 +10707,10 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 
 	int n_fitparams = param_list->nparams;
 	int n_iterations = 0;
-//#ifdef USE_STAN
-	//LogLikeGrad_Func<stan::math::var> loglikegrad_func(n_fitparams,this);
-	//loglikegrad_func.set_function(loglikeptr_stan);
-//#else
+#ifdef USE_STAN
+	LogLikeGrad_Func<stan::math::var> loglikegrad_func(n_fitparams,this);
+	loglikegrad_func.set_function(loglikeptr_stan);
+#else
 	LogLikeGrad_Func<double> loglikegrad_func(n_fitparams,this);
 	loglikegrad_func.set_function(loglikeptr);
 	Vector<double> stepsizes(param_list->stepsizes,n_fitparams);
@@ -10718,7 +10720,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		for (int i=0; i < n_fitparams; i++) cout << stepsizes[i] << " ";
 		cout << endl << endl;
 	}
-//#endif
+#endif
 
 	double *fitparams = new double[param_list->nparams];
 	param_list->get_values(fitparams);
