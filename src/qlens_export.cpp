@@ -3160,11 +3160,12 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("n_images", &PointSource::n_images)
 		//.def_readonly("zsrc", &PointSource::zsrc)
 		//.def_readonly("srcflux", &PointSource::srcflux)
-		//.def_readonly("pos", &PointSource::pos)
+		.def_property_readonly("pos", &PointSource::get_pos)
 		//.def("pos", [](PointSource &curr){
-			//py::list srcpos(2);
-			//for (int i=0; i < 2; i++) srcpos[i] = curr.pos[i];
-			//return srcpos;
+			//return curr.ptsrc_params.pos;
+			////py::list srcpos(2);
+			////for (int i=0; i < 2; i++) srcpos[i] = curr.ptsrc_params.pos[i];
+			////return srcpos;
 		//})
 		.def_readonly("images", &PointSource::images)
 		;

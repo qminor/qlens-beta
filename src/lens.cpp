@@ -10579,20 +10579,7 @@ double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 	return chisq_bestfit;
 }
 
-double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
-{
-#ifndef USE_EIGEN
-	die("qlens must be compiled with the Eigen library to use the BFGS optimizer");
-	return 0.0;
-#else
-	if (!param_list->all_prior_limits_defined()) { warn("not all prior limits have been defined"); return 0.0; }
-	fitmethod = BFGS;
-	if (fit_set_optimizations()==false) return -1e30;
-	if (!initialize_fitmodel(false)) {
-		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
-		return 1e30;
-	}
-
+	template <typename QScalar>
 	class LogLikeGrad_Func
 	{
 		private:
@@ -10601,17 +10588,34 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		double* steps;
 		const double increment = 1e-3;
 		public:
-		double (QLens::*func)(const double*);
+		QScalar (QLens::*func)(const QScalar*);
 		LogLikeGrad_Func(int n_, QLens* qptr_in) : n(n_), qptr(qptr_in) { steps = new double[n]; }
 		~LogLikeGrad_Func() { delete[] steps; }
 		void input_stepsizes(double* steps_in) {
 			// The stepsizes are only used if Ridder's method is used to calculate numerical derivatives, in which case h=0.1*stepsize is used for each param
 			for (int i=0; i < n; i++) steps[i] = steps_in[i];
 		}
-		void set_function(double (QLens::*func_in)(const double*)) { func = func_in; }
+		void set_function(QScalar (QLens::*func_in)(const QScalar*)) { func = func_in; }
 		double operator()(const VectorXd& params, VectorXd& grad) {
-			double logl0 = (qptr->*func)(params.data());
-			ridders_method(params,grad);
+			double logl0;
+//#ifdef USE_STAN
+			//if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				//stan::math::var* params_stan = new stan::math::var[n];
+				//for (int i=0; i < n; i++) params_stan[i] = params(i);
+				//stan::math::var loglike_stan = (qptr->*func(params_stan));
+				//loglike_stan.grad();
+				//for (int i=0; i < n; i++) {
+					//grad(i) = params_stan[i].adj();
+				//}
+				//logl0 = loglike_stan.val();
+				//delete[] params_stan;
+			//}
+			//else
+//#endif
+			{
+				logl0 = (qptr->*func)(params.data());
+				ridders_method(params,grad);
+			}
 			//delete[] params_inc;
 			//cout << "LOGL: " << logl0 << "(params: " << params(0) << " " << params(1) << " " << params(2) << " " << params(3) << " " << params(4) << " " << params(5) << " " << params(6) << ")" << endl;
 			return logl0;
@@ -10667,9 +10671,30 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		}
 	};
 
+double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
+{
+#ifndef USE_EIGEN
+	die("qlens must be compiled with the Eigen library to use the BFGS optimizer");
+	return 0.0;
+#else
+	if (!param_list->all_prior_limits_defined()) { warn("not all prior limits have been defined"); return 0.0; }
+	fitmethod = BFGS;
+	if (fit_set_optimizations()==false) return -1e30;
+	if (!initialize_fitmodel(false)) {
+		if (mpi_id==0) warn(warnings,"Warning: could not evaluate chi-square function");
+		return 1e30;
+	}
+
+
 	double (QLens::*loglikeptr)(const double*);
+//#ifdef USE_STAN
+	//stan::math::var (QLens::*loglikeptr_stan)(const stan::math::var*);
+//#endif
 	if (source_fit_mode==Point_Source) {
 		loglikeptr = &QLens::fitmodel_loglike_point_source;
+//#ifdef USE_STAN
+		//loglikeptr_stan = &QLens::fitmodel_loglike_point_source;
+//#endif
 	} else {
 		loglikeptr = &QLens::fitmodel_loglike_extended_source;
 	}
@@ -10679,9 +10704,13 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 	param.max_iterations = 100;
 
 	int n_fitparams = param_list->nparams;
-	LogLikeGrad_Func loglikegrad_func(n_fitparams,this);
-	loglikegrad_func.set_function(loglikeptr);
 	int n_iterations = 0;
+//#ifdef USE_STAN
+	//LogLikeGrad_Func<stan::math::var> loglikegrad_func(n_fitparams,this);
+	//loglikegrad_func.set_function(loglikeptr_stan);
+//#else
+	LogLikeGrad_Func<double> loglikegrad_func(n_fitparams,this);
+	loglikegrad_func.set_function(loglikeptr);
 	Vector<double> stepsizes(param_list->stepsizes,n_fitparams);
 	loglikegrad_func.input_stepsizes(stepsizes.array());
 	if (mpi_id==0) {
@@ -10689,6 +10718,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		for (int i=0; i < n_fitparams; i++) cout << stepsizes[i] << " ";
 		cout << endl << endl;
 	}
+//#endif
 
 	double *fitparams = new double[param_list->nparams];
 	param_list->get_values(fitparams);
