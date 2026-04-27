@@ -22,8 +22,8 @@ INC := -I$(INCLUDE_DIR)
 CONDA_INC = -I$(CONDA_DIR)/envs/$(ENV_NAME)/include
 CONDA_LIBDIR = $(CONDA_DIR)/envs/$(ENV_NAME)/lib
 STAN_DIR = $(CONDA_DIR)/envs/$(ENV_NAME)/math
-# NOTE: add $(STAN_INC) to CC line below to include stan; also add flag -DUSE_STAN below
-STAN_INC = -I$(STAN_DIR) -I$(STAN_DIR)/lib/eigen_3.4.0 -I$(STAN_DIR)/lib/boost_1.87.0 -I$(STAN_DIR)/lib/sundials_6.1.1/include -I$(STAN_DIR)/lib/sundials_6.1.1/src/sundials -include $(STAN_DIR)/stan/prim/constraint/identity_free.hpp -I$(STAN_DIR)/lib/tbb_2020.3/include -I$(STAN_DIR)/lib/eigen_3.4.0
+# NOTE: add $(STAN_INC) to CC line below to include stan; also add flags -DUSE_STAN and -D_REENTRANT below
+STAN_INC = -I$(STAN_DIR) -I$(STAN_DIR)/lib/eigen_3.4.0 -I$(STAN_DIR)/lib/boost_1.87.0 -I$(STAN_DIR)/lib/sundials_6.1.1/include -I$(STAN_DIR)/lib/sundials_6.1.1/src/sundials -include $(STAN_DIR)/stan/math/prim/constraint/identity_free.hpp -I$(STAN_DIR)/lib/tbb_2020.3/include -I$(STAN_DIR)/lib/eigen_3.4.0
 PYTHON_INC = $(CONDA_INC)/python3.13
 UMFPACK_INC = $(CONDA_INC)/suitesparse
 POLYCHORD_LIBDIR = $(QLENSDIR)/contrib/PolyChordLite/lib

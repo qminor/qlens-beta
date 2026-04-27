@@ -2858,6 +2858,39 @@ PYBIND11_MODULE(qlens, m) {
 			if (get_2sigma_percentiles) return std::make_tuple(halfpct_list,lowpct_2sig_list,hipct_2sig_list);
 			else return std::make_tuple(halfpct_list,lowpct_1sig_list,hipct_1sig_list);
 		})
+		.def("get_param_percentiles", [](QLens_Wrap &curr, const int paramnum, py::kwargs &kwargs){
+			bool get_2sigma_percentiles = false; // get 1*sigma percentiles by default
+			bool resampled = false;
+			bool use_fisher_matrix = false;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="get_2sigma") {
+					try {
+						get_2sigma_percentiles = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean argument for 'get_2sigma'");
+					}
+				}
+			}
+
+			dvector halfpct, lowpct_1sig, hipct_1sig, lowpct_2sig, hipct_2sig;
+			bool status = curr.get_parameter_percentiles(halfpct,lowpct_1sig,hipct_1sig,lowpct_2sig,hipct_2sig,resampled,use_fisher_matrix);
+			if (!status) throw std::runtime_error("could not find percentiles");
+
+			int npars = halfpct.size();
+			if (paramnum >= npars) throw std::runtime_error("invalid parameter number");
+			py::list percentiles(3);
+			if (get_2sigma_percentiles) {
+				percentiles[0] = halfpct[paramnum];
+				percentiles[1] = lowpct_2sig[paramnum];
+				percentiles[2] = hipct_2sig[paramnum];
+
+			} else {
+				percentiles[0] = halfpct[paramnum];
+				percentiles[1] = lowpct_1sig[paramnum];
+				percentiles[2] = hipct_1sig[paramnum];
+			}
+			return percentiles;
+		})
 		.def("show_param_markers", [](QLens_Wrap &curr){
 			if (curr.param_markers.empty()) throw std::runtime_error("parameter markers have not been set");
 			if (curr.mpi_id==0) std::cout << "Parameter marker values: '" << curr.param_markers << "'\n";

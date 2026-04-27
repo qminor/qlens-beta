@@ -23,7 +23,8 @@ STAN_INC = -I/Users/qminor/math -I/Users/qminor/math/lib/eigen_3.4.0 -I/Users/qm
 
 # Version without MUMPS
 #default: qlens mkdist cosmocalc 
-default: qlens mkdist qlens-wrap
+default: qlens qlens-wrap
+#default: qlens mkdist qlens-wrap
 CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
@@ -32,7 +33,7 @@ OPTS = -Wno-write-strings -O0 -std=c++17
 OPTS_NO_OPT = -Wno-write-strings -O0 -std=c++17
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FITPACK
-FLAGS = -DUSE_READLINE -DUSE_STAN -D_REENTRANT
+FLAGS = -DUSE_READLINE -DUSE_STAN -D_REENTRANT -DUSE_EIGEN
 #FLAGS = -DUSE_READLINE 
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
 OTHERLIBS =  /Users/qminor/math/lib/tbb/libtbb.dylib -lm -lreadline

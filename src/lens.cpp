@@ -10603,7 +10603,7 @@ double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
 				stan::math::var* params_stan = new stan::math::var[n];
 				for (int i=0; i < n; i++) params_stan[i] = params(i);
-				stan::math::var loglike_stan = (qptr->*func(params_stan));
+				stan::math::var loglike_stan = (qptr->*func)(params_stan);
 				loglike_stan.grad();
 				for (int i=0; i < n; i++) {
 					grad(i) = params_stan[i].adj();
