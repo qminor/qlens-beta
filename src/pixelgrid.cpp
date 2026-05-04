@@ -116,329 +116,6 @@ void ImagePixelGrid::deallocate_multithreaded_variables()
 	}
 }
 
-/************************ Functions in class PointSource (perhaps put in different file?) ***************************/
-
-PointSource::PointSource(QLens* lens_in) : Model()
-{
-	modelparams = &ptsrc_params;
-#ifdef USE_STAN
-	modelparams_dif = &ptsrc_params_dif;
-#endif
-	model_name = "ptsrc";
-	qlens = lens_in;
-	setup_parameters(true);
-	setup_param_pointers<double>();
-#ifdef USE_STAN
-	setup_param_pointers<stan::math::var>();
-#endif
-
-}
-
-PointSource::PointSource(QLens* lens_in, const lensvector<double>& sourcept, const double zsrc_in) : Model()
-{
-	modelparams = &ptsrc_params;
-#ifdef USE_STAN
-	modelparams_dif = &ptsrc_params_dif;
-#endif
-	qlens = lens_in;
-	setup_parameters(true);
-	setup_param_pointers<double>();
-#ifdef USE_STAN
-	setup_param_pointers<stan::math::var>();
-#endif
-
-	PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
-	p.zsrc = zsrc_in;
-	p.pos[0] = sourcept[0];
-	p.pos[1] = sourcept[1];
-#ifdef USE_STAN
-	sync_autodif_parameters();
-#endif
-}
-
-void PointSource::setup_parameters(const bool initial_setup)
-{
-	//PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
-	if (initial_setup) {
-		// default initial values
-		//p.pos[0] = 0.0;
-		//p.pos[1] = 0.0;
-		//p.srcflux = 1.0;
-		//p.zsrc=2.0;
-		//p.shift[0] = 0.0;
-		//p.shift[1] = 0.0;
-
-		setup_parameter_arrays(6);
-	} else {
-		// always reset the active parameter flags, since the active ones will be determined below
-		// NOTE: if (initial_setup==true), active params are reset in setup_parameter_arrays(..) above
-		n_active_params = 0;
-		for (int i=0; i < n_params; i++) {
-			active_params[i] = false; // default
-		}
-	}
-
-	int indx = 0;
-
-	include_shift = false;
-	if ((qlens) and (qlens->include_ptsrc_shift)) include_shift = true;
-
-	if (initial_setup) {
-		//p.param[indx] = &p.pos[0];
-		paramnames[indx] = "xsrc"; latex_paramnames[indx] = "x"; latex_param_subscripts[indx] = "src";
-		set_auto_penalty_limits[indx] = false;
-		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
-	}
-	active_params[indx] = true; 
-	n_active_params++;
-	indx++;
-
-	if (initial_setup) {
-		//p.param[indx] = &p.pos[1];
-		paramnames[indx] = "ysrc"; latex_paramnames[indx] = "y"; latex_param_subscripts[indx] = "src";
-		set_auto_penalty_limits[indx] = false;
-		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
-	}
-	active_params[indx] = true; 
-	n_active_params++;
-	indx++;
-
-	if (initial_setup) {
-		//p.param[indx] = &p.srcflux;
-		paramnames[indx] = "srcflux"; latex_paramnames[indx] = "f"; latex_param_subscripts[indx] = "src";
-		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0.01; penalty_upper_limits[indx] = 1e30;
-		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = true;
-	}
-	active_params[indx] = true; 
-	n_active_params++;
-	indx++;
-
-	if (initial_setup) {
-		// NOTE! If you change the order of parameters, change update_meta_parameters() below because it refers to index 3 for zsrc!!
-		//p.param[indx] = &p.zsrc;
-		paramnames[indx] = "zsrc"; latex_paramnames[indx] = "z"; latex_param_subscripts[indx] = "src";
-		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
-		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
-	}
-	zsrc_paramnum = indx;
-	active_params[indx] = true; 
-	n_active_params++;
-	indx++;
-
-	if (initial_setup) {
-		//p.param[indx] = &p.shift[0];
-		paramnames[indx] = "xshift"; latex_paramnames[indx] = "\\delta x"; latex_param_subscripts[indx] = "s";
-		set_auto_penalty_limits[indx] = false;
-		stepsizes[indx] = 0.01; scale_stepsize_by_param_value[indx] = false;
-	}
-	if (include_shift) {
-		active_params[indx] = true; 
-		n_active_params++;
-	}
-	indx++;
-
-	if (initial_setup) {
-		//p.param[indx] = &p.shift[1];
-		paramnames[indx] = "yshift"; latex_paramnames[indx] = "\\delta y"; latex_param_subscripts[indx] = "s";
-		set_auto_penalty_limits[indx] = false;
-		stepsizes[indx] = 0.01; scale_stepsize_by_param_value[indx] = false;
-	}
-	if (include_shift) {
-		active_params[indx] = true; 
-		n_active_params++;
-	}
-	indx++;
-}
-
-template <typename QScalar>
-void PointSource::setup_param_pointers()
-{
-	PtSrcParams<QScalar>& p = assign_ptsrc_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
-	p.pos[0] = 0.0;
-	p.pos[1] = 0.0;
-	p.srcflux = 1.0;
-	p.zsrc=2.0;
-	p.shift[0] = 0.0;
-	p.shift[1] = 0.0;
-
-	QScalar** param_ptr = p.param;
-	*(param_ptr++) = &p.pos[0];
-	*(param_ptr++) = &p.pos[1];
-	*(param_ptr++) = &p.srcflux;
-	*(param_ptr++) = &p.zsrc;
-	*(param_ptr++) = &p.shift[0];
-	*(param_ptr++) = &p.shift[1];
-}
-template void PointSource::setup_param_pointers<double>();
-#ifdef USE_STAN
-template void PointSource::setup_param_pointers<stan::math::var>();
-#endif
-
-
-void PointSource::copy_ptsrc_data(PointSource* ptsrc_in)
-{
-	PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
-	p.pos[0] = ptsrc_in->ptsrc_params.pos[0];
-	p.pos[1] = ptsrc_in->ptsrc_params.pos[1];
-	p.srcflux = ptsrc_in->ptsrc_params.srcflux;
-	p.zsrc=ptsrc_in->ptsrc_params.zsrc;
-	p.shift[0] = ptsrc_in->ptsrc_params.shift[0];
-	p.shift[1] = ptsrc_in->ptsrc_params.shift[1];
-	include_shift = ptsrc_in->include_shift;
-	copy_param_arrays(ptsrc_in);
-#ifdef USE_STAN
-	sync_autodif_parameters();
-#endif
-}
-
-#ifdef USE_STAN
-void PointSource::sync_autodif_parameters()
-{
-	ptsrc_params_dif.pos[0] = ptsrc_params.pos[0];
-	ptsrc_params_dif.pos[1] = ptsrc_params.pos[1];
-	ptsrc_params_dif.srcflux = ptsrc_params.srcflux;
-	ptsrc_params_dif.zsrc = ptsrc_params.zsrc;
-	ptsrc_params_dif.shift[0] = ptsrc_params.shift[0];
-	ptsrc_params_dif.shift[1] = ptsrc_params.shift[1];
-}
-#endif
-
-void PointSource::update_meta_parameters(const bool varied_only_fitparams)
-{
-	if ((qlens != NULL) and ((vary_params[zsrc_paramnum]) or (!varied_only_fitparams))) qlens->update_ptsrc_redshift_data(); // just in case the source redshift was changed
-}
-
-void PointSource::get_parameter_numbers_from_qlens(int& pi, int& pf)
-{
-	if (qlens) qlens->get_ptsrc_parameter_numbers(entry_number,pi,pf);
-}
-
-bool PointSource::register_vary_parameters_in_qlens()
-{
-	if (qlens != NULL) {
-		return qlens->register_ptsrc_vary_parameters(entry_number);
-	}
-	return true;
-}
-
-void PointSource::register_limits_in_qlens()
-{
-	if (qlens != NULL) {
-		qlens->register_ptsrc_prior_limits(entry_number);
-	}
-}
-
-void PointSource::update_fitparams_in_qlens()
-{
-	if (qlens != NULL) {
-		qlens->update_ptsrc_fitparams(entry_number);
-	}
-}
-
-void PointSource::set_vary_source_coords()
-{
-	// parameters 0 and 1 are the source position coordinates
-	if (!vary_params[0]) n_vary_params++;
-	vary_params[0] = true;
-	if (!vary_params[1]) n_vary_params++;
-	vary_params[1] = true;
-}
-
-void PointSource::copy_imageset(const lensvector<double>& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in)
-{
-	PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
-	n_images = nimg;
-	p.zsrc = zsrc_in;
-	p.srcflux = srcflux_in;
-	p.pos[0] = pos_in[0];
-	p.pos[1] = pos_in[1];
-	images.clear();
-	images.resize(n_images);
-	for (int i=0; i < n_images; i++) {
-		images[i].pos = images_in[i].pos;
-		images[i].mag = images_in[i].mag;
-		images[i].td = images_in[i].td;
-		images[i].parity = images_in[i].parity;
-	}
-#ifdef USE_STAN
-	sync_autodif_parameters();
-#endif
-}
-
-void PointSource::set_images(image* images_in, const int nimg)
-{
-	n_images = nimg;
-	images.clear();
-	images.resize(n_images);
-	for (int i=0; i < n_images; i++) {
-		images[i].pos = images_in[i].pos;
-		images[i].mag = images_in[i].mag;
-		images[i].td = images_in[i].td;
-		images[i].parity = images_in[i].parity;
-	}
-}
-
-template <typename QScalar>
-void PointSource::update_srcpos(const lensvector<QScalar>& srcpt)
-{
-	PtSrcParams<QScalar>& p = assign_ptsrc_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
-	p.pos[0] = srcpt[0];
-	p.pos[1] = srcpt[1];
-	if (include_shift) {
-		p.pos[0] += p.shift[0];
-		p.pos[1] += p.shift[1];
-	}
-#ifdef USE_STAN
-		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency. Maybe revisit this later? Might not be necessary
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-			ptsrc_params.pos[0] = (ptsrc_params_dif.pos[0]).val();
-			ptsrc_params.pos[1] = (ptsrc_params_dif.pos[1]).val();
-		} else {
-			ptsrc_params_dif.pos[0] = ptsrc_params.pos[0];
-			ptsrc_params_dif.pos[1] = ptsrc_params.pos[1];
-		}
-#endif
-}
-template void PointSource::update_srcpos<double>(const lensvector<double>& srcpt);
-#ifdef USE_STAN
-template void PointSource::update_srcpos<stan::math::var>(const lensvector<stan::math::var>& srcpt);
-#endif
-
-void PointSource::print_to_file(bool include_time_delays, bool show_labels, std::ofstream* srcfile, std::ofstream* imgfile)
-{
-	PtSrcParams<double>& p = assign_ptsrc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
-	std::cout << "#src_x (arcsec)\tsrc_y (arcsec)\tn_images";
-	if (p.srcflux != -1) std::cout << "\tsrc_flux";
-	std::cout << std::endl;
-	std::cout << p.pos[0] << "\t" << p.pos[1] << "\t" << n_images << "\t";
-	if (p.srcflux != -1) std::cout << "\t" << p.srcflux;
-	std::cout << std::endl << std::endl;
-
-	if (srcfile != NULL) (*srcfile) << p.pos[0] << " " << p.pos[1] << std::endl;
-	//std::cout << "# " << n_images << " images" << std::endl;
-	if (show_labels) {
-		std::cout << "#pos_x (arcsec)\tpos_y (arcsec)\tmagnification";
-		if (p.srcflux != -1.0) std::cout << "\tflux\t";
-		if (include_time_delays) std::cout << "\ttime_delay (days)";
-		std::cout << std::endl;
-	}
-	if (include_time_delays) {
-		for (int i = 0; i < n_images; i++) {
-			if (p.srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].td << std::endl;
-			else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*p.srcflux << "\t" << images[i].td << std::endl;
-			if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << std::endl;
-		}
-	} else {
-		for (int i = 0; i < n_images; i++) {
-			if (p.srcflux == -1.0) std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << std::endl;
-			else std::cout << images[i].pos[0] << "\t" << images[i].pos[1] << "\t" << images[i].mag << "\t" << images[i].mag*p.srcflux << std::endl;
-			if (imgfile != NULL) (*imgfile) << images[i].pos[0] << " " << images[i].pos[1] << std::endl;
-		}
-	}
-
-	std::cout << std::endl;
-}
-
 /***************************************** Functions in class CartesianSourceGrid ****************************************/
 
 void CartesianSourcePixel::allocate_multithreaded_variables(const int& threads, const bool reallocate)
@@ -8751,7 +8428,7 @@ bool ImageData::activate_partner_image_pixels(const int mask_k, const bool emask
 				pos[0] = pixel_xcvals[i];
 				pos[1] = pixel_ycvals[j];
 				qlens->find_sourcept<double>(pos,src,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
-				image *img = qlens->get_images(src, n_images, false);
+				image<double> *img = qlens->get_images<double>(src, n_images, false);
 				for (k=0; k < n_images; k++) {
 					if ((img[k].mag > 0) and (abs(img[k].mag) < 0.1)) continue; // ignore central images
 					ii = (int) ((img[k].pos[0] - xvals[0]) / xstep);
@@ -8785,7 +8462,7 @@ bool ImageData::activate_partner_image_pixels(const int mask_k, const bool emask
 				pos[0] = pixel_xcvals[i];
 				pos[1] = pixel_ycvals[j];
 				qlens->find_sourcept<double>(pos,src,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
-				image *img = qlens->get_images(src, n_images, false);
+				image<double> *img = qlens->get_images<double>(src, n_images, false);
 				for (k=0; k < n_images; k++) {
 					if ((img[k].mag > 0) and (abs(img[k].mag) < 0.1)) continue; // ignore central images
 					ii = (int) ((img[k].pos[0] - xvals[0]) / xstep);
@@ -14254,11 +13931,11 @@ void ImagePixelGrid::find_surface_brightness(const bool foreground_only, const b
 #endif
 }
 
-void ImagePixelGrid::find_point_images(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap_in, const bool is_lensed, const bool verbal)
+void ImagePixelGrid::find_point_images(const double src_x, const double src_y, vector<image<double>>& imgs, const bool use_overlap_in, const bool is_lensed, const bool verbal)
 {
 	imgs.resize(0);
 	if (!is_lensed) {
-		image imgpt;
+		image<double> imgpt;
 		imgpt.pos[0] = src_x;
 		imgpt.pos[1] = src_y;
 		imgpt.mag = 1.0;
@@ -14268,8 +13945,8 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 	}
 	qlens->record_singular_points(imggrid_zfactors);
 	static const int max_nimgs = 50;
-	qlens->source[0] = src_x;
-	qlens->source[1] = src_y;
+	qlens->grid->gridparams.sourcept[0] = src_x;
+	qlens->grid->gridparams.sourcept[1] = src_y;
 	int i,j,npix,cell_i,cell_j,n_candidates = 0;
 	CartesianSourcePixel* cellptr;
 	bool use_overlap = use_overlap_in;
@@ -14471,7 +14148,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 			n_candidates++;
 		}
 	}
-	image_pos_accuracy = Grid::image_pos_accuracy;
+	image_pos_accuracy = qlens->image_pos_accuracy;
 	//if (image_pos_accuracy < 0) image_pos_accuracy = 1e-3; // in case the data pixel size has not been set
 	if ((qlens->mpi_id==0) and (verbal)) cout << "Found " << n_candidates << " candidate images" << endl;
 	//for (i=0; i < n_candidates; i++) {
@@ -14488,7 +14165,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 #endif
 		double td_factor;
 		if (qlens->include_time_delays) td_factor = qlens->cosmo->time_delay_factor_arcsec(qlens->lens_redshift,qlens->reference_source_redshift);
-		image imgpt;
+		image<double> imgpt;
 		double mag;
 		#pragma omp for private(i) schedule(static)
 		for (i=0; i < n_candidates; i++) {
@@ -14503,7 +14180,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 				//if ((qlens->mpi_id==0) and (verbal)) cout << "FOUND IMAGE AT: " << imgpt.pos[0] << " " << imgpt.pos[1] << endl;
 				if (qlens->include_time_delays) {
 					double potential = qlens->potential<double>(imgpt.pos,imggrid_zfactors,imggrid_betafactors);
-					imgpt.td = 0.5*(SQR(imgpt.pos[0]-qlens->source[0])+SQR(imgpt.pos[1]-qlens->source[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
+					imgpt.td = 0.5*(SQR(imgpt.pos[0]-qlens->grid->gridparams.sourcept[0])+SQR(imgpt.pos[1]-qlens->grid->gridparams.sourcept[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
 					imgpt.td *= td_factor;
 				} else {
 					imgpt.td = 0;
@@ -14517,7 +14194,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 		}
 	}
 	bool redundancy;
-	vector<image>::iterator it, it2;
+	vector<image<double>>::iterator it, it2;
 	double sep, pixel_size;
 	pixel_size = dmax(pixel_xlength,pixel_ylength);
 	//int oldsize = imgs.size();
@@ -14546,7 +14223,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 				if (sep < pixel_size)
 				{
 					redundancy = true;
-					warn(qlens->newton_warnings,"rejecting probable duplicate image (imgsep=%g,threshold=%g): src (%g,%g), image (%g,%g), mag %g",sep,pixel_size,qlens->source[0],qlens->source[1],it->pos[0],it->pos[1],it->mag);
+					warn(qlens->newton_warnings,"rejecting probable duplicate image (imgsep=%g,threshold=%g): src (%g,%g), image (%g,%g), mag %g",sep,pixel_size,qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1],it->pos[0],it->pos[1],it->mag);
 					break;
 				}
 			}
@@ -14581,7 +14258,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 #endif
 }
 
-void ImagePixelGrid::generate_point_images(const vector<image>& imgs, double *ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num)
+void ImagePixelGrid::generate_point_images(const vector<image<double>>& imgs, double *ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num)
 {
 	int nx_half, ny_half;
 	double normfac, sigx, sigy;
@@ -14735,7 +14412,7 @@ void ImagePixelGrid::add_point_images(double *ptimage_surface_brightness, const 
 	}
 }
 
-void ImagePixelGrid::generate_and_add_point_images(const vector<image>& imgs, const bool include_imgfluxes, const double srcflux)
+void ImagePixelGrid::generate_and_add_point_images(const vector<image<double>>& imgs, const bool include_imgfluxes, const double srcflux)
 {
 	double *ptimgs = new double[n_active_pixels];
 	generate_point_images(imgs,ptimgs,include_imgfluxes,srcflux);
@@ -14745,8 +14422,8 @@ void ImagePixelGrid::generate_and_add_point_images(const vector<image>& imgs, co
 }	
 
 // 2-d Newton's Method w/ backtracking routines
-// These functions are redundant with the same ones in the Grid class, and I *HATE* redundancies like this. But for now, it's
-// easiest to just copy it over. Later you can put NewtonsMethod in a separate class and have it inherited by both Grid and ImagePixelGrid.
+// These functions are redundant with the same ones in the GridCell class, and I *HATE* redundancies like this. But for now, it's
+// easiest to just copy it over. Later you can put NewtonsMethod in a separate class and have it inherited by both GridCell and ImagePixelGrid.
 
 const int ImagePixelGrid::max_iterations = 200;
 const int ImagePixelGrid::max_step_length = 100;
@@ -14767,12 +14444,12 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 	lensvector<double> xroot_initial = xroot;
 	if ((xroot[0]==0) and (xroot[1]==0)) { xroot[0] = xroot[1] = 5e-1*qlens->cc_rmin; }	// Avoiding singularity at center
 	if (NewtonsMethod(xroot, newton_check[thread], thread)==false) {
-		warn(qlens->newton_warnings,"Newton's method failed for source (%g,%g), initial point (%g,%g)",qlens->source[0],qlens->source[1],xroot_initial[0],xroot_initial[1]);
+		warn(qlens->newton_warnings,"Newton's method failed for source (%g,%g), initial point (%g,%g)",qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1],xroot_initial[0],xroot_initial[1]);
 		return false;
 	}
 	//if (qlens->reject_images_found_outside_cell) {
 		//if (test_if_inside_cell(xroot,thread)==false) {
-			////warn(qlens->warnings,"Rejecting image found outside cell for source (%g,%g), level %i, cell center (%g,%g)",qlens->source[0],qlens->source[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1]);
+			////warn(qlens->warnings,"Rejecting image found outside cell for source (%g,%g), level %i, cell center (%g,%g)",qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1]);
 			//return false;
 		//}
 	//}
@@ -14788,7 +14465,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 		double singular_pt_accuracy = 2*image_pos_accuracy;
 		for (int i=0; i < qlens->n_singular_points; i++) {
 			if ((abs(xroot[0]-qlens->singular_pts[i][0]) < singular_pt_accuracy) and (abs(xroot[1]-qlens->singular_pts[i][1]) < singular_pt_accuracy)) {
-				warn(qlens->newton_warnings,"Newton's method converged to singular point (%g,%g) for source (%g,%g)",qlens->singular_pts[i][0],qlens->singular_pts[i][1],qlens->source[0],qlens->source[1]);
+				warn(qlens->newton_warnings,"Newton's method converged to singular point (%g,%g) for source (%g,%g)",qlens->singular_pts[i][0],qlens->singular_pts[i][1],qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1]);
 				return false;
 			}
 		}
@@ -14798,13 +14475,13 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 	mag = qlens->magnification<double>(xroot,thread,imggrid_zfactors,imggrid_betafactors);
 	if ((abs(lens_eq_f[0]) > 1000*image_pos_accuracy) and (abs(lens_eq_f[1]) > 1000*image_pos_accuracy) and (abs(mag) < 1e-3)) {
 		if (qlens->newton_warnings==true) {
-			warn(qlens->newton_warnings,"Newton's method may have found false root (%g,%g) (within 1000*accuracy) for source (%g,%g), cell center (%g,%g), mag %g",xroot[0],xroot[1],qlens->source[0],qlens->source[1],xroot_initial[0],xroot_initial[1],xroot[0],xroot[1],mag);
+			warn(qlens->newton_warnings,"Newton's method may have found false root (%g,%g) (within 1000*accuracy) for source (%g,%g), cell center (%g,%g), mag %g",xroot[0],xroot[1],qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1],xroot_initial[0],xroot_initial[1],xroot[0],xroot[1],mag);
 		}
 	}
 	if ((abs(mag) > qlens->newton_magnification_threshold) or (mag*0.0 != 0.0)) {
 		if (qlens->reject_himag_images) {
 			if ((qlens->mpi_id==0) and (qlens->newton_warnings)) {
-				cout << "*WARNING*: Rejecting image that exceeds imgsrch_mag_threshold (" << abs(mag) << "), src=(" << qlens->source[0] << "," << qlens->source[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")      " << endl;
+				cout << "*WARNING*: Rejecting image that exceeds imgsrch_mag_threshold (" << abs(mag) << "), src=(" << qlens->grid->gridparams.sourcept[0] << "," << qlens->grid->gridparams.sourcept[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")      " << endl;
 				if (qlens->use_ansi_characters) {
 					cout << "                                                                                                                            " << endl;
 					cout << "\033[2A";
@@ -14813,7 +14490,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 			return false;
 		} else {
 			if ((qlens->mpi_id==0) and (qlens->warnings)) {
-				cout << "*WARNING*: Image exceeds imgsrch_mag_threshold (" << abs(mag) << "); src=(" << qlens->source[0] << "," << qlens->source[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")        " << endl;
+				cout << "*WARNING*: Image exceeds imgsrch_mag_threshold (" << abs(mag) << "); src=(" << qlens->grid->gridparams.sourcept[0] << "," << qlens->grid->gridparams.sourcept[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")        " << endl;
 				if (qlens->use_ansi_characters) {
 					cout << "                                                                                                                            " << endl;
 					cout << "\033[2A";
@@ -14832,7 +14509,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 			images[nfound].mag = qlens->magnification<double>(xroot,0,imggrid_zfactors,imggrid_betafactors);
 			if (qlens->include_time_delays) {
 				double potential = qlens->potential(xroot,imggrid_zfactors,imggrid_betafactors);
-				images[nfound].td = 0.5*(SQR(xroot[0]-qlens->source[0])+SQR(xroot[1]-qlens->source[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
+				images[nfound].td = 0.5*(SQR(xroot[0]-qlens->grid->gridparams.sourcept[0])+SQR(xroot[1]-qlens->grid->gridparams.sourcept[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
 			} else {
 				images[nfound].td = 0;
 			}
@@ -14856,7 +14533,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 				}
 
 				if (images[nfound].parity != expected_parity)
-					warn(qlens->warnings, "wrong parity found for image from source (%g, %g)", qlens->source[0], qlens->source[1]);
+					warn(qlens->warnings, "wrong parity found for image from source (%g, %g)", qlens->grid->gridparams.sourcept[0], qlens->grid->gridparams.sourcept[1]);
 				
 				if ((qlens->system_type==Single) and (nfound_pos >= 1)) finished_search = true;
 				else

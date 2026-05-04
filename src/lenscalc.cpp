@@ -85,7 +85,7 @@ template stan::math::var QLens::kappa<stan::math::var>(const stan::math::var& x,
 #endif
 
 template<typename QScalar>
-QScalar QLens::potential(const double& x, const double& y, double* zfacs, double** betafacs)
+QScalar QLens::potential(const QScalar& x, const QScalar& y, double* zfacs, double** betafacs)
 {
 	QScalar pot=0, pot_subtot;
 	// This is not really sensical for multiplane lensing, and time delays need to be treated as in Schneider's textbook. Fix later
@@ -106,7 +106,7 @@ QScalar QLens::potential(const double& x, const double& y, double* zfacs, double
 }
 template double QLens::potential<double>(const double& x, const double& y, double* zfacs, double** betafacs);
 #ifdef USE_STAN
-template stan::math::var QLens::potential<stan::math::var>(const double& x, const double& y, double* zfacs, double** betafacs);
+template stan::math::var QLens::potential<stan::math::var>(const stan::math::var& x, const stan::math::var& y, double* zfacs, double** betafacs);
 #endif
 
 template<typename QScalar>
@@ -273,15 +273,16 @@ template void QLens::deflection_exclude<stan::math::var>(const double& x, const 
 #endif
 
 template<typename QScalar>
-void QLens::lens_equation(const lensvector<double>& x, lensvector<QScalar>& f, const int& thread, double *zfacs, double** betafacs)
+void QLens::lens_equation(const lensvector<QScalar>& x, lensvector<QScalar>& f, const int& thread, double *zfacs, double** betafacs)
 {
 	deflection<QScalar>(x[0],x[1],f,thread,zfacs,betafacs);
-	f[0] = source[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
-	f[1] = source[1] - x[1] + f[1];
+	GridParams<QScalar>& p = grid->assign_gridparam_object<QScalar>();
+	f[0] = p.sourcept[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
+	f[1] = p.sourcept[1] - x[1] + f[1];
 }
 template void QLens::lens_equation<double>(const lensvector<double>& x, lensvector<double>& f, const int& thread, double *zfacs, double** betafacs);
 #ifdef USE_STAN
-template void QLens::lens_equation<stan::math::var>(const lensvector<double>& x, lensvector<stan::math::var>& f, const int& thread, double* zfacs, double** betafacs);
+template void QLens::lens_equation<stan::math::var>(const lensvector<stan::math::var>& x, lensvector<stan::math::var>& f, const int& thread, double* zfacs, double** betafacs);
 #endif
 
 template<typename QScalar>
@@ -514,7 +515,7 @@ template void QLens::find_sourcept<stan::math::var>(const lensvector<double>& x,
 #endif
 
 template<typename QScalar>
-QScalar QLens::inverse_magnification(const lensvector<double>& x, const int &thread, double* zfacs, double** betafacs)
+QScalar QLens::inverse_magnification(const lensvector<QScalar>& x, const int &thread, double* zfacs, double** betafacs)
 {
 	LensCalc<QScalar>& lc = assign_lenscalc_object<QScalar>();
 	lensmatrix<QScalar> *jac = &lc.jacs[thread];
@@ -527,11 +528,11 @@ QScalar QLens::inverse_magnification(const lensvector<double>& x, const int &thr
 }
 template double QLens::inverse_magnification<double>(const lensvector<double>& x, const int &thread, double* zfacs, double** betafacs);
 #ifdef USE_STAN
-template stan::math::var QLens::inverse_magnification<stan::math::var>(const lensvector<double>& x, const int &thread, double* zfacs, double** betafacs);
+template stan::math::var QLens::inverse_magnification<stan::math::var>(const lensvector<stan::math::var>& x, const int &thread, double* zfacs, double** betafacs);
 #endif
 
 template<typename QScalar>
-QScalar QLens::magnification(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs)
+QScalar QLens::magnification(const lensvector<QScalar> &x, const int &thread, double* zfacs, double** betafacs)
 {
 	LensCalc<QScalar>& lc = assign_lenscalc_object<QScalar>();
 	lensmatrix<QScalar> *jac = &lc.jacs[thread];
@@ -544,7 +545,7 @@ QScalar QLens::magnification(const lensvector<double> &x, const int &thread, dou
 }
 template double QLens::magnification<double>(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs);
 #ifdef USE_STAN
-template stan::math::var QLens::magnification<stan::math::var>(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs);
+template stan::math::var QLens::magnification<stan::math::var>(const lensvector<stan::math::var> &x, const int &thread, double* zfacs, double** betafacs);
 #endif
 
 template<typename QScalar>

@@ -7,6 +7,7 @@
 #include "qlens.h"
 #include <vector>
 #include <sstream>
+#include <set>
 
 namespace py = pybind11;
 
@@ -17,6 +18,7 @@ double default_zsrc_ref = 2;
 QLens* global_qlens_ptr = NULL;
 
 void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_ptr, double& z, double& zs, boolvector& vary_list, bool& transform_to_pixsrc_frame, py::kwargs& kwargs); // function definition is at end of file
+void check_for_unexpected_params(const py::dict& dict, const std::set<std::string> &allowed);
 
 PYBIND11_MODULE(qlens, m) {
 	m.doc() = "QLens Python Plugin"; // optional module docstring
@@ -1754,7 +1756,12 @@ PYBIND11_MODULE(qlens, m) {
 			} catch (...) {
 				s = 0.0;
 			}
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+
+			std::set<std::string> allowed = {"b", "s"};
+			if (pmode==0) allowed.insert("alpha");
+			else allowed.insert("gamma");
+			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
+			check_for_unexpected_params(dict,allowed);
 
 			SPLE_Lens* sple = new SPLE_Lens(zlens,zsrc_ref,b,p2,s,q1,q2,xc,yc,pmode,cosmo_in);
 			if (transform_to_pixsrc_frame) {
@@ -1877,7 +1884,13 @@ PYBIND11_MODULE(qlens, m) {
 					p3 = 0.0;
 				}
 			} else throw std::runtime_error("Can only choose pmode=0,1, or 2");
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+
+			std::set<std::string> allowed = {};
+			if (pmode==0) allowed.insert({"b","a","s"});
+			else if (pmode==1) allowed.insert({"sigma0","a_kpc","s_kpc"});
+			else allowed.insert({"mtot","a_kpc","s_kpc"});
+			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
+			check_for_unexpected_params(dict,allowed);
 
 			dPIE_Lens* dpie = new dPIE_Lens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
 			if (transform_to_pixsrc_frame) {
@@ -1948,7 +1961,13 @@ PYBIND11_MODULE(qlens, m) {
 				p1 = py::cast<double>(dict["mvir"]);
 				p2 = py::cast<double>(dict["rs_kpc"]);
 			} else throw std::runtime_error("Can only choose pmode=0, 1, or 2");
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+
+			std::set<std::string> allowed = {};
+			if (pmode==0) allowed.insert({"ks","rs"});
+			else if (pmode==1) allowed.insert({"mvir","c"});
+			else allowed.insert({"mvir","rs_kpc"});
+			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
+			check_for_unexpected_params(dict,allowed);
 
 			if (cosmo_in==NULL) throw std::runtime_error("NFW requires cosmology object to be passed in when initializing");
 
@@ -2044,7 +2063,17 @@ PYBIND11_MODULE(qlens, m) {
 				p2 = py::cast<double>(dict["rs_kpc"]);
 				p3 = py::cast<double>(dict["tau_s"]);
 			} else throw std::runtime_error("Can only choose pmode=0, 1, 2, 3, or 4");
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+
+			std::set<std::string> allowed = {};
+			if (pmode==0) allowed.insert({"ks","rs","rt"});
+			else if (pmode==1) allowed.insert({"mvir","rt_kpc"});
+			else if (pmode==2) allowed.insert({"mvir","tau"});
+			else if (pmode==3) allowed.insert({"mvir","rs_kpc","rt_kpc"});
+			else allowed.insert({"mvir","rs_kpc","tau_s"});
+			if (((pmode==1) or (pmode==2)) and (!use_median_c)) allowed.insert("c");
+
+			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
+			check_for_unexpected_params(dict,allowed);
 
 			if (cosmo_in==NULL) throw std::runtime_error("NFW requires cosmology object to be passed in when initializing");
 
@@ -2168,7 +2197,13 @@ PYBIND11_MODULE(qlens, m) {
 			} else throw std::runtime_error("Can only choose pmode=0 or 1");
 			p2 = py::cast<double>(dict["R_eff"]);
 			p3 = py::cast<double>(dict["n"]);
-			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+
+			std::set<std::string> allowed = {};
+			if (pmode==0) allowed.insert({"kappa_e","R_eff","n"});
+			else allowed.insert({"Mstar","R_eff","n"});
+
+			LensProfile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
+			check_for_unexpected_params(dict,allowed);
 
 			SersicLens* sersic = new SersicLens(zlens,zsrc_ref,p1,p2,p3,q1,q2,xc,yc,pmode,cosmo_in);
 			if (transform_to_pixsrc_frame) {
@@ -2355,14 +2390,13 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 	
-			//if (kwargs) {
-				//throw std::runtime_error("unknown argument to Gaussian"); // currently no kwargs arguments available for Gaussian
-			//}
-
 			double p1,p2,q1,q2,xc,yc;
 			p1 = py::cast<double>(dict["sbmax"]);
 			p2 = py::cast<double>(dict["sigma"]);
-			SB_Profile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+			std::set<std::string> allowed = {"sbmax","sigma"};
+			SB_Profile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
+			check_for_unexpected_params(dict,allowed);
+
 			return new Gaussian(band,zsrc,p1,p2,q1,q2,xc,yc,NULL);
 		}))
 		;
@@ -2397,7 +2431,11 @@ PYBIND11_MODULE(qlens, m) {
 			} else throw std::runtime_error("Can only choose pmode=0 or 1");
 			p2 = py::cast<double>(dict["R_eff"]);
 			p3 = py::cast<double>(dict["n"]);
-			SB_Profile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict));
+			std::set<std::string> allowed = {"R_eff","n"};
+			if (pmode==0) allowed.insert("s0");
+			else allowed.insert("s_eff");
+			SB_Profile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
+			check_for_unexpected_params(dict,allowed);
 
 			return new Sersic(band,zsrc,p1,p2,p3,q1,q2,xc,yc,0,NULL);
 		}))
@@ -2834,6 +2872,13 @@ PYBIND11_MODULE(qlens, m) {
 						throw std::runtime_error("Invalid boolean argument for 'get_2sigma'");
 					}
 				}
+				else if (py::cast<string>(item.first)=="resampled") {
+					try {
+						resampled = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean argument for 'resampled'");
+					}
+				}
 			}
 
 			dvector halfpct, lowpct_1sig, hipct_1sig, lowpct_2sig, hipct_2sig;
@@ -2868,6 +2913,13 @@ PYBIND11_MODULE(qlens, m) {
 						get_2sigma_percentiles = py::cast<bool>(item.second);
 					} catch (...) {
 						throw std::runtime_error("Invalid boolean argument for 'get_2sigma'");
+					}
+				}
+				else if (py::cast<string>(item.first)=="resampled") {
+					try {
+						resampled = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean argument for 'resampled'");
 					}
 				}
 			}
@@ -3158,11 +3210,11 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readonly("caustic_pts", &QLens_Wrap::critical_curve::caustic_pts)
 		.def_readonly("length_of_cell", &QLens_Wrap::critical_curve::length_of_cell);
 		
-	py::class_<image>(m, "image")
-		.def_readonly("pos", &image::pos)
-		.def_readonly("mag", &image::mag)
-		.def_readonly("td", &image::td)
-		.def_readonly("parity", &image::parity)
+	py::class_<image<double>>(m, "image")
+		.def_readonly("pos", &image<double>::pos)
+		.def_readonly("mag", &image<double>::mag)
+		.def_readonly("td", &image<double>::td)
+		.def_readonly("parity", &image<double>::parity)
 		;
 	
 	py::class_<image_data>(m, "image_data")
@@ -3304,5 +3356,15 @@ void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_
 		if ((set_qlens) and (!set_cosmo) and (qlens_ptr != NULL)) cosmo = qlens_ptr->cosmo;
 	}
 }	
+
+void check_for_unexpected_params(const py::dict& dict, const std::set<std::string> &allowed)
+{
+	for (auto item : dict) {
+		std::string paramname = py::cast<std::string>(item.first);
+		if (allowed.find(paramname) == allowed.end()) {
+			throw std::runtime_error("Unexpected parameter name '" + paramname + "'");
+		}
+	}
+}
 
 

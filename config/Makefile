@@ -21,6 +21,8 @@ PYBIND11_CFLAGS := $(shell python3 -m pybind11 --includes)
 
 STAN_INC = -I/Users/qminor/math -I/Users/qminor/math/lib/eigen_3.4.0 -I/Users/qminor/math/lib/boost_1.87.0 -I/Users/qminor/math/lib/sundials_6.1.1/include -I/Users/qminor/math/lib/sundials_6.1.1/src/sundials -include /Users/qminor/math/stan/math/prim/constraint/identity_free.hpp -I/Users/qminor/math/lib/tbb_2020.3/include
 
+#EIGEN_INC = -I/Users/qminor/eigen
+
 # Version without MUMPS
 #default: qlens mkdist cosmocalc 
 default: qlens qlens-wrap
@@ -34,6 +36,7 @@ OPTS_NO_OPT = -Wno-write-strings -O0 -std=c++17
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FITPACK
 FLAGS = -DUSE_READLINE -DUSE_STAN -D_REENTRANT -DUSE_EIGEN
+#FLAGS = -DUSE_READLINE -DUSE_EIGEN
 #FLAGS = -DUSE_READLINE 
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
 OTHERLIBS =  /Users/qminor/math/lib/tbb/libtbb.dylib -lm -lreadline
@@ -56,24 +59,22 @@ CC   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) $(STAN_INC)
 CC_NO_OPT   := $(CCOMP) $(OPTS_NO_OPT) $(UMFOPTS) $(FLAGS) $(CMUMPS) $(INC) $(STAN_INC)
 CL   := $(CCOMP) $(OPTS) $(UMFOPTS) $(FLAGS)
 
-objects = sbprofile.o profile.o egrad.o models.o qlens.o commands.o params.o modelparams.o lenscalc.o \
-				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o errors.o brent.o sort.o \
-				trirectangle.o cosmo.o \
-				simplex.o powell.o mcmceval.o
+qlens_core_objects = sbprofile.o profile.o egrad.o params.o models.o modelparams.o lenscalc.o \
+				lens.o imgsrch.o pixelgrid.o mcmchdr.o cosmo.o mcmceval.o
 
-wrapper_objects = qlens_export.o qlens_wrapper.o profile.o mcmceval.o egrad.o commands.o params.o modelparams.o lenscalc.o \
-				lens.o imgsrch.o pixelgrid.o cg.o mcmchdr.o models.o sbprofile.o errors.o brent.o \
-				sort.o trirectangle.o cosmo.o \
-				simplex.o powell.o 
+util_objects = cg.o errors.o brent.o sort.o trirectangle.o simplex.o powell.o
 
-mkdist_objects = mkdist.o
-mkdist_shared_objects = errors.o mcmceval.o
+objects = qlens.o commands.o $(qlens_core_objects) $(util_objects)
+
+wrapper_objects = qlens_export.o qlens_wrapper.o $(qlens_core_objects) $(util_objects)
+
+mkdist_objects = mkdist.o errors.o mcmceval.o
 
 qlens: $(objects) $(LIBDMUMPS)
 	$(CL) -o qlens $(OPTL) $(objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) 
 
-mkdist: $(mkdist_objects) $(mkdist_shared_objects)
-	$(CC) -o mkdist $(mkdist_objects) $(mkdist_shared_objects) -lm
+mkdist: $(mkdist_objects) 
+	$(CC) -o mkdist $(mkdist_objects) -lm
 
 qlens-wrap: $(wrapper_objects)
 	$(CL) -shared $(wrapper_objects) $(LINKLIBS) -undefined dynamic_lookup -o $(MODULE)
@@ -102,13 +103,13 @@ modelparams.o: modelparams.cpp modelparams.h
 lenscalc.o: lenscalc.cpp qlens.h lensvec.h
 	$(CC) -c lenscalc.cpp
 
-lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h modelparams.h
+lens.o: lens.cpp profile.h sbprofile.h qlens.h pixelgrid.h lensvec.h matrix.h simplex.h powell.h mcmchdr.h cosmo.h delaunay.h modelparams.h imgsrch.h
 	$(CC) -c lens.cpp
 
-imgsrch.o: imgsrch.cpp qlens.h lensvec.h
+imgsrch.o: imgsrch.cpp qlens.h lensvec.h imgsrch.h
 	$(CC) -c imgsrch.cpp
 
-pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h egrad.h modelparams.h
+pixelgrid.o: pixelgrid.cpp profile.h sbprofile.h lensvec.h pixelgrid.h qlens.h matrix.h cg.h egrad.h modelparams.h imgsrch.h
 	$(CC) -c pixelgrid.cpp
 
 cg.o: cg.cpp cg.h
@@ -157,10 +158,13 @@ cosmo.o: cosmo.cpp cosmo.h
 	$(CC) -c cosmo.cpp
 
 clean_qlens:
-	rm qlens $(objects)
+	rm qlens $(MODULE) $(objects) qlens_wrapper.o qlens_export.o
+
+clean_qlens_core:
+	rm qlens $(qlens_core_objects) qlens_wrapper.o qlens_export.o
 
 clean:
-	rm qlens mkdist $(objects) $(mkdist_objects) 
+	rm qlens mkdist mkdist.o $(objects) $(mkdist_objects) 
 
 clmain:
 	rm qlens.o

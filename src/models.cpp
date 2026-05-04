@@ -145,8 +145,8 @@ void SPLE_Lens::update_meta_parameters_impl()
 	this->update_ellipticity_meta_parameters<QScalar>();
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	// these meta-parameters are used in analytic formulas for deflection, potential, etc.
-	p.bprime = p.b*f_major_axis;
-	p.sprime = p.s*f_major_axis;
+	p.bprime = p.b*p.f_major_axis;
+	p.sprime = p.s*p.f_major_axis;
 	p.qsq = p.q*p.q; p.ssq_prime = p.sprime*p.sprime;
 	if (parameter_mode==1) p.alpha = p.gamma-1;
 }
@@ -211,19 +211,19 @@ void SPLE_Lens::set_model_specific_integration_pointers()
 		if (pdif.alpha==1.0) {
 			this->kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::kapavg_spherical_rsq_iso<stan::math::var>);
 			this->potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::potential_spherical_rsq_iso<stan::math::var>);
-			if (pdif.q != 1.0) {
+			//if (pdif.q != 1.0) {
 				this->defptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&)> (&SPLE_Lens::deflection_elliptical_iso<stan::math::var>);
 				this->hessptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensmatrix<stan::math::var>&)> (&SPLE_Lens::hessian_elliptical_iso<stan::math::var>);
 				this->potptr_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var,const stan::math::var)> (&SPLE_Lens::potential_elliptical_iso<stan::math::var>);
-			}
+			//}
 		} else if (pdif.s==0.0) {
 			this->potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::potential_spherical_rsq_nocore<stan::math::var>);
-			if (pdif.q != 1.0) {
+			//if (pdif.q != 1.0) {
 				this->defptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&)> (&SPLE_Lens::deflection_elliptical_nocore<stan::math::var>);
 				this->hessptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensmatrix<stan::math::var>&)> (&SPLE_Lens::hessian_elliptical_nocore<stan::math::var>);
 				this->potptr_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var,const stan::math::var)> (&SPLE_Lens::potential_elliptical_nocore<stan::math::var>);
 				this->def_and_hess_ptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&,lensmatrix<stan::math::var>&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore<stan::math::var>);
-			}
+			//}
 		}
 	}
 #endif
@@ -375,15 +375,16 @@ void SPLE_Lens::deflection_elliptical_iso(const QScalar x, const QScalar y, lens
 	//using std::sqrt;
 	//using std::atan;
 	//using std::atanh;
-//#ifdef USE_STAN
-	//using stan::math::sqrt;
-	//using stan::math::atan;
-	//using stan::math::atanh;
-//#endif
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::atanh;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar u, psi;
 	psi = sqrt(p.qsq*(p.ssq_prime+x*x)+y*y);
-	u = sqrt(1-p.qsq);
+	QScalar eps = 1e-10;
+	u = sqrt(1-p.qsq+eps);
 
 	def[0] = (p.bprime*p.q/u)*atan(u*x/(psi+p.sprime));
 	def[1] = (p.bprime*p.q/u)*atanh(u*y/(psi+p.qsq*p.sprime));
@@ -397,9 +398,9 @@ template <typename QScalar>
 void SPLE_Lens::hessian_elliptical_iso(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess) // only for alpha=1
 {
 	//using std::sqrt;
-//#ifdef USE_STAN
-	//using stan::math::sqrt;
-//#endif
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
 
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar xsq, ysq, psi, tmp;
@@ -425,16 +426,17 @@ QScalar SPLE_Lens::potential_elliptical_iso(const QScalar x, const QScalar y) //
 	//using std::atan;
 	//using std::atanh;
 	//using std::log;
-//#ifdef USE_STAN
-	//using stan::math::sqrt;
-	//using stan::math::atan;
-	//using stan::math::atanh;
-	//using stan::math::log;
-//#endif
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::atanh;
+	using stan::math::log;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar u, tmp, psi;
 	psi = sqrt(p.qsq*(p.ssq_prime+x*x)+y*y);
-	u = sqrt(1-p.qsq);
+	QScalar eps = 1e-10;
+	u = sqrt(1-p.qsq+eps);
 
 	tmp = (p.bprime*p.q/u)*(x*atan(u*x/(psi+p.sprime)) + y*atanh(u*y/(psi+p.qsq*p.sprime)));
 	if (p.sprime != 0) tmp += p.bprime*p.q*p.sprime*(-log(SQR(psi+p.sprime) + SQR(u*x))/2 + log((1.0+p.q)*p.sprime));
@@ -453,12 +455,12 @@ void SPLE_Lens::deflection_elliptical_nocore(const QScalar x, const QScalar y, l
 	//using std::atan;
 	//using std::abs;
 	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::sqrt;
-	//using stan::math::atan;
-	//using stan::math::abs;
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::abs;
+	using stan::math::pow;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	// Formulas from Tessore et al. 2015
 	QScalar phi, R = sqrt(x*x+y*y/p.qsq);
@@ -489,12 +491,12 @@ void SPLE_Lens::hessian_elliptical_nocore(const QScalar x, const QScalar y, lens
 	//using std::atan;
 	//using std::abs;
 	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::sqrt;
-	//using stan::math::atan;
-	//using stan::math::abs;
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::abs;
+	using stan::math::pow;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar R, phi, kap;
 	R = sqrt(x*x+y*y/p.qsq);
@@ -533,12 +535,12 @@ void SPLE_Lens::deflection_and_hessian_elliptical_nocore(const QScalar x, const 
 	//using std::atan;
 	//using std::abs;
 	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::sqrt;
-	//using stan::math::atan;
-	//using stan::math::abs;
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::abs;
+	using stan::math::pow;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar R, phi, kap;
 	R = sqrt(x*x+y*y/p.qsq);
@@ -576,12 +578,12 @@ QScalar SPLE_Lens::potential_elliptical_nocore(const QScalar x, const QScalar y)
 	//using std::atan;
 	//using std::abs;
 	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::sqrt;
-	//using stan::math::atan;
-	//using stan::math::abs;
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::abs;
+	using stan::math::pow;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar phi, R = sqrt(x*x+y*y/(p.q*p.q));
 	phi = atan(abs(y/(p.q*x)));
@@ -607,10 +609,9 @@ complex<QScalar> SPLE_Lens::deflection_angular_factor(const QScalar &phi)
 {
 	//using std::polar;
 	//using std::norm;
-//#ifdef USE_STAN
-	//using stan::math::polar;
-	////using stan::math::norm;
-//#endif
+#ifdef USE_STAN
+	using stan::math::polar;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	// Formulas from Tessore et al. 2015
 	QScalar beta, ff;
@@ -859,9 +860,9 @@ void dPIE_Lens::update_meta_parameters_impl()
 		if (parameter_mode==1) set_abs_params_from_sigma0<QScalar>();
 		else if (parameter_mode==2) set_abs_params_from_mtot<QScalar>();
 	}
-	p.bprime = p.b*f_major_axis;
-	p.aprime = p.a*f_major_axis;
-	p.sprime = p.s*f_major_axis;
+	p.bprime = p.b*p.f_major_axis;
+	p.aprime = p.a*p.f_major_axis;
+	p.sprime = p.s*p.f_major_axis;
 	p.qsq = p.q*p.q; p.asq = p.aprime*p.aprime; p.ssq_prime = p.sprime*p.sprime;
 }
 template void dPIE_Lens::update_meta_parameters_impl<double>();
@@ -906,7 +907,7 @@ void dPIE_Lens::update_special_anchored_params()
 		else p.a = sqrt(ravg*p.b); // this is an approximate formula (a = sqrt(b*Re_halo)) and assumes the subhalo is found roughly near the Einstein radius of the halo
 
 		if (parameter_mode==1) p.a_kpc = p.a/kpc_to_arcsec;
-		p.aprime = p.a/f_major_axis;
+		p.aprime = p.a/p.f_major_axis;
 		p.asq = p.aprime*p.aprime;
 	}
 }
@@ -3365,24 +3366,14 @@ template void Shear::potential_derivatives_impl<stan::math::var>(stan::math::var
 #endif
 
 template <typename QScalar>
-void Shear::set_angle_from_components(const QScalar &comp1, const QScalar &comp2)
+void Shear::set_angle_from_components(QScalar comp1, const QScalar comp2)
 {
 	Shear_Params<QScalar>& p = assign_shear_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
-	QScalar angle;
-	if (comp1==0) {
-		if (comp2 > 0) angle = M_HALFPI;
-		else angle = -M_HALFPI;
-	} else {
-		angle = atan(abs(comp2/comp1));
-		if (comp1 < 0) {
-			if (comp2 < 0)
-				angle = angle - M_PI;
-			else
-				angle = M_PI - angle;
-		} else if (comp2 < 0) {
-			angle = -angle;
-		}
-	}
+#ifdef USE_STAN
+	using stan::math::atan2;
+	if ((comp1==0) and (comp2==0)) comp1 += 1e-10; // for autodiff purposes, to avoid coordinate singularity
+#endif
+	QScalar angle = atan2(comp2,comp1);
 	angle /= 2;
 	if (angle_points_towards_perturber) angle += M_HALFPI; // the phase shift is because the angle is the direction of the perturber, NOT the p.shear angle
 	if (orient_major_axis_north) angle -= M_HALFPI;
@@ -3390,9 +3381,9 @@ void Shear::set_angle_from_components(const QScalar &comp1, const QScalar &comp2
 	while (angle <= -M_HALFPI) angle += M_PI;
 	this->set_angle_radians(angle);
 }
-template void Shear::set_angle_from_components<double>(const double &comp1, const double &comp2);
+template void Shear::set_angle_from_components<double>(double comp1, const double comp2);
 #ifdef USE_STAN
-template void Shear::set_angle_from_components<stan::math::var>(const stan::math::var &comp1, const stan::math::var &comp2);
+template void Shear::set_angle_from_components<stan::math::var>(stan::math::var comp1, const stan::math::var comp2);
 #endif
 
 /***************************** Multipole term *******************************/
@@ -7337,7 +7328,7 @@ void TopHatLens::deflection_analytic(const QScalar x, const QScalar y, lensvecto
 {
 	TopHat_Params<QScalar>& p = assign_tophat_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar eps, xsqval, ysqval, xisq, qfac, u, qufactor, def_fac;
-	QScalar fsqinv = 1/SQR(f_major_axis);
+	QScalar fsqinv = 1/SQR(p.f_major_axis);
 	eps = 1 - p.q*p.q;
 	xsqval = x*x;
 	ysqval = y*y;
@@ -7368,7 +7359,7 @@ void TopHatLens::hessian_analytic(const QScalar x, const QScalar y, lensmatrix<Q
 {
 	TopHat_Params<QScalar>& p = assign_tophat_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar eps, xsqval, ysqval, xisq, qfac, u, qufactor, dxisq, hessfac, def_fac, def0, def1;
-	QScalar fsqinv = 1.0/SQR(f_major_axis);
+	QScalar fsqinv = 1.0/SQR(p.f_major_axis);
 	eps = 1 - p.q*p.q;
 	xsqval = x*x;
 	ysqval = y*y;
@@ -7406,7 +7397,7 @@ QScalar TopHatLens::potential_analytic(const QScalar x, const QScalar y)
 {
 	TopHat_Params<QScalar>& p = assign_tophat_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar eps, xsqval, ysqval, xisq, qfac, u, qufactor, dxisq, hessfac, def_fac, def0, def1;
-	QScalar fsqinv = 1.0/SQR(f_major_axis);
+	QScalar fsqinv = 1.0/SQR(p.f_major_axis);
 	eps = 1 - p.q*p.q;
 	xsqval = x*x;
 	ysqval = y*y;

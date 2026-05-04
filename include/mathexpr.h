@@ -18,7 +18,7 @@ const double EULER = 2.718281828459045;
 template <typename T>
 inline T minval(const T &a, const T &b) { return (a < b ? a : b); }
 template <typename T>
-inline T maxval(const T &a, const T &b) { return (a > b ? a : b); }
+T maxval(const T &a, const T &b) { return (a > b ? a : b); }
 
 inline double dmin(const double &a, const double &b) { return (a < b ? a : b); }
 inline double dmax(const double &a, const double &b) { return (a > b ? a : b); }
@@ -39,18 +39,6 @@ inline T degrees_to_radians(const T theta) { return (0.017453292519943295*theta)
 template <typename T>
 inline T radians_to_degrees(const T theta) { return (57.29577951308232*theta); }
 
-inline double get_angle(double a, double b) {
-	double angle = std::atan(std::abs(b/a));
-	if (a < 0) {
-		if (b < 0)
-			angle = angle - M_PI;
-		else
-			angle = M_PI - angle;
-	} else if (b < 0) {
-		angle = -angle;
-	}
-	return angle;
-
-}
+inline double get_angle(const double a, const double b) { return std::atan2(b,a); }
 
 #endif // MATHEXPR_H

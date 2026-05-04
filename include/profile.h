@@ -15,6 +15,7 @@
 #include <vector>
 #include <complex>
 #include <map>
+#include <set>
 
 #ifdef USE_STAN
 #include <stan/math.hpp>
@@ -66,6 +67,7 @@ class LensParams
 {
 	public:
 	QScalar q, theta, x_center, y_center; // four base parameters, which can be added to in derived lens models
+	QScalar f_major_axis; // used for defining elliptical radius
 	QScalar **param; // this is an array of pointers, each of which points to the corresponding indexed parameter for each model
 	QScalar epsilon, epsilon1, epsilon2; // used for defining ellipticity, and/or components of ellipticity (epsilon1, epsilon2)
 	QScalar costheta, sintheta;
@@ -160,7 +162,6 @@ class LensProfile : public EllipticityGradient
 	bool center_defined;
 	bool lensed_center_coords; // option for line-of-sight perturber that makes the lensed position of the perturber the free parameters
 	//double xc_prime, yc_prime; // used if lensed_center_coords is set to true
-	double f_major_axis; // used for defining elliptical radius
 	double zlens_current; // used to check if zlens has been changed, in which case sigma_cr, etc. are updated
 	//double epsilon, epsilon1, epsilon2; // used for defining ellipticity, and/or components of ellipticity (epsilon1, epsilon2)
 	//double costheta, sintheta;
@@ -214,7 +215,7 @@ class LensProfile : public EllipticityGradient
 	template <typename QScalar>
 	void set_geometric_parameters(const QScalar &q_in, const QScalar &theta_degrees, const QScalar &xc_in, const QScalar &yc_in);
 	template <typename QScalar>
-	void set_angle_from_components(const QScalar &comp_x, const QScalar &comp_y);
+	void set_angle_from_components(QScalar comp1, const QScalar comp2);
 	template <typename QScalar>
 	void set_center_if_lensed_coords();
 #ifdef USE_STAN
@@ -475,9 +476,11 @@ class LensProfile : public EllipticityGradient
 	void set_geometric_param_auto_ranges(int param_i);
 	void get_auto_ranges(boolvector& use_penalty_limits, Vector<double>& lower, Vector<double>& upper, int &index);
 
-	static void extract_geometric_params_from_map(double& q1, double& q2, double& xcp, double& ycp, std::map<std::string, double> dict)
+	static void extract_geometric_params_from_map(double& q1, double& q2, double& xcp, double& ycp, std::map<std::string, double> dict, std::set<std::string> &allowed)
 	{ 
 		if (!use_ellipticity_components) {
+			allowed.insert("q");
+			allowed.insert("theta");
 			try {
 			 q1 = dict.at("q");
 			} catch (...) {
@@ -489,6 +492,8 @@ class LensProfile : public EllipticityGradient
 				q2 = 0.0;
 			}
 		} else {
+			allowed.insert("e1");
+			allowed.insert("e2");
 			try {
 			 q1 = dict.at("e1");
 			 q2 = dict.at("e2");
@@ -497,13 +502,14 @@ class LensProfile : public EllipticityGradient
 			 q2 = 0.0;
 			}
 		}
+		allowed.insert({"xc","yc"});
 		try {
-					 xcp = dict.at("xc");
+			 xcp = dict.at("xc");
 		} catch (...) {
 			xcp = 0.0;
 		}
 		try {
-					 ycp = dict.at("yc");
+			 ycp = dict.at("yc");
 		} catch (...) {
 			ycp = 0.0;
 		}
@@ -628,7 +634,7 @@ class LensProfile : public EllipticityGradient
 	void get_center_coords(double &xc, double &yc) { xc=lensparams->x_center; yc=lensparams->y_center; }
 	void get_center_coords(lensvector<double> &center) { center[0]=lensparams->x_center; center[1]=lensparams->y_center; }
 	void get_q_theta(double &q_out, double& theta_out) { q_out=lensparams->q; theta_out=lensparams->theta; }
-	double get_f_major_axis() { return f_major_axis; }
+	double get_f_major_axis() { return lensparams->f_major_axis; }
 	double get_redshift() { return lensparams->zlens; }
 	int get_n_params() { return n_params; }
 	int get_lensprofile_nparams() { return lensprofile_nparams; }
@@ -1346,7 +1352,7 @@ class Shear : public LensProfile
 	void set_model_specific_integration_pointers();
 
 	template <typename QScalar>
-	void set_angle_from_components(const QScalar &comp_x, const QScalar &comp_y);
+	void set_angle_from_components(QScalar comp_x, const QScalar comp_y);
 
 	public:
 	Shear(const double zlens_in, const double zsrc_in, const double &shear_in, const double &theta_degrees, const double &xc_in, const double &yc_in, Cosmology*);

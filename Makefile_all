@@ -42,7 +42,7 @@ default: mkbuilddir mkobjdir qlens mkdist qlens-wrap
 
 CCOMP = mpicxx -DUSE_MPI
 OPTS = -Wno-write-strings -Wno-vla-cxx-extension -Xpreprocessor -fopenmp -O3 -std=c++17 -m64 -I"/opt/intel/oneapi/mkl/2022.1.0/include" 
-OPTS_NO_OPT = -Wno-write-strings -Wno-vla-cxx-extension -Xpreprocessor -fopenmp -std=c++17 
+OPTS_NO_OPT = -Wno-write-strings -Wno-vla-cxx-extension -Xpreprocessor -fopenmp -std=c++17 -DUSE_READLINE
 FLAGS = -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DMULTINEST_MOD -DUSE_POLYCHORD -DUSE_FITPACK -DUSE_MKL -DUSE_MLPACK -DUSE_FFTW -DUSE_COOLEST -DUSE_EIGEN
 
 #FLAGS = -I/usr/local/include/python3.7m/
@@ -91,7 +91,7 @@ mkobjdir:
 	mkdir -p $(OBJ_DIR)
 
 qlens: $(objects) $(LIBDMUMPS) $(fitpack_objects)
-	$(CL) -o $(BIN_DIR)/qlens $(objects) $(fitpack_objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS)  
+	$(CL) -o $(BIN_DIR)/qlens $(objects) $(fitpack_objects) $(LINKLIBS) $(UMFPACK) $(UMFLIBS) -lreadline
 
 qlens-wrap: $(wrapper_objects)
 	$(CL) -shared $(wrapper_objects) $(fitpack_objects) $(LINKLIBS) -undefined dynamic_lookup -o $(MODULE)
@@ -123,13 +123,13 @@ $(OBJ_DIR)/modelparams.o: $(SRC_DIR)/modelparams.cpp $(INCLUDE_DIR)/modelparams.
 $(OBJ_DIR)/lenscalc.o: $(SRC_DIR)/lenscalc.cpp $(INCLUDE_DIR)/qlens.h $(INCLUDE_DIR)/lensvec.h
 	$(CC) -c $(SRC_DIR)/lenscalc.cpp -o $(OBJ_DIR)/lenscalc.o
 
-$(OBJ_DIR)/lens.o: $(SRC_DIR)/lens.cpp $(INCLUDE_DIR)/profile.h $(INCLUDE_DIR)/sbprofile.h $(INCLUDE_DIR)/qlens.h $(INCLUDE_DIR)/pixelgrid.h $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/matrix.h $(INCLUDE_DIR)/simplex.h $(INCLUDE_DIR)/powell.h $(INCLUDE_DIR)/mcmchdr.h $(INCLUDE_DIR)/cosmo.h $(INCLUDE_DIR)/delaunay.h $(INCLUDE_DIR)/modelparams.h $(INCLUDE_DIR)/params.h
+$(OBJ_DIR)/lens.o: $(SRC_DIR)/lens.cpp $(INCLUDE_DIR)/profile.h $(INCLUDE_DIR)/sbprofile.h $(INCLUDE_DIR)/qlens.h $(INCLUDE_DIR)/pixelgrid.h $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/matrix.h $(INCLUDE_DIR)/simplex.h $(INCLUDE_DIR)/powell.h $(INCLUDE_DIR)/mcmchdr.h $(INCLUDE_DIR)/cosmo.h $(INCLUDE_DIR)/delaunay.h $(INCLUDE_DIR)/modelparams.h $(INCLUDE_DIR)/params.h $(INCLUDE_DIR)/imgsrch.h
 	$(CC) -c $(SRC_DIR)/lens.cpp -o $(OBJ_DIR)/lens.o
 
-$(OBJ_DIR)/imgsrch.o: $(SRC_DIR)/imgsrch.cpp $(INCLUDE_DIR)/qlens.h $(INCLUDE_DIR)/lensvec.h
+$(OBJ_DIR)/imgsrch.o: $(SRC_DIR)/imgsrch.cpp $(INCLUDE_DIR)/qlens.h $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/imgsrch.h
 	$(CC) -c $(SRC_DIR)/imgsrch.cpp -o $(OBJ_DIR)/imgsrch.o
 
-$(OBJ_DIR)/pixelgrid.o: $(SRC_DIR)/pixelgrid.cpp $(INCLUDE_DIR)/profile.h $(INCLUDE_DIR)/sbprofile.h $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/pixelgrid.h $(INCLUDE_DIR)/qlens.h $(INCLUDE_DIR)/matrix.h $(INCLUDE_DIR)/cg.h $(INCLUDE_DIR)/modelparams.h
+$(OBJ_DIR)/pixelgrid.o: $(SRC_DIR)/pixelgrid.cpp $(INCLUDE_DIR)/profile.h $(INCLUDE_DIR)/sbprofile.h $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/pixelgrid.h $(INCLUDE_DIR)/qlens.h $(INCLUDE_DIR)/matrix.h $(INCLUDE_DIR)/cg.h $(INCLUDE_DIR)/modelparams.h $(INCLUDE_DIR)/imgsrch.h
 	$(CC) -c $(SRC_DIR)/pixelgrid.cpp -o $(OBJ_DIR)/pixelgrid.o
 
 $(OBJ_DIR)/cg.o: $(SRC_DIR)/cg.cpp $(INCLUDE_DIR)/cg.h
@@ -178,10 +178,11 @@ $(OBJ_DIR)/hyp_2F1.o: $(SRC_DIR)/hyp_2F1.cpp $(INCLUDE_DIR)/hyp_2F1.h $(INCLUDE_
 	$(CC) -c $(SRC_DIR)/hyp_2F1.cpp -o $(OBJ_DIR)/hyp_2F1.o
 
 clean_qlens:
-	rm $(BIN_DIR)/qlens $(MODULE) $(wrapper_objects)
+	rm $(BIN_DIR)/qlens $(MODULE) $(objects) $(OBJ_DIR)/qlens_export.o $(OBJ_DIR)/qlens_wrapper.o
 
 clean:
-	rm $(BIN_DIR)/qlens $(MODULE) $(BIN_DIR)/kdist $(objects) $(mkdist_objects) $(wrapper_objects)
+	rm $(BIN_DIR)/qlens $(BIN_DIR)/mkdist $(OBJ_DIR)/mkdist.o $(MODULE) $(objects) $(OBJ_DIR)/qlens_export.o $(OBJ_DIR)/qlens_wrapper.o
+
 
 vim_run:
 	qlens

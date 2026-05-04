@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 #else
 	n_omp_threads = 1;
 #endif
-	Grid::allocate_multithreaded_variables(n_omp_threads);
+	GridCell::allocate_multithreaded_variables(n_omp_threads);
 	CartesianSourcePixel::allocate_multithreaded_variables(n_omp_threads);
 	DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
@@ -267,7 +267,7 @@ int main(int argc, char *argv[])
 #ifdef USE_MUMPS
 	QLens::delete_mumps();
 #endif
-	Grid::deallocate_multithreaded_variables();
+	GridCell::deallocate_multithreaded_variables();
 	ImagePixelGrid::deallocate_multithreaded_variables();
 	DelaunayGrid::deallocate_multithreaded_variables();
 	CartesianSourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)

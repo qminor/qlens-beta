@@ -2168,7 +2168,7 @@ void QLens::process_commands(bool read_file)
 					if (use_scientific_notation) cout << setiosflags(ios::scientific);
 					cout << "cc_splitlevels = " << cc_splitlevels << endl;
 					cout << "cc_split_neighbors: " << display_switch(cc_neighbor_splittings) << endl;
-					cout << "imgpos_accuracy = " << Grid::image_pos_accuracy << endl;
+					cout << "imgpos_accuracy = " << image_pos_accuracy << endl;
 					cout << "imgsep_threshold = " << redundancy_separation_threshold << endl;
 					cout << "imgsrch_mag_threshold = " << newton_magnification_threshold << endl;
 					cout << "reject_himag: " << display_switch(reject_himag_images) << endl;
@@ -2400,8 +2400,8 @@ void QLens::process_commands(bool read_file)
 				else Complain("unknown grid type");
 			} else {
 				if (mpi_id==0) {
-					if (radial_grid) cout << "Grid type: radial" << endl;
-					else cout << "Grid type: Cartesian" << endl;
+					if (radial_grid) cout << "GridCell type: radial" << endl;
+					else cout << "GridCell type: Cartesian" << endl;
 				}
 			}
 		}
@@ -13091,9 +13091,9 @@ void QLens::process_commands(bool read_file)
 			double imgpos_accuracy;
 			if (nwords == 2) {
 				if (!(ws[1] >> imgpos_accuracy)) Complain("invalid imgpos_accuracy setting");
-				set_imagepos_accuracy(imgpos_accuracy);
+				image_pos_accuracy = imgpos_accuracy;
 			} else if (nwords==1) {
-				imgpos_accuracy = Grid::image_pos_accuracy;
+				imgpos_accuracy = image_pos_accuracy;
 				if (mpi_id==0) cout << "image position imgpos_accuracy = " << imgpos_accuracy << endl;
 			} else Complain("must specify either zero or one argument (image position accuracy)");
 		}

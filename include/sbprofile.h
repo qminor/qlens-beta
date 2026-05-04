@@ -202,9 +202,11 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	void set_geometric_param_auto_ranges(int param_i);
 	void get_auto_ranges(boolvector& use_penalty_limits, Vector<double>& lower, Vector<double>& upper, int &index);
 
-	static void extract_geometric_params_from_map(double& q1, double& q2, double& xcp, double& ycp, std::map<std::string, double> dict)
+	static void extract_geometric_params_from_map(double& q1, double& q2, double& xcp, double& ycp, std::map<std::string, double> dict, std::set<std::string> &allowed)
 	{ 
 		if (!use_sb_ellipticity_components) {
+			allowed.insert("q");
+			allowed.insert("theta");
 			try {
 				q1 = dict.at("q");
 			} catch (...) {
@@ -216,6 +218,8 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 				q2 = 0.0;
 			}
 		} else {
+			allowed.insert("e1");
+			allowed.insert("e2");
 			try {
 			 q1 = dict.at("e1");
 			 q2 = dict.at("e2");
@@ -224,19 +228,18 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 			 q2 = 0.0;
 			}
 		}
+		allowed.insert({"xc","yc"});
 		try {
-					 xcp = dict.at("xc");
+			 xcp = dict.at("xc");
 		} catch (...) {
 			xcp = 0.0;
 		}
 		try {
-					 ycp = dict.at("yc");
+			 ycp = dict.at("yc");
 		} catch (...) {
 			ycp = 0.0;
 		}
 	}
-
-
 
 	virtual void get_fit_parameters(double *fitparams, int &index);
 	void get_fit_parameter_names(std::vector<std::string>& paramnames_vary, std::vector<std::string> *latex_paramnames_vary = NULL, std::vector<std::string> *latex_subscripts_vary = NULL, const bool include_suffix = false);

@@ -7,6 +7,7 @@
 #include "spline.h"
 #include "profile.h"
 #include "sbprofile.h"
+#include "imgsrch.h"
 #include "lensvec.h"
 #include "vector.h"
 #include "powell.h"
@@ -46,9 +47,6 @@
 
 using std::string;
 
-enum ImageSystemType { NoImages, Single, Double, Cusp, Quad };
-enum inside_cell { Inside, Outside, Edge };
-enum edge_sourcept_status { SourceInGap, SourceInOverlap, NoSource };
 enum SourceFitMode { Point_Source, Cartesian_Source, Delaunay_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
@@ -85,7 +83,7 @@ enum DerivedParamType {
 	UserDefined
 };
 
-class QLens;			// Defined after class Grid
+class QLens;
 class Model;
 class CartesianSourceGrid;
 class LensPixelGrid;
@@ -144,26 +142,6 @@ class MyIterator {
 	pointer m_ptr;
 };
 
-struct image {
-	lensvector<double> pos;
-	double mag, flux, td;
-	int parity;
-	//image() {}
-	//image(image& img_in) { pos=img_in.pos; mag=img_in.mag; flux=img_in.flux; td=img_in.td; parity=img_in.parity; }
-	//void copy_img(image& img_in) { pos=img_in.pos; mag=img_in.mag; flux=img_in.flux; td=img_in.td; parity=img_in.parity; }
-};
-
-struct image_data : public image
-{
-	double sigma_pos;
-	double sigma_flux;
-	double sigma_td;
-	bool use_in_chisq;
-	//image_data() {}
-	//image_data(image_data& img_in) { pos=img_in.pos; mag=img_in.mag; flux=img_in.flux; td=img_in.td; parity=img_in.parity; sigma_pos=img_in.sigma_pos; sigma_flux=img_in.sigma_flux; sigma_td=img_in.sigma_td; use_in_chisq=img_in.use_in_chisq; }
-	//image_data(image& img_in) { pos=img_in.pos; mag=img_in.mag; flux=img_in.flux; td=img_in.td; parity=img_in.parity; }
-};
-
 struct PtImageSet
 {
 	QLens* qlens_ptr;
@@ -171,7 +149,7 @@ struct PtImageSet
 	int n_images;
 	lensvector<double> srcpos;
 	bool include_time_delays;
-	std::vector<image> images;
+	std::vector<image<double>> images;
 
 	PtImageSet() { qlens_ptr = NULL; }
 	PtImageSet(QLens* qlens_ptr_in) { qlens_ptr = qlens_ptr_in; }
@@ -181,7 +159,7 @@ struct PtImageSet
 		images.resize(n_images);
 		include_time_delays = false;
 	}
-	void copy_imageset(const lensvector<double>& srcpos_in, const double zsrc_in, image* images_in, const int nimg);
+	void copy_imageset(const lensvector<double>& srcpos_in, const double zsrc_in, image<double>* images_in, const int nimg);
 	string output_images_string(const bool use_sci);
 
 	//MyIterator<image> begin() {
@@ -191,11 +169,11 @@ struct PtImageSet
 		//return MyIterator<image>(images.data()+n_images);
 	//}
 
-	std::vector<image>::iterator begin() { return images.begin(); }
-   std::vector<image>::iterator end() { return images.end(); }
-   std::vector<image>::const_iterator begin() const { return images.begin(); }
-   std::vector<image>::const_iterator end() const { return images.end(); }
-	image operator[](size_t i) { return images[i]; }
+	std::vector<image<double>>::iterator begin() { return images.begin(); }
+   std::vector<image<double>>::iterator end() { return images.end(); }
+   std::vector<image<double>>::const_iterator begin() const { return images.begin(); }
+   std::vector<image<double>>::const_iterator end() const { return images.end(); }
+	image<double> operator[](size_t i) { return images[i]; }
 };
 
 struct PtImageDataSet {
@@ -208,237 +186,6 @@ struct PtImageDataSet {
 		images.clear();
 		images.resize(n_images);
 	}
-};
-
-template <typename QScalar>
-class PtSrcParams : public ModelParams<QScalar>
-{
-	public:
-	//QScalar pos_x, pos_y;
-	lensvector<QScalar> pos;
-	lensvector<QScalar> shift; // allows for a small correction to the source position estimated using analytic_bestfit_src
-	QScalar zsrc, srcflux;
-};
-
-class PointSource : public Model
-{
-	friend class QLens;
-	friend class SB_Profile;
-
-	public:
-	PtSrcParams<double> ptsrc_params;
-#ifdef USE_STAN
-	PtSrcParams<stan::math::var> ptsrc_params_dif; // autodiff version
-#endif
-	template <typename QScalar>
-	PtSrcParams<QScalar>& assign_ptsrc_param_object()
-	{
-#ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>)
-			return ptsrc_params_dif;
-		else
-#endif
-		return ptsrc_params;
-	}
-
-	private:
-	int zsrc_paramnum; // just to keep track of which parameter number is zsrc (set when constructor is called)
-
-	public:
-	bool include_shift;
-	int n_images;
-	std::vector<image> images;
-
-	public:
-	PointSource() { qlens = NULL; }
-	PointSource(QLens* lens_in);
-	PointSource(QLens* lens_in, const lensvector<double>& sourcept, const double zsrc_in);
-	PointSource(lensvector<double>& src_in, double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0) {
-		copy_imageset(src_in, zsrc_in, images_in, nimg, srcflux_in);
-	}
-	void setup_parameters(const bool initial_setup);
-	template <typename QScalar>
-	void setup_param_pointers();
-
-	void update_meta_parameters(const bool varied_only_fitparams);
-	void get_parameter_numbers_from_qlens(int& pi, int& pf);
-	bool register_vary_parameters_in_qlens();
-	void register_limits_in_qlens();
-	void update_fitparams_in_qlens();
-	void set_vary_source_coords();
-#ifdef USE_STAN
-	void sync_autodif_parameters();
-#endif
-	void copy_ptsrc_data(PointSource* ptsrc_in);
-	void copy_imageset(const lensvector<double>& pos_in, const double zsrc_in, image* images_in, const int nimg, const double srcflux_in = 1.0);
-	void set_images(image* images_in, const int nimg);
-	template <typename QScalar>
-	void update_srcpos(const lensvector<QScalar>& srcpt);
-	double imgflux(const int imgnum) { if (imgnum < n_images) return abs(images[imgnum].mag*ptsrc_params.srcflux); else return -1; }
-	void print(bool include_time_delays = false, bool show_labels = true) { print_to_file(include_time_delays,show_labels,NULL,NULL); }
-	void print_to_file(bool include_time_delays, bool show_labels, std::ofstream* srcfile, std::ofstream* imgfile);
-	void reset_images() { n_images = 0; images.clear(); }
-	lensvector<double>& get_pos() { return ptsrc_params.pos; }
-#ifdef USE_STAN
-	lensvector<stan::math::var>& get_pos_autodif() { return ptsrc_params_dif.pos; }
-#endif
-	double& get_srcflux() { return ptsrc_params.srcflux; }
-	void set_srcflux(const double flux_in) { ptsrc_params.srcflux = flux_in; }
-#ifdef USE_STAN
-	stan::math::var& get_srcflux_autodif() { return ptsrc_params_dif.srcflux; }
-	void set_srcflux_autodif(const stan::math::var flux_in) { ptsrc_params_dif.srcflux = flux_in; }
-#endif
-
-};
-
-class Grid : private Brent
-{
-	private:
-	// this constructor is only used by the top-level Grid to initialize the lower-level grids, so it's private
-	Grid(lensvector<double>** xij, const int& i, const int& j, const int& level_in, Grid* parent_ptr);
-
-	Grid*** cell;
-	static QLens* lens;
-	static int nthreads;
-	Grid* neighbor[4]; // 0 = i+1 neighbor, 1 = i-1 neighbor, 2 = j+1 neighbor, 3 = j-1 neighbor
-	Grid* parent_cell;
-
-	public:
-	// Instead of all these static variables, have a class Grid versus GridCell, where Grid is the parent that contains all these as non-static variables
-	static double* grid_zfactors; // kappa ratio used for modeling source points at different redshifts
-	static double** grid_betafactors; // kappa ratio used for modeling source points at different redshifts
-	static const int u_split, w_split;
-	static bool radial_grid; // if false, a Cartesian grid is assumed
-	static bool enforce_min_area;
-	static bool cc_neighbor_splittings;
-	static double rmin, rmax;
-	static double xcenter, ycenter;
-	static double grid_q;
-	static double theta_offset;
-
-	int u_N, w_N;
-	int level;
-	lensvector<double> center_imgplane;
-	double cell_area;
-	lensvector<double> corner_pt[4];
-
-	// cell lensing properties
-	lensvector<double> *corner_sourcept[4];
-	double *corner_invmag[4];
-	double *corner_kappa[4];
-	bool allocated_corner[4];
-
-	// all functions in class Grid are contained in imgsrch.cpp
-	bool image_test(const int& thread);
-	void add_image_to_list(const lensvector<double>& imgpos);
-
-	bool run_newton(lensvector<double>& xroot, const int& thread);
-	inside_cell test_if_inside_sourceplane_cell(lensvector<double>* point, const int& thread);
-	bool test_if_sourcept_inside_triangle(lensvector<double>* point1, lensvector<double>* point2, lensvector<double>* point3, const int& thread);
-	bool test_if_inside_cell(const lensvector<double>& point, const int& thread);
-	bool test_if_galaxy_nearby(const lensvector<double>& point, const double& distsq);
-
-	void assign_lensing_properties(const int& thread);
-	void assign_subcell_lensing_properties_firstlevel();
-	void reassign_subcell_lensing_properties_firstlevel();
-	void assign_subcell_lensing_properties(const int& thread);
-
-	// Used for image searching. If you ever multi-thread the image search, be careful about making these static variables
-	static lensvector<double> *d1, *d2, *d3, *d4;
-	static double *product1, *product2, *product3;
-	static int *maxlevs;
-	static lensvector<double> ***xvals_threads;
-
-	// Used for finding critical curves within a grid cell
-	static int corner_positive_mag[4], corner_negative_mag[4];
-	static lensvector<double> ccsearch_initial_pt, ccsearch_interval;
-
-	bool cc_inside;
-	bool singular_pt_inside;
-	bool cell_in_central_image_region;
-	void check_if_cc_inside();
-	void check_if_singular_point_inside(const int& thread);
-	void check_if_central_image_region();
-
-	static double ccroot_t;
-	static lensvector<double> ccroot;
-	static double cclength1, cclength2, long_diagonal_length;
-	double invmag_along_diagonal(const double t);
-
-	static int u_split_initial, w_split_initial;
-	static const int max_level, max_images;
-
-	static int levels; // keeps track of the total number of grid cell levels
-	static int splitlevels; // specifies the number of initial splittings to perform (not counting extra splittings if critical curves present)
-	static int cc_splitlevels; // specifies the additional splittings to perform if critical curves are present
-	int galsubgrid_cc_splitlevels;
-	static double min_cell_area;
-
-	void clear_subcells(int clear_level);
-	void split_subcells_firstlevel(int cc_splitlevels, bool cc_neighbor_splitting);
-	void split_subcells(int cc_splitlevels, bool cc_neighbor_splitting, const int& thread);
-	void assign_neighbors_lensing_subcells(int cc_splitlevel, const int& thread);
-	bool split_cells(const int& thread);
-	void grid_search(const int& searchlevel, const int& thread);
-	void grid_search_firstlevel(const int& searchlevel);
-	edge_sourcept_status check_subgrid_neighbor_boundaries(const int& neighbor_direction, Grid* neighbor_subcell, lensvector<double>& centerpt, const int& thread);
-	void set_grid_xvals(lensvector<double>** xv, const int& i, const int& j);
-	void find_cell_area(const int& thread);
-	void assign_firstlevel_neighbors();
-	void assign_neighborhood();
-	void assign_all_neighbors();
-	void assign_level_neighbors(int neighbor_level);
-
-	bool LineSearch(lensvector<double>& xold, double fold, lensvector<double>& g, lensvector<double>& p, lensvector<double>& x, double& f, double stpmax, bool &check, const int& thread);
-	bool NewtonsMethod(lensvector<double>& x, bool &check, const int& thread);
-	void SolveLinearEqs(lensmatrix<double>&, lensvector<double>&);
-	bool redundancy(const lensvector<double>&, double &);
-	double max_component(const lensvector<double>&);
-
-	static const int max_iterations, max_step_length;
-	static lensvector<double> *fvec;
-	static bool *newton_check;
-
-	// make these multithread-safe if you decide to multithread the image searching
-	static bool finished_search;
-	static int nfound_max, nfound_pos, nfound_neg;
-	static image images[];
-
-public:
-	Grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double* zfactor_in, double** betafactor_in); 
-	Grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double* zfactor_in, double** betafactor_in);
-	void redraw_grid(double r_min, double r_max, double xcenter_in, double ycenter_in, double grid_q_in, double* zfactor_in, double** betafactor_in);
-	void redraw_grid(double xcenter_in, double ycenter_in, double xlength, double ylength, double* zfactor_in, double** betafactor_in);
-	void reassign_coordinates(lensvector<double>** xij, const int& i, const int& j, const int& level_in, Grid* parent_ptr);
-
-	static void set_splitting(int rs0, int ts0, int sl, int ccsl, double max_cs, bool neighbor_split);
-	static void allocate_multithreaded_variables(const int& threads, const bool reallocate = true);
-	static void deallocate_multithreaded_variables();
-	static void reset_search_parameters();
-	~Grid();
-
-	static int nfound;
-	static double image_pos_accuracy;
-	image* tree_search();
-	static void set_lens(QLens* lensptr) { lens = lensptr; }
-	void subgrid_around_galaxies(lensvector<double>* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_splittings, bool* subgrid);
-	void subgrid_around_galaxies_iteration(lensvector<double>* galaxy_centers, const int& ngal, double* subgrid_radius, double* min_galsubgrid_cellsize, const int& n_cc_split, bool cc_neighbor_splitting, bool *subgrid);
-
-	void galsubgrid();
-	void store_critical_curve_pts();
-	void find_and_store_critical_curve_pt(const int icorner, const int fcorner, int &added_pts);
-	static void set_imagepos_accuracy(const double& setting) {
-		image_pos_accuracy = setting;
-	}
-	static void set_enforce_min_area(const bool& setting) { enforce_min_area = setting; }
-
-	// for plotting the grid to a file:
-	//static std::ofstream xgrid;
-	//void plot_corner_coordinates();
-	void output_corner_coordinates(std::vector<double>& pts_x, std::vector<double>& pts_y, std::vector<double>& srcpts_x, std::vector<double>& srcpts_y);
-
-	void get_usplit_initial(int &setting) { setting = u_split_initial; }
-	void get_wsplit_initial(int &setting) { setting = w_split_initial; }
 };
 
 struct WeakLensingData
@@ -616,8 +363,8 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	int* ptsrc_redshift_idx;
 	std::vector<int> ptsrc_redshift_groups;
 
-	lensvector<double> source;
-	image *images_found;
+	//lensvector<double> source;
+	//image<double> *images_found;
 	ImageSystemType system_type;
 
 	double lens_redshift;
@@ -656,7 +403,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double romberg_accuracy; // for Romberg integration
 	bool include_recursive_lensing; // should only turn off if trying to understand effect of recursive lensing from multiple lens planes
 
-	Grid *grid;
+	ImgSrchGrid *grid;
 	bool radial_grid;
 	double grid_xlength, grid_ylength, grid_xcenter, grid_ycenter;  // for gridsize
 	double sourcegrid_xmin, sourcegrid_xmax, sourcegrid_ymin, sourcegrid_ymax;
@@ -720,6 +467,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	bool borrowed_image_data; // tells whether image_data is pointing to that of another QLens object (e.g. fitmodel pointing to initial lens object)
 	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
+	double image_pos_accuracy;
 	int lumreg_max_it;
 	int n_repeats;
 	bool display_chisq_status;
@@ -1213,7 +961,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double wtime0, wtime; // for calculating wall time in parallel calculations
 	bool show_wtime;
 
-	friend class Grid;
+	friend class ImgSrchGrid;
 	friend class CartesianSourceGrid;
 	friend class ImagePixelGrid;
 	friend struct ImageData;
@@ -1243,7 +991,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	template<typename QScalar>
 	QScalar kappa(const QScalar& x, const QScalar& y, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	QScalar potential(const double&, const double&, double* zfacs, double** betafacs);
+	QScalar potential(const QScalar&, const QScalar&, double* zfacs, double** betafacs);
 	template<typename QScalar>
 	void deflection(const QScalar&, const QScalar&, lensvector<QScalar>&, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
@@ -1267,7 +1015,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	template<typename QScalar>
 	QScalar kappa(const lensvector<QScalar> &x, double* zfacs, double** betafacs) { return kappa<QScalar>(x[0], x[1], zfacs, betafacs); }
 	template<typename QScalar>
-	QScalar potential(const lensvector<double>& x, double* zfacs, double** betafacs) { return potential<QScalar>(x[0],x[1], zfacs, betafacs); }
+	QScalar potential(const lensvector<QScalar>& x, double* zfacs, double** betafacs) { return potential<QScalar>(x[0],x[1], zfacs, betafacs); }
 	template<typename QScalar>
 	void deflection(const lensvector<QScalar>& x, lensvector<QScalar>& def, double* zfacs, double** betafacs) { deflection<QScalar>(x[0], x[1], def, 0, zfacs, betafacs); }
 	template<typename QScalar>
@@ -1281,9 +1029,9 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	}
 
 	template<typename QScalar>
-	QScalar inverse_magnification(const lensvector<double>&, const int &thread, double* zfacs, double** betafacs);
+	QScalar inverse_magnification(const lensvector<QScalar>&, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	QScalar magnification(const lensvector<double> &x, const int &thread, double* zfacs, double** betafacs);
+	QScalar magnification(const lensvector<QScalar> &x, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
 	QScalar shear(const lensvector<QScalar> &x, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
@@ -1376,7 +1124,8 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	// the following functions are contained in imgsrch.cpp
 	private:
-	void find_images();
+	template<typename QScalar>
+	void find_images(image<QScalar>*& images_found, const lensvector<QScalar> source_in);
 
 	public:
 	bool plot_recursive_grid(const char filename[]);
@@ -1390,15 +1139,17 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 		return plot_images_single_source(x_source,y_source,verbal,imgfile,srcfile,flux,show_labels);
 	}
 	bool plot_images_single_source(const double &x_source, const double &y_source, bool verbal, std::ofstream& imgfile, std::ofstream& srcfile, const double flux = -1.0, const bool show_labels = false);
-	image* get_images(const lensvector<double> &source_in, int &n_images) { return get_images(source_in, n_images, true); }
-	image* get_images(const lensvector<double> &source_in, int &n_images, bool verbal);
+	template <typename QScalar>
+	image<QScalar>* get_images(const lensvector<QScalar> &source_in, int &n_images, bool verbal);
+	template <typename QScalar>
+	image<QScalar>* get_images(const lensvector<QScalar> &source_in, int &n_images) { return get_images(source_in, n_images, true); }
 	bool get_imageset(const double src_x, const double src_y, PtImageSet& image_set, bool verbal = true); // used by Python wrapper
 
 	bool get_fit_imagesets(int min_dataset = 0, int max_dataset = -1, bool verbal = true); // defined in imgsrch.cpp
 
 	bool plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal);
 	template<typename QScalar>
-	void lens_equation(const lensvector<double>&, lensvector<QScalar>&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
+	void lens_equation(const lensvector<QScalar>&, lensvector<QScalar>&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
 
 	// the remaining functions in this class are all contained in lens.cpp
 	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);
@@ -1836,7 +1587,6 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void get_cc_splitlevels(int &setting) { setting = cc_splitlevels; }
 	void set_rminfrac(double setting) { rmin_frac = setting; }
 	void get_rminfrac(double &setting) { setting = rmin_frac; }
-	void set_imagepos_accuracy(double setting) { Grid::set_imagepos_accuracy(setting); }
 	void set_galsubgrid_radius_fraction(double setting) { galsubgrid_radius_fraction = setting; }
 	void get_galsubgrid_radius_fraction(double &setting) { setting = galsubgrid_radius_fraction; }
 	void set_galsubgrid_min_cellsize_fraction(double setting) { galsubgrid_min_cellsize_fraction = setting; }
@@ -2146,7 +1896,7 @@ class PointImageData
 	void input(const int &nn);
 	void input(const PointImageData& imgs_in);
 	//void input(const int &nn, image* images, const double sigma_pos_in, const double sigma_flux_in, const double sigma_td_in, bool* include, bool include_time_delays);
-	void input(const int &nn, image* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, const bool include_time_delays, const double zsrc);
+	void input(const int &nn, image<double>* images, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, const bool include_time_delays, const double zsrc);
 	void add_image(lensvector<double>& pos_in, const double sigma_pos_in, const double flux_in, const double sigma_f_in, const double time_delay_in, const double sigma_t_in);
 	//string mkstring_doub(const double db, const bool use_sci);
 	//string mkstring_int(const int i);

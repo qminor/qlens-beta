@@ -618,10 +618,10 @@ class ImagePixelGrid : private Sort
 
 	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, RayTracingMethod method, ImageData& pixel_data);
 	void load_data(ImageData& pixel_data);
-	void generate_point_images(const vector<image>& imgs, double *ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num = -1); // -1 means use all images
+	void generate_point_images(const vector<image<double>>& imgs, double *ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num = -1); // -1 means use all images
 	void add_point_images(double *ptimage_surface_brightness, const int npix);
-	void generate_and_add_point_images(const vector<image>& imgs, const bool include_imgfluxes, const double srcflux);
-	void find_point_images(const double src_x, const double src_y, vector<image>& imgs, const bool use_overlap, const bool is_lensed, const bool verbal);
+	void generate_and_add_point_images(const vector<image<double>>& imgs, const bool include_imgfluxes, const double srcflux);
+	void find_point_images(const double src_x, const double src_y, vector<image<double>>& imgs, const bool use_overlap, const bool is_lensed, const bool verbal);
 	//bool test_if_inside_cell(const lensvector<double>& point, const int& i, const int& j);
 	void assign_mask_pointers(ImageData& pixel_data, const int mask_index);
 	bool set_fit_window(ImageData& pixel_data, const bool raytrace = false, const int mask_k = 0, const bool redo_fft = true, const bool use_fgmask = false);

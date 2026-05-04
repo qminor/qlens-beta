@@ -52,6 +52,7 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 	set_null_ptrs_and_values(); // sets pointers to NULL to make sure qlens doesn't try to delete them during setup
 	lensparams->param = NULL;
 	lensparams->zlens = 0; // makes clear that the redshift hasn't been set yet
+	lensparams->f_major_axis = 1; // used for calculating approximate angle-averaged Einstein radius for non-elliptical lens models
 	lensparams->fourier_integral_left_cos_spline = NULL;
 	lensparams->fourier_integral_left_sin_spline = NULL;
 	lensparams->fourier_integral_right_cos_spline = NULL;
@@ -59,6 +60,7 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 #ifdef USE_STAN
 	lensparams_dif->param = NULL;
 	lensparams_dif->zlens = 0; // makes clear that the redshift hasn't been set yet
+	lensparams_dif->f_major_axis = 1; // used for calculating approximate angle-averaged Einstein radius for non-elliptical lens models
 	lensparams_dif->fourier_integral_left_cos_spline = NULL;
 	lensparams_dif->fourier_integral_left_sin_spline = NULL;
 	lensparams_dif->fourier_integral_right_cos_spline = NULL;
@@ -76,7 +78,6 @@ void LensProfile::setup_base_lens_properties(const int np, const int lensprofile
 	if (is_elliptical_lens) {
 		ellipticity_mode = default_ellipticity_mode;
 	} else {
-		f_major_axis = 1; // used for calculating approximate angle-averaged Einstein radius for non-elliptical lens models
 		ellipticity_mode = -1; // indicates not an elliptical lens
 	}
 	n_fourier_modes = 0;
@@ -198,7 +199,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 		lensparams->epsilon2 = lens_in->lensparams->epsilon2;
 	}
 
-	f_major_axis = lens_in->f_major_axis;
+	lensparams->f_major_axis = lens_in->lensparams->f_major_axis;
 	angle_param_exists = lens_in->angle_param_exists;
 	if (angle_param_exists) set_angle_radians<double>(lens_in->lensparams->theta);
 	lensparams->x_center = lens_in->lensparams->x_center;
@@ -319,7 +320,7 @@ void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 		egrad_mode = sb_in->egrad_mode;
 		egrad_ellipticity_mode = sb_in->egrad_ellipticity_mode;
 		center_gradient = sb_in->center_gradient;
-		f_major_axis = 1.0; // f_major_axis doesn't apply when egrad is on, but is still called in get_einstein_radius(...)
+		lensparams->f_major_axis = 1.0; // f_major_axis doesn't apply when egrad is on, but is still called in get_einstein_radius(...)
 		int i,j;
 		for (i=0; i < 4; i++) {
 			n_egrad_params[i] = sb_in->n_egrad_params[i];
@@ -993,6 +994,7 @@ void LensProfile::get_auto_ranges(boolvector& use_penalty_limits, Vector<double>
 				use_penalty_limits[index] = true;
 				lower[index] = penalty_lower_limits[i];
 				upper[index] = penalty_upper_limits[i];
+				//cout << "param " << i << ": lower=" << lower[index] << " upper=" << upper[index] << endl;
 			} else {
 				use_penalty_limits[index] = false;
 			}
@@ -1648,33 +1650,22 @@ double LensProfile::rho3d_w_integrand(const double w)
 }
 
 template <typename QScalar>
-void LensProfile::set_angle_from_components(const QScalar &comp1, const QScalar &comp2)
+void LensProfile::set_angle_from_components(QScalar comp1, const QScalar comp2)
 {
-	QScalar angle;
-	if (comp1==0) {
-		if (comp2 > 0) angle = M_HALFPI;
-		else if (comp2==0) angle = 0.0;
-		else angle = -M_HALFPI;
-	} else {
-		angle = atan(abs(comp2/comp1));
-		if (comp1 < 0) {
-			if (comp2 < 0)
-				angle = angle - M_PI;
-			else
-				angle = M_PI - angle;
-		} else if (comp2 < 0) {
-			angle = -angle;
-		}
-	}
+#ifdef USE_STAN
+	using stan::math::atan2;
+	if ((comp1==0) and (comp2==0)) comp1 += 1e-10; // for autodiff purposes, to avoid coordinate singularity
+#endif
+	QScalar angle = atan2(comp2,comp1);
 	angle = 0.5*angle;
 	if (orient_major_axis_north) angle -= M_HALFPI;
 	while (angle > M_HALFPI) angle -= M_PI;
 	while (angle <= -M_HALFPI) angle += M_PI;
 	set_angle_radians<QScalar>(angle);
 }
-template void LensProfile::set_angle_from_components<double>(const double &comp1, const double &comp2);
+template void LensProfile::set_angle_from_components<double>(const double comp1, double comp2);
 #ifdef USE_STAN
-template void LensProfile::set_angle_from_components<stan::math::var>(const stan::math::var &comp1, const stan::math::var &comp2);
+template void LensProfile::set_angle_from_components<stan::math::var>(const stan::math::var comp1, stan::math::var comp2);
 #endif
 
 void LensProfile::update_meta_parameters_and_pointers()
@@ -1707,14 +1698,14 @@ void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q
 #ifdef USE_STAN
 	kapavgptr_rsq_spherical_autodif = &LensProfile::kappa_avg_spherical_integral<stan::math::var>;
 	potptr_rsq_spherical_autodif = &LensProfile::potential_spherical_integral<stan::math::var>;
-	if ((lensparams_dif->q==1.0) and (!ellipticity_gradient)) {
-		potptr_autodif = &LensProfile::potential_spherical_default<stan::math::var>;
-		defptr_autodif = &LensProfile::deflection_spherical_default<stan::math::var>;
-		hessptr_autodif = &LensProfile::hessian_spherical_default<stan::math::var>;
-	} else {
+	//if ((lensparams_dif->q==1.0) and (!ellipticity_gradient)) {
+		//potptr_autodif = &LensProfile::potential_spherical_default<stan::math::var>;
+		//defptr_autodif = &LensProfile::deflection_spherical_default<stan::math::var>;
+		//hessptr_autodif = &LensProfile::hessian_spherical_default<stan::math::var>;
+	//} else {
 		defptr_autodif = &LensProfile::deflection_numerical<stan::math::var>;
 		hessptr_autodif = &LensProfile::hessian_numerical<stan::math::var>;
-	}
+	//}
 	def_and_hess_ptr_autodif = &LensProfile::deflection_and_hessian_together<stan::math::var>;
 #endif
 }
@@ -1952,6 +1943,10 @@ void LensProfile::update_cosmology_meta_parameters(const bool force_update)
 template <typename QScalar>
 void LensProfile::calculate_ellipticity_components()
 {
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if ((ellipticity_mode != -1) and (use_ellipticity_components)) {
 		p.theta_eff = (orient_major_axis_north) ? p.theta + M_HALFPI : p.theta;
@@ -1974,6 +1969,12 @@ void LensProfile::update_ellipticity_meta_parameters()
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)
 	if (use_ellipticity_components) {
+#ifdef USE_STAN
+		if ((p.epsilon1==0) and (p.epsilon2==0)) {
+			p.epsilon1 = 1e-10; // to avoid coordinate singularities messing with autodiff
+			p.epsilon2 = 1e-10;
+		}
+#endif
 		if ((ellipticity_mode==0) or (ellipticity_mode==1)) set_ellipticity_parameter(1 - sqrt(SQR(p.epsilon1) + SQR(p.epsilon2)));
 		else set_ellipticity_parameter(sqrt(SQR(p.epsilon1) + SQR(p.epsilon2)));
 		// if ellipticity components are being used, we are automatically using the following major axis scaling
@@ -1985,34 +1986,17 @@ void LensProfile::update_ellipticity_meta_parameters()
 	if (!ellipticity_gradient) {
 		if (ellipticity_mode==0) {
 			p.epsilon = 1 - p.q;
-			f_major_axis = 1.0; // defined such that a = xi, and b = xi*q
+			p.f_major_axis = 1.0; // defined such that a = xi, and b = xi*q
 		} else if (ellipticity_mode==1) {
 			p.epsilon = 1 - p.q;
 			// if ellipticity components are being used, we are automatically using the following major axis scaling
-#ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) 
-				f_major_axis = 1.0/sqrt((p.q).val()); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
-			else
-#endif
-			f_major_axis = 1.0/sqrt(p.q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+			p.f_major_axis = 1.0/sqrt(p.q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
 		} else if (ellipticity_mode==2) {
 			p.q = (1-p.epsilon)/(1+p.epsilon);
-#ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) 
-				f_major_axis = 1.0/sqrt((p.q).val()); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
-			else
-#endif
-			f_major_axis = 1.0/sqrt(p.q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
+			p.f_major_axis = 1.0/sqrt(p.q); // defined such that a = xi/sqrt(q), and b = xi*sqrt(q)
 		} else if (ellipticity_mode==3) {
 			p.q = sqrt((1-p.epsilon)/(1+p.epsilon));
-#ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-				double qval = (p.q).val();
-				f_major_axis = sqrt((1+qval*qval)/2)/qval; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
-			}
-			else
-#endif
-			f_major_axis = sqrt((1+p.q*p.q)/2)/p.q; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
+			p.f_major_axis = sqrt((1+p.q*p.q)/2)/p.q; // defined such that a = xi/sqrt(1-e), and b = xi/sqrt(1+e), so that q = sqrt((1-e)/(1+e))
 		}
 		if (!use_ellipticity_components) update_angle_meta_params<QScalar>(); // sets the costheta, sintheta meta-parameters
 	} else {
@@ -2060,6 +2044,10 @@ template void LensProfile::update_center_from_pixsrc_coords<stan::math::var>(QLe
 template <typename QScalar>
 void LensProfile::update_angle_meta_params()
 {
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// trig functions are stored to save computation time later
 	p.costheta = cos(p.theta);
@@ -2107,6 +2095,9 @@ template void LensProfile::rotate_back<stan::math::var>(stan::math::var &x, stan
 template <typename QScalar>
 QScalar LensProfile::elliptical_radius(QScalar x, QScalar y)
 {
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	// switch to coordinate system centered on lens profile
 	x -= p.x_center;
@@ -2119,7 +2110,7 @@ QScalar LensProfile::elliptical_radius(QScalar x, QScalar y)
 	} else {
 		QScalar xisq;
 		if (!ellipticity_gradient) {
-			xisq = (x*x + y*y/(p.q*p.q))/(f_major_axis*f_major_axis);
+			xisq = (x*x + y*y/(p.q*p.q))/(p.f_major_axis*p.f_major_axis);
 		} else {
 			//xisq = SQR(elliptical_radius_root(x,y));
 		}
@@ -2147,7 +2138,7 @@ QScalar LensProfile::kappa_impl(QScalar x, QScalar y)
 	} else {
 		QScalar xisq, fourier_factor = 0;
 		if (!ellipticity_gradient) {
-			xisq = (x*x + y*y/(p.q*p.q))/(f_major_axis*f_major_axis);
+			xisq = (x*x + y*y/(p.q*p.q))/(p.f_major_axis*p.f_major_axis);
 		} else {
 			//xisq = SQR(elliptical_radius_root(x,y));
 		}
@@ -2262,7 +2253,7 @@ void LensProfile::kappa_and_potential_derivatives_impl(QScalar x, QScalar y, QSc
 	if ((ellipticity_mode==3) and (p.q != 1)) {
 		kappa_deflection_and_hessian_from_elliptical_potential(x,y,kap,def,hess);
 	} else {
-		kap = kappa_rsq((x*x + y*y/(p.q*p.q))/(f_major_axis*f_major_axis));
+		kap = kappa_rsq((x*x + y*y/(p.q*p.q))/(p.f_major_axis*p.f_major_axis));
 #ifdef USE_STAN
 		if constexpr (std::is_same_v<QScalar, stan::math::var>) 
 			(this->*def_and_hess_ptr_autodif)(x,y,def,hess);
@@ -2303,6 +2294,9 @@ template void LensProfile::potential_derivatives_impl<stan::math::var>(stan::mat
 template <typename QScalar>
 void LensProfile::deflection_and_hessian_together(const QScalar x, const QScalar y, lensvector<QScalar> &def, lensmatrix<QScalar>& hess)
 {
+#ifdef USE_STAN
+	using stan::math::abs;
+#endif
 	if ((defptr == &LensProfile::deflection_numerical<double>) and (hessptr == &LensProfile::hessian_numerical<double>)) {
 		if ((abs(x) < 1e-14) and (abs(y) < 1e-14)) {
 			def[0]=0;
@@ -2336,6 +2330,9 @@ template void LensProfile::deflection_and_hessian_together<stan::math::var>(cons
 
 void LensProfile::kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap)
 {
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
 	LensParams<double>& p = assign_lensparam_object<double>();
 	if (lenstype==SHEET) {
 		kap = kappa_rsq(0); // since R doesn't matter for a mass sheet
@@ -2345,7 +2342,7 @@ void LensProfile::kappa_and_dkappa_dR(double x, double y, double& kap, double& d
 		x -= p.x_center;
 		y -= p.y_center;
 		if ((!ellipticity_gradient) and (p.sintheta != 0)) rotate(x,y);
-		double ell_radius_sq = (x*x + y*y/(p.q*p.q))/(f_major_axis*f_major_axis);
+		double ell_radius_sq = (x*x + y*y/(p.q*p.q))/(p.f_major_axis*p.f_major_axis);
 		kap = kappa_rsq(ell_radius_sq);
 		dkap = 2*ell_radius_sq*kappa_rsq_deriv(ell_radius_sq)/sqrt(x*x+y*y); // this gives dkappa_dR where R is simply radius, not elliptical radius
 	}
@@ -2669,7 +2666,7 @@ void LensProfile::get_einstein_radius(double& re_major_axis, double& re_average,
 	}
 	double (Brent::*bptr)(const double);
 	bptr = static_cast<double (Brent::*)(const double)> (&LensProfile::einstein_radius_root);
-	re_major_axis = f_major_axis * BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
+	re_major_axis = lensparams->f_major_axis * BrentsMethod(bptr,rmin_einstein_radius,rmax_einstein_radius,1e-6);
 	if (ellipticity_mode != -1) re_average = re_major_axis * sqrt(lensparams->q);
 	else re_average = re_major_axis; // not an elliptical lens, so q has no meaning
 	zfac = 1.0;

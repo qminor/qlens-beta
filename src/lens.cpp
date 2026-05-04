@@ -134,7 +134,6 @@ void QLens::allocate_multithreaded_variables(const int& threads, const bool real
 		else deallocate_multithreaded_variables();
 	}
 	nthreads = threads;
-	// Note: the grid construction is not being parallelized any more...if you decide to ditch it for good, then get rid of these multithreaded variables and replace by single-thread version
 	LensCalc<double>::xvals_i = new lensvector<double>[nthreads];
 	LensCalc<double>::defs = new lensvector<double>[nthreads];
 	LensCalc<double>::defs_subtot = new lensvector<double>*[nthreads];
@@ -445,6 +444,7 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	source_fit_mode = Point_Source;
 	use_ansi_characters = false;
 	chisq_tolerance = 1e-4;
+	image_pos_accuracy = 1e-6;
 	//chisqtol_lumreg = 1e-3;
 	lumreg_max_it = 0;
 	//lumreg_max_it_final = 20;
@@ -839,6 +839,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), Model() // creates lens object with same 
 	source_fit_mode = lens_in->source_fit_mode;
 	use_ansi_characters = lens_in->use_ansi_characters;
 	chisq_tolerance = lens_in->chisq_tolerance;
+	image_pos_accuracy = lens_in->image_pos_accuracy;
 	//chisqtol_lumreg = lens_in->chisqtol_lumreg;
 	lumreg_max_it = lens_in->lumreg_max_it;
 	//lumreg_max_it_final = lens_in->lumreg_max_it_final;
@@ -4939,23 +4940,24 @@ bool QLens::create_grid(bool verbal, double *zfacs, double **betafacs, const int
 	}
 	record_singular_points(zfacs); // grid cells will split around singular points (e.g. center of point mass, etc.)
 
-	Grid::set_splitting(usplit_initial, wsplit_initial, splitlevels, cc_splitlevels, min_cell_area, cc_neighbor_splittings);
-	Grid::set_enforce_min_area(true);
-	Grid::set_lens(this);
+	GridCell::set_splitting(usplit_initial, wsplit_initial, splitlevels, cc_splitlevels, min_cell_area, cc_neighbor_splittings);
+	GridCell::set_enforce_min_area(true);
 	if ((autogrid_before_grid_creation) or (autocenter) or (auto_gridsize_from_einstein_radius)) find_automatic_grid_position_and_size(zfacs);
 	double rmax = 0.5*dmax(grid_xlength,grid_ylength);
 
 	if ((verbal) and (mpi_id==0)) cout << "Creating grid..." << flush;
 	if (grid != NULL) {
-		if (radial_grid)
+		if (radial_grid) {
 			grid->redraw_grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs, betafacs); // setting grid_q to 1...not sure if there would be much benefit in grid_q < 1
-		else
+		} else {
 			grid->redraw_grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
+		}
 	} else {
-		if (radial_grid)
-			grid = new Grid(rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, zfacs, betafacs); // setting grid_q to 1 (see above comment)
-		else
-			grid = new Grid(grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, zfacs, betafacs);
+		if (radial_grid) {
+			grid = new ImgSrchGrid(this, rmin_frac*rmax, rmax, grid_xcenter, grid_ycenter, 1, image_pos_accuracy, zfacs, betafacs); // setting grid_q to 1 (see above comment)
+		} else {
+			grid = new ImgSrchGrid(this, grid_xcenter, grid_ycenter, grid_xlength, grid_ylength, image_pos_accuracy, zfacs, betafacs);
+		}
 	}
 	if ((subgrid_around_perturbers) and (nlens > 1)) {
 		subgrid_around_perturber_galaxies(centers,einstein_radii,i_primary,zfacs,betafacs,redshift_index);
@@ -5676,7 +5678,7 @@ bool QLens::find_lensed_position_of_background_perturber(bool verbal, int lens_n
 	set_source_redshift(zlsub);
 	create_grid(false,zfacs,betafacs);
 	int n_images, img_i;
-	image *img = get_images(perturber_center, n_images, false);
+	image<double> *img = get_images<double>(perturber_center, n_images, false);
 	if (n_images == 0) {
 		reset_grid();
 		set_source_redshift(zsrc0);
@@ -6693,9 +6695,11 @@ double QLens::get_total_xi_parameter(const double src_redshift)
 
 bool QLens::find_tangential_critical_curve(int &cc_num)
 {
-	if (!create_grid_from_default_redshift_and_store_cc()) {
-		warn("could not generate grid find c.c. to calculate xi; calculating spherically averaged xi instead");
-		return false;
+	if (critical_curve_pts.size()==0) {
+		if (!create_grid_from_default_redshift_and_store_cc()) {
+			warn("could not generate grid find c.c. to calculate xi; calculating spherically averaged xi instead");
+			return false;
+		}
 	}
 	if (!sorted_critical_curves) sort_critical_curves(); // sort critical curves
 	int n_cc = sorted_critical_curve.size();
@@ -6871,7 +6875,6 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	double *rvals, *phivals;
 	double x, y, r_phi, x_phi, y_phi;
 	double kappaval, sheartot, shear_angle, theta_shear, theta_perp_shear;
-	double kappaval2, sheartot2, shear_angle2;
 	double dkappa, dshear;
 	double x_phi2, y_phi2, r_phi2;
 	double new_kappaval, new_sheartot, new_shear_angle, shear_deriv, kappa_deriv;
@@ -6901,6 +6904,88 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	r_phi = rspline.splint(phi0);
 	x_phi = xc+r_phi*cos(phi);
 	y_phi = yc+r_phi*sin(phi);
+
+	//r_phi = r_ein;
+	//x_phi = xc+r_phi*cos(phi);
+	//y_phi = yc+r_phi*sin(phi);
+
+
+#ifdef USE_STAN
+	stan::math::start_nested();
+	{
+		stan::math::var theta_perp_stan = theta_perp_shear;
+		//stan::math::var tt = 0, uu = 0;
+		stan::math::var x_phi_stan, y_phi_stan, kappaval_stan, sheartot_stan, shear_angle_stan;
+		//stan::math::var uu = 0;
+		x_phi_stan = x_phi;
+		y_phi_stan = y_phi;
+		//x_phi_stan = x_phi + tt*cos(theta_perp_stan);
+		//y_phi_stan = y_phi + tt*sin(theta_perp_stan);
+		lensvector<stan::math::var> pt_stan(x_phi_stan,y_phi_stan);
+		//x_phi_stan2 = x_phi;
+		//y_phi_stan2 = y_phi;
+		//x_phi_stan2 = x_phi + uu*cos(theta_perp_stan);
+		//y_phi_stan2 = y_phi + uu*sin(theta_perp_stan);
+		//lensvector<stan::math::var> pt_stan2(x_phi_stan2,y_phi_stan2);
+
+		kappaval_stan = kappa<stan::math::var>(x_phi_stan,y_phi_stan,reference_zfactors,default_zsrc_beta_factors);
+		shear<stan::math::var>(pt_stan,sheartot_stan,shear_angle_stan,0,reference_zfactors,default_zsrc_beta_factors);
+		theta_perp_shear = degrees_to_radians(shear_angle_stan.val()-90);
+
+		kappaval = kappaval_stan.val();
+		kappaval_stan.grad();
+		//dkappa = tt.adj();
+		double uvec_x = cos(theta_perp_shear);
+		double uvec_y = sin(theta_perp_shear);
+
+		x_phi2 = x_phi + h*uvec_x;
+		y_phi2 = y_phi + h*uvec_y;
+
+		r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+
+		if (r_phi2 < r_phi) {
+			uvec_x = -uvec_x;
+			uvec_y = -uvec_y;
+		}
+
+		dkappa = x_phi_stan.adj()*uvec_x + y_phi_stan.adj()*uvec_y;
+
+		stan::math::set_zero_all_adjoints();
+		sheartot_stan.grad();
+		//dshear = uu.adj();
+		dshear = x_phi_stan.adj()*uvec_x + y_phi_stan.adj()*uvec_y;
+	}
+	stan::math::recover_memory_nested();
+
+/*
+	// the next part is just for checking against the numerical derivative; you can comment these lines out later
+	if (r_phi2 < r_phi) {
+		theta_perp_shear = theta_perp_shear + M_PI;
+		x_phi2 = x_phi + h*cos(theta_perp_shear);
+		y_phi2 = y_phi + h*sin(theta_perp_shear);
+		r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+		//cout << "new r_phi2: " << r_phi2 << endl;
+	}
+	lensvector<double> point2(x_phi2, y_phi2);
+
+	double kappaval2, sheartot2, shear_angle2;
+	kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+	shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+
+	// calculate xi from here, taking numerical derivatives
+	// just take a forward difference for now
+	lensvector<double> point(x_phi,y_phi);
+	double kappaval_check = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+	double sheartot_check;
+	shear<double>(point,sheartot_check,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+	double dkappa_check = (kappaval2 - kappaval_check)/h;
+	double dshear_check = (sheartot2 - sheartot_check)/h;
+
+	cout << "this is dkappa: " << dkappa << " and dkappa_check=" << dkappa_check <<endl;
+	cout << "this is dshear: " << dshear << " and dshear_check=" << dshear_check <<endl;
+	cout << "this is kappaval_stan: " << kappaval << " and kappaval_check=" << kappaval_check <<endl;
+	*/
+#else
 	lensvector<double> point(x_phi,y_phi);
 
 	// get kappa and derivative of kappa for each lens that is included
@@ -6922,45 +7007,9 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 		//cout << "new r_phi2: " << r_phi2 << endl;
 	}
 
-#ifdef USE_STAN
-	stan::math::var theta_perp_stan = theta_perp_shear;
-	stan::math::var tt = 0, uu = 0;
-	stan::math::var x_phi_stan, y_phi_stan, x_phi_stan2, y_phi_stan2, kappaval_stan, sheartot_stan, shear_angle_stan;
-	//stan::math::var uu = 0;
-	x_phi_stan = x_phi + tt*cos(theta_perp_stan);
-	y_phi_stan = y_phi + tt*sin(theta_perp_stan);
-	lensvector<stan::math::var> pt_stan(x_phi_stan,y_phi_stan);
-	x_phi_stan2 = x_phi + uu*cos(theta_perp_stan);
-	y_phi_stan2 = y_phi + uu*sin(theta_perp_stan);
-	lensvector<stan::math::var> pt_stan2(x_phi_stan2,y_phi_stan2);
-
-	kappaval_stan = kappa<stan::math::var>(x_phi_stan,y_phi_stan,reference_zfactors,default_zsrc_beta_factors);
-	shear<stan::math::var>(pt_stan2,sheartot_stan,shear_angle_stan,0,reference_zfactors,default_zsrc_beta_factors);
-
-	kappaval = kappaval_stan.val();
-	kappaval_stan.grad();
-	dkappa = tt.adj();
-	sheartot_stan.grad();
-	dshear = uu.adj();
-
-	// the next part is just for checking against the numerical derivative; you can comment these lines out later
 	lensvector<double> point2(x_phi2, y_phi2);
 
-	kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
-	shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
-
-	// calculate xi from here, taking numerical derivatives
-	// just take a forward difference for now
-	double kappaval_check = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
-	double dkappa_check = (kappaval2 - kappaval)/h;
-	double dshear_check = (sheartot2 - sheartot)/h;
-
-	cout << "this is dkappa: " << dkappa << " and dkappa_check=" << dkappa_check <<endl;
-	cout << "this is dshear: " << dshear << " and dshear_check=" << dshear_check <<endl;
-	cout << "this is kappaval_stan: " << kappaval << " and kappaval_check=" << kappaval_check <<endl;
-#else
-	lensvector<double> point2(x_phi2, y_phi2);
-
+	double kappaval2, sheartot2, shear_angle2;
 	kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
 	shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
 
@@ -7241,6 +7290,7 @@ void QLens::make_source_ellipse(const double xcenter, const double ycenter, cons
 	lensvector<double> pt;
 
 	int i,j;
+	lensvector<double> source;
 	for (i=1, a=da; i <= n_subellipses; i++, a += da)
 	{
 		for (j=0, theta=0; j < points_per_ellipse; j++, theta += dtheta)
@@ -7284,7 +7334,7 @@ bool QLens::add_simulated_point_image_data(const lensvector<double> &sourcept, c
 {
 	int i,n_images;
 	if (nlens==0) { warn("no lens model has been created"); return false; }
-	image *imgs = get_images(sourcept, n_images, false);
+	image<double> *imgs = get_images<double>(sourcept, n_images, false);
 	if (n_images==0) { warn("could not find any images; no data added"); return false; }
 
 	add_point_source(source_redshift,sourcept,false);
@@ -7332,7 +7382,7 @@ bool QLens::add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_f
 {
 	int i,n_images = n_ptsrc;
 	if (n_images==0) { warn("could not find any images; no data added"); return false; }
-	image* imgs = new image[n_images];
+	image<double>* imgs = new image<double>[n_images];
 	for (i=0; i < n_images; i++) {
 		imgs[i].pos = ptsrc_list[i]->get_pos();
 		//imgs[i].pos[0] = ptsrc_list[i]->ptsrc_params.pos[0];
@@ -8032,7 +8082,7 @@ void PointImageData::input(const PointImageData& imgdata_in)
 	max_distsqr = imgdata_in.max_distsqr;
 }
 
-void PointImageData::input(const int &nn, image* imgs_in, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, const bool include_time_delays, const double zsrc_in)
+void PointImageData::input(const int &nn, image<double>* imgs_in, double* sigma_pos_in, double* sigma_flux_in, const double sigma_td_in, bool* include, const bool include_time_delays, const double zsrc_in)
 {
 	// this function is used to store simulated data
 	int n_images_include=0;
@@ -8382,7 +8432,7 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 		else if ((point_image_data==NULL) and (include_flux_chisq)) { warn("cannot evaluate image flux chi-square; no image data have been defined"); return false; }
 		else if ((point_image_data==NULL) and (include_time_delay_chisq)) { warn("cannot evaluate image time delay chi-square; no image data have been defined"); return false; }
 	} else {
-		if (imgdata_list==NULL) { warn("image data pixels have not been loaded"); return false; }
+		//if (imgdata_list==NULL) { warn("image data pixels have not been loaded"); return false; }
 		if (source_fit_mode==Shapelet_Source) {
 			bool found_invertible_source = false;
 			for (int i=0; i < n_sb; i++) {
@@ -8648,10 +8698,14 @@ bool QLens::initialize_fitmodel(const bool running_fit_in)
 	if (source_fit_mode != Point_Source) {
 		fitmodel->n_data_bands = n_data_bands;
 		fitmodel->n_model_bands = n_model_bands;
-		fitmodel->imgdata_list = imgdata_list;
-		for (int i=0; i < n_data_bands; i++) fitmodel->load_pixel_grid_from_data(i);
+		if (imgdata_list != NULL) {
+			fitmodel->imgdata_list = imgdata_list;
+			for (int i=0; i < n_data_bands; i++) fitmodel->load_pixel_grid_from_data(i);
+		}
 	}
-	fitmodel->imgdatalist->input_ptr(fitmodel->imgdata_list,n_data_bands);
+	if (imgdata_list != NULL) {
+		fitmodel->imgdatalist->input_ptr(fitmodel->imgdata_list,n_data_bands);
+	}
 
 	for (i=0; i < nlens; i++) {
 		// if the lens is anchored to another lens, re-anchor so that it points to the corresponding
@@ -9305,10 +9359,23 @@ QScalar QLens::chisq_pos_image_plane()
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
 		redshift_idx = ptsrc_redshift_idx[ptsrc_redshift_groups[m]];
 		create_grid(false,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx],m);
+		lensvector<QScalar> *beta;
 		for (i=ptsrc_redshift_groups[m]; i < ptsrc_redshift_groups[m+1]; i++) {
 			if (ptsrc_redshift_idx[i] != redshift_idx) die("AWW fuck the redshift groups aren't sorted right");
 			chisq_each_srcpt = 0;
-			image *img = get_images(ptsrc_list[i]->get_pos(), n_images, false);
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				beta = &ptsrc_list[i]->get_pos_autodif();
+			} else
+#endif
+			beta = &ptsrc_list[i]->get_pos();
+
+			image<QScalar> *img = get_images<QScalar>((*beta), n_images, false);
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				//cout << "WHAZZUP " << (img[0].pos[0]).val() << " " << (img[0].pos[1]).val() << endl;
+			} 
+#endif
 			n_visible_images = n_images;
 			bool *ignore = new bool[n_images];
 			for (j=0; j < n_images; j++) ignore[j] = false;
@@ -9448,12 +9515,19 @@ QScalar QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool o
 	for (m=mpi_start; m < mpi_start + mpi_chunk; m++) {
 		redshift_idx = ptsrc_redshift_idx[ptsrc_redshift_groups[m]];
 		create_grid(false,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx],m);
+		lensvector<QScalar> *beta;
 		if ((mpi_id==0) and (verbose)) cout << endl << "zsrc=" << ptsrc_redshifts[redshift_idx] << ": grid = (" << (grid_xcenter-grid_xlength/2) << "," << (grid_xcenter+grid_xlength/2) << ") x (" << (grid_ycenter-grid_ylength/2) << "," << (grid_ycenter+grid_ylength/2) << ")" << endl;
 		for (i=ptsrc_redshift_groups[m]; i < ptsrc_redshift_groups[m+1]; i++) {
 			chisq_each_srcpt = 0;
 			n_matched_images_each_srcpt = 0;
 			rms_err_each_srcpt = 0;
-			image *img = get_images(ptsrc_list[i]->get_pos(), n_images, false);
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				beta = &ptsrc_list[i]->get_pos_autodif();
+			} else
+#endif
+			beta = &ptsrc_list[i]->get_pos();
+			image<QScalar> *img = get_images<QScalar>((*beta), n_images, false);
 			n_visible_images = n_images;
 			bool *ignore = new bool[n_images];
 			for (j=0; j < n_images; j++) ignore[j] = false;
@@ -9697,7 +9771,10 @@ void QLens::find_analytic_srcflux(double *bestfit_flux)
 			denom += SQR(image_mag/point_image_data[i].images[j].sigma_flux);
 			k++;
 		}
-		if (denom==0) bestfit_flux[i] = -1; // indicates we cannot find the source flux
+		if (denom==0) {
+			bestfit_flux[i] = -1; // indicates we cannot find the source flux
+			warn("fluxes have an uncertanty of zero; cannot find source flux");
+		}
 		else bestfit_flux[i] = num/denom;
 	}
 }
@@ -9818,6 +9895,7 @@ QScalar QLens::chisq_time_delays()
 	lensvector<QScalar> beta_ij;
 	double *specific_zfacs;
 	double **specific_betafacs;
+	lensvector<QScalar> datapt;
 	for (k=0, i=0; i < n_ptsrc; i++) {
 		specific_zfacs = ptsrc_zfactors[ptsrc_redshift_idx[i]];
 		specific_betafacs = ptsrc_beta_factors[ptsrc_redshift_idx[i]];
@@ -9825,9 +9903,11 @@ QScalar QLens::chisq_time_delays()
 		min_td_obs=1e30;
 		min_td_mod=1e30;
 		for (j=0; j < point_image_data[i].n_images; j++) {
+			datapt[0] = point_image_data[i].images[j].pos[0];
+			datapt[1] = point_image_data[i].images[j].pos[1];
 			if (point_image_data[i].images[j].sigma_td==0) continue;
 			find_sourcept<QScalar>(point_image_data[i].images[j].pos,beta_ij,0,specific_zfacs,specific_betafacs);
-			pot = potential<QScalar>(point_image_data[i].images[j].pos,specific_zfacs,specific_betafacs);
+			pot = potential<QScalar>(datapt,specific_zfacs,specific_betafacs);
 			time_delays_mod[j] = 0.5*(SQR(point_image_data[i].images[j].pos[0] - beta_ij[0]) + SQR(point_image_data[i].images[j].pos[1] - beta_ij[1])) - pot;
 			if (time_delays_mod[j] < min_td_mod) min_td_mod = time_delays_mod[j];
 
@@ -9992,16 +10072,17 @@ QScalar QLens::chisq_weak_lensing()
 	for (i=0; i < nsrc; i++) {
 		zfacs[i] = new double[n_lens_redshifts];
 	}
-	#pragma omp parallel
+	//#pragma omp parallel
 	{
 		int thread;
-#ifdef USE_OPENMP
-		thread = omp_get_thread_num();
-#else
+//#ifdef USE_OPENMP
+		//thread = omp_get_thread_num();
+//#else
 		thread = 0;
-#endif
+//#endif
 
-		#pragma omp for private(i,j,g1,g2) schedule(static) reduction(+:chisq)
+		// openmp can't seem to handle the reduction for stan::math::var variables, at least not for some implementations. So I'm commenting it out for now
+		//#pragma omp for private(i,j,g1,g2) schedule(static) reduction(+:chisq)
 		for (i=0; i < nsrc; i++) {
 			for (j=0; j < n_lens_redshifts; j++) {
 				zfacs[i][j] = cosmo->kappa_ratio(lens_redshifts[j],weak_lensing_data.zsrc[i],reference_source_redshift);
@@ -10123,7 +10204,6 @@ void QLens::fit_restore_defaults()
 	auto_store_cc_points = temp_auto_store_cc_points;
 	include_time_delays = temp_include_time_delays;
 	clear_raw_chisq(); // in case chi-square is being used as a derived parameter
-	Grid::set_lens(this); // annoying that the grids can only point to one lens object--it would be better for the pointer to be non-static (implement this later)
 }
 
 double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime_temp, const bool show_diagnostics, const bool show_status, const bool show_lensinfo)
@@ -10186,7 +10266,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 
 	display_chisq_status = true;
 	fitmodel->chisq_it = 0;
-	if (show_diagnostics) chisq_diagnostic = true;
+	//if (show_diagnostics) chisq_diagnostic = true;
 	bool default_display_status = display_chisq_status;
 	if (!show_status) display_chisq_status = false;
 
@@ -10200,33 +10280,38 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 	double *fitparams = new double[param_list->nparams];
 	param_list->get_values(fitparams);
 #ifdef USE_STAN
-	stan::math::var *fitparams_stan = new stan::math::var[param_list->nparams];
-	for (int i=0; i < param_list->nparams; i++) fitparams_stan[i] = fitparams[i];
-	stan::math::var loglike_stan = fitmodel_loglike_point_source<stan::math::var>(fitparams_stan);
-	loglike_stan.grad();
-	cout << "loglike = " << loglike_stan.val() << endl;
-	cout << "Autodiff params and GRADIENT comps: " << endl;
-	for (int i=0; i < param_list->nparams; i++) cout << fitparams_stan[i].val() << " " << fitparams_stan[i].adj() << endl;
-	cout << endl << endl;
-	delete[] fitparams_stan;
-#endif
+	stan::math::start_nested();
+	{
+		stan::math::var *fitparams_stan = new stan::math::var[param_list->nparams];
+		for (int i=0; i < param_list->nparams; i++) fitparams_stan[i] = fitparams[i];
+		stan::math::var loglike_stan = fitmodel_loglike_point_source<stan::math::var>(fitparams_stan);
+		loglike_stan.grad();
+		if (show_diagnostics) {
+			cout << "stan 2*loglike = " << (2*loglike_stan.val()) << endl;
+			cout << "Autodiff params and GRADIENT comps: " << endl;
+			for (int i=0; i < param_list->nparams; i++) cout << fitparams_stan[i].val() << " " << fitparams_stan[i].adj() << endl;
+			cout << endl << endl;
 
-	double epsilon = 1e-10;
-	double logl = fitmodel_loglike_point_source<double>(fitparams);
-	double logl2, dlogl;
-	double *fitparams2 = new double[param_list->nparams];
-	cout << "Params and GRADIENT comps from finite differencing: " << endl;
-	for (int i=0; i < param_list->nparams; i++) fitparams2[i] = fitparams[i];
-	for (int i=0; i < param_list->nparams; i++) {
-		fitparams2[i] += epsilon;
-		logl2 = fitmodel_loglike_point_source<double>(fitparams2);
-		dlogl = (logl2-logl)/epsilon;
-		cout << fitparams[i] << " " << dlogl << endl;
-		fitparams2[i] -= epsilon;
+			double epsilon = 1e-10;
+			double logl = fitmodel_loglike_point_source<double>(fitparams);
+			double logl2, dlogl;
+			double *fitparams2 = new double[param_list->nparams];
+			cout << "Params and GRADIENT comps from finite differencing: " << endl;
+			for (int i=0; i < param_list->nparams; i++) fitparams2[i] = fitparams[i];
+			for (int i=0; i < param_list->nparams; i++) {
+				fitparams2[i] += epsilon;
+				logl2 = fitmodel_loglike_point_source<double>(fitparams2);
+				dlogl = (logl2-logl)/epsilon;
+				cout << fitparams[i] << " " << dlogl << endl;
+				fitparams2[i] -= epsilon;
+			}
+			cout << endl << endl;
+			delete[] fitparams2;
+		}
+		delete[] fitparams_stan;
 	}
-	cout << endl << endl;
-	delete[] fitparams;
-
+	stan::math::recover_memory_nested();
+#endif
 
 	double chisqval = 2 * (this->*LogLikePtr)(param_list->values);
 	if (einstein_radius_prior) fitmodel->get_einstein_radius_prior(true); // just to show what the Re prior is returning
@@ -10239,7 +10324,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 	}
 #endif
 	display_chisq_status = false;
-	if (show_diagnostics) chisq_diagnostic = false;
+	//if (show_diagnostics) chisq_diagnostic = false;
 
 	if ((mpi_id==0) and (show_lensinfo)) {
 		cout << "lensing info:" << endl;
@@ -10254,6 +10339,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 
 	double rawchisqval = raw_chisq;
 	fit_restore_defaults();
+	delete[] fitparams;
 	if (init_fitmodel) delete fitmodel;
 	fitmodel = NULL;
 	if ((show_wtime_temp) and (!old_show_wtime)) show_wtime = false;
@@ -10580,97 +10666,113 @@ double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 }
 
 #ifdef USE_EIGEN
-	template <typename QScalar>
-	class LogLikeGrad_Func
-	{
-		private:
-		int n;
-		QLens* qptr;
-		double* steps;
-		const double increment = 1e-3;
-		public:
-		QScalar (QLens::*func)(const QScalar*);
-		LogLikeGrad_Func(int n_, QLens* qptr_in) : n(n_), qptr(qptr_in) { steps = new double[n]; }
-		~LogLikeGrad_Func() { delete[] steps; }
-		void input_stepsizes(double* steps_in) {
-			// The stepsizes are only used if Ridder's method is used to calculate numerical derivatives, in which case h=0.1*stepsize is used for each param
-			for (int i=0; i < n; i++) steps[i] = steps_in[i];
-		}
-		void set_function(QScalar (QLens::*func_in)(const QScalar*)) { func = func_in; }
-		double operator()(const VectorXd& params, VectorXd& grad) {
-			double logl0;
+template <typename QScalar>
+class LogLikeGrad_Func
+{
+	private:
+	int n;
+	QLens* qptr;
+	double* steps;
+	const double increment = 1e-3;
+	public:
+	double (QLens::*doublefunc)(const double*);
+	QScalar (QLens::*func)(const QScalar*);
+	LogLikeGrad_Func(int n_, QLens* qptr_in) : n(n_), qptr(qptr_in) { steps = new double[n]; }
+	~LogLikeGrad_Func() { delete[] steps; }
+	void input_stepsizes(double* steps_in) {
+		// The stepsizes are only used if Ridder's method is used to calculate numerical derivatives, in which case h=0.1*stepsize is used for each param
+		for (int i=0; i < n; i++) steps[i] = steps_in[i];
+	}
+	void set_function(QScalar (QLens::*func_in)(const QScalar*)) {
+		func = func_in;
+		if constexpr (std::is_same_v<QScalar, double>) doublefunc = func_in;
+	}
+	void set_doublefunc(double (QLens::*func_in)(const double*)) { doublefunc = func_in; }
+	double operator()(const VectorXd& params, VectorXd& grad) {
+		double logl0;
+			//logl0 = (qptr->*doublefunc)(params.data());
+			//ridders_method(params,grad);
 #ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			stan::math::start_nested();
+			{
 				stan::math::var* params_stan = new stan::math::var[n];
 				for (int i=0; i < n; i++) params_stan[i] = params(i);
 				stan::math::var loglike_stan = (qptr->*func)(params_stan);
-				loglike_stan.grad();
-				for (int i=0; i < n; i++) {
-					grad(i) = params_stan[i].adj();
-				}
+				//double logl0_stan = loglike_stan.val();
 				logl0 = loglike_stan.val();
+				//cout << "LOGLIKE: " << logl0_stan << " " << logl0 << endl;
+				loglike_stan.grad();
+				//double arg;
+				for (int i=0; i < n; i++) {
+					//arg = params_stan[i].adj();
+					grad(i) = params_stan[i].adj();
+					//cout << "GRAD(" << i << "): " << arg << " " << grad(i) << endl;
+				}
 				delete[] params_stan;
 			}
-			else
+			stan::math::recover_memory_nested();
+		}
+		else
 #endif
-			{
-				logl0 = (qptr->*func)(params.data());
-				ridders_method(params,grad);
-			}
-			//delete[] params_inc;
-			//cout << "LOGL: " << logl0 << "(params: " << params(0) << " " << params(1) << " " << params(2) << " " << params(3) << " " << params(4) << " " << params(5) << " " << params(6) << ")" << endl;
-			return logl0;
+		{
+			logl0 = (qptr->*func)(params.data());
+			ridders_method(params,grad);
 		}
-		void ridders_method(const VectorXd& params, VectorXd& grad) {
-			const double CON=1.4, CON2=(CON*CON);
-			const double BIG=1.0e100;
-			const double SAFE=2.0;
-			const int NTAB = 10;
-			int i,j;
-			double errt,fac,hh,ans=0.0;
+		//delete[] params_inc;
+		//cout << "LOGL: " << logl0 << "(params: " << params(0) << " " << params(1) << " " << params(2) << " " << params(3) << " " << params(4) << " " << params(5) << " " << params(6) << ")" << endl;
+		return logl0;
+	}
+	void ridders_method(const VectorXd& params, VectorXd& grad) {
+		const double CON=1.4, CON2=(CON*CON);
+		const double BIG=1.0e100;
+		const double SAFE=2.0;
+		const int NTAB = 10;
+		int i,j;
+		double errt,fac,hh,ans=0.0;
 
-			// We use Ridder's method for numerical derivative, because it is less noisy compared to finite differencing
-			double *x = new double[n];
-			for (int k=0; k < n; k++) x[k] = params(k);
-			for (int k=0; k < n; k++) {
-				ans=0.0;
-				double x0 = x[k];
-				double a[NTAB][NTAB];
-				//double **a = matrix <double> (NTAB, NTAB);
+		// We use Ridder's method for numerical derivative, because it is less noisy compared to finite differencing
+		double *x = new double[n];
+		for (int k=0; k < n; k++) x[k] = params(k);
+		for (int k=0; k < n; k++) {
+			ans=0.0;
+			double x0 = x[k];
+			double a[NTAB][NTAB];
+			//double **a = matrix <double> (NTAB, NTAB);
 
-				hh=0.5*steps[k];
+			hh=0.5*steps[k];
+			x[k] = x0 + hh;
+			a[0][0] = (qptr->*doublefunc)(x);
+			x[k] = x0 - hh;
+			a[0][0] -= (qptr->*doublefunc)(x);
+			a[0][0] /= (2.0*hh);
+			double err=BIG;
+			for (i=1;i<NTAB;i++) {
+				hh /= CON;
 				x[k] = x0 + hh;
-				a[0][0] = (qptr->*func)(x);
+				a[0][i] = (qptr->*doublefunc)(x);
 				x[k] = x0 - hh;
-				a[0][0] -= (qptr->*func)(x);
-				a[0][0] /= (2.0*hh);
-				double err=BIG;
-				for (i=1;i<NTAB;i++) {
-					hh /= CON;
-					x[k] = x0 + hh;
-					a[0][i] = (qptr->*func)(x);
-					x[k] = x0 - hh;
-					a[0][i] -= (qptr->*func)(x);
-					a[0][i] /= (2.0*hh);
-					fac=CON2;
-					for (j=1;j<=i;j++) {
-						a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
-						fac=CON2*fac;
-						errt=dmax(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
-						if (errt <= err) {
-							err=errt;
-							ans=a[j][i];
-						}
+				a[0][i] -= (qptr->*doublefunc)(x);
+				a[0][i] /= (2.0*hh);
+				fac=CON2;
+				for (j=1;j<=i;j++) {
+					a[j][i]=(a[j-1][i]*fac-a[j-1][i-1])/(fac-1.0);
+					fac=CON2*fac;
+					errt=dmax(fabs(a[j][i]-a[j-1][i]),fabs(a[j][i]-a[j-1][i-1]));
+					if (errt <= err) {
+						err=errt;
+						ans=a[j][i];
 					}
-					if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
 				}
-				x[k] = x0;
-				grad(k) = ans;
-				//cout << "gradient for param " << k << ": " << ans << " (hh=" << hh << ")" << endl;
+				if (fabs(a[i][i]-a[i-1][i-1]) >= SAFE*err) break;
 			}
-			delete[] x;
+			x[k] = x0;
+			grad(k) = ans;
+			//cout << "gradient for param " << k << ": " << ans << " (hh=" << hh << ")" << endl;
 		}
-	};
+		delete[] x;
+	}
+};
 #endif
 
 double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
@@ -10703,16 +10805,18 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 
 	LBFGSBParam<double> param;
 	param.epsilon = 1e-5;
-	param.max_iterations = 100;
+	param.max_iterations = simplex_nmax;
 
 	int n_fitparams = param_list->nparams;
 	int n_iterations = 0;
 #ifdef USE_STAN
 	LogLikeGrad_Func<stan::math::var> loglikegrad_func(n_fitparams,this);
 	loglikegrad_func.set_function(loglikeptr_stan);
+	loglikegrad_func.set_doublefunc(loglikeptr);
 #else
 	LogLikeGrad_Func<double> loglikegrad_func(n_fitparams,this);
 	loglikegrad_func.set_function(loglikeptr);
+#endif
 	Vector<double> stepsizes(param_list->stepsizes,n_fitparams);
 	loglikegrad_func.input_stepsizes(stepsizes.array());
 	if (mpi_id==0) {
@@ -10720,10 +10824,28 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		for (int i=0; i < n_fitparams; i++) cout << stepsizes[i] << " ";
 		cout << endl << endl;
 	}
-#endif
+//#endif
 
 	double *fitparams = new double[param_list->nparams];
 	param_list->get_values(fitparams);
+
+/*
+#ifdef USE_STAN
+	stan::math::start_nested();
+	{
+		stan::math::var *fitparams_stan = new stan::math::var[param_list->nparams];
+		for (int i=0; i < param_list->nparams; i++) fitparams_stan[i] = fitparams[i];
+		stan::math::var loglike_stan = fitmodel_loglike_point_source<stan::math::var>(fitparams_stan);
+		loglike_stan.grad();
+		cout << "loglike = " << loglike_stan.val() << endl;
+		cout << "Autodiff params and GRADIENT comps: " << endl;
+		for (int i=0; i < param_list->nparams; i++) cout << fitparams_stan[i].val() << " " << fitparams_stan[i].adj() << endl;
+		cout << endl << endl;
+		delete[] fitparams_stan;
+	}
+	stan::math::recover_memory_nested();
+#endif
+*/
 
 	double chisq_initial = (this->*loglikeptr)(fitparams);
 	if ((chisq_initial >= 1e30) and (mpi_id==0)) warn(warnings,"Your initial parameter values are returning a large \"penalty\" chi-square--this likely means\none or more parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
@@ -10778,7 +10900,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 
 	display_chisq_status = false;
 	if (mpi_id==0) {
-		cout << "Downhill simplex converged after " << n_iterations << " iterations\n\n";
+		cout << "BFGS converged after " << n_iterations << " iterations\n\n";
 	}
 
 	output_fit_results(fitparams,stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
@@ -13943,13 +14065,8 @@ QScalar QLens::fitmodel_loglike_point_source(const QScalar* params)
 		int n_matched_imgs;
 		if (imgplane_chisq) {
 			used_imgplane_chisq = true;
-			double* remember_grid_zfac = Grid::grid_zfactors;
-			double** remember_grid_betafac = Grid::grid_betafactors;
-			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic<double>(true,false,rms_err,n_matched_imgs);
-			else chisq = fitmodel->chisq_pos_image_plane<double>();
-			// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. This is has already been done for CartesianSourceGrid (versus CartesianSourcePixel), so just copy what you did there. DO THIS BEFORE RELEASING PUBLICLY!!!!
-			Grid::grid_zfactors = remember_grid_zfac;
-			Grid::grid_betafactors = remember_grid_betafac;
+			if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic<QScalar>(true,false,rms_err,n_matched_imgs);
+			else chisq = fitmodel->chisq_pos_image_plane<QScalar>();
 		}
 		else {
 			used_imgplane_chisq = false;
@@ -13970,13 +14087,8 @@ QScalar QLens::fitmodel_loglike_point_source(const QScalar* params)
 #endif
 			*/
 			if (chisq < chisq_imgplane_substitute_threshold) {
-				double* remember_grid_zfac = Grid::grid_zfactors;
-				double** remember_grid_betafac = Grid::grid_betafactors;
 				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic<QScalar>(true,false,rms_err,n_matched_imgs);
 				else chisq = fitmodel->chisq_pos_image_plane<QScalar>();
-			// THE FOLLOWING IS A HORRIBLE HACK because grid_zfactors, grid_betafactors are static. TO FIX THIS, have a parent Grid that contains these (and other) variables which are no longer static, with children objects called GridCell or something. This is has already been done for CartesianSourceGrid (versus CartesianSourcePixel), so just copy what you did there. DO THIS BEFORE RELEASING PUBLICLY!!!!
-				Grid::grid_zfactors = remember_grid_zfac;
-				Grid::grid_betafactors = remember_grid_betafac;
 				used_imgplane_chisq = true;
 			}
 		}

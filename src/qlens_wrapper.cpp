@@ -45,7 +45,7 @@ public:
 #else
 		n_omp_threads = 1;
 #endif
-		Grid::allocate_multithreaded_variables(n_omp_threads);
+		GridCell::allocate_multithreaded_variables(n_omp_threads);
 		CartesianSourceGrid::allocate_multithreaded_variables(n_omp_threads);
 		DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 		ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
@@ -539,7 +539,7 @@ public:
 	}
 	~QLens_Wrap()
 	 {
-		Grid::deallocate_multithreaded_variables();
+		GridCell::deallocate_multithreaded_variables();
 		ImagePixelGrid::deallocate_multithreaded_variables();
 		DelaunayGrid::deallocate_multithreaded_variables();
 		CartesianSourceGrid::deallocate_multithreaded_variables();
