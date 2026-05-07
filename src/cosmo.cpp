@@ -160,6 +160,10 @@ void Cosmology::setup_param_pointers()
 	QScalar** param_ptr = p.param;
 	*(param_ptr++) = &p.hubble;
 	*(param_ptr++) = &p.omega_m;
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
+
 }
 template void Cosmology::setup_param_pointers<double>();
 #ifdef USE_STAN
@@ -175,6 +179,9 @@ void Cosmology::copy_cosmo_data(const Cosmology* cosmo_in)
 	A_s = cosmo_in->A_s;
 	copy_param_arrays(cosmo_in);
 	set_cosmology_flat();
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
 }
 
 #ifdef USE_STAN
@@ -182,6 +189,8 @@ void Cosmology::sync_autodif_parameters()
 {
 	cosmo_params_dif.hubble = cosmo_params.hubble;
 	cosmo_params_dif.omega_m = cosmo_params.omega_m;
+	cosmo_params_dif.hubble_length = cosmo_params.hubble_length;
+	cosmo_params_dif.dcrit0 = cosmo_params.dcrit0;
 }
 #endif
 
