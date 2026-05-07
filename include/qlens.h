@@ -877,7 +877,8 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void count_MGE_amplitudes(int& n_mge_objects, int& n_gaussians, const int imggrid_i=-1);
 	void clear_pixel_matrices();
 	void clear_sparse_lensing_matrices();
-	double find_sbprofile_surface_brightness(lensvector<double> &pt);
+	template <typename QScalar>
+	QScalar find_sbprofile_surface_brightness(lensvector<QScalar> &pt);
 	void construct_Lmatrix(const int imggrid_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
 	void construct_Lmatrix_supersampled(const int imggrid_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
 	void PSF_convolution_Lmatrix(const int imggrid_i, bool verbal = false);
@@ -924,6 +925,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void vectorize_image_pixel_surface_brightness(const int imggrid_i, bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root, const int imggrid_i=-1);
 	double pixel_log_evidence_times_two(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
+	double pixel_log_evidence_times_two_sbprofile(double &chisq0, const bool verbal);
 	void setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bool verbal);
 	bool setup_cartesian_sourcegrid(const int imggrid_i, const int src_i, int& n_expected_imgpixels, const bool verbal);
 	bool generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, const int src_i, double& tot_wtime, double& tot_wtime0, const bool verbal);
@@ -1003,9 +1005,13 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	template<typename QScalar>
 	void hessian_weak(const double&, const double&, lensmatrix<QScalar>&, const int &thread, double* zfacs);
 	template<typename QScalar>
-	void find_sourcept(const lensvector<double>& x, lensvector<QScalar>& srcpt, const int &thread, double* zfacs, double** betafacs);
+	void find_sourcept_from_data(const lensvector<double>& x, lensvector<QScalar>& srcpt, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
-	void find_sourcept(const lensvector<double>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int &thread, double* zfacs, double** betafacs);
+	void find_sourcept_from_data(const lensvector<double>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int &thread, double* zfacs, double** betafacs);
+	template<typename QScalar>
+	void find_sourcept(const lensvector<QScalar>& x, lensvector<QScalar>& srcpt, const int &thread, double* zfacs, double** betafacs);
+	template<typename QScalar>
+	void find_sourcept(const lensvector<QScalar>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
 	void kappa_inverse_mag_sourcept(const lensvector<QScalar>& x, lensvector<QScalar>& srcpt, QScalar &kap_tot, QScalar &invmag, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>

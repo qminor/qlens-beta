@@ -9572,17 +9572,17 @@ bool ImageData::fit_isophote(const double xi0, const double xistep, const int em
 		if ((sbprofile != NULL) and (verbose)) {
 			// Now compare to true values...are uncertainties making sense?
 			double true_q, true_epsilon, true_theta, true_xc, true_yc, true_A4, true_rms_sbgrad_rel;
-			true_xc = sbprofile->x_center;
-			true_yc = sbprofile->y_center;
+			true_xc = sbprofile->sbparams->x_center;
+			true_yc = sbprofile->sbparams->y_center;
 			if (sbprofile->ellipticity_gradient==true) {
 				double eps;
 				sbprofile->ellipticity_function(xi,eps,true_theta);
 				true_q = sqrt(1-eps);
 				true_epsilon = 1-true_q;
 			} else {
-				true_q = sbprofile->q;
+				true_q = sbprofile->sbparams->q;
 				true_epsilon = 1 - true_q;
-				true_theta = sbprofile->theta;
+				true_theta = sbprofile->sbparams->theta;
 			}
 			true_A4 = 0.0;
 			if (sbprofile->n_fourier_modes > 0) {
@@ -21776,19 +21776,20 @@ void QLens::vectorize_image_pixel_surface_brightness(const int imggrid_i, bool u
 	}
 }
 
-double QLens::find_sbprofile_surface_brightness(lensvector<double> &pt)
+template <typename QScalar>
+QScalar QLens::find_sbprofile_surface_brightness(lensvector<QScalar> &pt)
 {
-	double sb = 0;
-	lensvector<double> srcpt;
+	QScalar sb = 0;
+	lensvector<QScalar> srcpt;
 	
-	find_sourcept<double>(pt,srcpt,0,reference_zfactors,default_zsrc_beta_factors);
+	find_sourcept<QScalar>(pt,srcpt,0,reference_zfactors,default_zsrc_beta_factors);
 	//cout << "src=" << srcpt[0] << "," << srcpt[1] << " pt=" << pt[0] << "," << pt[1] << endl;
 	for (int k=0; k < n_sb; k++) {
 		if (sb_list[k]->is_lensed) {
 			sb += sb_list[k]->surface_brightness(srcpt[0],srcpt[1]);
 			//if (!sb_list[k]->zoom_subgridding) sb += sb_list[k]->surface_brightness(srcpt[0],srcpt[1]);
 			//else {
-				//lensvector<double> srcpt1,srcpt2,srcpt3,srcpt4;
+				//lensvector<QScalar> srcpt1,srcpt2,srcpt3,srcpt4;
 				//find_sourcept(pt1,srcpt1,0,reference_zfactors,default_zsrc_beta_factors);
 				//find_sourcept(pt2,srcpt2,0,reference_zfactors,default_zsrc_beta_factors);
 				//find_sourcept(pt3,srcpt3,0,reference_zfactors,default_zsrc_beta_factors);
@@ -21804,6 +21805,10 @@ double QLens::find_sbprofile_surface_brightness(lensvector<double> &pt)
 	}
 	return sb;
 }
+template double QLens::find_sbprofile_surface_brightness<double>(lensvector<double> &pt);
+#ifdef USE_STAN
+template stan::math::var QLens::find_sbprofile_surface_brightness<stan::math::var>(lensvector<stan::math::var> &pt);
+#endif
 
 /*
 void QLens::plot_image_pixel_surface_brightness(string outfile_root, const int imggrid_i)

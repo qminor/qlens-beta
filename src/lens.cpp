@@ -313,7 +313,7 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	else {
 		cosmo = new Cosmology();
 		cosmology_allocated_within_qlens = true;
-		cosmo->set_cosmology(0.3,0.04,0.7,2.215); // defaults: omega_matter = 0.3, hubble = 0.7
+		cosmo->set_cosmology_flat(0.3,0.04,0.7,2.215); // defaults: omega_matter = 0.3, hubble = 0.7
 	}
 	cosmo->set_qlens(this);
 	lens_redshift = 0.5;
@@ -1927,7 +1927,7 @@ void QLens::update_lens_redshift_data()
 		if (lens_list[i]->lensed_center_coords) lens_list[i]->set_center_if_lensed_coords<double>(); // for LOS perturbers whose lensed center coordinates are used as parameters (updates true center)
 	}
 	for (i=0; i < n_sb; i++) {
-		if (sb_list[i]->lensed_center_coords) sb_list[i]->set_center_if_lensed_coords(); // for source objects whose lensed center coordinates are used as parameters (updates true center)
+		if (sb_list[i]->lensed_center_coords) sb_list[i]->set_center_if_lensed_coords<double>(); // for source objects whose lensed center coordinates are used as parameters (updates true center)
 	}
 }
 
@@ -2895,7 +2895,7 @@ void QLens::add_source(SB_Profile* new_src, const bool is_lensed)
 	sbprofile_imggrid_idx = new_sbprofile_imggrid_idx;
 	if (band_number==n_model_bands) add_new_model_band();
 	sbprofile_band_number[n_sb] = band_number;
-	add_new_extended_src_redshift(new_src->zsrc,n_sb,false);
+	add_new_extended_src_redshift(new_src->sbparams->zsrc,n_sb,false);
 	sbprofile_imggrid_idx[n_sb] = band_number*n_extended_src_redshifts+sbprofile_redshift_idx[n_sb];
 	n_sb++;
 	sb_list = newlist;
@@ -7208,27 +7208,27 @@ void QLens::print_lensing_info_at_point(const double x, const double y)
 	deflection<double>(point,alpha,reference_zfactors,default_zsrc_beta_factors);
 	//lensvector<double> alpha2;
 	//custom_deflection(point[0],point[1],alpha2);
-	lensvector<double> newpoint;
+	//lensvector<double> newpoint;
 	const double inc = 1e-4;
 	double r0 = sqrt(x*x+y*y);
 	double rp = r0+inc;
 	double phi = get_angle(x,y);
 	double xp = rp*cos(phi);
 	double yp = rp*sin(phi);
-	double new_sheartot, new_shear_angle;
-	newpoint[0] = xp; newpoint[1] = yp;
+	//double new_sheartot, new_shear_angle;
+	//newpoint[0] = xp; newpoint[1] = yp;
 	//double r_ell = lens_list[primary_lens_number]->elliptical_radius(x,y);
 	shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
-	shear<double>(newpoint,new_sheartot,new_shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
-	double shear_deriv = (new_sheartot-sheartot)/inc;
+	//shear<double>(newpoint,new_sheartot,new_shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+	//double shear_deriv = (new_sheartot-sheartot)/inc;
 	beta[0] = point[0] - alpha[0];
 	beta[1] = point[1] - alpha[1];
 	double kappaval = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
-	double new_kappaval = kappa<double>(newpoint,reference_zfactors,default_zsrc_beta_factors);
-	double kappa_deriv = (new_kappaval-kappaval)/inc;
+	//double new_kappaval = kappa<double>(newpoint,reference_zfactors,default_zsrc_beta_factors);
+	//double kappa_deriv = (new_kappaval-kappaval)/inc;
 	//double shear_deriv_approx = sheartot*kappa_deriv/kappaval;
-	double shear_deriv_approx = -kappa_deriv - 2/r0 + 2*kappaval/r0;
-	double shear_deriv_err = (shear_deriv_approx-shear_deriv)/shear_deriv;
+	//double shear_deriv_approx = -kappa_deriv - 2/r0 + 2*kappaval/r0;
+	//double shear_deriv_err = (shear_deriv_approx-shear_deriv)/shear_deriv;
 	if (mpi_id==0) {
 		cout << "kappa = " << kappaval << endl;
 		cout << "deflection = (" << alpha[0] << "," << alpha[1] << ")\n";
@@ -7237,8 +7237,8 @@ void QLens::print_lensing_info_at_point(const double x, const double y)
 		cout << "magnification = " << magnification<double>(point,0,reference_zfactors,default_zsrc_beta_factors) << endl;
 		cout << "shear = " << sheartot << ", shear_angle=" << shear_angle << endl;
 		cout << "reduced_shear1 = " << sheartot*cos(2*shear_angle*M_PI/180.0)/(1-kappaval) << " reduced_shear2 = " << sheartot*sin(2*shear_angle*M_PI/180.0)/(1-kappaval) << endl;
-		cout << "shear_deriv = " << shear_deriv << endl;
-		cout << "shear_deriv_approx = " << shear_deriv_approx << endl;
+		//cout << "shear_deriv = " << shear_deriv << endl;
+		//cout << "shear_deriv_approx = " << shear_deriv_approx << endl;
 		//cout << "shear_deriv_error = " << shear_deriv_err << endl;
 		cout << "sourcept = (" << beta[0] << "," << beta[1] << ")\n";
 
@@ -7258,8 +7258,24 @@ void QLens::print_lensing_info_at_point(const double x, const double y)
 		}
 		*/
 		if (n_sb > 0) {
+			/*
+#ifdef USE_STAN
+			stan::math::start_nested();
+			{
+				lensvector<stan::math::var> point;
+				point[0] = x; point[1] = y;
+
+				stan::math::var sb = find_sbprofile_surface_brightness(point);
+				sb.grad();
+				cout << "surface brightness from analytic sources = " << sb.val() << endl;
+				cout << "d(sb)/dx = " << point[0].adj() << " d(sb)/dy = " << point[1].adj() << endl;
+			}
+			stan::math::recover_memory_nested();
+			*/	
+//#else
 			double sb = find_sbprofile_surface_brightness(point);
 			cout << "surface brightness from analytic sources = " << sb << endl;
+//#endif
 		}
 		cout << endl;
 		//cout << "shear/kappa = " << sheartot/kappa(point) << endl;
@@ -7299,6 +7315,7 @@ void QLens::make_source_ellipse(const double xcenter, const double ycenter, cons
 			pt[0] = xcenter + x*cos(angle) - y*sin(angle);
 			pt[1] = ycenter + x*sin(angle) + y*cos(angle);
 			if (draw_in_imgplane) {
+				
 				find_sourcept<double>(pt,source,0,reference_zfactors,default_zsrc_beta_factors);
 			} else {
 				source[0] = pt[0];
@@ -7763,7 +7780,7 @@ bool QLens::plot_srcpts_from_image_data(int dataset_number, ofstream* srcfile, c
 	double *specific_zfacs = ptsrc_zfactors[ptsrc_redshift_idx[dataset_number]];
 	double **specific_betafacs = ptsrc_beta_factors[ptsrc_redshift_idx[dataset_number]];
 	for (i=0; i < n_srcpts; i++) {
-		find_sourcept<double>(point_image_data[dataset_number].images[i].pos,srcpts[i],0,specific_zfacs,specific_betafacs);
+		find_sourcept_from_data<double>(point_image_data[dataset_number].images[i].pos,srcpts[i],0,specific_zfacs,specific_betafacs);
 	}
 
 	if (use_scientific_notation==false) {
@@ -8974,7 +8991,7 @@ void QLens::find_analytic_srcpos(lensvector<double> *beta_i)
 					bvec[0] += (magsqr[0][0]*beta_ji[0] + magsqr[0][1]*beta_ji[1])*siginv;
 					bvec[1] += (magsqr[1][0]*beta_ji[0] + magsqr[1][1]*beta_ji[1])*siginv;
 				} else {
-					find_sourcept<double>(point_image_data[i].images[j].pos,beta_ji,0,specific_zfacs,specific_betafacs);
+					find_sourcept_from_data<double>(point_image_data[i].images[j].pos,beta_ji,0,specific_zfacs,specific_betafacs);
 					siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 					beta_i[i][0] += beta_ji[0]*siginv;
 					beta_i[i][1] += beta_ji[1]*siginv;
@@ -9090,7 +9107,7 @@ QScalar QLens::chisq_pos_source_plane()
 						bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
 					}
 				} else {
-					find_sourcept<QScalar>(point_image_data[i].images[j].pos,beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					find_sourcept_from_data<QScalar>(point_image_data[i].images[j].pos,beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					if (use_analytic_bestfit_src) {
 						siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 						src_bf[0] += beta_ji[j][0]*siginv;
@@ -9255,7 +9272,7 @@ QScalar QLens::chisq_pos_source_plane_test(const QScalar beta_x, const QScalar b
 						bvec[1] += (magsqr[1][0]*beta_ji[j][0] + magsqr[1][1]*beta_ji[j][1])*siginv;
 					}
 				} else {
-					find_sourcept<QScalar>(point_image_data[i].images[j].pos,beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
+					find_sourcept_from_data<QScalar>(point_image_data[i].images[j].pos,beta_ji[j],0,ptsrc_zfactors[redshift_idx],ptsrc_beta_factors[redshift_idx]);
 					if (use_analytic_bestfit_src) {
 						siginv = 1.0/(SQR(point_image_data[i].images[j].sigma_pos) + syserr_pos*syserr_pos);
 						src_bf[0] += beta_ji[j][0]*siginv;
@@ -9906,7 +9923,7 @@ QScalar QLens::chisq_time_delays()
 			datapt[0] = point_image_data[i].images[j].pos[0];
 			datapt[1] = point_image_data[i].images[j].pos[1];
 			if (point_image_data[i].images[j].sigma_td==0) continue;
-			find_sourcept<QScalar>(point_image_data[i].images[j].pos,beta_ij,0,specific_zfacs,specific_betafacs);
+			find_sourcept_from_data<QScalar>(point_image_data[i].images[j].pos,beta_ij,0,specific_zfacs,specific_betafacs);
 			pot = potential<QScalar>(datapt,specific_zfacs,specific_betafacs);
 			time_delays_mod[j] = 0.5*(SQR(point_image_data[i].images[j].pos[0] - beta_ij[0]) + SQR(point_image_data[i].images[j].pos[1] - beta_ij[1])) - pot;
 			if (time_delays_mod[j] < min_td_mod) min_td_mod = time_delays_mod[j];
@@ -10137,7 +10154,7 @@ double QLens::get_avg_ptsrc_dist(const int ptsrc_i)
 		n_srcpts = point_image_data[ptsrc_i].n_images;
 		lensvector<double> *srcpts = new lensvector<double>[n_srcpts];
 		for (j=0; j < n_srcpts; j++) {
-			find_sourcept<double>(point_image_data[ptsrc_i].images[j].pos,srcpts[j],0,ptsrc_zfactors[ptsrc_redshift_idx[ptsrc_i]],ptsrc_beta_factors[ptsrc_redshift_idx[ptsrc_i]]);
+			find_sourcept_from_data<double>(point_image_data[ptsrc_i].images[j].pos,srcpts[j],0,ptsrc_zfactors[ptsrc_redshift_idx[ptsrc_i]],ptsrc_beta_factors[ptsrc_redshift_idx[ptsrc_i]]);
 			for (k=0; k < j; k++) {
 				avg_srcdist += sqrt(SQR(srcpts[j][0] - srcpts[k][0]) + SQR(srcpts[j][1] - srcpts[k][1]));
 				n_src_pairs++;
@@ -10277,40 +10294,43 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 	}
 #endif
 
-	double *fitparams = new double[param_list->nparams];
-	param_list->get_values(fitparams);
 #ifdef USE_STAN
-	stan::math::start_nested();
-	{
-		stan::math::var *fitparams_stan = new stan::math::var[param_list->nparams];
-		for (int i=0; i < param_list->nparams; i++) fitparams_stan[i] = fitparams[i];
-		stan::math::var loglike_stan = fitmodel_loglike_point_source<stan::math::var>(fitparams_stan);
-		loglike_stan.grad();
-		if (show_diagnostics) {
-			cout << "stan 2*loglike = " << (2*loglike_stan.val()) << endl;
-			cout << "Autodiff params and GRADIENT comps: " << endl;
-			for (int i=0; i < param_list->nparams; i++) cout << fitparams_stan[i].val() << " " << fitparams_stan[i].adj() << endl;
-			cout << endl << endl;
+	if (source_fit_mode==Point_Source) {
+		double *fitparams = new double[param_list->nparams];
+		param_list->get_values(fitparams);
+		stan::math::start_nested();
+		{
+			stan::math::var *fitparams_stan = new stan::math::var[param_list->nparams];
+			for (int i=0; i < param_list->nparams; i++) fitparams_stan[i] = fitparams[i];
+			stan::math::var loglike_stan = fitmodel_loglike_point_source<stan::math::var>(fitparams_stan);
+			loglike_stan.grad();
+			if (show_diagnostics) {
+				cout << "stan 2*loglike = " << (2*loglike_stan.val()) << endl;
+				cout << "Autodiff params and GRADIENT comps: " << endl;
+				for (int i=0; i < param_list->nparams; i++) cout << fitparams_stan[i].val() << " " << fitparams_stan[i].adj() << endl;
+				cout << endl << endl;
 
-			double epsilon = 1e-10;
-			double logl = fitmodel_loglike_point_source<double>(fitparams);
-			double logl2, dlogl;
-			double *fitparams2 = new double[param_list->nparams];
-			cout << "Params and GRADIENT comps from finite differencing: " << endl;
-			for (int i=0; i < param_list->nparams; i++) fitparams2[i] = fitparams[i];
-			for (int i=0; i < param_list->nparams; i++) {
-				fitparams2[i] += epsilon;
-				logl2 = fitmodel_loglike_point_source<double>(fitparams2);
-				dlogl = (logl2-logl)/epsilon;
-				cout << fitparams[i] << " " << dlogl << endl;
-				fitparams2[i] -= epsilon;
+				double epsilon = 1e-10;
+				double logl = fitmodel_loglike_point_source<double>(fitparams);
+				double logl2, dlogl;
+				double *fitparams2 = new double[param_list->nparams];
+				cout << "Params and GRADIENT comps from finite differencing: " << endl;
+				for (int i=0; i < param_list->nparams; i++) fitparams2[i] = fitparams[i];
+				for (int i=0; i < param_list->nparams; i++) {
+					fitparams2[i] += epsilon;
+					logl2 = fitmodel_loglike_point_source<double>(fitparams2);
+					dlogl = (logl2-logl)/epsilon;
+					cout << fitparams[i] << " " << dlogl << endl;
+					fitparams2[i] -= epsilon;
+				}
+				cout << endl << endl;
+				delete[] fitparams2;
 			}
-			cout << endl << endl;
-			delete[] fitparams2;
+			delete[] fitparams_stan;
 		}
-		delete[] fitparams_stan;
+		stan::math::recover_memory_nested();
+		delete[] fitparams;
 	}
-	stan::math::recover_memory_nested();
 #endif
 
 	double chisqval = 2 * (this->*LogLikePtr)(param_list->values);
@@ -10339,7 +10359,6 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 
 	double rawchisqval = raw_chisq;
 	fit_restore_defaults();
-	delete[] fitparams;
 	if (init_fitmodel) delete fitmodel;
 	fitmodel = NULL;
 	if ((show_wtime_temp) and (!old_show_wtime)) show_wtime = false;
@@ -14262,15 +14281,22 @@ double QLens::fitmodel_loglike_extended_source(const double* params)
 		loglike += fitmodel->get_einstein_radius_prior(false);
 		//if (loglike > 1e10) loglike += 1e5; // in this case, intead of doing inversion we'll just add 1e5 as a stand-in for chi-square to save time
 	}
-	double chisq00;
-	chisq=0,chisq0=0;
-	if (loglike < 1e30) {
-		for (int i=0; i < n_ranchisq; i++) {
-			chisq += fitmodel->pixel_log_evidence_times_two(chisq00,false,i);
-			chisq0 += chisq00;
+
+	if (source_fit_mode==Parameterized_Source) {
+		chisq0=0;
+		chisq = fitmodel->pixel_log_evidence_times_two_sbprofile(chisq0,false);
+	} else {
+		double chisq00;
+		chisq=0;
+		chisq0=0;
+		if (loglike < 1e30) {
+			for (int i=0; i < n_ranchisq; i++) {
+				chisq += fitmodel->pixel_log_evidence_times_two(chisq00,false,i);
+				chisq0 += chisq00;
+			}
+			chisq /= n_ranchisq;
+			chisq0 /= n_ranchisq;
 		}
-		chisq /= n_ranchisq;
-		chisq0 /= n_ranchisq;
 	}
 
 	raw_chisq = chisq0; // in case the chi-square is being used as a derived parameter
@@ -14468,7 +14494,7 @@ void QLens::reassign_sb_param_pointers_and_names()
 	// parameter pointers should be reassigned if the parameterization mode has been changed
 	if (n_sb > 0) {
 		for (int i=0; i < n_sb; i++) {
-			sb_list[i]->calculate_ellipticity_components(); // in case ellipticity components has been turned on
+			sb_list[i]->calculate_ellipticity_components<double>(); // in case ellipticity components has been turned on
 			sb_list[i]->assign_param_pointers();
 			sb_list[i]->assign_paramnames();
 		}
@@ -16799,7 +16825,6 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					lensgrids[0]->include_in_lensing_calculations = true;
 				}
 			}
-			//cout << "DONE WITH THE INVERSION PART" << endl;
 		} else if (source_fit_mode == Parameterized_Source) {
 			for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
 				if (at_least_one_lensed_src) {
@@ -17069,6 +17094,176 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 	chisq_it++;
 
 	delete[] src_i_list;
+	return logev_times_two;
+}
+
+double QLens::pixel_log_evidence_times_two_sbprofile(double &chisq0, const bool verbal)
+{
+	// This function is too long, and should be further broken into a bunch of smaller functions.
+	if (n_data_bands==0) { warn("No image data have been loaded"); return -1e30; }
+	if (n_model_bands < n_data_bands) { warn("Numebr of model bands is not large enough to accommodate number of data bands"); }
+
+	if (n_extended_src_redshifts == 0) {
+		add_new_extended_src_redshift(source_redshift,-1,false);
+	}
+
+	if (n_model_bands != n_data_bands) die("number of model bands does not equal number of data bands");
+
+	if (image_pixel_grids == NULL) { warn("No image surface brightness grid has been generated"); return -1e30; }
+	int imggrid_i, src_i;
+	for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
+		if (image_pixel_grids[imggrid_i] == NULL) { warn("No image surface brightness grid for imggrid_i=%i has been generated",imggrid_i); return -1e30; }
+	}
+	if ((source_fit_mode == Parameterized_Source) and (n_sb==0)) {
+		warn("no parameterized sources have been defined; cannot evaluate chi-square");
+		chisq0=-1e30; return -1e30;
+	}
+
+	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in mask 0 : " << imgdata_list[0]->n_mask_pixels[0] << endl;
+	double tot_wtime0, tot_wtime;
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		tot_wtime0 = omp_get_wtime();
+	}
+#endif
+
+	if (redo_lensing_calculations_before_inversion) {
+		for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
+			image_pixel_grids[imggrid_i]->redo_lensing_calculations(verbal);
+		}
+	}
+
+	int i,j,zsrc_i;
+	double logev_times_two = 0;
+	chisq0 = 0;
+	double logev_times_two_band;
+	double regterms;
+	bool skip_inversion = false;
+
+	bool include_foreground_sbmask, include_foreground_sb, at_least_one_noninverted_foreground_src, at_least_one_lensed_src, at_least_one_lensed_nonshapelet_src; 
+
+	ImageData *image_data;
+	
+	bool sb_outside_window, sb_outside_window_allbands = false;
+	for (int band_number = 0; band_number < n_data_bands; band_number++) {
+		image_data = imgdata_list[band_number];
+		logev_times_two_band = 0;
+		// the foreground surface brightness includes foreground, but can also include additional (analytic) lensed sources if in pixel mode
+		include_foreground_sbmask = false;
+		include_foreground_sb = false;
+		at_least_one_noninverted_foreground_src = false;
+		at_least_one_lensed_src = false;
+		at_least_one_lensed_nonshapelet_src = false;
+		for (int k=0; k < n_sb; k++) {
+			if ((!sb_list[k]->is_lensed) and (sb_list[k]->sbtype != MULTI_GAUSSIAN_EXPANSION)) {
+				at_least_one_noninverted_foreground_src = true;
+			} else {
+				at_least_one_lensed_src = true;
+			}
+		}
+		if (at_least_one_noninverted_foreground_src) include_foreground_sb = true;
+		if ((!ignore_foreground_in_chisq) and (include_fgmask_in_inversion)) { include_foreground_sbmask = true; } 
+		else if (((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
+
+		for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
+			if (at_least_one_lensed_src) {
+				image_pixel_grids[imggrid_i]->find_surface_brightness(false,true);
+				vectorize_image_pixel_surface_brightness(imggrid_i,true);
+				PSF_convolution_pixel_vector(imggrid_i,false,verbal,fft_convolution);
+				store_image_pixel_surface_brightness(imggrid_i);
+			} else {
+				image_pixel_grids[imggrid_i]->set_zero_lensed_surface_brightness();
+			}
+			if (at_least_one_noninverted_foreground_src) {
+				assign_foreground_mappings(imggrid_i,true);
+				if (!ignore_foreground_in_chisq) {
+					calculate_foreground_pixel_surface_brightness(imggrid_i,false);
+					store_foreground_pixel_surface_brightness(imggrid_i);
+				}
+			} else {
+				image_pixel_grids[imggrid_i]->set_zero_foreground_surface_brightness();
+			}
+		}
+
+		double cov_inverse;
+		if (!use_noise_map) {
+			if (background_pixel_noise==0) cov_inverse = 1; // background noise hasn't been specified, so just pick an arbitrary value
+			else cov_inverse = 1.0/SQR(background_pixel_noise);
+		}
+		int count, foreground_count;
+		int n_data_pixels;
+		double chisq0_imggrid;
+		double pixel_avg_n_images;
+		int chisq0_band = 0;
+		foreground_count = 0;
+		count = 0;
+
+		// Next we evaluate the chi-square
+		for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
+			ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i]; 
+			if (image_pixel_grids[imggrid_i]->n_pixsrc_to_include_in_Lmatrix==0) continue;
+			n_data_pixels = 0;
+			chisq0_imggrid = 0;
+			for (i=0; i < image_data->npixels_x; i++) {
+				for (j=0; j < image_data->npixels_y; j++) {
+					if (((!include_fgmask_in_inversion) and (image_pixel_grid->pixel_in_mask[i][j])) or ((include_foreground_sbmask) and (image_data->foreground_mask_data[i][j])))
+					{
+						n_data_pixels++;
+						if (use_noise_map) cov_inverse = image_data->covinv_map[i][j];
+						if ((image_pixel_grid->pixel_in_mask[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
+							if (include_foreground_sb) {
+								chisq0_imggrid += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+								foreground_count++;
+							} else {
+								chisq0_imggrid += SQR(image_pixel_grid->surface_brightness[i][j] - image_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+							}
+							count++;
+						} else {
+							// NOTE that if a pixel is not in the foreground mask, the foreground_surface_brightness has already been set to zero for that pixel
+							if (include_foreground_sb) {
+								chisq0_imggrid += SQR(image_pixel_grid->foreground_surface_brightness[i][j] - image_data->surface_brightness[i][j])*cov_inverse;
+								foreground_count++;
+							}
+							else if (image_pixel_grid->pixel_in_mask[i][j]) chisq0_imggrid += SQR(image_data->surface_brightness[i][j])*cov_inverse; // if we're not modeling foreground, then only add to chi-square if it's inside the primary mask
+						}
+					}
+				}
+			}
+			chisq0_band += chisq0_imggrid;
+			logev_times_two_band += chisq0_imggrid; // logev_times_two_band includes the prior terms
+
+			if (group_id==0) {
+				if (logfile.is_open()) {
+					logfile << "it=" << chisq_it << ": ";
+					if (n_extended_src_redshifts > 1) logfile << "imggrid_i=" << imggrid_i;
+					logfile << " chisq0_band=" << chisq0_imggrid << " chisq0_per_pixel=" << chisq0_imggrid/n_data_pixels << " (ntot_pixels=" << n_data_pixels << ") regterms=" << regterms << endl;
+				}
+			}
+			if ((mpi_id==0) and (verbal)) {
+				if (n_extended_src_redshifts > 1) cout << "imggrid_i=" << imggrid_i << ": ";
+				cout << "chisq0=" << chisq0_imggrid << " chisq0_per_pixel=" << chisq0_imggrid/n_data_pixels << " (ntot_pixels=" << n_data_pixels << ")";
+				cout << endl;
+			}
+		}
+		logev_times_two += logev_times_two_band;
+		chisq0 += chisq0_band;
+		if ((mpi_id==0) and (verbal)) {
+			cout << "total number of image pixels included in loglike within the lensing mask (excluding foreground mask) = " << count << endl;
+			if (include_foreground_sb) cout << "total number of foreground image pixels included in loglike = " << foreground_count << endl;
+		}
+	}
+#ifdef USE_OPENMP
+	if (show_wtime) {
+		tot_wtime = omp_get_wtime() - tot_wtime0;
+		if (mpi_id==0) cout << "Total wall time for sbprofile loglike: " << tot_wtime << endl;
+	}
+#endif
+
+
+	if ((n_extended_src_redshifts > 1) and (mpi_id==0) and (verbal)) cout << "chisq0_tot=" << chisq0 << endl;
+	
+	chisq_it++;
+
 	return logev_times_two;
 }
 

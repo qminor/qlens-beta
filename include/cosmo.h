@@ -46,10 +46,42 @@ struct CosmologyParams
 	void remove_comments(std::string& instring);
 };
 
+template <typename QScalar>
+class CosmoParams : public ModelParams<QScalar>
+{
+	public:
+	QScalar omega_m, hubble;
+	QScalar hubble_length, dcrit0;
+};
+
 class Cosmology : public Model, public Brent
 {
+	public:
+	CosmoParams<double> cosmo_params;
+#ifdef USE_STAN
+	CosmoParams<stan::math::var> cosmo_params_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	CosmoParams<QScalar>& assign_cosmo_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return cosmo_params_dif;
+		else
+#endif
+		return cosmo_params;
+	}
+
 	private:
-	double omega_m, omega_b, omega_lambda, hubble, hubble_length, growth_factor, dcrit0;
+	void set_modelparams()
+	{
+		modelparams = &cosmo_params;
+#ifdef USE_STAN
+		modelparams_dif = &cosmo_params_dif;
+#endif
+	}
+
+	double omega_b, omega_lambda, growth_factor;
 	double power_k_normalization, variance_normalization;
 	double A_s; // dimensionless curvature power spectrum at the pivot scale
 	double ns, running;
@@ -80,60 +112,94 @@ class Cosmology : public Model, public Brent
 	double tf_cb, tf_cbnu;
 
 	public:
-	Cosmology() { setup_parameters(true); k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running; qlens = NULL; }
+	Cosmology() {
+		set_modelparams();
+		setup_parameters(true);
+		setup_param_pointers<double>();
+		k_pivot = default_k_pivot;
+		ns = default_spectral_index;
+		running = default_running;
+		qlens = NULL;
+	}
 	int set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double degen_hdm, double omega_lamb, double hub, double del_R, bool normalize_by_sigma8);
 	Cosmology(CosmologyParams &cosmo) {
+		set_modelparams();
 		k_pivot = default_k_pivot;
 		ns = cosmo.spectral_index;
 		running = cosmo.running;
 		setup_parameters(true);
-		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,cosmo.omega_lambda,cosmo.hubble,cosmo.A_s,true);
+		setup_param_pointers<double>();
+		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,cosmo.omega_lambda,cosmo.hubble,cosmo.A_s,false);
 	}
 	Cosmology(double omega_matter, double hub) {
+		set_modelparams();
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
 		setup_parameters(true);
-		set_cosmology(omega_matter,default_omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,default_del_R,true);
+		setup_param_pointers<double>();
+		set_cosmology(omega_matter,default_omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,default_del_R,false);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double hub, double del_R) {
+		set_modelparams();
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
 		setup_parameters(true);
-		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,del_R,true);
+		setup_param_pointers<double>();
+		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,del_R,false);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double omega_lamb, double hub, double del_R) {
+		set_modelparams();
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
 		setup_parameters(true);
-		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R,true);
+		setup_param_pointers<double>();
+		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R,false);
 	}
 	Cosmology(double omega_matter, double omega_baryon, double omega_hdm, int degen_hdm, double omega_lamb, double hub, double del_R) {
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
 		setup_parameters(true);
-		set_cosmology(omega_matter,omega_baryon,omega_hdm,degen_hdm,omega_lamb,hub,del_R,true);
+		setup_param_pointers<double>();
+		set_cosmology(omega_matter,omega_baryon,omega_hdm,degen_hdm,omega_lamb,hub,del_R,false);
 	}
-	void set_cosmology(double omega_matter, double omega_baryon, double hub, double del_R) {
+	void set_cosmology_flat(double omega_matter, double omega_baryon, double hub, double del_R) {
 	// if this function is called, we assume a flat universe, three massless neutrinos, and find transfer function at redshift zero
+		set_modelparams();
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,1-omega_matter,hub,del_R,true);
+		setup_parameters(true);
+		setup_param_pointers<double>();
+		double omega_lamb;
+		if (omega_matter > 0) omega_lamb = 1-omega_matter;
+		else omega_lamb = 1 - cosmo_params.omega_m;
+		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R,false);
 	}
 	void set_cosmology(double omega_matter, double omega_baryon, double omega_lamb, double hub, double del_R) {
 		// similar to above, except universe is not necessarily flat
+		set_modelparams();
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R,true);
+		setup_parameters(true);
+		setup_param_pointers<double>();
+		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R,false);
 	}
+	void set_cosmology() { set_cosmology(-1,-1,-1,-1,-1); }
+	void set_cosmology_flat() { set_cosmology_flat(-1,-1,-1,-1); }
 	void set_cosmology(CosmologyParams &cosmo) {
+		set_modelparams();
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s,true);
+		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s,false);
 	}
 	void set_cosmology(Cosmology &cosmo) {
+		set_modelparams();
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		set_cosmology(cosmo.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.omega_m,cosmo.hubble,cosmo.A_s,true);
+		set_cosmology(cosmo.cosmo_params.omega_m,cosmo.omega_b,default_neutrino_mass,default_n_massive_neutrinos,1-cosmo.cosmo_params.omega_m,cosmo.cosmo_params.hubble,cosmo.A_s,false);
 	}
 	void setup_parameters(const bool initial_setup);   // don't need this, unless we want to work with Model pointers in lens.cpp for parameter manipulation?
+	template <typename QScalar>
+	void setup_param_pointers();
+
 	void update_meta_parameters(const bool varied_only_fitparams); 
 	void get_parameter_numbers_from_qlens(int& pi, int& pf);
 	bool register_vary_parameters_in_qlens();
 	void register_limits_in_qlens();
 	void update_fitparams_in_qlens();
 	void copy_cosmo_data(const Cosmology* cosmo_in);
+	void sync_autodif_parameters();
 
 	void set_pivot_scale(double pscale) { k_pivot = pscale; }
 	void set_power_spectrum_scale_params(double index, double run) { ns = index; running = run; }
@@ -182,7 +248,10 @@ class Cosmology : public Model, public Brent
 	template <typename QScalar>
 	QScalar critical_density(const QScalar z);
 	template <typename QScalar>
-	QScalar matter_density(const QScalar z) { return omega_m*dcrit0*CUBE(1+z); }
+	QScalar matter_density(const QScalar z) {
+		CosmoParams<QScalar>& p = assign_cosmo_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+		return p.omega_m*p.dcrit0*CUBE(1+z);
+	}
 	template <typename QScalar>
 	void get_halo_parameters_from_rs_ds(const QScalar z, const QScalar rs, const QScalar ds, QScalar &mvir, QScalar &rvir);
 	template <typename QScalar>
@@ -201,19 +270,23 @@ class Cosmology : public Model, public Brent
 	double calculate_menc_scale_factor(double zl1, double zl2, double zs, double rp, double al, double tp); // for multi-plane lensing perturbations
 
 	double growth_function(double a);
-	double dt_dz(const double z) { return (hubble_length*pow(omega_m*CUBE(1+z)+1-omega_m, -0.5)/(1+z)); }
-	double h_over_h0(const double a) { return sqrt(omega_m/(a*a*a) + (1-omega_m-omega_lambda)/(a*a) + omega_lambda); }
+	double dt_dz(const double z) {
+		return (cosmo_params.hubble_length*pow(cosmo_params.omega_m*CUBE(1+z)+1-cosmo_params.omega_m, -0.5)/(1+z));
+	}
+	double h_over_h0(const double a) {
+		return sqrt(cosmo_params.omega_m/(a*a*a) + (1-cosmo_params.omega_m-omega_lambda)/(a*a) + omega_lambda);
+	}
 
-	double get_hubble() { return hubble; }
+	double get_hubble() { return cosmo_params.hubble; }
 	void set_hubble(const double h_in) {
-		hubble = h_in;
+		cosmo_params.hubble = h_in;
 		update_meta_parameters(false);
 		// once qlens pointer is setup, add a line that updates zfactors, betafactors in qlens
 	}
 
-	double get_omega_m() { return omega_m; }
+	double get_omega_m() { return cosmo_params.omega_m; }
 	void set_omega_m(const double om_in) {
-		omega_m = om_in;
+		cosmo_params.omega_m = om_in;
 		update_meta_parameters(false);
 		// once qlens pointer is setup, add a line that updates zfactors, betafactors in qlens
 	}

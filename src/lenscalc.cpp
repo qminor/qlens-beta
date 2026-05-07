@@ -491,7 +491,7 @@ template void QLens::hessian_weak<stan::math::var>(const double& x, const double
 #endif
 
 template<typename QScalar>
-void QLens::find_sourcept(const lensvector<double>& x, lensvector<QScalar>& srcpt, const int& thread, double* zfacs, double** betafacs)
+void QLens::find_sourcept(const lensvector<QScalar>& x, lensvector<QScalar>& srcpt, const int& thread, double* zfacs, double** betafacs)
 {
 	deflection<QScalar>(x[0],x[1],srcpt,thread,zfacs,betafacs);
 	srcpt[0] = x[0] - srcpt[0]; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector<double> alpha, which would be an extra memory operation)
@@ -499,11 +499,11 @@ void QLens::find_sourcept(const lensvector<double>& x, lensvector<QScalar>& srcp
 }
 template void QLens::find_sourcept<double>(const lensvector<double>& x, lensvector<double>& srcpt, const int& thread, double* zfacs, double** betafacs);
 #ifdef USE_STAN
-template void QLens::find_sourcept<stan::math::var>(const lensvector<double>& x, lensvector<stan::math::var>& srcpt, const int& thread, double* zfacs, double** betafacs);
+template void QLens::find_sourcept<stan::math::var>(const lensvector<stan::math::var>& x, lensvector<stan::math::var>& srcpt, const int& thread, double* zfacs, double** betafacs);
 #endif
 
 template<typename QScalar>
-void QLens::find_sourcept(const lensvector<double>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int& thread, double* zfacs, double** betafacs)
+void QLens::find_sourcept(const lensvector<QScalar>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int& thread, double* zfacs, double** betafacs)
 {
 	deflection<QScalar>(x[0],x[1],srcpt_x,srcpt_y,thread,zfacs,betafacs);
 	srcpt_x = x[0] - srcpt_x; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector<double> alpha, which would be an extra memory operation)
@@ -511,8 +511,34 @@ void QLens::find_sourcept(const lensvector<double>& x, QScalar& srcpt_x, QScalar
 }
 template void QLens::find_sourcept<double>(const lensvector<double>& x, double& srcpt_x, double& srcpt_y, const int& thread, double* zfacs, double** betafacs);
 #ifdef USE_STAN
-template void QLens::find_sourcept<stan::math::var>(const lensvector<double>& x, stan::math::var& srcpt_x, stan::math::var& srcpt_y, const int& thread, double* zfacs, double** betafacs);
+template void QLens::find_sourcept<stan::math::var>(const lensvector<stan::math::var>& x, stan::math::var& srcpt_x, stan::math::var& srcpt_y, const int& thread, double* zfacs, double** betafacs);
 #endif
+
+template<typename QScalar>
+void QLens::find_sourcept_from_data(const lensvector<double>& x, lensvector<QScalar>& srcpt, const int& thread, double* zfacs, double** betafacs)
+{
+	deflection<QScalar>(x[0],x[1],srcpt,thread,zfacs,betafacs);
+	srcpt[0] = x[0] - srcpt[0]; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector<double> alpha, which would be an extra memory operation)
+	srcpt[1] = x[1] - srcpt[1];
+}
+template void QLens::find_sourcept_from_data<double>(const lensvector<double>& x, lensvector<double>& srcpt, const int& thread, double* zfacs, double** betafacs);
+#ifdef USE_STAN
+template void QLens::find_sourcept_from_data<stan::math::var>(const lensvector<double>& x, lensvector<stan::math::var>& srcpt, const int& thread, double* zfacs, double** betafacs);
+#endif
+
+template<typename QScalar>
+void QLens::find_sourcept_from_data(const lensvector<double>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int& thread, double* zfacs, double** betafacs)
+{
+	deflection<QScalar>(x[0],x[1],srcpt_x,srcpt_y,thread,zfacs,betafacs);
+	srcpt_x = x[0] - srcpt_x; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector<double> alpha, which would be an extra memory operation)
+	srcpt_y = x[1] - srcpt_y;
+}
+template void QLens::find_sourcept_from_data<double>(const lensvector<double>& x, double& srcpt_x, double& srcpt_y, const int& thread, double* zfacs, double** betafacs);
+#ifdef USE_STAN
+template void QLens::find_sourcept_from_data<stan::math::var>(const lensvector<double>& x, stan::math::var& srcpt_x, stan::math::var& srcpt_y, const int& thread, double* zfacs, double** betafacs);
+#endif
+
+
 
 template<typename QScalar>
 QScalar QLens::inverse_magnification(const lensvector<QScalar>& x, const int &thread, double* zfacs, double** betafacs)

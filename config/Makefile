@@ -35,11 +35,11 @@ OPTS = -Wno-write-strings -O0 -std=c++17
 OPTS_NO_OPT = -Wno-write-strings -O0 -std=c++17
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FITPACK
-FLAGS = -DUSE_READLINE -DUSE_STAN -D_REENTRANT -DUSE_EIGEN
+FLAGS = -DUSE_READLINE -DUSE_STAN -D_REENTRANT -DUSE_EIGEN -DUSE_FITS
 #FLAGS = -DUSE_READLINE -DUSE_EIGEN
 #FLAGS = -DUSE_READLINE 
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio
-OTHERLIBS =  /Users/qminor/math/lib/tbb/libtbb.dylib -lm -lreadline
+OTHERLIBS =  /Users/qminor/math/lib/tbb/libtbb.dylib -lcfitsio -lm -lreadline
 #OTHERLIBS =  -lm -lreadline
 LINKLIBS = $(OTHERLIBS) $(MULTINEST_LIB) $(POLYCHORD_LIB)
 

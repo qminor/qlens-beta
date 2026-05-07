@@ -95,6 +95,10 @@ class LensSpline_Params : public LensParams<QScalar>
 	public:
 	Spline<QScalar> kspline;
 	QScalar qx_parameter, f_parameter;
+	LensSpline_Params() : LensParams<QScalar>() {
+		qx_parameter = 1.0;
+		f_parameter = 1.0;
+	}
 };
 
 class LensProfile : public EllipticityGradient
@@ -126,6 +130,18 @@ class LensProfile : public EllipticityGradient
 #endif
 
 	private:
+	template <typename QScalar>
+	LensParams<QScalar>& assign_lensparam_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return (*lensparams_dif);
+		else
+#endif
+		return (*lensparams);
+	}
+
+	protected:
 	LensSpline_Params<double> lensparams_spl;
 #ifdef USE_STAN
 	LensSpline_Params<stan::math::var> lensparams_spl_dif; // autodiff version
@@ -139,17 +155,6 @@ class LensProfile : public EllipticityGradient
 		else
 #endif
 		return lensparams_spl;
-	}
-
-	template <typename QScalar>
-	LensParams<QScalar>& assign_lensparam_object()
-	{
-#ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>)
-			return (*lensparams_dif);
-		else
-#endif
-		return (*lensparams);
 	}
 
 	public:
@@ -371,7 +376,6 @@ class LensProfile : public EllipticityGradient
 		if (lensparams_dif->fourier_integral_left_cos_spline != NULL) delete[] lensparams_dif->fourier_integral_right_cos_spline;
 		if (lensparams_dif->fourier_integral_left_cos_spline != NULL) delete[] lensparams_dif->fourier_integral_right_sin_spline;
 #endif
-
 	}
 	void set_null_ptrs_and_values()
 	{

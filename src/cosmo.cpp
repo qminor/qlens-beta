@@ -119,10 +119,6 @@ bool CosmologyParams::load_params(string filename)
 void Cosmology::setup_parameters(const bool initial_setup)
 {
 	if (initial_setup) {
-		// default initial values
-		omega_m = 0.3;
-		hubble = 0.7;
-
 		setup_parameter_arrays(2);
 	} else {
 		// always reset the active parameter flags, since the active ones will be determined below
@@ -136,7 +132,6 @@ void Cosmology::setup_parameters(const bool initial_setup)
 	int indx = 0;
 
 	if (initial_setup) {
-		param[indx] = &hubble;
 		paramnames[indx] = "hubble"; latex_paramnames[indx] = "H"; latex_param_subscripts[indx] = "0";
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -146,7 +141,6 @@ void Cosmology::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		param[indx] = &omega_m;
 		paramnames[indx] = "omega_m"; latex_paramnames[indx] = "\\Omega"; latex_param_subscripts[indx] = "M";
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -156,19 +150,45 @@ void Cosmology::setup_parameters(const bool initial_setup)
 	indx++;
 }
 
+template <typename QScalar>
+void Cosmology::setup_param_pointers()
+{
+	CosmoParams<QScalar>& p = assign_cosmo_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+	p.hubble = 0.7;
+	p.omega_m = 0.3;
+
+	QScalar** param_ptr = p.param;
+	*(param_ptr++) = &p.hubble;
+	*(param_ptr++) = &p.omega_m;
+}
+template void Cosmology::setup_param_pointers<double>();
+#ifdef USE_STAN
+template void Cosmology::setup_param_pointers<stan::math::var>();
+#endif
+
 void Cosmology::copy_cosmo_data(const Cosmology* cosmo_in)
 {
-	hubble = cosmo_in->hubble;
-	omega_m = cosmo_in->omega_m;
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+	p.hubble = cosmo_in->cosmo_params.hubble;
+	p.omega_m = cosmo_in->cosmo_params.omega_m;
 	omega_b = cosmo_in->omega_b;
 	A_s = cosmo_in->A_s;
 	copy_param_arrays(cosmo_in);
-	set_cosmology(omega_m,omega_b,hubble,A_s);
+	set_cosmology_flat();
 }
+
+#ifdef USE_STAN
+void Cosmology::sync_autodif_parameters()
+{
+	cosmo_params_dif.hubble = cosmo_params.hubble;
+	cosmo_params_dif.omega_m = cosmo_params.omega_m;
+}
+#endif
 
 void Cosmology::update_meta_parameters(const bool varied_only_fitparams)
 {
-	set_cosmology(omega_m,omega_b,hubble,A_s);
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+	set_cosmology_flat();
 	if ((qlens) and (n_vary_params > 0)) {
 		qlens->update_zfactors_and_betafactors();
 		for (int i=0; i < qlens->nlens; i++) {
@@ -204,22 +224,23 @@ void Cosmology::update_fitparams_in_qlens()
 
 int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double neutrino_mass, double n_massive_neutrinos, double omega_lamb, double hub, double A_s_in, bool normalize_by_sigma8)
 {
-	omega_m = omega_matter;
-	omega_b = omega_baryon;
-	omega_lambda = omega_lamb;
-	hubble = hub;
-	hubble_length = 2.99792458e3/hubble; // in Mpc
-	dcrit0 = 2.775e11*hubble*hubble;  // units are solar masses per Mpc^3
-	A_s = A_s_in;
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+	if (omega_matter > 0) p.omega_m = omega_matter;
+	if (omega_baryon > 0) omega_b = omega_baryon;
+	if (omega_lamb > 0) omega_lambda = omega_lamb;
+	if (hub > 0) p.hubble = hub;
+	if (A_s_in > 0) A_s = A_s_in;
+	p.hubble_length = 2.99792458e3/p.hubble; // in Mpc
+	p.dcrit0 = 2.775e11*p.hubble*p.hubble;  // units are solar masses per Mpc^3
 	k_pivot = default_k_pivot;
 
-	double omega_hdm = n_massive_neutrinos*neutrino_mass/93.04/SQR(hubble);
+	double omega_hdm = n_massive_neutrinos*neutrino_mass/93.04/SQR(p.hubble);
 
 	// fitting formula from Carroll, Press & Turner 1992
-	double growth_factor = (5.0/2.0)*omega_m/(pow(omega_m, 4.0/7.0) - omega_lambda + (1 + 0.5*omega_m)*(1 + omega_lambda/70.0));
+	double growth_factor = (5.0/2.0)*p.omega_m/(pow(p.omega_m, 4.0/7.0) - omega_lambda + (1 + 0.5*p.omega_m)*(1 + omega_lambda/70.0));
 
 	//double growth_factor = growth_function(1);
-	variance_normalization = (4.0/25.0)*A_s*QUARTIC(hubble_length)*SQR(growth_factor/omega_m);
+	variance_normalization = (4.0/25.0)*A_s*QUARTIC(p.hubble_length)*SQR(growth_factor/p.omega_m);
 	power_k_normalization = variance_normalization*(2*M_PI*M_PI);
 		// Now set up the transfer function. Fitting Formulae are for CDM + Baryon + Massive Neutrino (MDM) cosmologies.
 	// Daniel J. Eisenstein & Wayne Hu, Institute for Advanced Study
@@ -228,33 +249,33 @@ int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double ne
 
 	int qwarn = 0;
 	 // Look for strange input
-	if (omega_baryon<0.0) {
-		cerr << "set_cosmology(): Negative omega_baryon set to trace amount.\n";
+	if (omega_b<0.0) {
+		cerr << "set_cosmology(): Negative omega_b set to trace amount.\n";
 		qwarn = 1;
 	}
 	if (omega_hdm<0.0) {
 		cerr << "set_cosmology(): Negative omega_hdm set to trace amount.\n";
 		qwarn = 1;
 	}
-	if (hubble<=0.0) {
+	if (p.hubble<=0.0) {
 		cerr <<"set_cosmology(): Negative Hubble constant illegal.\n";
 		exit(1);  // Can't recover
 	}
-	//else if (hubble>2.0) {
+	//else if (p.hubble>2.0) {
 		//cerr <<"Warning: Hubble constant should be in units of 100 km/s/Mpc, which means it should not be significantly larger than 1.\n";
 		//qwarn = 1;
 	//}
 	if (n_massive_neutrinos<1) n_massive_neutrinos=1;
 	num_degen_hdm = n_massive_neutrinos;	
 
-	if (omega_baryon<=0) die("omega_baryon must be greater than zero");
+	if (omega_b<=0) die("omega_b must be greater than zero");
 
-	omega_curv = 1.0-omega_matter-omega_lambda;
-	omhh = omega_matter*SQR(hubble);
-	obhh = omega_baryon*SQR(hubble);
-	onhh = omega_hdm*SQR(hubble);
-	f_baryon = omega_baryon/omega_matter;
-	f_hdm = omega_hdm/omega_matter;
+	omega_curv = 1.0-p.omega_m-omega_lambda;
+	omhh = p.omega_m*SQR(p.hubble);
+	obhh = omega_b*SQR(p.hubble);
+	onhh = omega_hdm*SQR(p.hubble);
+	f_baryon = omega_b/p.omega_m;
+	f_hdm = omega_hdm/p.omega_m;
 	f_cdm = 1.0-f_baryon-f_hdm;
 	f_cb = f_cdm+f_baryon;
 	f_bnu = f_baryon+f_hdm;
@@ -277,7 +298,7 @@ int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double ne
 	p_c = 0.25*(5.0-sqrt(1+24.0*f_cdm));
 	p_cb = 0.25*(5.0-sqrt(1+24.0*f_cb));
 
-	growth_small_k = z_equality*2.5*omega_m / (pow(omega_m,4.0/7.0)-omega_lambda+(1.0+omega_m/2.0)*(1.0+omega_lambda/70.0));
+	growth_small_k = z_equality*2.5*p.omega_m / (pow(p.omega_m,4.0/7.0)-omega_lambda+(1.0+p.omega_m/2.0)*(1.0+omega_lambda/70.0));
 	 
 	// Compute small-scale suppression
 	alpha_nu = f_cdm/f_cb*(5.0-2.*(p_c+p_cb))/(5.-4.*p_cb)*
@@ -344,6 +365,7 @@ double Cosmology::transfer_function(double kk)
 
 double Cosmology::transfer_function(double kk, double zz)
 {
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	// Fitting Formulae for CDM + Baryon + Massive Neutrino (MDM) cosmologies.
 	// Daniel J. Eisenstein & Wayne Hu, Institute for Advanced Study
 	// 
@@ -353,11 +375,11 @@ double Cosmology::transfer_function(double kk, double zz)
 	// growth_cbnu -- the transfer function for density-weighted CDM + Baryon + Massive Neutrino perturbations. */
 
 	double omega_lambda_z, omega_matter_z;
-	double omega_denom = omega_lambda+SQR(1.0+zz)*(omega_curv+omega_m*(1.0+zz));
+	double omega_denom = omega_lambda+SQR(1.0+zz)*(omega_curv+p.omega_m*(1.0+zz));
 	omega_lambda_z = omega_lambda/omega_denom;
-	omega_matter_z = omega_m*SQR(1.0+zz)*(1.0+zz)/omega_denom;
+	omega_matter_z = p.omega_m*SQR(1.0+zz)*(1.0+zz)/omega_denom;
 	double growth_small_k_z = z_equality/(1.0+zz)*2.5*omega_matter_z / (pow(omega_matter_z,4.0/7.0)-omega_lambda_z+(1.0+omega_matter_z/2.0)*(1.0+omega_lambda_z/70.0));
-	//growth_z_to_z0 = z_equality*2.5*omega_m/(pow(omega_m,4.0/7.0) - omega_lambda + (1.0+omega_m/2.0)*(1.0+omega_lambda/70.0));
+	//growth_z_to_z0 = z_equality*2.5*p.omega_m/(pow(p.omega_m,4.0/7.0) - omega_lambda + (1.0+p.omega_m/2.0)*(1.0+omega_lambda/70.0));
 	//growth_z_to_z0 = growth_small_k/growth_z_to_z0;	
 
 	 double tf_sup_L, tf_sup_C;
@@ -392,9 +414,10 @@ double Cosmology::transfer_function(double kk, double zz)
 
 double Cosmology::growth_function(double a)
 {
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	Romberg<std::function<double(const double)>,double> romberg;
 	double integral = romberg.integrate_open([this](auto x) { return growth_function_integrand(x); },0,a,1e-6,5);
-	return 2.5*omega_m*h_over_h0(a)*integral;
+	return 2.5*p.omega_m*h_over_h0(a)*integral;
 }
 
 double Cosmology::growth_function_integrand(double a)
@@ -441,10 +464,11 @@ double Cosmology::variance(double k, double z)
 
 double Cosmology::rms_sigma_tophat(const double mass, const double z) // dM/M: rms mass fluctuation of CDM halos
 {
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	auto tophat_window_func = [this](auto x) { return tophat_window_k(x); };
 
 	double mass_fluctuation;
-	tophat_window_R = pow(3 * mass / (M_4PI*omega_m*dcrit0*CUBE(1+z)), (1.0/3.0)); // unit of length is Mpc
+	tophat_window_R = pow(3 * mass / (M_4PI*p.omega_m*p.dcrit0*CUBE(1+z)), (1.0/3.0)); // unit of length is Mpc
 	Romberg<std::function<double(const double)>,double> romberg;
 	mass_fluctuation = romberg.integrate_open(tophat_window_func, 0, 10, 1.0e-6, 5) + romberg.integrate_improper(tophat_window_func, 10, 1e30, 1.0e-6, 5);
 	return sqrt(mass_fluctuation);
@@ -452,15 +476,15 @@ double Cosmology::rms_sigma_tophat(const double mass, const double z) // dM/M: r
 
 double Cosmology::rms_sigma8() // dM/M: rms mass fluctuation of CDM halos
 {
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	double mass_fluctuation;
-	tophat_window_R = 8.0/hubble;
+	tophat_window_R = 8.0/p.hubble;
 
 	auto tophat_window_func = [this](auto x) { return tophat_window_k(x); };
 
 	Romberg<std::function<double(const double)>,double> romberg;
 	mass_fluctuation = romberg.integrate_open(tophat_window_func, 0, 10, 1.0e-6, 5) + romberg.integrate_improper(tophat_window_func, 10, 1e30, 1.0e-6, 5);
 	return sqrt(mass_fluctuation);
-	return 0;
 }
 
 double Cosmology::tophat_window_k(const double k)
@@ -468,6 +492,7 @@ double Cosmology::tophat_window_k(const double k)
 	double x, W_k; /* W_k here is actually (W_k/V_k)^2 (see fig.9.2, K&T p.332) */
 	x = k*tophat_window_R;
 	W_k = SQR(sin(x)/(x*x*x) - cos(x)/(x*x));
+	//cout << "HARG? " << W_k << " var=" << variance(k) << " norm=" << variance_normalization << " trans=" << transfer_function(k) << " scpert=" << scaled_curvature_perturbation(log(k/k_pivot)) << endl;
 	return (9.0*variance(k)*W_k/k);
 }
 
@@ -508,6 +533,7 @@ void Cosmology::spline_comoving_distance(void)
 
 void Cosmology::redshift_distribution(void)
 {
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	const int zsteps = 200;
 	int i;
 	double z, zmin, zmax, zstep;
@@ -517,7 +543,7 @@ void Cosmology::redshift_distribution(void)
 	ofstream nzout("nz.dat");
 	Romberg<std::function<double(const double)>,double> romberg;
 	for (i=0, z=zmin; i < zsteps; i++, z += zstep) {
-		chi = romberg.integrate([this](auto x){return comoving_distance_derivative(x);}, 0, z, 1e-6, 5)/hubble_length;
+		chi = romberg.integrate([this](auto x){return comoving_distance_derivative(x);}, 0, z, 1e-6, 5)/p.hubble_length;
 		nz = chi*chi/pow(1+z,5);
 		nzout << z << " " << chi << " " << nz << endl;
 	}
@@ -532,8 +558,9 @@ double Cosmology::comoving_distance_exact(const double z)
 
 double Cosmology::angular_radius(double chi)
 {
-	double omega_curv = 1-omega_m-omega_lambda;
-	double hubble_radius = hubble_length/sqrt(abs(omega_curv));
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+	double omega_curv = 1-p.omega_m-omega_lambda;
+	double hubble_radius = p.hubble_length/sqrt(abs(omega_curv));
 	if (omega_curv > 0)
 		return hubble_radius*(sinh(chi/hubble_radius));
 	else if (omega_curv < 0)
@@ -543,14 +570,16 @@ double Cosmology::angular_radius(double chi)
 
 double Cosmology::comoving_distance_derivative(const double z)
 {
-	return (hubble_length*pow(omega_m*CUBE(1+z)+(1-omega_m-omega_lambda)*SQR(1+z) + omega_lambda, -0.5));
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+	return (p.hubble_length*pow(p.omega_m*CUBE(1+z)+(1-p.omega_m-omega_lambda)*SQR(1+z) + omega_lambda, -0.5));
 	//return pow(1+z,-1.5);
 }
 
 template <typename QScalar>
 QScalar Cosmology::critical_density(const QScalar z)
 {
-	return dcrit0*(omega_m*CUBE(1+z)+1-omega_m);
+	CosmoParams<QScalar>& p = assign_cosmo_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
+	return p.dcrit0*(p.omega_m*CUBE(1+z)+1-p.omega_m);
 }
 template double Cosmology::critical_density<double>(const double z);
 #ifdef USE_STAN
@@ -560,6 +589,7 @@ template stan::math::var Cosmology::critical_density<stan::math::var>(const stan
 template <typename QScalar>
 void Cosmology::get_halo_parameters_from_rs_ds(const QScalar z, const QScalar rs, const QScalar ds, QScalar &mvir, QScalar &rvir)
 {
+	CosmoParams<QScalar>& p = assign_cosmo_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	static const double virial_ratio = 200.0;
 	double (Brent::*croot)(const double);
 	croot = static_cast<double (Brent::*)(const double)> (&Cosmology::concentration_root_equation);
@@ -798,10 +828,10 @@ void Cosmology::plot_power_k(int nsteps, const double log10k_min, const double l
 	int i;
 
 	// now we find amplitude of perturbations when they cross the horizon (just to check)
-	//k=hubble_length;
+	//k=p.hubble_length;
 	//logkappa = log(k/k_pivot);
 	//double dhsq = variance_normalization*QUARTIC(k)*SQR(transfer_function(k))*pow(k/k_pivot,ns-1);
-	//double dh = sqrt(dhsq)*omega_m/growth_factor;
+	//double dh = sqrt(dhsq)*p.omega_m/growth_factor;
 	//cout << dh << endl;
 	//die();
 
@@ -826,10 +856,10 @@ void Cosmology::plot_primordial_power_spectrum(int nsteps, const double log10k_m
 	int i;
 
 	// now we find amplitude of perturbations when they cross the horizon (just to check)
-	//k=hubble_length;
+	//k=p.hubble_length;
 	//logkappa = log(k/k_pivot);
 	//double dhsq = variance_normalization*QUARTIC(k)*SQR(transfer_function(k))*pow(k/k_pivot,ns-1);
-	//double dh = sqrt(dhsq)*omega_m/growth_factor;
+	//double dh = sqrt(dhsq)*p.omega_m/growth_factor;
 	//cout << dh << endl;
 	//die();
 
@@ -896,12 +926,13 @@ QScalar Cosmology::median_concentration_dutton(const QScalar mass, const QScalar
 	using stan::math::exp;
 	using stan::math::pow;
 #endif
+	CosmoParams<QScalar>& p = assign_cosmo_param_object<QScalar>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar a, b, logc, ten = 10.0;
 	a = 0.52 + (0.901 - 0.520)*exp(-0.617*pow(z,1.21));
 	b = -0.101 + 0.026*z;
 	//QScalar logccheck = 2.148 - 0.11*log(mass)/ln10;
 
-	logc = a + b*log(mass*hubble*1e-12)/ln10;
+	logc = a + b*log(mass*p.hubble*1e-12)/ln10;
 	//cout << "LOGC: " << logc << " " << logccheck << endl;
 	return pow(ten,logc);
 }
@@ -941,9 +972,10 @@ double Cosmology::delta_z(const double z)
 
 double Cosmology::d_plus(const double z)   // empirical fitting function for growth function (oguri p. 112)
 {
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	double g, omega_m_z, omega_lambda_z;
 
-	omega_m_z = omega_m*CUBE(1+z)/(omega_m*CUBE(1+z)+1-omega_m);
+	omega_m_z = p.omega_m*CUBE(1+z)/(p.omega_m*CUBE(1+z)+1-p.omega_m);
 	omega_lambda_z = 1 - omega_m_z;
 	g = (5.0/2.0)*omega_m_z*(1.0/(pow(omega_m_z, 4.0/7.0) - omega_lambda_z + (1 + omega_m_z/2)*(1 + omega_lambda_z/70)));
 	return g/(1+z);
@@ -951,20 +983,22 @@ double Cosmology::d_plus(const double z)   // empirical fitting function for gro
 
 double Cosmology::rms_lsig(const double rad)
 {
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	double sigma_spline;
-	double mass = omega_m*dcrit0*M_PI*(4.0/3.0)*CUBE(rad);
+	double mass = p.omega_m*p.dcrit0*M_PI*(4.0/3.0)*CUBE(rad);
 	sigma_spline = rms_sigma.splint(mass);
 	return sigma_spline;
 }
 
 double Cosmology::mass_function_ST(const double mass, const double z)
 {
+	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
 	double dsigma_dlogm, dr_dm, matter_density0, sig, rad, der, nu, ans;
-	matter_density0 = omega_m*dcrit0;
+	matter_density0 = p.omega_m*p.dcrit0;
 	sig = rms_sigma.splint(mass);
-	rad = pow(3 * mass / (M_4PI*omega_m*dcrit0), (1.0/3.0)); // unit of length is Mpc
+	rad = pow(3 * mass / (M_4PI*p.omega_m*p.dcrit0), (1.0/3.0)); // unit of length is Mpc
 
-	dr_dm = -(1.0/3.0)*pow(3/(4*M_PI*omega_m*dcrit0), 1.0/3.0)*pow(mass, -2.0/3.0);  // dr/dm (chain rule)
+	dr_dm = -(1.0/3.0)*pow(3/(4*M_PI*p.omega_m*p.dcrit0), 1.0/3.0)*pow(mass, -2.0/3.0);  // dr/dm (chain rule)
 
 	// this is d(ln(sigma^-1))/dln(M), which goes roughly like M^(-1/2)
 	//der = derivative(rms_lsig, rad, 1e-6);

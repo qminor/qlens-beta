@@ -239,21 +239,12 @@ class DelaunayGrid : private Sort
 
 	public:
 	static bool zero_outside_border;
-	//bool look_for_starting_point;
 	int n_gridpts;
 	int n_triangles;
-	//int img_ni, img_nj;
 	lensvector<double> *gridpts;
 	Triangle *triangle;
-	//double *surface_brightness;	
-	//bool *active_pixel;
-	//int *active_index;
-	//int **img_index_ij;
 	int *adj_triangles[4];
-	//int *imggrid_ivals;
-	//int *imggrid_jvals;
 	double avg_area;
-	//double srcpixel_xmin, srcpixel_xmax, srcpixel_ymin, srcpixel_ymax;
 	double kernel_correlation_length, matern_index;
 
 	protected:
@@ -477,6 +468,24 @@ class ImagePixelGrid : private Sort
 	friend struct ImageData;
 	friend class LensProfile;
 	friend class PSF;
+
+	/*
+	template <typename QScalar>
+	class ImgGrid_Params
+	{
+		QScalar **surface_brightness;
+		QScalar **foreground_surface_brightness;
+		lensvector<QScalar> **corner_sourcepts;
+		lensvector<QScalar> **center_sourcepts;
+		lensvector<QScalar> ***subpixel_center_sourcepts;
+		QScalar ***subpixel_surface_brightness;
+		QScalar *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
+		QScalar *defx_subpixel_centers, *defy_subpixel_centers;
+		QScalar *twistx, *twisty;
+	};
+	*/
+
+
 	QLens *qlens;
 	CartesianSourceGrid *cartesian_srcgrid;
 	DelaunaySourceGrid *delaunay_srcgrid;
@@ -491,8 +500,8 @@ class ImagePixelGrid : private Sort
 	lensvector<double> ***subpixel_center_sourcepts;
 	double ***subpixel_surface_brightness;
 	lensvector<double> ***subpixel_source_gradient;
-	//double **S0_check;
-	//lensvector<double> **x0_check;
+	double **S0_check;
+	lensvector<double> **x0_check;
 	double ***subpixel_weights;
 	int **subpixel_index;
 

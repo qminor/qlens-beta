@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
 
 	Cosmology cosmo;
 	if (load_cosmology_file) cosmo.set_cosmology(cosmology);
-	else cosmo.set_cosmology(0.3,0.04,0.7,2.215); // defaults: omega_matter = 0.3, hubble = 0.7
+	else cosmo.set_cosmology_flat(0.3,0.04,0.7,2.215); // defaults: omega_matter = 0.3, hubble = 0.7
 	QLens lens(&cosmo);
 #ifdef USE_OPENMP
 	if (disptime) lens.set_show_wtime(true); // useful for optimizing the number of threads and MPI processes to minimize the wall time per likelihood evaluation

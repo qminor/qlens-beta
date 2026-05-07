@@ -2690,6 +2690,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("secondary_lens_number", &QLens_Wrap::get_secondary_lens_number, &QLens_Wrap::set_secondary_lens_number)
 		.def_property("shear_components", &QLens_Wrap::get_shear_components_mode, &QLens_Wrap::set_shear_components_mode)
 		.def_property("ellipticity_components", &QLens_Wrap::get_ellipticity_components_mode, &QLens_Wrap::set_ellipticity_components_mode)
+		.def_property("sb_ellipticity_components", &QLens_Wrap::get_sb_ellipticity_components_mode, &QLens_Wrap::set_sb_ellipticity_components_mode)
 		.def_property("split_imgpixels", &QLens_Wrap::get_split_imgpixels, &QLens_Wrap::set_split_imgpixels)
 		.def_property("imgpixel_nsplit", &QLens_Wrap::get_imgpixel_nsplit, &QLens_Wrap::set_imgpixel_nsplit)
 		.def_property("major_axis_along_y", &QLens_Wrap::get_major_axis_along_y, &QLens_Wrap::toggle_major_axis_along_y)

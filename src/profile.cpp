@@ -293,15 +293,15 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 
 void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 {
-	lensparams->zlens = sb_in->zsrc;
+	lensparams->zlens = sb_in->sbparams->zsrc;
 	zlens_current = lensparams->zlens;
-	lensparams->q = sb_in->q;
-	lensparams->epsilon1 = sb_in->epsilon1;
-	lensparams->epsilon2 = sb_in->epsilon2;
+	lensparams->q = sb_in->sbparams->q;
+	lensparams->epsilon1 = sb_in->sbparams->epsilon1;
+	lensparams->epsilon2 = sb_in->sbparams->epsilon2;
 	angle_param_exists = sb_in->angle_param_exists;
-	if (angle_param_exists) set_angle_radians<double>(sb_in->theta);
-	lensparams->x_center = sb_in->x_center;
-	lensparams->y_center = sb_in->y_center;
+	if (angle_param_exists) set_angle_radians<double>(sb_in->sbparams->theta);
+	lensparams->x_center = sb_in->sbparams->x_center;
+	lensparams->y_center = sb_in->sbparams->y_center;
 	ellipticity_mode = sb_in->ellipticity_mode;
 	ellipticity_gradient = sb_in->ellipticity_gradient;
 	fourier_gradient = sb_in->fourier_gradient;
@@ -309,8 +309,8 @@ void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 	n_fourier_modes = sb_in->n_fourier_modes;
 	if (n_fourier_modes > 0) {
 		fourier_mode_mvals.input(sb_in->fourier_mode_mvals);
-		lensparams->fourier_mode_cosamp.input(sb_in->fourier_mode_cosamp);
-		lensparams->fourier_mode_sinamp.input(sb_in->fourier_mode_sinamp);
+		lensparams->fourier_mode_cosamp.input(sb_in->sbparams->fourier_mode_cosamp);
+		lensparams->fourier_mode_sinamp.input(sb_in->sbparams->fourier_mode_sinamp);
 		fourier_mode_paramnum.input(sb_in->fourier_mode_paramnum);
 		int n_new_params = n_params + 2*n_fourier_modes;
 		set_nparams_and_anchordata(n_new_params);
@@ -381,8 +381,10 @@ void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 	assign_paramnames();
 	assign_param_pointers();
 #ifdef USE_STAN
+	sync_autodif_parameters();
 	assign_param_pointers_autodif();
 #endif
+
 }
 
 #ifdef USE_STAN
@@ -523,7 +525,7 @@ void LensProfile::set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, cons
 		parameter_anchor_source[i] = (SB_Profile*) sb_in;
 		parameter_anchor_paramnum[i] = i;
 		parameter_anchor_ratio[i] = 1.0;
-		(*lensparams->param[i]) = *(parameter_anchor_source[i]->param[i]);
+		(*lensparams->param[i]) = *(parameter_anchor_source[i]->sbparams->param[i]);
 		at_least_one_param_anchored = true;
 	}
 	update_anchored_parameters();
@@ -837,8 +839,6 @@ void LensProfile::update_fit_parameters(const QScalar* fitparams, int &index, bo
 				else *(p.param[i]) = fitparams[index++];
 			}
 		}
-		
-		update_meta_parameters();
 #ifdef USE_STAN
 		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency. Maybe revisit this later? Might not be necessary
 		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
@@ -856,6 +856,7 @@ void LensProfile::update_fit_parameters(const QScalar* fitparams, int &index, bo
 		}
 		update_meta_parameters_autodif();
 #endif
+		update_meta_parameters();
 		set_integration_pointers();
 		set_model_specific_integration_pointers();
 	}
@@ -868,6 +869,9 @@ template void LensProfile::update_fit_parameters<stan::math::var>(const stan::ma
 
 void LensProfile::update_anchored_parameters()
 {
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	LensParams<double>& p = assign_lensparam_object<double>();
 	if (at_least_one_param_anchored) {
 		for (int i=0; i < n_params; i++) {
@@ -878,7 +882,7 @@ void LensProfile::update_anchored_parameters()
 #endif
 				if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
 			} else if (anchor_parameter_to_source[i]) {
-				(*lensparams->param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+				(*lensparams->param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->sbparams->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
 				if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
 			}
 		}
@@ -1107,15 +1111,15 @@ void LensProfile::assign_anchored_parameter(const int& paramnum, const int& anch
 	parameter_anchor_paramnum[paramnum] = anchor_paramnum;
 	if ((!use_implicit_ratio) and (!use_exponent)) {
 		parameter_anchor_ratio[paramnum] = 1.0;
-		(*lensparams->param[paramnum]) = *(param_anchor_source->param[anchor_paramnum]);
+		(*lensparams->param[paramnum]) = *(param_anchor_source->sbparams->param[anchor_paramnum]);
 	}
 	else if (use_implicit_ratio) {
 		parameter_anchor_exponent[paramnum] = 1.0;
-		if ((*(param_anchor_source->param[anchor_paramnum]))==0) {
+		if ((*(param_anchor_source->sbparams->param[anchor_paramnum]))==0) {
 			if (*lensparams->param[paramnum]==0) parameter_anchor_ratio[paramnum] = 1.0;
 			else die("cannot anchor to parameter with specified ratio if parameter is equal to zero");
 		} else {
-			parameter_anchor_ratio[paramnum] = (*lensparams->param[paramnum]) / (*(param_anchor_source->param[anchor_paramnum]));
+			parameter_anchor_ratio[paramnum] = (*lensparams->param[paramnum]) / (*(param_anchor_source->sbparams->param[anchor_paramnum]));
 		}
 	}
 	else if (use_exponent) {
@@ -1262,11 +1266,11 @@ void LensProfile::set_geometric_param_pointers(int qi)
 
 	if (!ellipticity_gradient) {
 		if (use_ellipticity_components) {
-			p.param[qi++] = &p.epsilon1;
+			p.param[qi] = &p.epsilon1;
+			ellipticity_paramnum = qi++;
 			p.param[qi] = &p.epsilon2;
 			angle_param[qi++] = false;
 			angle_param_exists = false; // there is no angle parameter if ellipticity components are being used
-			ellipticity_paramnum = -1; // no single ellipticity parameter here
 		} else {
 			if ((ellipticity_mode==2) or (ellipticity_mode==3))
 				p.param[qi] = &p.epsilon;
@@ -1893,6 +1897,10 @@ void LensProfile::reset_angle_modulo_2pi()
 template <typename QScalar>
 void LensProfile::set_angle(const QScalar &theta_degrees)
 {
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	p.theta = degrees_to_radians(theta_degrees);
 	// trig functions are stored to save computation time later
@@ -1913,6 +1921,10 @@ template void LensProfile::set_angle<stan::math::var>(const stan::math::var &the
 template <typename QScalar>
 void LensProfile::set_angle_radians(const QScalar &theta_in)
 {
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	p.theta = theta_in;
 	// trig functions are stored to save computation time later
@@ -1970,8 +1982,8 @@ void LensProfile::update_ellipticity_meta_parameters()
 	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)
 	if (use_ellipticity_components) {
 #ifdef USE_STAN
-		if ((p.epsilon1==0) and (p.epsilon2==0)) {
-			p.epsilon1 = 1e-10; // to avoid coordinate singularities messing with autodiff
+		if (((vary_params[ellipticity_paramnum]) or (vary_params[ellipticity_paramnum])) and ((p.epsilon1==0.0) and (p.epsilon2==0.0))) {
+			p.epsilon1 = 1e-10; // to avoid coordinate singularities messing with autodiff (only do this fudge if we're actually varying ellipticity)
 			p.epsilon2 = 1e-10;
 		}
 #endif
@@ -2351,7 +2363,6 @@ void LensProfile::kappa_and_dkappa_dR(double x, double y, double& kap, double& d
 void LensProfile::add_fourier_mode(const int m_in, const double amp_in, const double amp2_in, const bool vary1, const bool vary2)
 {
 	n_fourier_modes++;
-	fourier_mode_mvals.resize(n_fourier_modes);
 	lensparams->fourier_mode_cosamp.resize(n_fourier_modes);
 	lensparams->fourier_mode_sinamp.resize(n_fourier_modes);
 	lensparams->fourier_mode_cosamp[n_fourier_modes-1] = amp_in;
@@ -2362,6 +2373,7 @@ void LensProfile::add_fourier_mode(const int m_in, const double amp_in, const do
 	lensparams_dif->fourier_mode_cosamp[n_fourier_modes-1] = amp_in;
 	lensparams_dif->fourier_mode_sinamp[n_fourier_modes-1] = amp2_in;
 #endif
+	fourier_mode_mvals.resize(n_fourier_modes);
 	fourier_mode_paramnum.resize(n_fourier_modes);
 	fourier_mode_mvals[n_fourier_modes-1] = m_in;
 	fourier_mode_paramnum[n_fourier_modes-1] = n_params;
@@ -2417,13 +2429,13 @@ void LensProfile::remove_fourier_modes()
 	for (int i=0; i < n_params; i++) if (vary_params[i]) n_vary_params++;
 
 	n_fourier_modes = 0;
-	fourier_mode_mvals.resize(n_fourier_modes);
 	lensparams->fourier_mode_sinamp.resize(n_fourier_modes);
 	lensparams->fourier_mode_cosamp.resize(n_fourier_modes);
 #ifdef USE_STAN
 	lensparams_dif->fourier_mode_sinamp.resize(n_fourier_modes);
 	lensparams_dif->fourier_mode_cosamp.resize(n_fourier_modes);
 #endif
+	fourier_mode_mvals.resize(n_fourier_modes);
 	fourier_mode_paramnum.resize(n_fourier_modes);
 
 	delete[] lensparams->param;

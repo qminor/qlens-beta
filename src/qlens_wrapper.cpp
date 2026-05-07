@@ -257,6 +257,11 @@ public:
 		LensProfile::use_ellipticity_components = comp;
 		reassign_lensparam_pointers_and_names();
 	}
+	bool get_sb_ellipticity_components_mode() { return SB_Profile::use_sb_ellipticity_components; }
+	void set_sb_ellipticity_components_mode(const bool comp) {
+		SB_Profile::use_sb_ellipticity_components = comp;
+		reassign_sb_param_pointers_and_names();
+	}
 
 	bool get_split_imgpixels() { return split_imgpixels; }
 	void set_split_imgpixels(const bool split) {
