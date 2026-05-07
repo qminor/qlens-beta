@@ -2356,7 +2356,7 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 		})
-		.def("sb", &SB_Profile::surface_brightness)
+		//.def("sb", &SB_Profile::surface_brightness)
 		.def("anchor_param", [](SB_Profile &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name){
 			int paramnum = -1;
 			int anchor_paramnum = -1;
@@ -2879,7 +2879,7 @@ PYBIND11_MODULE(qlens, m) {
 					} catch (...) {
 						throw std::runtime_error("Invalid boolean argument for 'resampled'");
 					}
-				}
+				} else throw std::runtime_error("unknown argument to get_param_percentiles");
 			}
 
 			dvector halfpct, lowpct_1sig, hipct_1sig, lowpct_2sig, hipct_2sig;
@@ -2922,7 +2922,7 @@ PYBIND11_MODULE(qlens, m) {
 					} catch (...) {
 						throw std::runtime_error("Invalid boolean argument for 'resampled'");
 					}
-				}
+				} else throw std::runtime_error("unknown argument to get_param_percentiles");
 			}
 
 			dvector halfpct, lowpct_1sig, hipct_1sig, lowpct_2sig, hipct_2sig;
