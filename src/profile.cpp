@@ -293,7 +293,7 @@ void LensProfile::copy_base_lensdata(const LensProfile* lens_in) // This must *a
 
 void LensProfile::copy_source_data_to_lens(const SB_Profile* sb_in)
 {
-	lensparams->zlens = sb_in->sbparams->zsrc;
+	if (sb_in->is_lensed) lensparams->zlens = sb_in->sbparams->zsrc; // don't use the same redshift if it's marked as a "foreground" source
 	zlens_current = lensparams->zlens;
 	lensparams->q = sb_in->sbparams->q;
 	lensparams->epsilon1 = sb_in->sbparams->epsilon1;

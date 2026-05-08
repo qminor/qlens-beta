@@ -13945,8 +13945,8 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 	}
 	qlens->record_singular_points(imggrid_zfactors);
 	static const int max_nimgs = 50;
-	qlens->grid->gridparams.sourcept[0] = src_x;
-	qlens->grid->gridparams.sourcept[1] = src_y;
+	sourcept[0] = src_x;
+	sourcept[1] = src_y;
 	int i,j,npix,cell_i,cell_j,n_candidates = 0;
 	CartesianSourcePixel* cellptr;
 	bool use_overlap = use_overlap_in;
@@ -14180,7 +14180,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 				//if ((qlens->mpi_id==0) and (verbal)) cout << "FOUND IMAGE AT: " << imgpt.pos[0] << " " << imgpt.pos[1] << endl;
 				if (qlens->include_time_delays) {
 					double potential = qlens->potential<double>(imgpt.pos,imggrid_zfactors,imggrid_betafactors);
-					imgpt.td = 0.5*(SQR(imgpt.pos[0]-qlens->grid->gridparams.sourcept[0])+SQR(imgpt.pos[1]-qlens->grid->gridparams.sourcept[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
+					imgpt.td = 0.5*(SQR(imgpt.pos[0]-sourcept[0])+SQR(imgpt.pos[1]-sourcept[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
 					imgpt.td *= td_factor;
 				} else {
 					imgpt.td = 0;
@@ -14223,7 +14223,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 				if (sep < pixel_size)
 				{
 					redundancy = true;
-					warn(qlens->newton_warnings,"rejecting probable duplicate image (imgsep=%g,threshold=%g): src (%g,%g), image (%g,%g), mag %g",sep,pixel_size,qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1],it->pos[0],it->pos[1],it->mag);
+					warn(qlens->newton_warnings,"rejecting probable duplicate image (imgsep=%g,threshold=%g): src (%g,%g), image (%g,%g), mag %g",sep,pixel_size,sourcept[0],sourcept[1],it->pos[0],it->pos[1],it->mag);
 					break;
 				}
 			}
@@ -14444,18 +14444,18 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 	lensvector<double> xroot_initial = xroot;
 	if ((xroot[0]==0) and (xroot[1]==0)) { xroot[0] = xroot[1] = 5e-1*qlens->cc_rmin; }	// Avoiding singularity at center
 	if (NewtonsMethod(xroot, newton_check[thread], thread)==false) {
-		warn(qlens->newton_warnings,"Newton's method failed for source (%g,%g), initial point (%g,%g)",qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1],xroot_initial[0],xroot_initial[1]);
+		warn(qlens->newton_warnings,"Newton's method failed for source (%g,%g), initial point (%g,%g)",sourcept[0],sourcept[1],xroot_initial[0],xroot_initial[1]);
 		return false;
 	}
 	//if (qlens->reject_images_found_outside_cell) {
 		//if (test_if_inside_cell(xroot,thread)==false) {
-			////warn(qlens->warnings,"Rejecting image found outside cell for source (%g,%g), level %i, cell center (%g,%g)",qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1]);
+			////warn(qlens->warnings,"Rejecting image found outside cell for source (%g,%g), level %i, cell center (%g,%g)",sourcept[0],sourcept[1],level,center_imgplane[0],center_imgplane[1],xroot[0],xroot[1]);
 			//return false;
 		//}
 	//}
 
 	lensvector<double> lens_eq_f;
-	qlens->lens_equation<double>(xroot,lens_eq_f,thread,imggrid_zfactors,imggrid_betafactors);
+	qlens->lens_equation_imggrid(xroot,sourcept,lens_eq_f,thread,imggrid_zfactors,imggrid_betafactors);
 	//double lenseq_mag = sqrt(SQR(lens_eq_f[0]) + SQR(lens_eq_f[1]));
 	//double tryacc = image_pos_accuracy / sqrt(abs(qlens->magnification<double>(xroot,thread,zfactor)));
 	//cout << lenseq_mag << " " << tryacc << " " << sqrt(abs(qlens->magnification<double>(xroot,thread,zfactor))) << endl;
@@ -14465,7 +14465,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 		double singular_pt_accuracy = 2*image_pos_accuracy;
 		for (int i=0; i < qlens->n_singular_points; i++) {
 			if ((abs(xroot[0]-qlens->singular_pts[i][0]) < singular_pt_accuracy) and (abs(xroot[1]-qlens->singular_pts[i][1]) < singular_pt_accuracy)) {
-				warn(qlens->newton_warnings,"Newton's method converged to singular point (%g,%g) for source (%g,%g)",qlens->singular_pts[i][0],qlens->singular_pts[i][1],qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1]);
+				warn(qlens->newton_warnings,"Newton's method converged to singular point (%g,%g) for source (%g,%g)",qlens->singular_pts[i][0],qlens->singular_pts[i][1],sourcept[0],sourcept[1]);
 				return false;
 			}
 		}
@@ -14475,13 +14475,13 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 	mag = qlens->magnification<double>(xroot,thread,imggrid_zfactors,imggrid_betafactors);
 	if ((abs(lens_eq_f[0]) > 1000*image_pos_accuracy) and (abs(lens_eq_f[1]) > 1000*image_pos_accuracy) and (abs(mag) < 1e-3)) {
 		if (qlens->newton_warnings==true) {
-			warn(qlens->newton_warnings,"Newton's method may have found false root (%g,%g) (within 1000*accuracy) for source (%g,%g), cell center (%g,%g), mag %g",xroot[0],xroot[1],qlens->grid->gridparams.sourcept[0],qlens->grid->gridparams.sourcept[1],xroot_initial[0],xroot_initial[1],xroot[0],xroot[1],mag);
+			warn(qlens->newton_warnings,"Newton's method may have found false root (%g,%g) (within 1000*accuracy) for source (%g,%g), cell center (%g,%g), mag %g",xroot[0],xroot[1],sourcept[0],sourcept[1],xroot_initial[0],xroot_initial[1],xroot[0],xroot[1],mag);
 		}
 	}
 	if ((abs(mag) > qlens->newton_magnification_threshold) or (mag*0.0 != 0.0)) {
 		if (qlens->reject_himag_images) {
 			if ((qlens->mpi_id==0) and (qlens->newton_warnings)) {
-				cout << "*WARNING*: Rejecting image that exceeds imgsrch_mag_threshold (" << abs(mag) << "), src=(" << qlens->grid->gridparams.sourcept[0] << "," << qlens->grid->gridparams.sourcept[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")      " << endl;
+				cout << "*WARNING*: Rejecting image that exceeds imgsrch_mag_threshold (" << abs(mag) << "), src=(" << sourcept[0] << "," << sourcept[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")      " << endl;
 				if (qlens->use_ansi_characters) {
 					cout << "                                                                                                                            " << endl;
 					cout << "\033[2A";
@@ -14490,7 +14490,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 			return false;
 		} else {
 			if ((qlens->mpi_id==0) and (qlens->warnings)) {
-				cout << "*WARNING*: Image exceeds imgsrch_mag_threshold (" << abs(mag) << "); src=(" << qlens->grid->gridparams.sourcept[0] << "," << qlens->grid->gridparams.sourcept[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")        " << endl;
+				cout << "*WARNING*: Image exceeds imgsrch_mag_threshold (" << abs(mag) << "); src=(" << sourcept[0] << "," << sourcept[1] << "), x=(" << xroot[0] << "," << xroot[1] << ")        " << endl;
 				if (qlens->use_ansi_characters) {
 					cout << "                                                                                                                            " << endl;
 					cout << "\033[2A";
@@ -14509,7 +14509,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 			images[nfound].mag = qlens->magnification<double>(xroot,0,imggrid_zfactors,imggrid_betafactors);
 			if (qlens->include_time_delays) {
 				double potential = qlens->potential(xroot,imggrid_zfactors,imggrid_betafactors);
-				images[nfound].td = 0.5*(SQR(xroot[0]-qlens->grid->gridparams.sourcept[0])+SQR(xroot[1]-qlens->grid->gridparams.sourcept[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
+				images[nfound].td = 0.5*(SQR(xroot[0]-sourcept[0])+SQR(xroot[1]-sourcept[1])) - potential; // the dimensionless version; it will be converted to days by the QLens class
 			} else {
 				images[nfound].td = 0;
 			}
@@ -14533,7 +14533,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 				}
 
 				if (images[nfound].parity != expected_parity)
-					warn(qlens->warnings, "wrong parity found for image from source (%g, %g)", qlens->grid->gridparams.sourcept[0], qlens->grid->gridparams.sourcept[1]);
+					warn(qlens->warnings, "wrong parity found for image from source (%g, %g)", sourcept[0], sourcept[1]);
 				
 				if ((qlens->system_type==Single) and (nfound_pos >= 1)) finished_search = true;
 				else
@@ -14561,7 +14561,7 @@ bool ImagePixelGrid::NewtonsMethod(lensvector<double>& x, bool &check, const int
 	lensvector<double> g, p, xold;
 	lensmatrix<double> fjac;
 
-	qlens->lens_equation<double>(x, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
+	qlens->lens_equation_imggrid(x, sourcept, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
 	double f = 0.5*fvec[thread].sqrnorm();
 	if (max_component(fvec[thread]) < 0.01*image_pos_accuracy)
 		return true; 
@@ -14587,7 +14587,7 @@ bool ImagePixelGrid::NewtonsMethod(lensvector<double>& x, bool &check, const int
 			return false;
 		}
 		/*
-		qlens->lens_equation(x, fvec[thread], thread, zfactor);
+		qlens->lens_equation_imggrid(x, sourcept, fvec[thread], thread, zfactor);
 		double magfac = sqrt(abs(qlens->magnification<double>(x,thread,zfactor)));
 		double tryacc;
 		lensvector<double> dx = x - xold;
@@ -14659,7 +14659,7 @@ bool ImagePixelGrid::LineSearch(lensvector<double>& xold, double fold, lensvecto
 			warn(qlens->newton_warnings, "Newton blew up!");
 			return false;
 		}
-		qlens->lens_equation<double>(x, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
+		qlens->lens_equation_imggrid(x, sourcept, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
 		f = 0.5 * fvec[thread].sqrnorm();
 		if (alam < alamin) {
 			x[0] = xold[0];

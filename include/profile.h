@@ -635,6 +635,8 @@ class LensProfile : public EllipticityGradient
 	bool isspherical() { return (lensparams->q==1.0); }
 	std::string get_model_name() { return model_name; }
 	LensProfileName get_lenstype() { return lenstype; }
+	double get_xcenter() { return lensparams->x_center; }
+	double get_ycenter() { return lensparams->y_center; }
 	void get_center_coords(double &xc, double &yc) { xc=lensparams->x_center; yc=lensparams->y_center; }
 	void get_center_coords(lensvector<double> &center) { center[0]=lensparams->x_center; center[1]=lensparams->y_center; }
 	void get_q_theta(double &q_out, double& theta_out) { q_out=lensparams->q; theta_out=lensparams->theta; }

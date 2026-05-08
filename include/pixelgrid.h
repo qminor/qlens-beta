@@ -573,6 +573,8 @@ class ImagePixelGrid : private Sort
 	int *mask_subcell_i, *mask_subcell_j, *mask_subcell_index;
 	int **ncvals;
 
+	lensvector<double> sourcept;
+
 	bool include_potential_perturbations;
 
 	long int ntot_corners, ntot_cells, ntot_cells_emask;

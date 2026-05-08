@@ -1392,6 +1392,7 @@ void NFW::update_meta_parameters_impl()
 	if (cosmo != NULL) {
 		if (parameter_mode==2) set_ks_c200_from_m200_rs<QScalar>();
 		else if (parameter_mode==1) set_ks_rs_from_m200_c200<QScalar>();
+		/*
 		else {
 			QScalar sigma_cr_kpc = sigma_cr*SQR(kpc_to_arcsec);
 			QScalar ds, r200;
@@ -1400,14 +1401,11 @@ void NFW::update_meta_parameters_impl()
 			//cosmo->get_halo_parameters_from_rs_ds(p.zlens,p.rs_kpc,ds,p.m200,r200);
 			//p.c200 = r200/p.rs_kpc;
 		}
+		*/
 	}
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		stan::math::var rmin_stan = 1e-6*p.rs;
-		rmin_einstein_radius = rmin_stan.val();
-	} else
-#endif
-	rmin_einstein_radius = 1e-6*p.rs; // for determining the Einstein radius (sets lower bound of root finder)
+	if constexpr (std::is_same_v<QScalar, double>) {
+		rmin_einstein_radius = 1e-6*p.rs; // for determining the Einstein radius (sets lower bound of root finder)
+	}
 }
 template void NFW::update_meta_parameters_impl<double>();
 #ifdef USE_STAN
@@ -1950,13 +1948,9 @@ void Truncated_NFW::update_meta_parameters_impl()
 		else if ((parameter_mode==1) or (parameter_mode==2)) set_ks_rs_from_m200_c200<QScalar>();
 	}
 	Truncated_NFW_Params<QScalar>& p = assign_tnfw_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		stan::math::var rmin_stan = 1e-6*p.rs;
-		rmin_einstein_radius = rmin_stan.val();
-	} else
-#endif
-	rmin_einstein_radius = 1e-6*p.rs;
+	if constexpr (std::is_same_v<QScalar, double>) {
+		rmin_einstein_radius = 1e-6*p.rs; // for determining the Einstein radius (sets lower bound of root finder)
+	}
 }
 template void Truncated_NFW::update_meta_parameters_impl<double>();
 #ifdef USE_STAN
@@ -2400,13 +2394,9 @@ void Cored_NFW::update_meta_parameters_impl()
 			p.beta = p.rc/p.rs;
 		}
 	}
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		stan::math::var rmin_stan = 1e-6*p.rs;
-		rmin_einstein_radius = rmin_stan.val();
-	} else
-#endif
-	rmin_einstein_radius = 1e-6*p.rs;
+	if constexpr (std::is_same_v<QScalar, double>) {
+		rmin_einstein_radius = 1e-6*p.rs; // for determining the Einstein radius (sets lower bound of root finder)
+	}
 	//if (p.rs <= p.rc) die("scale radius a cannot be equal to or less than core radius s for Cored NFW model");
 }
 template void Cored_NFW::update_meta_parameters_impl<double>();
@@ -2845,13 +2835,9 @@ void Hernquist::update_meta_parameters_impl()
 	Hernquist_Params<QScalar>& p = assign_hernquist_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters<QScalar>();
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		stan::math::var rmin_stan = 1e-6*p.rs;
-		rmin_einstein_radius = rmin_stan.val();
-	} else
-#endif
-	rmin_einstein_radius = 1e-6*p.rs;
+	if constexpr (std::is_same_v<QScalar, double>) {
+		rmin_einstein_radius = 1e-6*p.rs; // for determining the Einstein radius (sets lower bound of root finder)
+	}
 }
 template void Hernquist::update_meta_parameters_impl<double>();
 #ifdef USE_STAN
@@ -3040,13 +3026,9 @@ void ExpDisk::update_meta_parameters_impl()
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters<QScalar>();
 	ExpDisk_Params<QScalar>& p = assign_expdisk_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		stan::math::var rmin_stan = 1e-6*p.R_d;
-		rmin_einstein_radius = rmin_stan.val();
-	} else
-#endif
-	rmin_einstein_radius = 1e-6*p.R_d;
+	if constexpr (std::is_same_v<QScalar, double>) {
+		rmin_einstein_radius = 1e-6*p.R_d; // for determining the Einstein radius (sets lower bound of root finder)
+	}
 }
 template void ExpDisk::update_meta_parameters_impl<double>();
 #ifdef USE_STAN

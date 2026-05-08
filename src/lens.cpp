@@ -2869,6 +2869,7 @@ void QLens::create_and_add_source_object(SB_ProfileName name, const bool is_lens
 
 void QLens::add_source(SB_Profile* new_src, const bool is_lensed)
 {
+	if (!is_lensed) new_src->set_lensed(false);
 	new_src->set_qlens_pointer(this);
 	int band_number = new_src->band;
 	if (band_number > n_model_bands) die("cannot add band with index that is > number of bands");
@@ -16022,7 +16023,6 @@ void QLens::set_imgpixel_nsplit(const int nsplit_in) {
 		if (fft_convolution) cleanup_FFT_convolution_arrays();
 	}
 }
-
 
 const bool QLens::output_lensed_surface_brightness(Vector<double>& xvals, Vector<double>& yvals, Vector<double>& zvals, const int band_number, const bool output_fits, const bool plot_residual, bool plot_foreground_only, const bool omit_foreground, const bool show_all_pixels, const bool normalize_residuals, const bool offload_to_data, const bool show_extended_mask, const bool show_foreground_mask, const bool show_noise_thresh, const bool exclude_ptimgs, const bool only_ptimgs, int specific_zsrc_i, const bool show_only_first_order_corrections, const bool plot_log, const bool plot_current_sb, const bool verbose)
 {

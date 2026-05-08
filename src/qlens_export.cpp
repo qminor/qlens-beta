@@ -372,6 +372,11 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 		})
+		.def("get_param", [](Model &current, string paramname){ 
+			double value;
+			if (!current.get_specific_parameter(paramname,value)) throw std::runtime_error("could not find parameter '" + paramname +"'");
+			return value;
+		})
 		.def_readonly("indx",&Model::entry_number)
 		.def("__repr__", [](Model &a) {
 				string outstring = a.get_parameters_string();
@@ -1547,7 +1552,8 @@ PYBIND11_MODULE(qlens, m) {
 		//.def_readonly("zlens",&LensProfile::zlens)
 		.def_readonly("zsrc_ref",&LensProfile::zsrc_ref)
 		.def_readonly("sigma_cr",&LensProfile::sigma_cr)
-		//.def_readonly("xc",&LensProfile::x_center)
+		.def_property_readonly("xc",&LensProfile::get_xcenter)
+		.def_property_readonly("yc",&LensProfile::get_ycenter)
 		//.def_readonly("yc",&LensProfile::y_center)
 		//.def_readonly("q",&LensProfile::q)
 		//.def_readonly("theta",&LensProfile::theta)
@@ -1650,6 +1656,11 @@ PYBIND11_MODULE(qlens, m) {
 					throw std::runtime_error("could not set limits for given parameter " + paramname);
 				}
 			}
+		})
+		.def("get_param", [](LensProfile &current, string paramname){ 
+			double value;
+			if (!current.get_specific_parameter(paramname,value)) throw std::runtime_error("could not find parameter '" + paramname +"'");
+			return value;
 		})
 		//.def("get_prior_limits", [](LensProfile &curr){
 			//int nparams = current.n_vary_params;
@@ -2259,6 +2270,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def(py::init<>([](){return new SB_Profile();}))
 		.def(py::init<const SB_Profile*>())
 		.def_readonly("indx",&SB_Profile::sb_number)
+		.def_property_readonly("xc",&SB_Profile::get_xcenter)
+		.def_property_readonly("yc",&SB_Profile::get_ycenter)
 		.def("update", [](SB_Profile &current, py::dict dict){
 			for (auto item : dict) {
 				if(!current.update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second)))
@@ -2355,6 +2368,11 @@ PYBIND11_MODULE(qlens, m) {
 					throw std::runtime_error("could not set limits for given parameter " + paramname);
 				}
 			}
+		})
+		.def("get_param", [](SB_Profile &current, string paramname){ 
+			double value;
+			if (!current.get_specific_parameter(paramname,value)) throw std::runtime_error("could not find parameter '" + paramname +"'");
+			return value;
 		})
 		//.def("sb", &SB_Profile::surface_brightness)
 		.def("anchor_param", [](SB_Profile &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name){
@@ -2682,6 +2700,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("outside_sb_noise_threshold", &QLens_Wrap::outside_sb_prior_noise_frac)
 		.def_readwrite("nimg_prior", &QLens_Wrap::n_image_prior)
 		.def_readwrite("nimg_threshold", &QLens_Wrap::n_image_threshold)
+		.def_readwrite("nimg_sb_frac_threshold", &QLens_Wrap::n_image_prior_sb_frac)
 		.def_readwrite("srcpixel_clustering", &QLens_Wrap::use_srcpixel_clustering)
 		.def_readwrite("n_cluster_it", &QLens_Wrap::n_cluster_iterations)
 
@@ -3191,6 +3210,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("flux_chisq", &QLens_Wrap::include_flux_chisq)
 		.def_readwrite("chisqtol", &QLens_Wrap::chisq_tolerance)
 		.def_readwrite("central_image", &QLens_Wrap::include_central_image)
+		.def_readwrite("skip_newtons_method", &QLens_Wrap::skip_newtons_method)
+		.def_readwrite("invert_imgflux", &QLens_Wrap::include_imgfluxes_in_inversion)
 		//.def_readwrite("sourcepts_fit", &QLens_Wrap::sourcepts_fit)
 		.def_readwrite("n_livepts", &QLens_Wrap::n_livepts)
 		//.def_readwrite("warnings", &QLens_Wrap::warnings)
@@ -3244,8 +3265,10 @@ PYBIND11_MODULE(qlens, m) {
 		.def("print", &PointSource::print,
 				py::arg("include_time_delays") = false, py::arg("include_time_delays") = true)
 		.def_readonly("n_images", &PointSource::n_images)
-		//.def_readonly("zsrc", &PointSource::zsrc)
-		//.def_readonly("srcflux", &PointSource::srcflux)
+		.def_property_readonly("zsrc", &PointSource::get_zsrc)
+		.def_property_readonly("srcflux", &PointSource::get_srcflux)
+		.def_property_readonly("xsrc", &PointSource::get_xcenter)
+		.def_property_readonly("ysrc", &PointSource::get_ycenter)
 		.def_property_readonly("pos", &PointSource::get_pos)
 		//.def("pos", [](PointSource &curr){
 			//return curr.ptsrc_params.pos;

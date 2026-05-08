@@ -1156,6 +1156,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	bool plot_images(const char *sourcefile, const char *imagefile, bool color_multiplicities, bool verbal);
 	template<typename QScalar>
 	void lens_equation(const lensvector<QScalar>&, lensvector<QScalar>&, const int& thread, double *zfacs, double **betafacs); // Used by Newton's method to find images
+	void lens_equation_imggrid(const lensvector<double>& x, const lensvector<double>& srcpt, lensvector<double>& f, const int& thread, double *zfacs, double** betafacs);
 
 	// the remaining functions in this class are all contained in lens.cpp
 	void create_and_add_lens(LensProfileName, const int emode, const double zl, const double zs, const double mass_parameter, const double logslope_param, const double scale, const double core, const double q, const double theta, const double xc, const double yc, const double extra_param1 = -1000, const double extra_param2 = -1000, const int parameter_mode = 0);

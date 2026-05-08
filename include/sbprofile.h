@@ -428,6 +428,8 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	std::string get_model_name() { return model_name; }
 	SB_ProfileName get_sbtype() { return sbtype; }
 	void get_center_coords(double &xc, double &yc) { xc=sbparams->x_center; yc=sbparams->y_center; }
+	double get_xcenter() { return sbparams->x_center; }
+	double get_ycenter() { return sbparams->y_center; }
 	int get_n_params() { return n_params; }
 	int get_sbprofile_nparams() { return sbprofile_nparams; }
 	void check_vary_params();
