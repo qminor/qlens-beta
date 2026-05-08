@@ -14455,7 +14455,7 @@ bool ImagePixelGrid::run_newton(lensvector<double>& xroot, double& mag, const in
 	//}
 
 	lensvector<double> lens_eq_f;
-	qlens->lens_equation_imggrid(xroot,sourcept,lens_eq_f,thread,imggrid_zfactors,imggrid_betafactors);
+	qlens->lens_equation<double>(xroot,sourcept,lens_eq_f,thread,imggrid_zfactors,imggrid_betafactors);
 	//double lenseq_mag = sqrt(SQR(lens_eq_f[0]) + SQR(lens_eq_f[1]));
 	//double tryacc = image_pos_accuracy / sqrt(abs(qlens->magnification<double>(xroot,thread,zfactor)));
 	//cout << lenseq_mag << " " << tryacc << " " << sqrt(abs(qlens->magnification<double>(xroot,thread,zfactor))) << endl;
@@ -14561,7 +14561,7 @@ bool ImagePixelGrid::NewtonsMethod(lensvector<double>& x, bool &check, const int
 	lensvector<double> g, p, xold;
 	lensmatrix<double> fjac;
 
-	qlens->lens_equation_imggrid(x, sourcept, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
+	qlens->lens_equation<double>(x, sourcept, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
 	double f = 0.5*fvec[thread].sqrnorm();
 	if (max_component(fvec[thread]) < 0.01*image_pos_accuracy)
 		return true; 
@@ -14587,7 +14587,7 @@ bool ImagePixelGrid::NewtonsMethod(lensvector<double>& x, bool &check, const int
 			return false;
 		}
 		/*
-		qlens->lens_equation_imggrid(x, sourcept, fvec[thread], thread, zfactor);
+		qlens->lens_equation<double>(x, sourcept, fvec[thread], thread, zfactor);
 		double magfac = sqrt(abs(qlens->magnification<double>(x,thread,zfactor)));
 		double tryacc;
 		lensvector<double> dx = x - xold;
@@ -14659,7 +14659,7 @@ bool ImagePixelGrid::LineSearch(lensvector<double>& xold, double fold, lensvecto
 			warn(qlens->newton_warnings, "Newton blew up!");
 			return false;
 		}
-		qlens->lens_equation_imggrid(x, sourcept, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
+		qlens->lens_equation<double>(x, sourcept, fvec[thread], thread, imggrid_zfactors, imggrid_betafactors);
 		f = 0.5 * fvec[thread].sqrnorm();
 		if (alam < alamin) {
 			x[0] = xold[0];

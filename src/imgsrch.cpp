@@ -2372,6 +2372,7 @@ template void GridCell::SolveLinearEqs<stan::math::var>(lensmatrix<stan::math::v
 template <typename QScalar>
 bool GridCell::run_newton(lensvector<QScalar>& xroot, const int& thread)
 {
+	GridParams<QScalar>& p = parent_grid->assign_gridparam_object<QScalar>();
 #ifdef USE_STAN
 	using stan::math::abs;
 #endif
@@ -2400,7 +2401,7 @@ bool GridCell::run_newton(lensvector<QScalar>& xroot, const int& thread)
 	}
 
 	lensvector<QScalar> lens_eq_f;
-	lens->lens_equation<QScalar>(xroot,lens_eq_f,thread,parent_grid->grid_zfactors,parent_grid->grid_betafactors);
+	lens->lens_equation<QScalar>(xroot,p.sourcept,lens_eq_f,thread,parent_grid->grid_zfactors,parent_grid->grid_betafactors);
 	lensvector<double> xroot_doub;
 #ifdef USE_STAN
 	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
@@ -2480,14 +2481,15 @@ template bool GridCell::run_newton<stan::math::var>(lensvector<stan::math::var>&
 template <typename QScalar>
 bool GridCell::NewtonsMethod(lensvector<QScalar>& x, bool &check, const int& thread)
 {
+	GridParams<QScalar>& p = parent_grid->assign_gridparam_object<QScalar>();
 #ifdef USE_STAN
 	using stan::math::fabs;
 #endif
 	check = false;
-	lensvector<QScalar> g, p, xold;
+	lensvector<QScalar> g, pp, xold;
 	lensmatrix<QScalar> fjac;
 
-	lens->lens_equation<QScalar>(x, CellStaticParams<QScalar>::fvec[thread], thread, parent_grid->grid_zfactors, parent_grid->grid_betafactors);
+	lens->lens_equation<QScalar>(x, p.sourcept, CellStaticParams<QScalar>::fvec[thread], thread, parent_grid->grid_zfactors, parent_grid->grid_betafactors);
 	QScalar f = 0.5*CellStaticParams<QScalar>::fvec[thread].sqrnorm();
 	if (max_component(CellStaticParams<QScalar>::fvec[thread]) < 0.01*parent_grid->image_pos_accuracy)
 		return true; 
@@ -2509,10 +2511,10 @@ bool GridCell::NewtonsMethod(lensvector<QScalar>& x, bool &check, const int& thr
 		xold[0] = x[0];
 		xold[1] = x[1];
 		fold = f; 
-		p[0] = -CellStaticParams<QScalar>::fvec[thread][0];
-		p[1] = -CellStaticParams<QScalar>::fvec[thread][1];
-		SolveLinearEqs(fjac, p);
-		if (LineSearch(xold, fold, g, p, x, f, stpmax, check, thread)==false)
+		pp[0] = -CellStaticParams<QScalar>::fvec[thread][0];
+		pp[1] = -CellStaticParams<QScalar>::fvec[thread][1];
+		SolveLinearEqs(fjac, pp);
+		if (LineSearch(xold, fold, g, pp, x, f, stpmax, check, thread)==false)
 			return false;
 		if ((x[0] > 1e3*lens->cc_rmax) or (x[1] > 1e3*lens->cc_rmax)) {
 			warn(lens->newton_warnings, "Newton blew up!");
@@ -2567,8 +2569,9 @@ template bool GridCell::NewtonsMethod<stan::math::var>(lensvector<stan::math::va
 #endif
 
 template <typename QScalar>
-bool GridCell::LineSearch(lensvector<QScalar>& xold, QScalar fold, lensvector<QScalar>& g, lensvector<QScalar>& p, lensvector<QScalar>& x, QScalar& f, QScalar stpmax, bool &check, const int& thread)
+bool GridCell::LineSearch(lensvector<QScalar>& xold, QScalar fold, lensvector<QScalar>& g, lensvector<QScalar>& pp, lensvector<QScalar>& x, QScalar& f, QScalar stpmax, bool &check, const int& thread)
 {
+	GridParams<QScalar>& p = parent_grid->assign_gridparam_object<QScalar>();
 #ifdef USE_STAN
 	using stan::math::fabs;
 #endif
@@ -2577,30 +2580,30 @@ bool GridCell::LineSearch(lensvector<QScalar>& xold, QScalar fold, lensvector<QS
 	QScalar a, alam, alam2, alamin, b, disc, f2, rhs1, rhs2, slope, mag, temp, test, tmplam;
 
 	check = false;
-	mag = p.norm();
+	mag = pp.norm();
 	if (mag > stpmax) {
 		QScalar fac = stpmax / mag;
-		p[0] *= fac;
-		p[1] *= fac;
+		pp[0] *= fac;
+		pp[1] *= fac;
 	}
-	slope = g[0]*p[0] + g[1]*p[1];
-	if (slope >= 0.0) die("Roundoff problem during line search (g=(%g,%g), p=(%g,%g))",g[0],g[1],p[0],p[1]); 
+	slope = g[0]*pp[0] + g[1]*pp[1];
+	if (slope >= 0.0) die("Roundoff problem during line search (g=(%g,%g), pp=(%g,%g))",g[0],g[1],pp[0],pp[1]); 
 	QScalar one = 1.0;
-	test = fabs(p[0]) / maxval(fabs(xold[0]), one); 
-	temp = fabs(p[1]) / maxval(fabs(xold[1]), one); 
+	test = fabs(pp[0]) / maxval(fabs(xold[0]), one); 
+	temp = fabs(pp[1]) / maxval(fabs(xold[1]), one); 
 	alamin = parent_grid->image_pos_accuracy / maxval(temp,test); 
 	alam = 1.0; 
 	while (true)
 	{
-		x[0] = xold[0] + alam*p[0];
-		x[1] = xold[1] + alam*p[1];
+		x[0] = xold[0] + alam*pp[0];
+		x[1] = xold[1] + alam*pp[1];
 		if ((fabs(x[0]) < 1e6*lens->cc_rmax) and (fabs(x[1]) < 1e6*lens->cc_rmax))
 			;
 		else {
 			warn(lens->newton_warnings, "Newton blew up!");
 			return false;
 		}
-		lens->lens_equation<QScalar>(x, CellStaticParams<QScalar>::fvec[thread], thread, parent_grid->grid_zfactors, parent_grid->grid_betafactors);
+		lens->lens_equation<QScalar>(x, p.sourcept, CellStaticParams<QScalar>::fvec[thread], thread, parent_grid->grid_zfactors, parent_grid->grid_betafactors);
 		f = 0.5 * CellStaticParams<QScalar>::fvec[thread].sqrnorm();
 		if (alam < alamin) {
 			x[0] = xold[0];
@@ -2636,9 +2639,9 @@ bool GridCell::LineSearch(lensvector<QScalar>& xold, QScalar fold, lensvector<QS
 		alam = maxval(tmplam, 0.1*alam);
 	}
 }
-template bool GridCell::LineSearch<double>(lensvector<double>& xold, double fold, lensvector<double>& g, lensvector<double>& p, lensvector<double>& x, double& f, double stpmax, bool &check, const int& thread);
+template bool GridCell::LineSearch<double>(lensvector<double>& xold, double fold, lensvector<double>& g, lensvector<double>& pp, lensvector<double>& x, double& f, double stpmax, bool &check, const int& thread);
 #ifdef USE_STAN
-template bool GridCell::LineSearch<stan::math::var>(lensvector<stan::math::var>& xold, stan::math::var fold, lensvector<stan::math::var>& g, lensvector<stan::math::var>& p, lensvector<stan::math::var>& x, stan::math::var& f, stan::math::var stpmax, bool &check, const int& thread);
+template bool GridCell::LineSearch<stan::math::var>(lensvector<stan::math::var>& xold, stan::math::var fold, lensvector<stan::math::var>& g, lensvector<stan::math::var>& pp, lensvector<stan::math::var>& x, stan::math::var& f, stan::math::var stpmax, bool &check, const int& thread);
 #endif
 
 void ImgSrchGrid::reset_search_parameters()

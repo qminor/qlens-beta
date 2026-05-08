@@ -273,25 +273,16 @@ template void QLens::deflection_exclude<stan::math::var>(const double& x, const 
 #endif
 
 template<typename QScalar>
-void QLens::lens_equation(const lensvector<QScalar>& x, lensvector<QScalar>& f, const int& thread, double *zfacs, double** betafacs)
+void QLens::lens_equation(const lensvector<QScalar>& x, const lensvector<QScalar>& srcpt, lensvector<QScalar>& f, const int& thread, double *zfacs, double** betafacs)
 {
 	deflection<QScalar>(x[0],x[1],f,thread,zfacs,betafacs);
-	GridParams<QScalar>& p = grid->assign_gridparam_object<QScalar>();
-	f[0] = p.sourcept[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
-	f[1] = p.sourcept[1] - x[1] + f[1];
-}
-template void QLens::lens_equation<double>(const lensvector<double>& x, lensvector<double>& f, const int& thread, double *zfacs, double** betafacs);
-#ifdef USE_STAN
-template void QLens::lens_equation<stan::math::var>(const lensvector<stan::math::var>& x, lensvector<stan::math::var>& f, const int& thread, double* zfacs, double** betafacs);
-#endif
-
-void QLens::lens_equation_imggrid(const lensvector<double>& x, const lensvector<double>& srcpt, lensvector<double>& f, const int& thread, double *zfacs, double** betafacs)
-{
-	deflection<double>(x[0],x[1],f,thread,zfacs,betafacs);
-	GridParams<double>& p = grid->assign_gridparam_object<double>();
 	f[0] = srcpt[0] - x[0] + f[0]; // finding root of lens equation, i.e. f(x) = beta - theta + alpha = 0   (where alpha is the deflection)
 	f[1] = srcpt[1] - x[1] + f[1];
 }
+template void QLens::lens_equation<double>(const lensvector<double>& x, const lensvector<double>& srcpt, lensvector<double>& f, const int& thread, double *zfacs, double** betafacs);
+#ifdef USE_STAN
+template void QLens::lens_equation<stan::math::var>(const lensvector<stan::math::var>& x, const lensvector<stan::math::var>& srcpt, lensvector<stan::math::var>& f, const int& thread, double* zfacs, double** betafacs);
+#endif
 
 template<typename QScalar>
 void QLens::map_to_lens_plane(const int& redshift_i, const QScalar& x, const QScalar& y, lensvector<QScalar>& xi, const int &thread, double* zfacs, double** betafacs)

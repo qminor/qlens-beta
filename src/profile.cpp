@@ -619,6 +619,10 @@ bool LensProfile::vary_parameters(const boolvector& vary_params_in)
 		}
 	}
 	if (k != n_vary_params) die("k != n_vary_params");
+	update_meta_parameters(); // just in case any parameters change based on what is varied
+#ifdef USE_STAN
+	update_meta_parameters_autodif();
+#endif
 
 	if (qlens) {
 		if (pf > pi) qlens->param_list->remove_params(pi,pf);
