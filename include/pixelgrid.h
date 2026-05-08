@@ -483,8 +483,33 @@ class ImagePixelGrid : private Sort
 		QScalar *defx_subpixel_centers, *defy_subpixel_centers;
 		QScalar *twistx, *twisty;
 	};
+
+	private:
+	ImgGrid_Params<double> imggrid_params;
+#ifdef USE_STAN
+	ImgGrid_Params<stan::math::var> imggrid_params_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	ImgGrid_Params<QScalar>& assign_lensspline_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return imggrid_params_dif;
+		else
+#endif
+		return imggrid_params;
+	}
 	*/
 
+	double **surface_brightness;
+	double **foreground_surface_brightness;
+	lensvector<double> **corner_sourcepts;
+	lensvector<double> **center_sourcepts;
+	lensvector<double> ***subpixel_center_sourcepts;
+	double ***subpixel_surface_brightness;
+	double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
+	double *defx_subpixel_centers, *defy_subpixel_centers;
+	double *twistx, *twisty;
 
 	QLens *qlens;
 	CartesianSourceGrid *cartesian_srcgrid;
@@ -492,21 +517,17 @@ class ImagePixelGrid : private Sort
 	ImageData *image_data;
 	PSF *psf;
 	LensPixelGrid *lensgrid;
+
 	lensvector<double> **corner_pts;
-	lensvector<double> **corner_sourcepts;
 	lensvector<double> **center_pts;
-	lensvector<double> **center_sourcepts;
 	lensvector<double> ***subpixel_center_pts;
-	lensvector<double> ***subpixel_center_sourcepts;
-	double ***subpixel_surface_brightness;
 	lensvector<double> ***subpixel_source_gradient;
+
 	double **S0_check;
 	lensvector<double> **x0_check;
 	double ***subpixel_weights;
 	int **subpixel_index;
 
-	double **surface_brightness;
-	double **foreground_surface_brightness;
 	double **noise_map;
 	double **source_plane_triangle1_area; // area of triangle 1 (connecting points 0,1,2) when mapped to the source plane
 	double **source_plane_triangle2_area; // area of triangle 2 (connecting points 1,3,2) when mapped to the source plane
@@ -564,9 +585,6 @@ class ImagePixelGrid : private Sort
 
 	int **twist_status;
 	lensvector<double> **twist_pts;
-	double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
-	double *defx_subpixel_centers, *defy_subpixel_centers;
-	double *twistx, *twisty;
 	int *twiststat;
 	int *masked_pixels_i, *masked_pixels_j, *emask_pixels_i, *emask_pixels_j, *masked_pixel_corner_i, *masked_pixel_corner_j, *masked_pixel_corner, *masked_pixel_corner_up;
 	int *extended_mask_subcell_i, *extended_mask_subcell_j, *extended_mask_subcell_index;
