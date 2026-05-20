@@ -189,8 +189,9 @@ void Cosmology::sync_autodif_parameters()
 {
 	cosmo_params_dif.hubble = cosmo_params.hubble;
 	cosmo_params_dif.omega_m = cosmo_params.omega_m;
-	cosmo_params_dif.hubble_length = cosmo_params.hubble_length;
-	cosmo_params_dif.dcrit0 = cosmo_params.dcrit0;
+
+	cosmo_params_dif.hubble_length = 2.99792458e3/cosmo_params_dif.hubble; // in Mpc
+	cosmo_params_dif.dcrit0 = 2.775e11*cosmo_params_dif.hubble*cosmo_params_dif.hubble;  // units are solar masses per Mpc^3
 }
 #endif
 
@@ -325,6 +326,10 @@ int Cosmology::set_cosmology(double omega_matter, double omega_baryon, double ne
 
 	 spline_comoving_distance();
 	 //rms_tophat_spline();
+
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
 
 	 return qwarn;
 }

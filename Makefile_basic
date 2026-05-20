@@ -101,7 +101,7 @@ $(OBJ_DIR)/profile.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/profile.cpp $(INCLUDE_
 	$(CC) -c $(SRC_DIR)/profile.cpp -o $(OBJ_DIR)/profile.o
 
 $(OBJ_DIR)/models.o: $(INCLUDE_DIR)/profile.h $(SRC_DIR)/models.cpp
-   $(CC) -c $(SRC_DIR)/models.cpp -o $(OBJ_DIR)/models.o
+	$(CC) -c $(SRC_DIR)/models.cpp -o $(OBJ_DIR)/models.o
 
 $(OBJ_DIR)/sbprofile.o: $(INCLUDE_DIR)/sbprofile.h $(SRC_DIR)/sbprofile.cpp
 	$(CC) -c $(SRC_DIR)/sbprofile.cpp -o $(OBJ_DIR)/sbprofile.o
