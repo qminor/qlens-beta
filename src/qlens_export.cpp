@@ -38,11 +38,6 @@ PYBIND11_MODULE(qlens, m) {
 		.def("print_transforms",&ParamList::print_priors_and_transforms)
 		.def("priors",&ParamList::print_priors_and_limits)
 		.def("transforms",&ParamList::print_priors_and_transforms)
-		.def("stepsizes", [](ParamList &current) {
-			py::list steps(current.nparams);
-			for (int i=0; i < current.nparams; i++) steps[i] = current.stepsizes[i];
-				return steps;
-		})
 		.def("update", [](ParamList &current, py::dict dict){
 			for (auto item : dict) {
 				if(!current.update_param_value(py::cast<string>(item.first), py::cast<double>(item.second)))
@@ -52,6 +47,38 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("update", [](ParamList &current, const string name, const double value){
 			return current.update_param_value(name, value);
+		})
+		.def("stepsizes", [](ParamList &current, py::kwargs &kwargs) {
+			bool scale_from_chain = false;
+			double scale_factor = -1.0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="scale") {
+					try {
+						scale_factor = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid scale factor'");
+					}
+				}
+				else if (py::cast<string>(item.first)=="from_chain") {
+					try {
+						scale_from_chain = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean argument to 'from_chain''");
+					}
+				}
+			}
+			if (scale_from_chain) {
+				dvector stepsizes(current.nparams);
+				if (current.qlens->get_stepsizes_from_percentiles(scale_factor,stepsizes)==false) throw std::runtime_error("could not get stepsizes from percentiles");
+				current.reset_stepsizes_no_transform(stepsizes.array());
+			} else {
+				if (scale_factor > 0) {
+					for (int i=0; i < current.nparams; i++) current.scale_stepsize(i,scale_factor);
+				}
+			}
+			py::list steps(current.nparams);
+			for (int i=0; i < current.nparams; i++) steps[i] = current.stepsizes[i];
+				return steps;
 		})
 		.def("stepsize", [](ParamList &current, const string name, py::args &args, py::kwargs &kwargs){
 			int paramnum = -1;
