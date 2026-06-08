@@ -1145,6 +1145,7 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 			bool success = current.load_imgdata(band,filename,pixsize,pix_xy_ratio,x_offset,y_offset,hdu_index,show_header);
+			if (!success) throw std::runtime_error("image data could not be loaded");
 			ImageData* newimgdata = (success) ? current.imgdatalist_ptr[band] : NULL;
 			return newimgdata;
 		})
