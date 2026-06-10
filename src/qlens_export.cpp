@@ -32,6 +32,11 @@ PYBIND11_MODULE(qlens, m) {
 			for (int i=0; i < current.nparams; i++) vals[i] = current.values[i];
 			return vals;
 		})
+		.def("value", [](ParamList &current, const string name) {
+			int paramnum = current.lookup_param_number(name);
+			if (paramnum < 0) throw std::runtime_error("specified parameter name '" + name + "' not recognized");
+			return current.values[paramnum];
+		})
 		.def("print",&ParamList::print_parameter_values)
 		.def("print_stepsizes",&ParamList::print_stepsizes)
 		.def("print_priors",&ParamList::print_priors_and_limits)
