@@ -994,7 +994,8 @@ PYBIND11_MODULE(qlens, m) {
 					throw std::runtime_error("Keyword argument not recognized for 'set_mask_annulus'");
 				}
 			}
-			if (!current.set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,unmask,fgmask,mask_i)) throw std::runtime_error("coult not alter mask");
+			bool masking = (unmask) ? false : true;
+			if (!current.set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,masking,fgmask,mask_i)) throw std::runtime_error("coult not alter mask");
 		})
 		.def("set_emask_annulus", [](ImageData &current, const double xc, const double yc, const double rmin, const double rmax, py::kwargs &kwargs) {
 			int mask_i = 0;
