@@ -1768,7 +1768,7 @@ PYBIND11_MODULE(qlens, m) {
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
-				else zlens = default_zlens;
+				else throw std::runtime_error("need to specify lens redshift or else pass in qlens object to set default redshift");
 			}
 			if (zsrc_ref==-1) {
 				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
@@ -2861,6 +2861,17 @@ PYBIND11_MODULE(qlens, m) {
 					throw std::runtime_error("Available fitmethods: simplex (default), powell, bfgs, nest, multinest, polychord, twalk");
 			}
 			if ((adopt_bestfit) and (curr.adopt_model(curr.bestfitparams)==false)) throw std::runtime_error("could not adopt best-fit model");
+		})
+		.def("process_chains", [](QLens_Wrap &curr, const string &fitmethod, py::kwargs &kwargs){
+			if (fitmethod=="multinest") {
+				curr.multinest(false,true);
+				curr.adopt_model(curr.bestfitparams);
+			} else if (fitmethod=="polychord") {
+				curr.polychord(false,true);
+				curr.adopt_model(curr.bestfitparams);
+			} else {
+					throw std::runtime_error("Can only process chains for multinest or polychord");
+			}
 		})
 		.def("set_source_mode", [](QLens_Wrap &curr, const string &source_mode="ptsource"){
 			if(source_mode=="ptsource") {
