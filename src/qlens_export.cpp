@@ -946,12 +946,19 @@ PYBIND11_MODULE(qlens, m) {
 			double xstretch = 1.0;
 			double ystretch = 1.0;
 			bool fgmask = false;
+			bool unmask = false;
 			for (auto item : kwargs) {
 				if (py::cast<string>(item.first)=="mask") {
 					try {
 						mask_i = py::cast<int>(item.second);
 					} catch (...) {
 						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else if (py::cast<string>(item.first)=="unmask") {
+					try {
+						unmask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'unmask' argument");
 					}
 				} else if (py::cast<string>(item.first)=="thetamin") {
 					try {
@@ -987,7 +994,7 @@ PYBIND11_MODULE(qlens, m) {
 					throw std::runtime_error("Keyword argument not recognized for 'set_mask_annulus'");
 				}
 			}
-			if (!current.set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,false,fgmask,mask_i)) throw std::runtime_error("coult not alter mask");
+			if (!current.set_mask_annulus(xc,yc,rmin,rmax,thetamin,thetamax,xstretch,ystretch,unmask,fgmask,mask_i)) throw std::runtime_error("coult not alter mask");
 		})
 		.def("set_emask_annulus", [](ImageData &current, const double xc, const double yc, const double rmin, const double rmax, py::kwargs &kwargs) {
 			int mask_i = 0;
