@@ -12,6 +12,8 @@
 
 #ifdef USE_STAN
 #include <stan/math.hpp>
+//#include <stan/math/prim/core/init_threadpool_tbb.hpp>
+#include <tbb/global_control.h>
 #endif
 
 using namespace std;
@@ -67,7 +69,7 @@ int main(int argc, char *argv[])
 #endif
 	GridCell::allocate_multithreaded_variables(n_omp_threads);
 	CartesianSourcePixel::allocate_multithreaded_variables(n_omp_threads);
-	DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
+	//DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 	ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 	QLens::allocate_multithreaded_variables(n_omp_threads);
 	GaussLegendre<std::function<double(const double)>,double>::allocate_quadrature_tables(GaussLegendre<std::function<double(const double)>,double>::numberOfPoints);
@@ -91,6 +93,7 @@ int main(int argc, char *argv[])
 	bool mumps_mpi=true;
 	bool quit_if_error = true;
 	bool suppress_plots = false;
+	int num_tbb_threads = 1;
 	CosmologyParams cosmology;
 
 	bool load_cosmology_file = false;
@@ -109,7 +112,10 @@ int main(int argc, char *argv[])
 					case 'w': disptime = true; break;
 					case 'p': mumps_mpi = false; break;
 					case 'Q': quit_if_error = false; break;
-					case 'n': suppress_plots = true; break;
+					case 'n':
+						if (sscanf(argv[i], "n%i", &num_tbb_threads)==0) usage_error(mpi_id);
+						argv[i] = advance(argv[i]);
+						break;
 					case 't': run_test_function = true; break;
 					case 'i':
 						if (sscanf(argv[i], "i%i", &inversion_nthread)==0) usage_error(mpi_id);
@@ -153,6 +159,22 @@ int main(int argc, char *argv[])
 			argv[i] = advance(argv[i]);
 		}
 	}
+
+#ifdef USE_STAN
+	tbb::global_control control(
+		 tbb::global_control::max_allowed_parallelism,
+		 num_tbb_threads
+	);
+
+	stan::math::init_threadpool_tbb();
+#endif
+
+#ifdef USE_STAN
+	if (mpi_id==0) std::cout << "TBB max threads = " << tbb::global_control::active_value(tbb::global_control::max_allowed_parallelism) << std::endl;
+#endif
+
+	//stan::math::set_num_threads(num_threads);
+
 	if ((load_cosmology_file) and (cosmology.load_params(cosmology_filename)==false)) die();
 
 #ifdef USE_MPI
@@ -269,7 +291,7 @@ int main(int argc, char *argv[])
 #endif
 	GridCell::deallocate_multithreaded_variables();
 	ImagePixelGrid::deallocate_multithreaded_variables();
-	DelaunayGrid::deallocate_multithreaded_variables();
+	//DelaunayGrid::deallocate_multithreaded_variables();
 	CartesianSourcePixel::deallocate_multithreaded_variables(); // this is for Cartesian source grids (with optional adaptive splitting)
 	QLens::deallocate_multithreaded_variables();
 	GaussLegendre<std::function<double(const double)>,double>::deallocate_quadrature_tables();

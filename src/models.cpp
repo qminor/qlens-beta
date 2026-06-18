@@ -46,6 +46,7 @@ void SPLE_Lens::initialize_parameters(const double &bb, const double &slope, con
 	}
 	if (lensparams_sple.s < 0) lensparams_sple.s = -lensparams_sple.s; // don't allow negative core radii
 #ifdef USE_STAN
+	this->set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -173,49 +174,54 @@ void SPLE_Lens::set_model_specific_integration_pointers()
 {
 	SPLE_Params<double>& p = assign_sple_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	// Here, we direct the integration pointers to analytic formulas in special cases where analytic solutions are possible
-	this->kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::kapavg_spherical_rsq<double>);
-	this->potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::potential_spherical_rsq<double>);
-	if (!this->ellipticity_gradient) {
+	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::kapavg_spherical_rsq<double>);
+	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::potential_spherical_rsq<double>);
+	kapavgptr_rsq_spherical_vec = static_cast<void (LensProfile::*)(const Eigen::VectorXd&, Eigen::VectorXd&)> (&SPLE_Lens::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>);
+	if (!ellipticity_gradient) {
 		if (p.alpha==1.0) {
-			this->kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::kapavg_spherical_rsq_iso<double>);
-			this->potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::potential_spherical_rsq_iso<double>);
+			kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::kapavg_spherical_rsq_iso<double>);
+			potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::potential_spherical_rsq_iso<double>);
 			if (p.q != 1.0) {
-				this->defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector<double>&)> (&SPLE_Lens::deflection_elliptical_iso<double>);
-				this->hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix<double>&)> (&SPLE_Lens::hessian_elliptical_iso<double>);
-				this->potptr = static_cast<double (LensProfile::*)(const double,const double)> (&SPLE_Lens::potential_elliptical_iso<double>);
+				defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector<double>&)> (&SPLE_Lens::deflection_elliptical_iso<double>);
+				hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix<double>&)> (&SPLE_Lens::hessian_elliptical_iso<double>);
+				potptr = static_cast<double (LensProfile::*)(const double,const double)> (&SPLE_Lens::potential_elliptical_iso<double>);
 			}
 		} else if (p.s==0.0) {
-			this->potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::potential_spherical_rsq_nocore<double>);
+			potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SPLE_Lens::potential_spherical_rsq_nocore<double>);
 			if (p.q != 1.0) {
-				this->defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector<double>&)> (&SPLE_Lens::deflection_elliptical_nocore<double>);
-				this->hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix<double>&)> (&SPLE_Lens::hessian_elliptical_nocore<double>);
-				this->potptr = static_cast<double (LensProfile::*)(const double,const double)> (&SPLE_Lens::potential_elliptical_nocore<double>);
-				this->def_and_hess_ptr = static_cast<void (LensProfile::*)(const double,const double,lensvector<double>&,lensmatrix<double>&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore<double>);
+				defptr = static_cast<void (LensProfile::*)(const double,const double,lensvector<double>&)> (&SPLE_Lens::deflection_elliptical_nocore<double>);
+				hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix<double>&)> (&SPLE_Lens::hessian_elliptical_nocore<double>);
+				potptr = static_cast<double (LensProfile::*)(const double,const double)> (&SPLE_Lens::potential_elliptical_nocore<double>);
+				def_and_hess_ptr = static_cast<void (LensProfile::*)(const double,const double,lensvector<double>&,lensmatrix<double>&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore<double>);
+				defptr_vec = static_cast<void (LensProfile::*)(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, Eigen::VectorXd&)> (&SPLE_Lens::deflection_elliptical_nocore_vec<Eigen::VectorXd,double>);
 			}
 		}
 	}
 #ifdef USE_STAN
 	SPLE_Params<stan::math::var>& pdif = assign_sple_param_object<stan::math::var>(); // this reference will point to either the <stan::math::var> lensparams or <stan::math::var> lensparams for autodiff
 	// Here, we direct the integration pointers to analytic formulas in special cases where analytic solutions are possible
-	this->kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::kapavg_spherical_rsq<stan::math::var>);
-	this->potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::potential_spherical_rsq<stan::math::var>);
-	if (!this->ellipticity_gradient) {
+	kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::kapavg_spherical_rsq<stan::math::var>);
+	potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::potential_spherical_rsq<stan::math::var>);
+	kapavgptr_rsq_spherical_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&SPLE_Lens::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
+	if (!ellipticity_gradient) {
 		if (pdif.alpha==1.0) {
-			this->kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::kapavg_spherical_rsq_iso<stan::math::var>);
-			this->potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::potential_spherical_rsq_iso<stan::math::var>);
-			//if (pdif.q != 1.0) {
-				this->defptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&)> (&SPLE_Lens::deflection_elliptical_iso<stan::math::var>);
-				this->hessptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensmatrix<stan::math::var>&)> (&SPLE_Lens::hessian_elliptical_iso<stan::math::var>);
-				this->potptr_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var,const stan::math::var)> (&SPLE_Lens::potential_elliptical_iso<stan::math::var>);
-			//}
+			kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::kapavg_spherical_rsq_iso<stan::math::var>);
+			potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::potential_spherical_rsq_iso<stan::math::var>);
+			if (pdif.q != 1.0) {
+				defptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&)> (&SPLE_Lens::deflection_elliptical_iso<stan::math::var>);
+				hessptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensmatrix<stan::math::var>&)> (&SPLE_Lens::hessian_elliptical_iso<stan::math::var>);
+				potptr_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var,const stan::math::var)> (&SPLE_Lens::potential_elliptical_iso<stan::math::var>);
+			}
 		} else if (pdif.s==0.0) {
-			this->potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::potential_spherical_rsq_nocore<stan::math::var>);
-			//if (pdif.q != 1.0) {
-				this->defptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&)> (&SPLE_Lens::deflection_elliptical_nocore<stan::math::var>);
-				this->hessptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensmatrix<stan::math::var>&)> (&SPLE_Lens::hessian_elliptical_nocore<stan::math::var>);
-				this->potptr_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var,const stan::math::var)> (&SPLE_Lens::potential_elliptical_nocore<stan::math::var>);
-				this->def_and_hess_ptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&,lensmatrix<stan::math::var>&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore<stan::math::var>);
-			//}
+			potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::potential_spherical_rsq_nocore<stan::math::var>);
+			if (pdif.q != 1.0) {
+				defptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&)> (&SPLE_Lens::deflection_elliptical_nocore<stan::math::var>);
+				hessptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensmatrix<stan::math::var>&)> (&SPLE_Lens::hessian_elliptical_nocore<stan::math::var>);
+				potptr_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var,const stan::math::var)> (&SPLE_Lens::potential_elliptical_nocore<stan::math::var>);
+				def_and_hess_ptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&,lensmatrix<stan::math::var>&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore<stan::math::var>);
+				defptr_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&SPLE_Lens::deflection_elliptical_nocore_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
+
+			}
 		}
 	}
 #endif
@@ -224,10 +230,9 @@ void SPLE_Lens::set_model_specific_integration_pointers()
 template <typename QScalar>
 QScalar SPLE_Lens::kappa_rsq_impl(const QScalar rsq)
 {
-	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return ((2-p.alpha) * pow(p.b*p.b/(p.s*p.s+rsq), p.alpha/2) / 2);
 }
@@ -239,10 +244,9 @@ template stan::math::var SPLE_Lens::kappa_rsq_impl<stan::math::var>(const stan::
 template <typename QScalar>
 QScalar SPLE_Lens::kappa_rsq_deriv_impl(const QScalar rsq)
 {
-	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar bsqr = p.b*p.b;
 	return (-p.alpha * (2-p.alpha) * pow(bsqr/(p.s*p.s+rsq), p.alpha/2 + 1)) / (4*bsqr);
@@ -255,10 +259,9 @@ template stan::math::var SPLE_Lens::kappa_rsq_deriv_impl<stan::math::var>(const 
 template <typename QScalar>
 QScalar SPLE_Lens::kapavg_spherical_rsq(const QScalar rsq)
 {
-	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return (pow(p.b,p.alpha)*(pow(rsq+p.s*p.s,1-p.alpha/2) - pow(p.s,2-p.alpha)))/rsq;
 }
@@ -270,10 +273,9 @@ template stan::math::var SPLE_Lens::kapavg_spherical_rsq<stan::math::var>(const 
 template <typename QScalar>
 QScalar SPLE_Lens::kapavg_spherical_rsq_iso(const QScalar rsq) // only for alpha=1
 {
-	//using std::sqrt;
-//#ifdef USE_STAN
-	//using stan::math::sqrt;
-//#endif
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return p.b*(sqrt(p.s*p.s+rsq)-p.s)/rsq; // now, tmp = kappa_average
 }
@@ -282,15 +284,60 @@ template double SPLE_Lens::kapavg_spherical_rsq_iso<double>(const double rsq); /
 template stan::math::var SPLE_Lens::kapavg_spherical_rsq_iso<stan::math::var>(const stan::math::var rsq); // only for alpha=1
 #endif
 
+template <typename VecType, typename QScalar>
+void SPLE_Lens::kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa)
+{
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
+	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>();
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		kappa = ((2-p.alpha) * pow(p.b*p.b/(p.s*p.s+rsq), p.alpha/2) / 2);
+	} else
+#endif
+	{
+		kappa = (((2-p.alpha) * (p.b*p.b/(p.s*p.s+rsq.array())).pow(p.alpha/2) / 2)).matrix();
+	}
+}
+template void SPLE_Lens::kappa_rsq_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa);
+#ifdef USE_STAN
+template void SPLE_Lens::kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa);
+#endif
+
+template <typename VecType, typename QScalar>
+void SPLE_Lens::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
+{
+#ifdef USE_STAN
+	using stan::math::pow;
+	using stan::math::elt_divide;
+#endif
+	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>();
+	//cout << "RUNNING SPHERICAL KAPAVG!" << endl;
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		kapavg = elt_divide(pow(p.b,p.alpha)*(pow(rsq + p.s*p.s,1 - p.alpha/2) - pow(p.s,2 - p.alpha)), rsq);
+	} else
+#endif
+	{
+		kapavg = (pow(p.b,p.alpha)*((rsq.array() + p.s*p.s).pow(1 - p.alpha/2) - pow(p.s,2 - p.alpha))/rsq.array()).matrix();
+	}
+}
+
+template void SPLE_Lens::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kapavg);
+#ifdef USE_STAN
+template void SPLE_Lens::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kapavg);
+#endif
+
 template <typename QScalar>
 QScalar SPLE_Lens::potential_spherical_rsq(const QScalar rsq)
 {
-	//using std::pow;
-	//using std::log;
-//#ifdef USE_STAN
-	//using stan::math::pow;
-	//using stan::math::log;
-//#endif
+#ifdef USE_STAN
+	using stan::math::pow;
+	using stan::math::log;
+#endif
 	//
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	// Formula from Keeton (2002), w/ typo corrected (sign in front of the DiGamma() term)
@@ -325,12 +372,10 @@ template stan::math::var SPLE_Lens::potential_spherical_rsq<stan::math::var>(con
 template <typename QScalar>
 QScalar SPLE_Lens::potential_spherical_rsq_iso(const QScalar rsq) // only for alpha=1
 {
-	//using std::sqrt;
-	//using std::log;
-//#ifdef USE_STAN
-	//using stan::math::sqrt;
-	//using stan::math::log;
-//#endif
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::log;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar tmp, sqrtterm;
 	sqrtterm = sqrt(p.s*p.s+rsq);
@@ -346,10 +391,9 @@ template stan::math::var SPLE_Lens::potential_spherical_rsq_iso<stan::math::var>
 template <typename QScalar>
 QScalar SPLE_Lens::potential_spherical_rsq_nocore(const QScalar rsq)
 {
-	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return pow(p.b*p.b/rsq,p.alpha/2)*rsq/(2-p.alpha);
 }
@@ -364,9 +408,6 @@ template stan::math::var SPLE_Lens::potential_spherical_rsq_nocore<stan::math::v
 template <typename QScalar>
 void SPLE_Lens::deflection_elliptical_iso(const QScalar x, const QScalar y, lensvector<QScalar>& def) // only for alpha=1
 {
-	//using std::sqrt;
-	//using std::atan;
-	//using std::atanh;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::atan;
@@ -375,7 +416,7 @@ void SPLE_Lens::deflection_elliptical_iso(const QScalar x, const QScalar y, lens
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar u, psi;
 	psi = sqrt(p.qsq*(p.ssq_prime+x*x)+y*y);
-	QScalar eps = 1e-10;
+	double eps = 1e-10;
 	u = sqrt(1-p.qsq+eps);
 
 	def[0] = (p.bprime*p.q/u)*atan(u*x/(psi+p.sprime));
@@ -389,7 +430,6 @@ template void SPLE_Lens::deflection_elliptical_iso<stan::math::var>(const stan::
 template <typename QScalar>
 void SPLE_Lens::hessian_elliptical_iso(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess) // only for alpha=1
 {
-	//using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 #endif
@@ -414,10 +454,6 @@ template void SPLE_Lens::hessian_elliptical_iso<stan::math::var>(const stan::mat
 template <typename QScalar>
 QScalar SPLE_Lens::potential_elliptical_iso(const QScalar x, const QScalar y) // only for alpha=1
 {
-	//using std::sqrt;
-	//using std::atan;
-	//using std::atanh;
-	//using std::log;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::atan;
@@ -427,7 +463,7 @@ QScalar SPLE_Lens::potential_elliptical_iso(const QScalar x, const QScalar y) //
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar u, tmp, psi;
 	psi = sqrt(p.qsq*(p.ssq_prime+x*x)+y*y);
-	QScalar eps = 1e-10;
+	double eps = 1e-10;
 	u = sqrt(1-p.qsq+eps);
 
 	tmp = (p.bprime*p.q/u)*(x*atan(u*x/(psi+p.sprime)) + y*atanh(u*y/(psi+p.qsq*p.sprime)));
@@ -443,33 +479,22 @@ template stan::math::var SPLE_Lens::potential_elliptical_iso<stan::math::var>(co
 template <typename QScalar>
 void SPLE_Lens::deflection_elliptical_nocore(const QScalar x, const QScalar y, lensvector<QScalar>& def)
 {
-	//using std::sqrt;
-	//using std::atan;
-	//using std::abs;
-	//using std::pow;
 #ifdef USE_STAN
 	using stan::math::sqrt;
-	using stan::math::atan;
-	using stan::math::abs;
+	using stan::math::atan2;
 	using stan::math::pow;
 #endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	// Formulas from Tessore et al. 2015
 	QScalar phi, R = sqrt(x*x+y*y/p.qsq);
-	phi = atan(abs(y/(p.q*x)));
+	phi = atan2(y,p.q*x);
 
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
-	complex<QScalar> def_complex = 2*p.bprime*p.q/(1+p.q)*pow(p.bprime/R,p.alpha-1)*deflection_angular_factor(phi);
+	QScalar defnorm = 2*p.bprime*p.q/(1+p.q)*pow(p.bprime/R,p.alpha-1);
+	QScalar fac1,fac2;
+	deflection_angular_factor_nocomplex(phi,fac1,fac2);
 
-	def[0] = real(def_complex);
-	def[1] = imag(def_complex);
+	def[0] = defnorm*fac1;
+	def[1] = defnorm*fac2;
 }
 template void SPLE_Lens::deflection_elliptical_nocore<double>(const double x, const double y, lensvector<double>& def);
 #ifdef USE_STAN
@@ -479,29 +504,17 @@ template void SPLE_Lens::deflection_elliptical_nocore<stan::math::var>(const sta
 template <typename QScalar>
 void SPLE_Lens::hessian_elliptical_nocore(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess)
 {
-	//using std::sqrt;
-	//using std::atan;
-	//using std::abs;
-	//using std::pow;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::atan;
-	using stan::math::abs;
 	using stan::math::pow;
+	using stan::math::atan2;
 #endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar R, phi, kap;
 	R = sqrt(x*x+y*y/p.qsq);
 	kap = 0.5 * (2-p.alpha) * pow(p.bprime/R, p.alpha);
-	phi = atan(abs(y/(p.q*x)));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
+	phi = atan2(y,p.q*x);
 
 	complex<QScalar> hess_complex, zstar(x,-y);
 	// The following is the *deflection*, not the shear, but it will be transformed to shear in the following line
@@ -523,29 +536,17 @@ template void SPLE_Lens::hessian_elliptical_nocore<stan::math::var>(const stan::
 template <typename QScalar>
 void SPLE_Lens::deflection_and_hessian_elliptical_nocore(const QScalar x, const QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
-	//using std::sqrt;
-	//using std::atan;
-	//using std::abs;
-	//using std::pow;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::atan;
-	using stan::math::abs;
+	using stan::math::atan2;
 	using stan::math::pow;
 #endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar R, phi, kap;
 	R = sqrt(x*x+y*y/p.qsq);
 	kap = 0.5 * (2-p.alpha) * pow(p.bprime/R, p.alpha);
-	phi = atan(abs(y/(p.q*x)));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
+	phi = atan2(y,p.q*x);
 	complex<QScalar> def_complex = 2*p.bprime*p.q/(1+p.q)*pow(p.bprime/R,p.alpha-1)*deflection_angular_factor(phi);
 	def[0] = real(def_complex);
 	def[1] = imag(def_complex);
@@ -566,28 +567,15 @@ template void SPLE_Lens::deflection_and_hessian_elliptical_nocore<stan::math::va
 template <typename QScalar>
 QScalar SPLE_Lens::potential_elliptical_nocore(const QScalar x, const QScalar y) // only for sprime=0
 {
-	//using std::sqrt;
-	//using std::atan;
-	//using std::abs;
-	//using std::pow;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::atan;
-	using stan::math::abs;
+	using stan::math::atan2;
 	using stan::math::pow;
 #endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar phi, R = sqrt(x*x+y*y/(p.q*p.q));
-	phi = atan(abs(y/(p.q*x)));
-
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
+	phi = atan2(y,p.q*x);
 	complex<QScalar> def_complex = 2*p.bprime*p.q/(1+p.q)*pow(p.bprime/R,p.alpha-1)*deflection_angular_factor(phi);
 	return (x*real(def_complex) + y*imag(def_complex))/(2-p.alpha);
 }
@@ -599,8 +587,6 @@ template stan::math::var SPLE_Lens::potential_elliptical_nocore<stan::math::var>
 template <typename QScalar>
 complex<QScalar> SPLE_Lens::deflection_angular_factor(const QScalar &phi)
 {
-	//using std::polar;
-	//using std::norm;
 #ifdef USE_STAN
 	using stan::math::polar;
 #endif
@@ -622,6 +608,186 @@ complex<QScalar> SPLE_Lens::deflection_angular_factor(const QScalar &phi)
 template complex<double> SPLE_Lens::deflection_angular_factor<double>(const double &phi);
 #ifdef USE_STAN
 template complex<stan::math::var> SPLE_Lens::deflection_angular_factor<stan::math::var>(const stan::math::var &phi);
+#endif
+
+template <typename QScalar>
+void SPLE_Lens::deflection_angular_factor_nocomplex(const QScalar &phi, QScalar& fac_x, QScalar& fac_y)
+{
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
+	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
+	// Formulas from Tessore et al. 2015
+	QScalar beta, ff;
+	beta = 2.0/(2-p.alpha);
+	ff = (1-p.q)/(1+p.q);
+
+	QScalar omega_x, omega_y, c2, s2;
+	QScalar amp, new_omega_x, new_omega_y;
+
+	fac_x = cos(phi);
+	fac_y = sin(phi);
+
+	omega_x = fac_x;
+	omega_y = fac_y;
+
+	c2 = cos(2*phi);
+	s2 = sin(2*phi);
+
+	int i=1;
+
+	do {
+		 amp = -ff * (beta*i - 1) / (beta*i + 1);
+		 new_omega_x = amp * (c2*omega_x - s2*omega_y);
+		 new_omega_y = amp * (s2*omega_x + c2*omega_y);
+
+		 omega_x = new_omega_x;
+		 omega_y = new_omega_y;
+
+		 fac_x += omega_x;
+		 fac_y += omega_y;
+
+		 i++;
+
+	} while ((omega_x*omega_x + omega_y*omega_y) > def_tolerance*(fac_x*fac_x + fac_y*fac_y));
+}
+template void SPLE_Lens::deflection_angular_factor_nocomplex<double>(const double &phi, double& fac_x, double& fac_y);
+#ifdef USE_STAN
+template void SPLE_Lens::deflection_angular_factor_nocomplex<stan::math::var>(const stan::math::var &phi, stan::math::var& fac_x, stan::math::var& fac_y);
+#endif
+
+template <typename VecType, typename QScalar>
+void SPLE_Lens::deflection_elliptical_nocore_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y)
+{
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan2;
+	using stan::math::pow;
+	using stan::math::elt_multiply;
+	using stan::math::elt_divide;
+	using stan::math::inv;
+#endif
+	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
+	// Formulas from Tessore et al. 2015
+
+	VecType R, phi;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		R = sqrt(elt_multiply(x,x) + elt_divide(elt_multiply(y,y),p.qsq));
+		R = 2*p.bprime*p.q/(1+p.q)*pow(p.bprime*inv(R),p.alpha-1); // Now R is no longer elliptical radius, but rather the norm of deflection
+	} else {
+		R = (x.array().square() + y.array().square()/p.qsq).sqrt().matrix();
+		R = (2*p.bprime*p.q/(1+p.q)*(p.bprime*R.array().inverse()).pow(p.alpha-1)).matrix(); // Now R is no longer elliptical radius, but rather the norm of deflection
+	}
+	phi = atan2(y,p.q*x);
+#else
+	R = (x.array().square() + y.array().square()/p.qsq).sqrt().matrix();
+	R = (2*p.bprime*p.q/(1+p.q)*(p.bprime*R.array().inverse()).pow(p.alpha-1)).matrix(); // Now R is no longer elliptical radius, but rather the norm of deflection
+	phi = (y.array().atan2((p.q*x).array())).matrix();
+#endif
+
+	deflection_angular_factor_nocomplex_vec<VecType,QScalar>(phi,def_x,def_y);
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		def_x = elt_multiply(R,def_x); // Now R is no longer elliptical radius, but rather the norm of deflection
+		def_y = elt_multiply(R,def_y); // Now R is no longer elliptical radius, but rather the norm of deflection
+	} else
+#endif
+	{
+		def_x = R.cwiseProduct(def_x); // Now R is no longer elliptical radius, but rather the norm of deflection
+		def_y = R.cwiseProduct(def_y); // Now R is no longer elliptical radius, but rather the norm of deflection
+	}
+}
+template void SPLE_Lens::deflection_elliptical_nocore_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& x, const Eigen::VectorXd& y, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y);
+#ifdef USE_STAN
+template void SPLE_Lens::deflection_elliptical_nocore_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& x, const stan::math::var_value<Eigen::VectorXd>& y, stan::math::var_value<Eigen::VectorXd>& def_x, stan::math::var_value<Eigen::VectorXd>& def_y);
+#endif
+
+template <typename VecType, typename QScalar>
+void SPLE_Lens::deflection_angular_factor_nocomplex_vec(const VecType& phi, VecType& fac_x, VecType& fac_y)
+{
+	//cout << "ARE WE HERE for real?" << endl;
+#ifdef USE_STAN
+    using stan::math::cos;
+    using stan::math::sin;
+    using stan::math::elt_multiply;
+#endif
+
+    auto& p = assign_sple_param_object<QScalar>();
+
+	const QScalar beta = 2.0/(2-p.alpha);
+	const QScalar ff = (1-p.q)/(1+p.q);
+
+	 VecType omega_x, omega_y;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		omega_x = cos(phi);
+		omega_y = sin(phi);
+	} else
+#endif
+	{
+		omega_x = (phi.array().cos()).matrix();
+		omega_y = (phi.array().sin()).matrix();
+	}
+
+	 fac_x = omega_x;
+	 fac_y = omega_y;
+
+	 VecType c2, s2;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		c2 = cos(2*phi);
+		s2 = sin(2*phi);
+	} else
+#endif
+	{
+		c2 = ((2*phi).array().cos()).matrix();
+		s2 = ((2*phi).array().sin()).matrix();
+	}
+
+    int i=1;
+
+	 double omega_sum, fac_sum;
+	 VecType new_omega_x, new_omega_y;
+    do
+    {
+        QScalar amp = -ff * (beta*i - 1) / (beta*i + 1);
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+				new_omega_x = amp * (elt_multiply(c2,omega_x) - elt_multiply(s2,omega_y));
+				new_omega_y = amp * (elt_multiply(s2,omega_x) + elt_multiply(c2,omega_y));
+			} else
+#endif
+			{
+				new_omega_x = amp * (c2.cwiseProduct(omega_x) - s2.cwiseProduct(omega_y));
+				new_omega_y = amp * (s2.cwiseProduct(omega_x) + c2.cwiseProduct(omega_y));
+			}
+
+        omega_x = new_omega_x;
+        omega_y = new_omega_y;
+
+        fac_x = fac_x + omega_x;
+        fac_y = fac_y + omega_y;
+
+        i++;
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+				 omega_sum = (omega_x.val().squaredNorm() + omega_y.val().squaredNorm());
+				 fac_sum = (fac_x.val().squaredNorm() + fac_y.val().squaredNorm());
+			} else
+#endif
+			{
+				 omega_sum = (omega_x.cwiseProduct(omega_x) + omega_y.cwiseProduct(omega_y)).sum();
+				 fac_sum = (fac_x.cwiseProduct(fac_x) + fac_y.cwiseProduct(fac_y)).sum();
+			}
+    }
+    while (omega_sum > (def_tolerance*fac_sum));
+}
+template void SPLE_Lens::deflection_angular_factor_nocomplex_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& phi, Eigen::VectorXd& fac_x, Eigen::VectorXd& fac_y);
+#ifdef USE_STAN
+template void SPLE_Lens::deflection_angular_factor_nocomplex_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& phi, stan::math::var_value<Eigen::VectorXd>& fac_x, stan::math::var_value<Eigen::VectorXd>& fac_y);
 #endif
 
 void SPLE_Lens::get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor)
@@ -706,7 +872,7 @@ dPIE_Lens::dPIE_Lens(const double zlens_in, const double zsrc_in, const double &
 
 void dPIE_Lens::initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	this->set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	this->set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 	dPIE_Params<double>& p = assign_dpie_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	if (parameter_mode==0) {
 		p.b = p1_in;
@@ -722,6 +888,7 @@ void dPIE_Lens::initialize_parameters(const double &p1_in, const double &p2_in, 
 		p.s_kpc = p3_in;
 	}
 #ifdef USE_STAN
+	this->set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -989,7 +1156,6 @@ void dPIE_Lens::set_model_specific_integration_pointers()
 template <typename QScalar>
 QScalar dPIE_Lens::kappa_rsq_impl(const QScalar rsq)
 {
-	using std::pow;
 #ifdef USE_STAN
 	using stan::math::pow;
 #endif
@@ -1004,7 +1170,6 @@ template stan::math::var dPIE_Lens::kappa_rsq_impl<stan::math::var>(const stan::
 template <typename QScalar>
 QScalar dPIE_Lens::kappa_rsq_deriv_impl(const QScalar rsq)
 {
-	using std::pow;
 #ifdef USE_STAN
 	using stan::math::pow;
 #endif
@@ -1019,6 +1184,9 @@ template stan::math::var dPIE_Lens::kappa_rsq_deriv_impl<stan::math::var>(const 
 template <typename QScalar>
 QScalar dPIE_Lens::kapavg_spherical_rsq(const QScalar rsq)
 {
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
 	dPIE_Params<QScalar>& p = assign_dpie_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return p.b*((sqrt(p.s*p.s+rsq)-p.s) - (sqrt(p.a*p.a+rsq)-p.a))/rsq;
 }
@@ -1030,9 +1198,6 @@ template stan::math::var dPIE_Lens::kapavg_spherical_rsq<stan::math::var>(const 
 template <typename QScalar>
 QScalar dPIE_Lens::potential_spherical_rsq(const QScalar rsq)
 {
-	using std::pow;
-	using std::log;
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::pow;
 	using stan::math::log;
@@ -1057,9 +1222,6 @@ template stan::math::var dPIE_Lens::potential_spherical_rsq<stan::math::var>(con
 template <typename QScalar>
 void dPIE_Lens::deflection_elliptical(const QScalar x, const QScalar y, lensvector<QScalar>& def)
 {
-	using std::sqrt;
-	using std::atan;
-	using std::atanh;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::atan;
@@ -1082,7 +1244,6 @@ template void dPIE_Lens::deflection_elliptical<stan::math::var>(const stan::math
 template <typename QScalar>
 void dPIE_Lens::hessian_elliptical(const QScalar x, const QScalar y, lensmatrix<QScalar>& hess)
 {
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 #endif
@@ -1108,10 +1269,6 @@ template void dPIE_Lens::hessian_elliptical<stan::math::var>(const stan::math::v
 template <typename QScalar>
 QScalar dPIE_Lens::potential_elliptical(const QScalar x, const QScalar y)
 {
-	using std::sqrt;
-	using std::atan;
-	using std::atanh;
-	using std::log;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::atan;
@@ -1133,6 +1290,47 @@ QScalar dPIE_Lens::potential_elliptical(const QScalar x, const QScalar y)
 template double dPIE_Lens::potential_elliptical<double>(const double x, const double y);
 #ifdef USE_STAN
 template stan::math::var dPIE_Lens::potential_elliptical<stan::math::var>(const stan::math::var x, const stan::math::var y);
+#endif
+
+template <typename VecType, typename QScalar>
+void dPIE_Lens::deflection_elliptical_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y)
+{
+#ifdef USE_STAN
+    using stan::math::sqrt;
+    using stan::math::atan;
+    using stan::math::atanh;
+    using stan::math::elt_multiply;
+    using stan::math::elt_divide;
+#endif
+
+    dPIE_Params<QScalar>& p = assign_dpie_param_object<QScalar>();
+
+    // Common scalar factor
+    QScalar u = sqrt(1 - p.qsq);
+    QScalar prefac = (p.bprime * p.q / u);
+
+    VecType psi;
+    VecType psi2;
+
+#ifdef USE_STAN
+    if constexpr (
+        std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+        psi = sqrt(p.qsq * (p.ssq_prime + elt_multiply(x, x)) + elt_multiply(y, y));
+        psi2 = sqrt(p.qsq * (p.asq + elt_multiply(x, x)) + elt_multiply(y, y));
+        def_x = prefac * (atan(elt_divide(u * x, psi + p.sprime)) - atan(elt_divide(u * x, psi2 + p.aprime)));
+        def_y = prefac * (atanh(elt_divide(u * y, psi + p.qsq * p.sprime)) - atanh(elt_divide(u * y, psi2 + p.qsq * p.aprime)));
+    } else
+#endif
+    {
+        psi = ((p.qsq * (p.ssq_prime + x.array().square()) + y.array().square()).sqrt()).matrix();
+        psi2 = ((p.qsq * (p.asq + x.array().square()) + y.array().square()).sqrt()).matrix();
+        def_x = prefac * ((u * x.array() / (psi.array() + p.sprime)).atan() - (u * x.array() / (psi2.array() + p.aprime)).atan()).matrix();
+        def_y = prefac * ((u * y.array() / (psi.array() + p.qsq * p.sprime)).atanh() - (u * y.array() / (psi2.array() + p.qsq * p.aprime)).atanh()).matrix();
+    }
+}
+template void dPIE_Lens::deflection_elliptical_vec<Eigen::VectorXd, double>(const Eigen::VectorXd& x, const Eigen::VectorXd& y, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y);
+#ifdef USE_STAN
+template void dPIE_Lens::deflection_elliptical_vec<stan::math::var_value<Eigen::VectorXd>, stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& x, const stan::math::var_value<Eigen::VectorXd>& y, stan::math::var_value<Eigen::VectorXd>& def_x, stan::math::var_value<Eigen::VectorXd>& def_y);
 #endif
 
 template <typename QScalar>
@@ -1229,7 +1427,7 @@ NFW::NFW(const double zlens_in, const double zsrc_in, const double &p1_in, const
 
 void NFW::initialize_parameters(const double &p1_in, const double &p2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 
 	NFW_Params<double>& p = assign_nfw_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	if (parameter_mode==2) {
@@ -1243,6 +1441,7 @@ void NFW::initialize_parameters(const double &p1_in, const double &p2_in, const 
 		p.rs = p2_in;
 	}
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -1469,17 +1668,17 @@ void NFW::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::kapavg_spherical_rsq<double>);
 	potptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&NFW::potential_spherical_rsq<double>);
+	kapavgptr_rsq_spherical_vec = static_cast<void (LensProfile::*)(const Eigen::VectorXd&, Eigen::VectorXd&)> (&NFW::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>);
 #ifdef USE_STAN
 	kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&NFW::kapavg_spherical_rsq<stan::math::var>);
 	potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&NFW::potential_spherical_rsq<stan::math::var>);
+	kapavgptr_rsq_spherical_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&NFW::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
 #endif
 }
 
 template <typename QScalar>
 void NFW::set_ks_c200_from_m200_rs()
 {
-	using std::pow;
-	using std::log;
 #ifdef USE_STAN
 	using stan::math::pow;
 	using stan::math::log;
@@ -1500,8 +1699,6 @@ template void NFW::set_ks_c200_from_m200_rs<stan::math::var>();
 template <typename QScalar>
 void NFW::set_ks_rs_from_m200_c200()
 {
-	using std::pow;
-	using std::log;
 #ifdef USE_STAN
 	using stan::math::pow;
 	using stan::math::log;
@@ -1522,9 +1719,6 @@ template void NFW::set_ks_rs_from_m200_c200<stan::math::var>();
 template <typename QScalar>
 QScalar NFW::kappa_rsq_impl(const QScalar rsq)
 {
-	using std::sqrt;
-	using std::abs;
-	using std::log;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::abs;
@@ -1544,7 +1738,6 @@ template stan::math::var NFW::kappa_rsq_impl<stan::math::var>(const stan::math::
 template <typename QScalar>
 QScalar NFW::kappa_rsq_deriv_impl(const QScalar rsq)
 {
-	using std::abs;
 #ifdef USE_STAN
 	using stan::math::abs;
 #endif
@@ -1566,9 +1759,6 @@ template stan::math::var NFW::kappa_rsq_deriv_impl<stan::math::var>(const stan::
 template <typename QScalar>
 QScalar NFW::lens_function_xsq(const QScalar xsq)
 {
-	using std::sqrt;
-	using std::atan;
-	using std::atanh;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::atan;
@@ -1584,7 +1774,6 @@ template stan::math::var NFW::lens_function_xsq<stan::math::var>(const stan::mat
 template <typename QScalar>
 QScalar NFW::kapavg_spherical_rsq(const QScalar rsq)
 {
-	using std::log;
 #ifdef USE_STAN
 	using stan::math::log;
 #endif
@@ -1605,10 +1794,6 @@ template stan::math::var NFW::kapavg_spherical_rsq<stan::math::var>(const stan::
 template <typename QScalar>
 QScalar NFW::potential_spherical_rsq(const QScalar rsq)
 {
-	using std::sqrt;
-	using std::atan;
-	using std::atanh;
-	using std::log;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 	using stan::math::atan;
@@ -1630,6 +1815,134 @@ QScalar NFW::potential_spherical_rsq(const QScalar rsq)
 template double NFW::potential_spherical_rsq<double>(const double rsq);
 #ifdef USE_STAN
 template stan::math::var NFW::potential_spherical_rsq<stan::math::var>(const stan::math::var rsq);
+#endif
+
+template <typename VecType, typename QScalar>
+void Truncated_NFW::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
+{
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::log;
+	using stan::math::elt_divide;
+#endif
+
+	Truncated_NFW_Params<QScalar>& p = assign_tnfw_param_object<QScalar>();
+
+	VecType xsq, sqrttx, lx, tmp, lensfunc;
+	QScalar tau, tsq;
+
+	xsq = rsq/(p.rs*p.rs);
+	tau = p.rt/p.rs;
+	tsq = tau*tau;
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		sqrttx = sqrt(tsq + xsq);
+		lx = log(elt_divide(sqrt(xsq), sqrttx + sqrt(tsq)));
+		lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
+		if (lens_subclass==0) {
+			tmp = (tsq + 1 + 2*(xsq - 1))*lensfunc + M_PI*tau + (tsq - 1)*log(tau) + sqrttx*(-M_PI + (tsq - 1)*lx/tau);
+			kapavg = 4*p.ks*tsq/SQR(tsq + 1)*elt_divide(tmp, xsq);
+		} else {
+			tmp = 2*(tsq + 1 + 4*(xsq - 1))*lensfunc + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq + xsq) - tsq - 1) + (-tsq*(tsq*tsq - 1) + (tsq + xsq)*(3*tsq*tsq - 6*tsq - 1))*lx)/CUBE(tau)/sqrttx;
+			kapavg = 2*p.ks*tsq*tsq/CUBE(tsq + 1)*elt_divide(tmp, xsq);
+		}
+	} else
+#endif
+	{
+		sqrttx = (tsq + xsq.array()).sqrt().matrix();
+		lx = (xsq.array().sqrt()/(sqrttx.array() + sqrt(tsq))).log().matrix();
+		lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
+		if (lens_subclass==0) {
+			tmp = ((tsq + 1 + 2*(xsq.array() - 1))*lensfunc.array() + M_PI*tau + (tsq - 1)*log(tau) + sqrttx.array()*(-M_PI + (tsq - 1)*lx.array()/tau)).matrix();
+			kapavg = (4*p.ks*tsq/SQR(tsq + 1)*tmp.array()/xsq.array()).matrix();
+		} else {
+			tmp = (2*(tsq + 1 + 4*(xsq.array() - 1))*lensfunc.array() + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq + xsq.array()) - tsq - 1) + (-tsq*(tsq*tsq - 1) + (tsq + xsq.array())*(3*tsq*tsq - 6*tsq - 1))*lx.array())/CUBE(tau)/sqrttx.array()).matrix();
+			kapavg = (2*p.ks*tsq*tsq/CUBE(tsq + 1)*tmp.array()/xsq.array()).matrix();
+		}
+	}
+}
+
+template void Truncated_NFW::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kapavg);
+
+#ifdef USE_STAN
+template void Truncated_NFW::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kapavg);
+#endif
+
+template <typename VecType, typename QScalar>
+void NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
+{
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::atanh;
+	using stan::math::elt_divide;
+#endif
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		lensfunc = elt_divide(atan(sqrt(xsq - 1)),sqrt(xsq - 1));
+		// worry about x=1 case later
+		for (int i=0; i < xsq.size(); ++i) {
+			if (xsq(i).val() < 1.0)
+				lensfunc.vi_->val_.coeffRef(i) = atanh(sqrt(1 - xsq(i).val())) / sqrt(1 - xsq(i).val());
+			else if (xsq(i).val() == 1.0)
+				lensfunc.vi_->val_.coeffRef(i) = 1.0;
+		}
+	} else
+#endif
+	{
+		lensfunc = (atan((xsq.array() - 1).sqrt()) / (xsq.array() - 1).sqrt()).matrix();
+		// worry about x=1 case later
+		for (int i=0; i < xsq.size(); ++i) {
+			if (xsq(i) < 1.0)
+				lensfunc(i) = atanh(sqrt(1 - xsq(i))) / sqrt(1 - xsq(i));
+			else if (xsq(i) == 1.0)
+				lensfunc(i) = 1.0;
+		}
+	}
+}
+template void NFW::lens_function_xsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& xsq, Eigen::VectorXd& lensfunc);
+#ifdef USE_STAN
+template void NFW::lens_function_xsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& xsq, stan::math::var_value<Eigen::VectorXd>& lensfunc);
+#endif
+
+template <typename VecType, typename QScalar>
+void NFW::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
+{
+#ifdef USE_STAN
+	using stan::math::log;
+	using stan::math::elt_divide;
+#endif
+
+	NFW_Params<QScalar>& p = assign_nfw_param_object<QScalar>();
+	VecType xsq, lensfunc;
+	xsq = rsq/(p.rs*p.rs);
+	lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		kapavg = 2*p.ks*elt_divide(2*lensfunc + log(xsq/4), xsq);
+		/*
+		// worry about the small x case later
+		for (int i=0; i < xsq.size(); ++i) {
+			if (xsq(i).val() <= 1e-5)
+				kapavg.vi_->val_.coeffRef(i) = -p.ks*(1 + log(xsq(i).val()/4));
+		}
+		*/
+	} else
+#endif
+	{
+		kapavg = (2*p.ks*(2*lensfunc.array() + (xsq.array()/4).log())/xsq.array()).matrix();
+		// worry about the small x case later
+		for (int i=0; i < xsq.size(); ++i) {
+			if (xsq(i) <= 1e-5)
+				kapavg(i) = -p.ks*(1 + log(xsq(i)/4));
+		}
+	}
+}
+template void NFW::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kapavg);
+#ifdef USE_STAN
+template void NFW::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& xsq, stan::math::var_value<Eigen::VectorXd>& kapavg);
 #endif
 
 double NFW::rho3d_r_integrand_analytic(const double r)
@@ -1720,7 +2033,7 @@ Truncated_NFW::Truncated_NFW(const double zlens_in, const double zsrc_in, const 
 
 void Truncated_NFW::initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 
 	Truncated_NFW_Params<double>& p = assign_tnfw_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	if (parameter_mode==4) {
@@ -1745,6 +2058,7 @@ void Truncated_NFW::initialize_parameters(const double &p1_in, const double &p2_
 		p.rt = p3_in;
 	}
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -2026,8 +2340,10 @@ void Truncated_NFW::set_auto_ranges()
 void Truncated_NFW::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&Truncated_NFW::kapavg_spherical_rsq<double>);
+	kapavgptr_rsq_spherical_vec = static_cast<void (LensProfile::*)(const Eigen::VectorXd&, Eigen::VectorXd&)> (&Truncated_NFW::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>);
 #ifdef USE_STAN
 	kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&Truncated_NFW::kapavg_spherical_rsq<stan::math::var>);
+	kapavgptr_rsq_spherical_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&Truncated_NFW::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
 #endif
 }
 
@@ -2140,6 +2456,43 @@ double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
 	}
 }
 
+template <typename VecType, typename QScalar>
+void Truncated_NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
+{
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::atanh;
+	using stan::math::elt_divide;
+#endif
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		lensfunc = elt_divide(atan(sqrt(xsq - 1)),sqrt(xsq - 1));
+		// will this break autodiff?
+		for (int i=0; i < xsq.size(); ++i) {
+			if (xsq(i).val() < 1.0)
+				lensfunc.vi_->val_.coeffRef(i) = atanh(sqrt(1 - xsq(i).val())) / sqrt(1 - xsq(i).val());
+			else if (xsq(i).val() == 1.0)
+				lensfunc.vi_->val_.coeffRef(i) = 1.0;
+		}
+	} else
+#endif
+	{
+		lensfunc = (atan((xsq.array() - 1).sqrt()) / (xsq.array() - 1).sqrt()).matrix();
+		for (int i=0; i < xsq.size(); ++i) {
+			if (xsq(i) < 1.0)
+				lensfunc(i) = atanh(sqrt(1 - xsq(i))) / sqrt(1 - xsq(i));
+			else if (xsq(i) == 1.0)
+				lensfunc(i) = 1.0;
+		}
+	}
+}
+template void Truncated_NFW::lens_function_xsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& xsq, Eigen::VectorXd& lensfunc);
+#ifdef USE_STAN
+template void Truncated_NFW::lens_function_xsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& xsq, stan::math::var_value<Eigen::VectorXd>& lensfunc);
+#endif
+
 bool Truncated_NFW::output_cosmology_info(const int lens_number)
 {
 	Truncated_NFW_Params<double>& p = assign_tnfw_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
@@ -2206,7 +2559,7 @@ Cored_NFW::Cored_NFW(const double zlens_in, const double zsrc_in, const double &
 
 void Cored_NFW::initialize_parameters(const double &p1_in, const double &p2_in, const double &p3_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 
 	Cored_NFW_Params<double>& p = assign_cnfw_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	if (parameter_mode==3) {
@@ -2227,6 +2580,7 @@ void Cored_NFW::initialize_parameters(const double &p1_in, const double &p2_in, 
 		p.rc = p3_in;
 	}
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -2763,12 +3117,13 @@ Hernquist::Hernquist(const double zlens_in, const double zsrc_in, const double &
 
 void Hernquist::initialize_parameters(const double &ks_in, const double &rs_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 
 	Hernquist_Params<double>& p = assign_hernquist_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	p.ks = ks_in;
 	p.rs = rs_in;
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -2955,12 +3310,13 @@ ExpDisk::ExpDisk(const double zlens_in, const double zsrc_in, const double &k0_i
 
 void ExpDisk::initialize_parameters(const double &k0_in, const double &R_d_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 
 	ExpDisk_Params<double>& p = assign_expdisk_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	p.k0 = k0_in;
 	p.R_d = R_d_in;
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -3294,6 +3650,7 @@ template stan::math::var Shear::potential_impl<stan::math::var>(stan::math::var 
 template <typename QScalar>
 void Shear::deflection_impl(QScalar x, QScalar y, lensvector<QScalar>& def)
 {
+	//cout << "BOOGA?" << endl;
 	Shear_Params<QScalar>& p = assign_shear_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	x -= p.x_center;
 	y -= p.y_center;
@@ -3336,6 +3693,50 @@ void Shear::potential_derivatives_impl(QScalar x, QScalar y, lensvector<QScalar>
 template void Shear::potential_derivatives_impl<double>(double x, double y, lensvector<double>& def, lensmatrix<double>& hess);
 #ifdef USE_STAN
 template void Shear::potential_derivatives_impl<stan::math::var>(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess);
+#endif
+
+template <typename VecType, typename QScalar>
+void Shear::deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& def_x, VecType& def_y)
+{
+	//cout << "BOOGA BOOGA?" << endl;
+	Shear_Params<QScalar>& p = assign_shear_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
+
+	VecType x,y;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		x = x0 - p.x_center;
+		y = y0 - p.y_center;
+	} else
+#endif
+	{
+		x = (x0.array() - p.x_center).matrix();
+		y = (y0.array() - p.y_center).matrix();
+	}
+
+	def_x = x*p.shear1 + y*p.shear2;
+	def_y = -y*p.shear1 + x*p.shear2;
+
+	/*
+	lensvector<QScalar> defcheck;
+	for (int indx = 0; indx < x.size(); indx++) {
+		deflection_impl<QScalar>(x0(indx),y0(indx),defcheck);
+		QScalar xp = x0(indx)-p.x_center;
+		QScalar yp = y0(indx)-p.y_center;
+		//rotate(xp,yp);
+
+		if constexpr (std::is_same_v<VecType, Eigen::VectorXd>) {
+			//cout << "x: " << x(indx) << " y: " << y(indx) << " xcheck: " << xp << " ycheck: " << yp << endl;
+			if ((abs(def_x(indx)-defcheck[0]) > 1e-6) or (abs(def_y(indx)-defcheck[1]) > 1e-6))
+				cout << "SHEAR DEF: " << def_x(indx) << " " << def_y(indx) << " DEFCHECK: " << defcheck[0] << " " << defcheck[1] << endl;
+		}
+	}
+	*/
+
+
+}
+template void Shear::deflection_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, Eigen::VectorXd&);
+#ifdef USE_STAN
+template void Shear::deflection_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&);
 #endif
 
 template <typename QScalar>
@@ -3540,18 +3941,15 @@ void Multipole::set_model_specific_integration_pointers()
 template <typename QScalar>
 QScalar Multipole::kappa_impl(QScalar x, QScalar y)
 {
+#ifdef USE_STAN
+	using stan::math::atan2;
+	using stan::math::cos;
+	using stan::math::pow;
+#endif
 	Multipole_Params<QScalar>& p = assign_mpole_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	x -= p.x_center;
 	y -= p.y_center;
-	QScalar phi = atan(abs(y/x));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
+	QScalar phi = atan2(y,x);
 	if (kappa_multipole) {
 		return p.A_n*pow(x*x+y*y,-p.n/2) * cos(m*(phi-p.theta_eff));
 	} else {
@@ -3602,18 +4000,15 @@ template stan::math::var Multipole::kappa_rsq_deriv_impl<stan::math::var>(const 
 template <typename QScalar>
 QScalar Multipole::potential_impl(QScalar x, QScalar y)
 {
+#ifdef USE_STAN
+	using stan::math::atan2;
+	using stan::math::cos;
+	using stan::math::pow;
+#endif
 	Multipole_Params<QScalar>& p = assign_mpole_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	x -= p.x_center;
 	y -= p.y_center;
-	QScalar phi = atan(abs(y/x));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
+	QScalar phi = atan2(y,x);
 	if (kappa_multipole) {
 		return (2*p.A_n*pow(x*x+y*y,1-p.n/2)/(SQR(2-p.n)-m*m)) * cos(m*(phi-p.theta_eff));
 	} else {
@@ -3631,20 +4026,18 @@ template stan::math::var Multipole::potential_impl<stan::math::var>(stan::math::
 template <typename QScalar>
 void Multipole::deflection_impl(QScalar x, QScalar y, lensvector<QScalar>& def)
 {
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan2;
+	using stan::math::cos;
+	using stan::math::pow;
+#endif
 	Multipole_Params<QScalar>& p = assign_mpole_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	x -= p.x_center;
 	y -= p.y_center;
 	QScalar r, phi, psi, dpsi, cs, ss;
 	r = sqrt(x*x+y*y);
-	phi = atan(abs(y/x));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
+	phi = atan2(y,x);
 
 	if (kappa_multipole) {
 		psi = 2*p.A_n*pow(r,2-p.n)/(SQR(2-p.n)-m*m);
@@ -3687,6 +4080,12 @@ template stan::math::var Multipole::deflection_m0_spherical_r<stan::math::var>(c
 template <typename QScalar>
 void Multipole::hessian_impl(QScalar x, QScalar y, lensmatrix<QScalar>& hess)
 {
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan2;
+	using stan::math::cos;
+	using stan::math::pow;
+#endif
 	Multipole_Params<QScalar>& p = assign_mpole_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	x -= p.x_center;
 	y -= p.y_center;
@@ -3698,15 +4097,7 @@ void Multipole::hessian_impl(QScalar x, QScalar y, lensmatrix<QScalar>& hess)
 	r = sqrt(rsq);
 	rcube = rsq*r;
 	xy = x*y;
-	phi = atan(abs(y/x));
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
+	phi = atan2(y,x);
 
 	if (kappa_multipole) {
 		psi = 2*p.A_n*pow(r,2-p.n)/(SQR(2-p.n)-mm);
@@ -3736,28 +4127,26 @@ template void Multipole::hessian_impl<stan::math::var>(stan::math::var x, stan::
 template <typename QScalar>
 void Multipole::potential_derivatives_impl(QScalar x, QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess)
 {
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan2;
+	using stan::math::cos;
+	using stan::math::sin;
+	using stan::math::pow;
+#endif
 	Multipole_Params<QScalar>& p = assign_mpole_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	x -= p.x_center;
 	y -= p.y_center;
 
 	QScalar r, rsq, rcube, xy, xx, yy, phi, ddpsi, psi, dpsi, cs, ss;
 	int mm = m*m;
-	phi = atan(abs(y/x));
+	phi = atan2(y,x);
 	xx = x*x;
 	yy = y*y;
 	rsq = xx+yy;
 	r = sqrt(rsq);
 	rcube = rsq*r;
 	xy = x*y;
-
-	if (x < 0) {
-		if (y < 0)
-			phi = phi - M_PI;
-		else
-			phi = M_PI - phi;
-	} else if (y < 0) {
-		phi = -phi;
-	}
 
 	if (kappa_multipole) {
 		psi = 2*p.A_n*pow(r,2-p.n)/(SQR(2-p.n)-mm);
@@ -3980,6 +4369,10 @@ void PointMass::set_model_specific_integration_pointers()
 template <typename QScalar>
 QScalar PointMass::potential_impl(QScalar x, QScalar y)
 {
+#ifdef USE_STAN
+	using stan::math::log;
+	using stan::math::sqrt;
+#endif
 	PointMass_Params<QScalar>& p = assign_ptmass_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	x -= p.x_center;
 	y -= p.y_center;
@@ -4014,6 +4407,10 @@ template stan::math::var PointMass::kapavg_spherical_rsq<stan::math::var>(const 
 template <typename QScalar>
 QScalar PointMass::potential_spherical_rsq(const QScalar rsq)
 {
+#ifdef USE_STAN
+	using stan::math::log;
+	using stan::math::sqrt;
+#endif
 	PointMass_Params<QScalar>& p = assign_ptmass_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return p.b*p.b*log(sqrt(rsq));
 }
@@ -4115,7 +4512,7 @@ CoreCusp::CoreCusp(const double zlens_in, const double zsrc_in, const double &ma
 
 void CoreCusp::initialize_parameters(const double &mass_param_in, const double &gamma_in, const double &n_in, const double &a_in, const double &s_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 
 	CoreCusp_Params<double>& p = assign_cc_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	p.gamma = gamma_in;
@@ -4136,6 +4533,7 @@ void CoreCusp::initialize_parameters(const double &mass_param_in, const double &
 	else p.k0 = mass_param_in;
 	//cout << "s=" << p.s << " " << "a=" << p.a << " " << p.gamma << " " << p.k0 << endl;
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -4318,6 +4716,10 @@ void CoreCusp::set_model_specific_integration_pointers()
 template <typename QScalar>
 QScalar CoreCusp::kappa_rsq_impl(const QScalar rsq)
 {
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::pow;
+#endif
 	CoreCusp_Params<QScalar>& p = assign_cc_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar atilde = sqrt(p.a*p.a-p.s*p.s);
 	return pow(p.a/atilde,p.n) * kappa_rsq_nocore(rsq+p.s*p.s,atilde);
@@ -4330,6 +4732,9 @@ template stan::math::var CoreCusp::kappa_rsq_impl<stan::math::var>(const stan::m
 template <typename QScalar>
 QScalar CoreCusp::kappa_rsq_nocore(const QScalar rsq_prime, const QScalar atilde)
 {
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	CoreCusp_Params<QScalar>& p = assign_cc_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	// Formulas for the non-cored profile are from Munoz et al. 2001
 	QScalar ks, xisq, pp, hyp, ans;
@@ -4353,6 +4758,10 @@ template stan::math::var CoreCusp::kappa_rsq_nocore<stan::math::var>(const stan:
 template <typename QScalar>
 QScalar CoreCusp::kappa_rsq_deriv_impl(const QScalar rsq)
 {
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::pow;
+#endif
 	CoreCusp_Params<QScalar>& p = assign_cc_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar atilde = sqrt(p.a*p.a-p.s*p.s);
 	return pow(p.a/atilde,p.n) * kappa_rsq_deriv_nocore(rsq+p.s*p.s,atilde);
@@ -4365,6 +4774,9 @@ template stan::math::var CoreCusp::kappa_rsq_deriv_impl<stan::math::var>(const s
 template <typename QScalar>
 QScalar CoreCusp::kappa_rsq_deriv_nocore(const QScalar rsq_prime, const QScalar atilde)
 {
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	CoreCusp_Params<QScalar>& p = assign_cc_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar ks, xisq, hyp, ans;
 	ks = p.k0*atilde/(p.a*M_2PI);
@@ -4385,7 +4797,6 @@ template stan::math::var CoreCusp::kappa_rsq_deriv_nocore<stan::math::var>(const
 template <typename QScalar>
 void CoreCusp::set_core_enclosed_mass()
 {
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::sqrt;
 #endif
@@ -4428,6 +4839,9 @@ template stan::math::var CoreCusp::kapavg_spherical_rsq<stan::math::var>(const s
 template <typename QScalar>
 QScalar CoreCusp::enclosed_mass_spherical_nocore(const QScalar rsq_prime, const QScalar atilde, const QScalar nprime) // actually mass_enclosed/(pi*sigma_crit)
 {
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	CoreCusp_Params<QScalar>& p = assign_cc_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	QScalar xisq, pp, hyp, np;
 	xisq = rsq_prime/(atilde*atilde);
@@ -4446,6 +4860,10 @@ template stan::math::var CoreCusp::enclosed_mass_spherical_nocore<stan::math::va
 template <typename QScalar>
 QScalar CoreCusp::enclosed_mass_spherical_nocore_n3(const QScalar rsq_prime, const QScalar atilde, const double n_stepsize) // actually mass_enclosed/(pi*sigma_crit)
 {
+#ifdef USE_STAN
+	using stan::math::log;
+	using stan::math::pow;
+#endif
 	CoreCusp_Params<QScalar>& p = assign_cc_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	// if p.gamma = 1, use GFunction2 (eq. 67 of Keeton 2001), but for very small r/p.a, use Richardson extrapolation which requires fewer iterations
 	// for other values of p.gamma, use Gfunction1 (eq. 66) if r < p.a, and GFunction2 (eq. 67) if r >= p.a
@@ -4580,7 +4998,7 @@ SersicLens::SersicLens(const double zlens_in, const double zsrc_in, const double
 
 void SersicLens::initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 
 	Sersic_Params<double>& p = assign_sersic_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	if (parameter_mode==0) {
@@ -4592,6 +5010,7 @@ void SersicLens::initialize_parameters(const double &p1_in, const double &Re_in,
 	p.re = Re_in;
 
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -4792,8 +5211,6 @@ void SersicLens::set_model_specific_integration_pointers()
 template <typename QScalar>
 QScalar SersicLens::kappa_rsq_impl(const QScalar rsq)
 {
-	using std::exp;
-	using std::pow;
 #ifdef USE_STAN
 	using stan::math::exp;
 	using stan::math::pow;
@@ -4810,8 +5227,6 @@ template stan::math::var SersicLens::kappa_rsq_impl<stan::math::var>(const stan:
 template <typename QScalar>
 QScalar SersicLens::kappa_rsq_deriv_impl(const QScalar rsq)
 {
-	using std::exp;
-	using std::pow;
 #ifdef USE_STAN
 	using stan::math::exp;
 	using stan::math::pow;
@@ -4881,7 +5296,7 @@ DoubleSersicLens::DoubleSersicLens(const double zlens_in, const double zsrc_in, 
 
 void DoubleSersicLens::initialize_parameters(const double &p1_in, const double &delta_k_in, const double &Reff1_in, const double &n1_in, const double &Reff2_in, const double &n2_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 
 	DoubleSersic_Params<double>& p = assign_dsersic_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	if (parameter_mode==0) {
@@ -4895,6 +5310,7 @@ void DoubleSersicLens::initialize_parameters(const double &p1_in, const double &
 	p.n2 = n2_in;
 	p.Reff2 = Reff2_in;
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -5046,6 +5462,9 @@ template void DoubleSersicLens::assign_param_pointers_impl<stan::math::var>();
 template <typename QScalar>
 void DoubleSersicLens::update_meta_parameters_impl()
 {
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	DoubleSersic_Params<QScalar>& p = assign_dsersic_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters<QScalar>();
@@ -5096,6 +5515,10 @@ void DoubleSersicLens::set_auto_ranges()
 template <typename QScalar>
 QScalar DoubleSersicLens::kappa_rsq_impl(const QScalar rsq)
 {
+#ifdef USE_STAN
+	using stan::math::exp;
+	using stan::math::pow;
+#endif
 	DoubleSersic_Params<QScalar>& p = assign_dsersic_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return (p.kappa0_1*exp(-p.b1*pow(rsq/(p.Reff1*p.Reff1),0.5/p.n1)) + p.kappa0_2*exp(-p.b2*pow(rsq/(p.Reff2*p.Reff2),0.5/p.n2)));
 }
@@ -5107,6 +5530,10 @@ template stan::math::var DoubleSersicLens::kappa_rsq_impl<stan::math::var>(const
 template <typename QScalar>
 QScalar DoubleSersicLens::kappa_rsq_deriv_impl(const QScalar rsq)
 {
+#ifdef USE_STAN
+	using stan::math::exp;
+	using stan::math::pow;
+#endif
 	DoubleSersic_Params<QScalar>& p = assign_dsersic_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return -(p.kappa0_1*exp(-p.b1*pow(rsq/(p.Reff1*p.Reff1),0.5/p.n1))*p.b1*pow(p.Reff1,-1.0/p.n1)*pow(rsq,0.5/p.n1-1)/(2*p.n1) + p.kappa0_2*exp(-p.b2*pow(rsq/(p.Reff2*p.Reff2),0.5/p.n2))*p.b2*pow(p.Reff2,-1.0/p.n2)*pow(rsq,0.5/p.n2-1)/(2*p.n2));
 }
@@ -5165,7 +5592,7 @@ Cored_SersicLens::Cored_SersicLens(const double zlens_in, const double zsrc_in, 
 
 void Cored_SersicLens::initialize_parameters(const double &p1_in, const double &Re_in, const double &n_in, const double &rc_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 
 	Cored_Sersic_Params<double>& p = assign_csersic_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	if (parameter_mode==0) {
@@ -5177,6 +5604,7 @@ void Cored_SersicLens::initialize_parameters(const double &p1_in, const double &
 	p.re = Re_in;
 	p.rc = rc_in;
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -5318,6 +5746,9 @@ template void Cored_SersicLens::assign_param_pointers_impl<stan::math::var>();
 template <typename QScalar>
 void Cored_SersicLens::update_meta_parameters_impl()
 {
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	update_cosmology_meta_parameters();
 	update_ellipticity_meta_parameters<QScalar>();
 	Cored_Sersic_Params<QScalar>& p = assign_csersic_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
@@ -5369,6 +5800,10 @@ void Cored_SersicLens::set_model_specific_integration_pointers()
 template <typename QScalar>
 QScalar Cored_SersicLens::kappa_rsq_impl(const QScalar rsq)
 {
+#ifdef USE_STAN
+	using stan::math::exp;
+	using stan::math::pow;
+#endif
 	Cored_Sersic_Params<QScalar>& p = assign_csersic_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return p.kappa0*exp(-p.b*pow((rsq+p.rc*p.rc)/(p.re*p.re),0.5/p.n));
 }
@@ -5380,6 +5815,10 @@ template stan::math::var Cored_SersicLens::kappa_rsq_impl<stan::math::var>(const
 template <typename QScalar>
 QScalar Cored_SersicLens::kappa_rsq_deriv_impl(const QScalar rsq)
 {
+#ifdef USE_STAN
+	using stan::math::exp;
+	using stan::math::pow;
+#endif
 	Cored_Sersic_Params<QScalar>& p = assign_csersic_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	return -p.kappa0*exp(-p.b*pow((rsq+p.rc*p.rc)/(p.re*p.re),0.5/p.n))*p.b*pow(p.re,-1.0/p.n)*pow((rsq+p.rc*p.rc),0.5/p.n-1)/(2*p.n);
 }
@@ -5391,6 +5830,9 @@ template stan::math::var Cored_SersicLens::kappa_rsq_deriv_impl<stan::math::var>
 template <typename QScalar>
 QScalar Cored_SersicLens::kapavg_spherical_rsq(const QScalar rsq)
 {
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	Cored_Sersic_Params<QScalar>& p = assign_csersic_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	// WARNING! This is a hack and incorrect for p.rc not equal to zero! At some point, derive the correct formula!
 	// Formula from Cardone et al. 2003
@@ -7165,11 +7607,12 @@ void TopHatLens::setup_lens_properties(const int parameter_mode, const int subcl
 void TopHatLens::initialize_parameters(const double &kap0_in, const double &rad_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in)
 {
 	// if use_ellipticity_components is on, q_in and theta_in are actually e1, e2, but this is taken care of in set_geometric_parameters
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 	TopHat_Params<double>& p = assign_tophat_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	p.kap0 = kap0_in;
 	p.xi0 = rad_in;
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 	update_meta_parameters_and_pointers();
@@ -7406,7 +7849,7 @@ TestModel::TestModel(const double zlens_in, const double zsrc_in, const double &
 {
 	setup_lens_properties();
 	//setup_base_lens_properties(X,false); // number of parameters = X, is_elliptical_lens = false
-	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in);
+	set_geometric_parameters<double>(q_in,theta_degrees,xc_in,yc_in);
 	set_integration_pointers();
 }
 

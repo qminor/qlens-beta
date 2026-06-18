@@ -91,6 +91,10 @@ void Simplex::downhill_simplex(int &nfunk, const int& nmax, const double& temper
 	if (yb == 1e30) {
 		// record initial point as best-fit point thus far, just in case the random-walk takes us too far away
 		for (j=0;j<ndim;j++) pb[j]=p[0][j];
+		//if (y[0] > yb) {
+			//cout << "y > yb" << endl;
+			//exit(1);
+		//}
 		yb=y[0];
 	}
 
@@ -237,8 +241,8 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 			if (yb < fmin_anneal) t = 0;
 			else t *= tinc;
 			if (verbal) {
+				cout << "\033[1A" << "temperature=" << t << ", best(-2*loglike)=" << (2*yb) << "       " << endl;
 				if (simplex_display_bestfit_point) {
-					cout << "\033[1A" << "temperature=" << t << ", best(-2*loglike)=" << (2*yb) << "       " << endl;
 					cout << "best-fit point: (";
 					for (int i=0; i < ndim; i++) {
 						cout << pb[i];
@@ -246,8 +250,6 @@ int Simplex::downhill_simplex_anneal(bool verbal)
 					}
 					cout << ")      " << endl;
 					cout << "\033[1A" << flush;
-				} else {
-					cout << "\033[1A" << "temperature=" << t << ", best(-2*loglike)=" << yb << "       " << endl;
 				}
 			}
 		}

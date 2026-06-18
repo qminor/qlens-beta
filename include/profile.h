@@ -17,6 +17,8 @@
 #include <map>
 #include <set>
 
+#include <Eigen/Core>
+
 #ifdef USE_STAN
 #include <stan/math.hpp>
 #endif
@@ -57,8 +59,9 @@ enum LensProfileName
 	TESTMODEL
 };
 
-template <typename QScalar>
+template <typename VecType, typename QScalar>
 struct LensIntegral; // defined in lensintegral.h
+
 
 class QLens; 
 
@@ -89,23 +92,24 @@ class LensParams
 	}
 };
 
-template <typename QScalar>
-class LensSpline_Params : public LensParams<QScalar>
-{
-	public:
-	Spline<QScalar> kspline;
-	QScalar qx_parameter, f_parameter;
-	LensSpline_Params() : LensParams<QScalar>() {
-		qx_parameter = 1.0;
-		f_parameter = 1.0;
-	}
-};
-
 class LensProfile : public EllipticityGradient
 {
-	friend struct LensIntegral<double>;
+	template <typename QScalar>
+	class LensSpline_Params : public LensParams<QScalar>
+	{
+		public:
+		Spline<QScalar> kspline;
+		QScalar qx_parameter, f_parameter;
+		LensSpline_Params() : LensParams<QScalar>() {
+			qx_parameter = 1.0;
+			f_parameter = 1.0;
+		}
+	};
+
+	friend struct LensIntegral<Eigen::VectorXd,double>;
 #ifdef USE_STAN
-	friend struct LensIntegral<stan::math::var>;
+	friend struct LensIntegral<stan::math::var_value<Eigen::VectorXd>,stan::math::var>;
+	friend struct LensIntegral<Eigen::VectorXd,stan::math::var>;
 #endif
 	friend class QLens;
 	friend class SB_Profile;
@@ -271,6 +275,11 @@ class LensProfile : public EllipticityGradient
 	template <typename QScalar>
 	void deflection_and_hessian_numerical(const QScalar x, const QScalar y, lensvector<QScalar>& def, lensmatrix<QScalar>& hess);
 
+	template <typename VecType, typename QScalar>
+	void deflection_numerical_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y);
+	template <typename VecType, typename QScalar>
+	void deflection_spherical_default_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y);
+
 	template <typename QScalar>
 	void warn_if_not_converged(const bool& converged, const QScalar &x, const QScalar &y);
 
@@ -385,12 +394,16 @@ class LensProfile : public EllipticityGradient
 		hessptr = NULL;
 		potptr = NULL;
 		def_and_hess_ptr = NULL;
+		defptr_vec = NULL;
+		kapavgptr_rsq_spherical_vec = NULL;
 #ifdef USE_STAN
 		kapavgptr_rsq_spherical_autodif = NULL;
 		potptr_rsq_spherical_autodif = NULL;
 		hessptr_autodif = NULL;
 		potptr_autodif = NULL;
 		def_and_hess_ptr_autodif = NULL;
+		defptr_vec_autodif = NULL;
+		kapavgptr_rsq_spherical_vec_autodif = NULL;
 #endif
 		anchor_parameter_to_lens = NULL;
 		parameter_anchor_lens = NULL;
@@ -418,11 +431,6 @@ class LensProfile : public EllipticityGradient
 	void set_redshifts(const double zlens_in, const double zsrc_in);
 	void setup_cosmology(Cosmology* cosmo_in);
 
-	template <typename QScalar>
-	using temp_defptr = void(*)(const QScalar, const QScalar, lensvector<QScalar>&);
-
-	//void (LensProfile::*temp_defptr)(const QScalar, const QScalar, lensvector<QScalar>& def); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
-
 	// in all derived classes, each of the following function pointers can be redirected if analytic formulas
 	// are used instead of the default numerical version
 	double (LensProfile::*kapavgptr_rsq_spherical)(const double); // numerical: &LensProfile::kapavg_spherical_integral
@@ -439,6 +447,13 @@ class LensProfile : public EllipticityGradient
 	void (LensProfile::*hessptr_autodif)(const stan::math::var, const stan::math::var, lensmatrix<stan::math::var>& hess); // numerical: &LensProfile::hessian_numerical or &LensProfile::hessian_spherical_default
 	stan::math::var (LensProfile::*potptr_autodif)(const stan::math::var, const stan::math::var); // numerical: &LensProfile::potential_numerical
 	void (LensProfile::*def_and_hess_ptr_autodif)(const stan::math::var, const stan::math::var, lensvector<stan::math::var>& def, lensmatrix<stan::math::var> &hess); // numerical: &LensProfile::deflection_numerical or &LensProfile::deflection_spherical_default
+#endif
+
+	void (LensProfile::*defptr_vec)(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y);
+	void (LensProfile::*kapavgptr_rsq_spherical_vec)(const Eigen::VectorXd&, Eigen::VectorXd& def_r);
+#ifdef USE_STAN
+	void (LensProfile::*defptr_vec_autodif)(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>& def_x, stan::math::var_value<Eigen::VectorXd>& def_y);
+	void (LensProfile::*kapavgptr_rsq_spherical_vec_autodif)(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>& def_r);
 #endif
 
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
@@ -567,6 +582,14 @@ class LensProfile : public EllipticityGradient
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
 
+	virtual void kappa_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa) { kappa_rsq_vec_impl<Eigen::VectorXd,double>(rsq,kappa); }
+#ifdef USE_STAN
+	virtual void kappa_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa) { kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,kappa); }
+#endif
+
+	template <typename VecType, typename QScalar>
+	void kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa);
+
 	virtual void get_einstein_radius(double& re_major_axis, double& re_average, const double zfactor);
 	virtual double get_xi_parameter(const double zfactor);
 	virtual double get_inner_logslope();
@@ -605,6 +628,11 @@ class LensProfile : public EllipticityGradient
 	virtual void hessian(stan::math::var x, stan::math::var y, lensmatrix<stan::math::var>& hess)  { hessian_impl(x,y,hess); }
 #endif
 
+	virtual void deflection_vec(const Eigen::VectorXd& x0, const Eigen::VectorXd& y0, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y) { deflection_vec_impl<Eigen::VectorXd,double>(x0,y0,def_x,def_y); }
+#ifdef USE_STAN
+	virtual void deflection_vec(const stan::math::var_value<Eigen::VectorXd>& x0, const stan::math::var_value<Eigen::VectorXd>& y0, stan::math::var_value<Eigen::VectorXd>& def_x, stan::math::var_value<Eigen::VectorXd>& def_y) { deflection_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(x0,y0,def_x,def_y); }
+#endif
+
 	template <typename QScalar>
 	QScalar elliptical_radius(QScalar x, QScalar y);
 	template <typename QScalar>
@@ -619,6 +647,9 @@ class LensProfile : public EllipticityGradient
 	void deflection_impl(QScalar x, QScalar y, lensvector<QScalar>& def);
 	template <typename QScalar>
 	void hessian_impl(QScalar x, QScalar y, lensmatrix<QScalar>& hess); // the Hessian matrix of the lensing potential (*not* the arrival time surface)
+
+	template <typename VecType, typename QScalar>
+	void deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& def_x, VecType& def_y);
 
 	template <typename QScalar>
 	QScalar kappa_from_fourier_modes(const QScalar x, const QScalar y);
@@ -710,7 +741,7 @@ class SPLE_Lens : public LensProfile
 	//double qsq, ssq_prime; // used in lensing calculations
 	//double gamma; // 3D density log-slope, which is an alternative parameter instead of alpha
 	inline static const double euler_mascheroni = 0.57721566490153286060;
-	inline static const double def_tolerance = 1e-16;
+	inline static const double def_tolerance = 1e-10;
 
 	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
 	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
@@ -718,6 +749,7 @@ class SPLE_Lens : public LensProfile
 	stan::math::var kappa_rsq(const stan::math::var rsq) { return kappa_rsq_impl(rsq); }
 	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
 #endif
+
 
 	template <typename QScalar>
 	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
@@ -750,6 +782,24 @@ class SPLE_Lens : public LensProfile
 	QScalar potential_spherical_rsq_nocore(const QScalar rsq);
 	template <typename QScalar>
 	std::complex<QScalar> deflection_angular_factor(const QScalar &phi);
+	template <typename QScalar>
+	void deflection_angular_factor_nocomplex(const QScalar &phi, QScalar& fac_x, QScalar& fac_y);
+
+	template <typename VecType, typename QScalar>
+	void deflection_elliptical_nocore_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y);
+	template <typename VecType, typename QScalar>
+	void deflection_angular_factor_nocomplex_vec(const VecType& phi, VecType& fac_x, VecType& fac_y);
+	template <typename VecType, typename QScalar>
+	void kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg);
+
+	void kappa_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa) { kappa_rsq_vec_impl<Eigen::VectorXd,double>(rsq,kappa); }
+#ifdef USE_STAN
+	void kappa_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa) { kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,kappa); }
+#endif
+
+	template <typename VecType, typename QScalar>
+	void kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa);
+
 	double rho3d_r_integrand_analytic(const double r);
 
 	void setup_lens_properties(const int parameter_mode_in = 0, const int subclass = 0);
@@ -848,6 +898,9 @@ class dPIE_Lens : public LensProfile
 	QScalar potential_elliptical(const QScalar x, const QScalar y);
 	template <typename QScalar>
 	QScalar potential_spherical_rsq(const QScalar rsq);
+
+	template <typename VecType, typename QScalar>
+	void deflection_elliptical_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y);
 
 	double rho3d_r_integrand_analytic(const double r);
 
@@ -949,6 +1002,11 @@ class NFW : public LensProfile
 	QScalar potential_spherical_rsq(const QScalar rsq);
 	double rho3d_r_integrand_analytic(const double r);
 
+	template <typename VecType, typename QScalar>
+	void lens_function_xsq_vec(const VecType& rsq, VecType& kapavg);
+	template <typename VecType, typename QScalar>
+	void kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg);
+
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 	template <typename QScalar>
@@ -1036,6 +1094,11 @@ class Truncated_NFW : public LensProfile
 	template <typename QScalar>
 	QScalar kapavg_spherical_rsq(const QScalar rsq);
 	double rho3d_r_integrand_analytic(const double r);
+
+	template <typename VecType, typename QScalar>
+	void lens_function_xsq_vec(const VecType& rsq, VecType& kapavg);
+	template <typename VecType, typename QScalar>
+	void kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg);
 
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
@@ -1403,6 +1466,11 @@ class Shear : public LensProfile
 	void hessian(stan::math::var x, stan::math::var y, lensmatrix<stan::math::var>& hess)  { hessian_impl(x,y,hess); }
 #endif
 
+	void deflection_vec(const Eigen::VectorXd& x0, const Eigen::VectorXd& y0, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y) { deflection_vec_impl<Eigen::VectorXd,double>(x0,y0,def_x,def_y); }
+#ifdef USE_STAN
+	void deflection_vec(const stan::math::var_value<Eigen::VectorXd>& x0, const stan::math::var_value<Eigen::VectorXd>& y0, stan::math::var_value<Eigen::VectorXd>& def_x, stan::math::var_value<Eigen::VectorXd>& def_y) { deflection_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(x0,y0,def_x,def_y); }
+#endif
+
 	// here the base class deflection/hessian functions are overloaded because the angle is put in explicitly in the formulas (no rotation of the coordinates is needed)
 	template <typename QScalar>
 	QScalar potential_impl(QScalar, QScalar);
@@ -1420,6 +1488,8 @@ class Shear : public LensProfile
 		kap = 0;
 		potential_derivatives_impl(x,y,def,hess);
 	}
+	template <typename VecType, typename QScalar>
+	void deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& def_x, VecType& def_y);
 
 	template <typename QScalar>
 	QScalar kappa_impl(QScalar, QScalar) { return 0; }

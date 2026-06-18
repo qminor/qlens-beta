@@ -1,5 +1,5 @@
 fit label ptsrc_fit2      # This labels the files that will be produced by the lens fitting
-fit source_mode shapelet
+fit source_mode delaunay
 fit method simplex          # downhill simplex method (plus optional simulated annealing)
 data_pixel_size 0.049
 sbmap loadimg sim_ptsrc2.fits
@@ -58,12 +58,11 @@ analytic_bestfit_src on
 hubble 0.8
 vary_hubble on
 chisqtol 1e-4
-pause
 
 outside_sb_prior off        # Imposes a penalty if surface brightness is produced outside the pixel mask (type 'help sbmap_settings' for info)
 nimg_prior off              # This imposes a penalty chi-square if too few images are produced (defined by the threshold below)
 #nimg_threshold 1.4        	# Specify the minimum number of images you expect to get produced for nimg_prior; should be at least above 1
-#pause
+pause
 									# to avoid solutions where the source looks exactly like the images and no multiple imaging occurs
 
 # To see how terrible the initial guess looks...

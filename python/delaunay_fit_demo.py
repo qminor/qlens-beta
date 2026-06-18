@@ -22,7 +22,7 @@ sim_hst_data.load_mask("mask.fits")
 #plot_sb(dataimg,q)
 #pause()
 
-plotdata(q,nomask=True,title="Mock data for delaunay_fit_demo.py")
+#plotdata(q,nomask=True,title="Mock data for delaunay_fit_demo.py")
 
 q.sbmap_load_psf("hst_psf.fits")
 
@@ -83,8 +83,8 @@ q.fitmodel()
 q.sbmap_invert()
 #imgdata[0].unmask_all_pixels()
 
-plotimg(q,nres=True,title="Residuals before optimizing")      # NOTE: plotimg, plotsrc, and plotdata all return figures and axes, so you can also do e.g.
-plotsrc(q,interp=False,title="Reconstructed source before optimizing")    # (fig, ax) = plotimg(q,show=False) and modify the figures
+#plotimg(q,nres=True,title="Residuals before optimizing")      # NOTE: plotimg, plotsrc, and plotdata all return figures and axes, so you can also do e.g.
+#plotsrc(q,interp=False,title="Reconstructed source before optimizing")    # (fig, ax) = plotimg(q,show=False) and modify the figures
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 

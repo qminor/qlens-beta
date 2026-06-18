@@ -27,7 +27,10 @@
 #include <fstream>
 #include <complex>
 #include <iterator>
+#include <chrono>
 #define USE_COMM_WORLD -987654
+
+#include <Eigen/Core>
 
 #ifdef USE_FFTW
 #ifdef USE_MKL
@@ -47,14 +50,26 @@
 
 using std::string;
 
+struct PlainTypes {
+	using QScalar = double;
+	using VecType = Eigen::VectorXd;
+	using MatType = Eigen::MatrixXd;
+};
+
+#ifdef USE_STAN
+struct AutoDiffTypes {
+	using QScalar = stan::math::var;
+	using VecType = stan::math::var_value<Eigen::VectorXd>;
+	using MatType = stan::math::var_value<Eigen::MatrixXd>;
+};
+#endif
+
 enum SourceFitMode { Point_Source, Cartesian_Source, Delaunay_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
 enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO };
 enum RegularizationMethod { None, Norm, Gradient, SmoothGradient, Curvature, SmoothCurvature, Matern_Kernel, Exponential_Kernel, Squared_Exponential_Kernel };
-enum RayTracingMethod {
-	Interpolate,
-	Area_Overlap
-};
+enum MatrixFormat { DENSE, DENSE_FMATRIX, SPARSE }; // DENSE_FMATRIX means Lmatrix is stored as sparse even after PSF convolution, but Fmatrix is stored as dense
+enum SparseSolver { CG_Method, MUMPS, UMFPACK, EIGEN_SPARSE, NO_SPARSE };
 
 enum DerivedParamType {
 	KappaR,
@@ -242,6 +257,26 @@ class LensCalc
 	static lensmatrix<QScalar> *jacs, *hesses, **hesses_subtot, *hesses_i, *Amats_i;
 };
 
+/*
+// this is a version of thread-local storage that would work better with TBB. However, I'll have to be careful about how it works in the autodiff version
+template <typename QScalar>
+class LensCalc_TLS
+{
+	public:
+	lensvector<QScalar> def, *def_subtot, defs_i, xvals_i;
+	lensmatrix<QScalar> jac, hess, *hess_subtot, hess_i, Amat_i;
+	LensCalc_TLS() { def_subtot = NULL; hess_subtot = NULL; }
+	LensCalc_TLS(const int nmax) {
+		def_subtot = new lensvector<QScalar>[nmax];
+		hess_subtot = new lensvector<QScalar>[nmax];
+	}
+	~LensCalc_TLS() {
+		if (def_subtot != NULL) delete[] def_subtot;
+		if (hess_subtot != NULL) delete[] hess_subtot;
+	}
+};
+*/
+
 // There is too much inheritance going on here. Nearly all of these (except Model) can be changed to simply objects that are created within the QLens
 // class; it's more transparent to do so, and more object-oriented.
 class QLens : public Model, public UCMC, private Brent, private Sort, private Powell, public Simplex
@@ -425,13 +460,16 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	bool use_ansi_characters;
 	int lensmodel_fit_parameters, srcmodel_fit_parameters, pixsrc_fit_parameters, pixlens_fit_parameters, ptsrc_fit_parameters, psf_fit_parameters, cosmo_fit_parameters;
 
-	double *regparam_ptr; // points to regularization parameter for given source pixel grid or shapelet object
-	double *regparam_pot_ptr; // points to regularization parameter for potential of given lens pixel grid
-	double matern_approx_source_size;
 	bool optimize_regparam;
 	double optimize_regparam_tol, optimize_regparam_minlog, optimize_regparam_maxlog;
-	double regopt_chisqmin, regopt_logdet;
 	int max_regopt_iterations;
+
+	bool use_noise_map;
+	bool dense_Rmatrix;
+	bool find_covmatrix_inverse; // set by user (default=false); if true, finds Rmatrix explicitly (usually more computationally intensive)
+	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false
+	double covmatrix_epsilon; // fudge factor in covariance matrix diagonal to aid inversion
+	bool penalize_defective_covmatrix;
 
 	// the following parameters are used for luminosity- or distance-weighted regularization
 	bool use_lum_weighted_regularization;
@@ -447,15 +485,11 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	int lum_weight_function;
 	bool get_lumreg_from_sbweights;
 
-	double *reg_weight_factor;
-
 	bool use_lum_weighted_srcpixel_clustering;
 	bool use_dist_weighted_srcpixel_clustering;
 
 	bool save_sbweights_during_inversion;
 	bool use_saved_sbweights;
-	double *saved_sbweights;
-	int n_sbweights;
 
 	static string fit_output_filename;
 	string get_fit_label() { return fit_output_filename; }
@@ -507,7 +541,6 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	bool activate_unmapped_source_pixels;
 	double total_srcgrid_overlap_area, high_sn_srcgrid_overlap_area;
 	bool exclude_source_pixels_beyond_fit_window;
-	bool regrid_if_unmapped_source_subpixels;
 	bool calculate_bayes_factor;
 	double reference_lnZ;
 	double base_srcpixel_imgpixel_ratio;
@@ -578,13 +611,12 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	enum TerminalType { TEXT, POSTSCRIPT, PDF } terminal; // keeps track of the file format for plotting
 	enum FitMethod { POWELL, SIMPLEX, BFGS, NESTED_SAMPLING, TWALK, POLYCHORD, MULTINEST } fitmethod;
 	RegularizationMethod regularization_method;
-	enum MatrixFormat { DENSE, DENSE_FMATRIX, SPARSE } matrix_format; // DENSE_FMATRIX means Lmatrix is stored as sparse even after PSF convolution, but Fmatrix is stored as dense
-	enum SparseSolver { CG_Method, MUMPS, UMFPACK, EIGEN_SPARSE, NONE } sparse_solver;
+	MatrixFormat matrix_format; // DENSE_FMATRIX means Lmatrix is stored as sparse even after PSF convolution, but Fmatrix is stored as dense
+	SparseSolver sparse_solver;
 	bool use_non_negative_least_squares;
 	//bool use_fnnls;
 	int max_nnls_iterations;
 	double nnls_tolerance;
-	RayTracingMethod ray_tracing_method;
 	bool natural_neighbor_interpolation;
 	bool parallel_mumps, show_mumps_info;
 
@@ -686,170 +718,8 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	ImageData **imgdata_list;
 	ImgDataList *imgdatalist; // this is a container class that is used by the Python wrapper
 
-	int image_npixels, source_npixels, lensgrid_npixels, n_mge_sets, n_mge_amps, source_and_lens_n_amps, n_amps; // note, n_amps can also include point image fluxes
-	SB_Profile** mge_list;
-	int image_n_subpixels; // for supersampling
-	int image_npixels_fgmask;
-	int image_npixels_data; // right now, only used during optimization of regparam (and is only different from image_npixels when include_fgmask_in_inversion is used and there is padding of the fgmask)
-
-	double *image_surface_brightness;
-	double *image_surface_brightness_supersampled;
-	double *imgpixel_covinv_vector;
-	double *point_image_surface_brightness;
-	double *sbprofile_surface_brightness;
-	double *img_minus_sbprofile;
-	double *amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
-	double *amplitude_vector;
-	int *img_index_datapixels;
-
-	int *image_pixel_location_Lmatrix;
-	int *source_pixel_location_Lmatrix;
-	int Lmatrix_n_elements;
-	double *Lmatrix;
-	int *Lmatrix_index;
-	std::vector<double> *Lmatrix_rows;
-	std::vector<int> *Lmatrix_index_rows;
-
-	bool assign_pixel_mappings(const int imggrid_i, const bool potential_perturbations=false, const bool verbal=false);
-	void assign_foreground_mappings(const int imggrid_i, const bool use_data = true);
-	double *Dvector;
-	double *Dvector_cov;
-	double *Dvector_cov_copy;
-	int Fmatrix_nn;
-	double *Fmatrix;
-	double *Fmatrix_copy; // used when optimizing the regularization parameter
-	int *Fmatrix_index;
-	bool use_noise_map;
-	bool dense_Rmatrix;
-	bool find_covmatrix_inverse; // set by user (default=false); if true, finds Rmatrix explicitly (usually more computationally intensive)
-	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false
-	double covmatrix_epsilon; // fudge factor in covariance matrix diagonal to aid inversion
-	bool penalize_defective_covmatrix;
-
-	double **Rmatrix_ptr;
-	int **Rmatrix_index_ptr;
-	int *source_npixels_ptr;
-	int *src_npixel_start_ptr;
-	int n_src_inv; // specifies how many pixellated (or shapelet) sources will be included in the Lmatrix
-	int* src_npixels_inv;
-	int *src_npixel_start;
-	double **Rmatrix;
-	int **Rmatrix_index;
-
-	double *Rmatrix_pot;
-	int *Rmatrix_pot_index;
-
-	// The following are simply used as temporary arrays when constructing Rmatrix
-	double *Rmatrix_diag_temp;
-	std::vector<double> *Rmatrix_rows;
-	std::vector<int> *Rmatrix_index_rows;
-	int *Rmatrix_row_nn;
-
-	dmatrix Lmatrix_dense;
-	dmatrix Lmatrix_supersampled;
-	dmatrix Lmatrix_transpose_ptimg_amps; // this contains just the part of the Lmatrix_transpose whose columns will multiply the point image amplitudes
-	dvector Gmatrix_stacked;
-	dvector Gmatrix_stacked_copy;
-	dvector Fmatrix_stacked;
-	dvector Fmatrix_packed;
-	dvector Fmatrix_packed_copy; // used when optimizing the regularization parameter
-
-	// these will be arrays of size n_src_inv (number of pixellated sources being included in Lmatrix)
-	dvector *covmatrix_stacked;
-	dvector *covmatrix_packed;
-	dvector *covmatrix_factored;
-	dvector *Rmatrix_packed;
-	// these will point to the current element in the above arrays
-	dvector *covmatrix_stacked_ptr;
-	dvector *covmatrix_packed_ptr;
-	dvector *covmatrix_factored_ptr;
-	dvector *Rmatrix_packed_ptr;
-
-	dvector covmatrix_pot_stacked;
-	dvector covmatrix_pot_packed;
-	dvector covmatrix_pot_factored;
-	dvector Rmatrix_pot_packed;
-
-	dvector *Rmatrix_MGE_packed;
-	double *Rmatrix_MGE_log_determinants;
-
-	double* Rmatrix_log_determinant; // array of size n_src_inv (number of pixellated sources being included in Lmatrix)
-	double* Rmatrix_log_determinant_ptr;
-	double Rmatrix_pot_log_determinant;
-
-
-	dvector covmatrix_stacked_copy; // used when optimizing the regularization parameter with luminosity weighting
-	dvector temp_src; // used when optimizing the regularization parameter
-
-	double *gmatrix[4];
-	int *gmatrix_index[4];
-	int *gmatrix_row_index[4];
-	std::vector<double> *gmatrix_rows[4];
-	std::vector<int> *gmatrix_index_rows[4];
-	int *gmatrix_row_nn[4];
-	int gmatrix_nn[4];
-
-	double *hmatrix[2];
-	int *hmatrix_index[2];
-	int *hmatrix_row_index[2];
-	std::vector<double> *hmatrix_rows[2];
-	std::vector<int> *hmatrix_index_rows[2];
-	int *hmatrix_row_nn[2];
-	int hmatrix_nn[2];
-
-#ifdef USE_MUMPS
-	static DMUMPS_STRUC_C *mumps_solver;
-#endif
-
-	void convert_Lmatrix_to_dense();
-	void construct_Lmatrix_shapelets(const int imggrid_i);
-	void add_MGE_amplitudes_to_Lmatrix(const int imggrid_i);
-	void PSF_convolution_Lmatrix_dense(const int imggrid_i, const bool verbal=false);
-	void create_lensing_matrices_from_Lmatrix_dense(const int imggrid_i, const bool potential_perturbations=false, const bool verbal=false);
-	void get_source_regparam_ptr(const int imggrid_i, const int imggrid_include_i, double* &regparam);
-	void generate_Gmatrix();
-	void add_regularization_term_to_dense_Fmatrix(double *regparam, const bool potential_perturbations=false);
-	void add_MGE_regularization_terms_to_dense_Fmatrix(const int imggrid_i);
-	double calculate_regularization_prior_term(double *regparam_ptr, const bool potential_perturbations=false);
-	double calculate_MGE_regularization_prior_term(const int imggrid_i);
-
-	bool optimize_regularization_parameter(const int imggrid_i, const bool dense_Fmatrix=false, const bool verbal=false, const bool pre_srcgrid = false);
-	void setup_regparam_optimization(const int imggrid_i, const bool dense_Fmatrix=false);
-	void calculate_subpixel_sbweights(const int imggrid_i, const bool save_sbweights = false, const bool verbal = false);
-	void calculate_subpixel_distweights(const int imggrid_i=-1);
-	void find_srcpixel_weights(const int imggrid_i=-1);
-	void load_pixel_sbweights(const int imggrid_i=-1);
-	double chisq_regparam_dense(const double logreg);
-	double chisq_regparam(const double logreg);
-	void calculate_lumreg_srcpixel_weights(const int imggrid_i, const bool use_sbweights=false);
-	void calculate_distreg_srcpixel_weights(const int imggrid_i, const double xc=0, const double yc=0, const double sig=1.0, const bool verbal = false);
-	void calculate_srcpixel_scaled_distances(const double xc, const double yc, const double sig, double *dists, lensvector<double> **srcpts, const int nsrcpts, const double e1 = 0, const double e2 = 0);
-	void calculate_mag_srcpixel_weights(const int imggrid_i);
-
-	//void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
-	double brents_min_method(double (QLens::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
-	void create_regularization_matrix_shapelet(const int imggrid_i=-1);
-	void create_MGE_regularization_matrices(const int imggrid_i=-1);
-	void generate_Rmatrix_shapelet_gradient(const int imggrid_i=-1);
-	void generate_Rmatrix_shapelet_curvature(const int imggrid_i=-1);
 	//void set_corrlength_for_given_matscale();
 	//double corrlength_eq_matern_factor(const double log_corr_length);
-
-	//bool Cholesky_dcmp(double** a, double &logdet, int n);
-	//bool Cholesky_dcmp_upper(double** a, double &logdet, int n);
-	bool Cholesky_dcmp_packed(double* a, int n);
-	//void Cholesky_solve(double** a, double* b, double* x, int n);
-	void Cholesky_solve_lower_packed(double* a, double* b, double* x, int n);
-	void LU_logdet_stacked(double* a, double &logdet, int n);
-	void Cholesky_logdet_packed(double* a, double &logdet, int n);
-	void Cholesky_logdet_lower_packed(double* a, double &logdet, int n);
-	//void test_inverts();
-	//void Cholesky_invert_upper(double** a, const int n);
-	//void Cholesky_invert_lower(double** a, const int n);
-	void Cholesky_invert_upper_packed(double* a, const int n);
-	void upper_triangular_syrk(double* a, const int n);
-	void repack_matrix_lower(double* packed_matrix, const int nn);
-	void repack_matrix_upper(double* packed_matrix, const int nn);
 
 	bool ignore_foreground_in_chisq;
 	//bool use_input_psf_matrix;
@@ -869,69 +739,21 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double psf_threshold, psf_ptsrc_threshold;
 	int ptimg_nsplit; // allows for subpixel PSF even if supersampling is not being used for all pixels
 
-	double Fmatrix_log_determinant;
-	double Gmatrix_log_determinant;
-	void initialize_pixel_matrices(const int imggrid_i, const bool potential_perturbations=false, bool verbal=false);
-	void initialize_pixel_matrices_shapelets(const int imggrid_i, bool verbal=false);
-	void count_shapelet_amplitudes(const int imggrid_i=-1);
-	void count_MGE_amplitudes(int& n_mge_objects, int& n_gaussians, const int imggrid_i=-1);
-	void clear_pixel_matrices();
-	void clear_sparse_lensing_matrices();
-	template <typename QScalar>
-	QScalar find_sbprofile_surface_brightness(lensvector<QScalar> &pt);
-	void construct_Lmatrix(const int imggrid_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
-	void construct_Lmatrix_supersampled(const int imggrid_i, const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
-	void PSF_convolution_Lmatrix(const int imggrid_i, bool verbal = false);
-	void PSF_convolution_pixel_vector(const int imggrid_i, const bool foreground = false, const bool verbal = false, const bool use_fft = false);
-	void average_supersampled_image_surface_brightness(const int imggrid_i=-1);
-	void average_supersampled_dense_Lmatrix(const int imggrid_i=-1);
+	void reset_PSF_convolution_plans();
 	void cleanup_FFT_convolution_arrays();
-	void copy_FFT_convolution_arrays(QLens* lens_in);
-	void fourier_transform(double* data, const int ndim, int* nn, const int isign);
-	void fourier_transform_parallel(double** data, const int ndata, const int jstart, const int ndim, int* nn, const int isign);
 
-	bool create_regularization_matrix(const int imggrid_i, const bool include_lum_weighting = false, const bool use_sbweights = false, const bool potential_perturbations = false, const bool verbal = false);
-	void generate_Rmatrix_from_gmatrices(const int imggrid_i=-1, const bool interpolate = false, const bool potential_perturbations = false);
-	void generate_Rmatrix_from_hmatrices(const int imggrid_i=-1, const bool interpolate = false, const bool potential_perturbations = false);
-	void generate_Rmatrix_norm(const bool potential_perturbations = false);
-	bool generate_Rmatrix_from_covariance_kernel(const int imggrid_i, const int kernel_type=0, const bool include_lum_weighting=false, const bool potential_perturbations = false, const bool verbal = false);
-	void find_source_centroid(const int imggrid_i, double& xc_approx, double& yc_approx, const bool verbal);
-
-	void create_lensing_matrices_from_Lmatrix(const int imggrid_i, const bool dense_Fmatrix=false, const bool potential_perturbations=false, const bool verbal=false);
-	void invert_lens_mapping_dense(const int imggrid_i, bool verbal=false);
-	void invert_lens_mapping_EIGEN_sparse(const int imggrid_i, double& logdet, const bool verbal, const bool use_copy = false);
-	void invert_lens_mapping_MUMPS(const int imggrid_i, double& logdet, const bool verbal, const bool use_copy = false);
-	void invert_lens_mapping_UMFPACK(const int imggrid_i, double& logdet, const bool verbal, const bool use_copy = false);
-	void convert_Rmatrix_to_dense();
-	void convert_Rmatrix_pot_to_dense();
-	void Rmatrix_determinant_MUMPS(const bool potential_perturbations);
-	void Rmatrix_determinant_UMFPACK(const bool potential_perturbations);
-	void Rmatrix_determinant_EIGEN(const bool potential_perturbations);
-	void matrix_determinant_dense(double& logdet, const dvector& matrix_in, const int npixels);
-
-	void invert_lens_mapping_CG_method(const int imggrid_i, bool verbal);
-	void update_source_and_lensgrid_amplitudes(const int imggrid_i, const bool verbal=false);
-	void indexx(int* arr, int* indx, int nn);
-
-	double set_required_data_pixel_window(bool verbal);
-
-	void calculate_source_pixel_surface_brightness();
-	void calculate_image_pixel_surface_brightness();
-	void calculate_image_pixel_surface_brightness_dense();
-	void calculate_foreground_pixel_surface_brightness(const int imggrid_i, const bool allow_lensed_nonshapelet_sources = true);
-	void add_foreground_to_image_pixel_vector();
-	void store_image_pixel_surface_brightness(const int imggrid_i=-1);
-	void store_foreground_pixel_surface_brightness(const int imggrid_i=-1);
-	void vectorize_image_pixel_surface_brightness(const int imggrid_i, bool use_mask = false);
 	void plot_image_pixel_surface_brightness(string outfile_root, const int imggrid_i=-1);
 	double pixel_log_evidence_times_two(double& chisq0, const bool verbal = false, const int ranchisq_i = 0);
-	double pixel_log_evidence_times_two_sbprofile(double &chisq0, const bool verbal);
+	template <typename QScalar, typename MathTypes>
+	QScalar pixel_log_evidence_times_two_sbprofile(QScalar &chisq0, const bool verbal);
+	template <typename QScalar, typename MathTypes>
+	QScalar pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool verbal, const int ranchisq_i);
+
 	void setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bool verbal);
 	bool setup_cartesian_sourcegrid(const int imggrid_i, const int src_i, int& n_expected_imgpixels, const bool verbal);
-	bool generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, const int src_i, double& tot_wtime, double& tot_wtime0, const bool verbal);
-	bool generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, double& tot_wtime, double& tot_wtime0, const bool verbal);
+	bool generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, const int src_i, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
+	bool generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
 	void add_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, double& logev_times_two, const bool verbal);
-	void add_regularization_prior_terms_to_logev(const int band_number, const int zsrc_i, double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
 	void set_n_imggrids_to_include_in_inversion();
 
 	bool load_pixel_grid_from_data(const int band_number);
@@ -945,6 +767,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void find_optimal_sourcegrid_for_analytic_source();
 	bool create_sourcegrid_cartesian(const int band_number, const int zsrc_i, const bool verbal, const bool use_mask, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
 	bool create_sourcegrid_delaunay(const int src_i, const bool use_mask, const bool verbal);
+	template <typename MathTypes>
 	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal=false);
 	bool create_lensgrid_cartesian(const int band_number, const int zsrc_i, const int pixlens_i, const bool verbal, const bool use_mask = true);
 	int make_pixellated_source_from_sbprofiles(const int band_i, const int zsrc_i, const int npix, const bool make_delaunay_from_sbprofile, const bool use_mask, const bool verbal_mode);
@@ -960,7 +783,9 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	//double temp_double;
 	//void Swap(double& a, double& b) { temp_double = a; a = b; b = temp_double; }
 
-	double wtime0, wtime; // for calculating wall time in parallel calculations
+	// for calculating wall time in parallel calculations
+	std::chrono::steady_clock::time_point wtime0;
+	std::chrono::duration<double> wtime;
 	bool show_wtime;
 
 	friend class ImgSrchGrid;
@@ -1012,6 +837,9 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void find_sourcept(const lensvector<QScalar>& x, lensvector<QScalar>& srcpt, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
 	void find_sourcept(const lensvector<QScalar>& x, QScalar& srcpt_x, QScalar& srcpt_y, const int &thread, double* zfacs, double** betafacs);
+	template<typename VecType, typename QScalar>
+	void find_sourcepts_from_data_vec(const VecType& x, const VecType& y, VecType& srcpts_x, VecType& srcpts_y, const int& thread, double* zfacs, double** betafacs);
+
 	template<typename QScalar>
 	void kappa_inverse_mag_sourcept(const lensvector<QScalar>& x, lensvector<QScalar>& srcpt, QScalar &kap_tot, QScalar &invmag, const int &thread, double* zfacs, double** betafacs);
 	template<typename QScalar>
@@ -1220,6 +1048,13 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	}
 	bool get_sci_notation() { return use_scientific_notation; }
 
+	bool get_fft_convolution_mode() { return fft_convolution; }
+	void set_fft_convolution_mode(const bool fftconv) { 
+		bool old_setting = fft_convolution;
+		fft_convolution = fftconv;
+		if ((!fft_convolution) and (old_setting==true)) cleanup_FFT_convolution_arrays();
+	}
+
 	bool get_warnings() { return warnings; }
 	void set_warnings(const bool setting) { warnings = setting; }
 
@@ -1388,7 +1223,8 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void update_prior_limits(const double* lower, const double* upper, const bool* changed_limits);
 	template<typename QScalar>
 	QScalar fitmodel_loglike_point_source(const QScalar* params);
-	double fitmodel_loglike_extended_source(const double* params);
+	template <typename QScalar, typename MathTypes>
+	QScalar fitmodel_loglike_extended_source(const QScalar* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
 	double LogLikeVecFunc(std::vector<double>& params) { return (this->*LogLikePtr)(params.data()); }
@@ -1430,6 +1266,10 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void make_source_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename);
 	void make_source_ellipse(const double xcenter, const double ycenter, const double major_axis, const double q, const double angle, const int n_subellipses, const int points_per_ellipse, const bool draw_in_imgplane, string source_filename);
 	void raytrace_image_rectangle(const double xmin, const double xmax, const int xsteps, const double ymin, const double ymax, const int ysteps, string source_filename);
+
+	template <typename QScalar>
+	QScalar find_sbprofile_surface_brightness(lensvector<QScalar> &pt);
+	void find_source_centroid(const int imggrid_i, double& xc_approx, double& yc_approx, const bool verbal);
 
 	void plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	void plot_total_kappa(const double rmin, const double rmax, const int steps, const char *kname, const char *kdname = NULL);
@@ -1525,7 +1365,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void set_matrix_format_string(const string setting) {
 		if (setting=="dense") matrix_format = DENSE;
 		else if (setting=="fdense") {
-#if defined(USE_MKL) || defined(USE_EIGEN)
+#if defined(USE_MKL) || defined(USE_EIGEN_INV)
 			matrix_format = DENSE_FMATRIX;
 #else
 			throw std::runtime_error("currently 'fdense' matrix inversion mode is only supported with Eigen and/or MKL");
@@ -1541,7 +1381,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 		else if (sparse_solver==UMFPACK) setting = "umfpack";
 		else if (sparse_solver==EIGEN_SPARSE) setting = "eigen";
 		else if (sparse_solver==CG_Method) setting = "cg";
-		else if (sparse_solver==NONE) setting = "none";
+		else if (sparse_solver==NO_SPARSE) setting = "none";
 		else throw std::runtime_error("Unknown sparse solver");
 		return setting;
 	}
@@ -1561,14 +1401,14 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 #endif
 		}
 		else if (setting=="eigen") {
-#ifdef USE_EIGEN
+#ifdef USE_EIGEN_INV
 			sparse_solver = EIGEN_SPARSE;
 #else
 			throw std::runtime_error("qlens must be compiled with Eigen in order to set sparse solver to 'eigen'");
 #endif
 		}
 		else if (setting=="cg") sparse_solver = CG_Method;
-		else if (setting=="none") sparse_solver = NONE;
+		else if (setting=="none") sparse_solver = NO_SPARSE;
 		else throw std::runtime_error("invalid argument to 'sparse_solver' command; must specify valid sparse_solver");
 	}
 
@@ -1605,12 +1445,6 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void set_imgpixel_nsplit(const int nsplit_in);
 	bool set_fitmethod(FitMethod fitmethod_in)
 	{
-#ifndef USE_EIGEN
-		if (fitmethod_in==BFGS) {
-			warn("cannot set fit method to 'bfgs' unless qlens is compiled with the Eigen library");
-			return false;
-		}
-#endif
 		fitmethod = fitmethod_in;
 		if ((fitmethod==POWELL) or (fitmethod==SIMPLEX)) {
 			for (int i=0; i < nlens; i++) lens_list[i]->set_include_limits(false);

@@ -43,16 +43,6 @@ PYBIND11_MODULE(qlens, m) {
 		.def("print_transforms",&ParamList::print_priors_and_transforms)
 		.def("priors",&ParamList::print_priors_and_limits)
 		.def("transforms",&ParamList::print_priors_and_transforms)
-		.def("update", [](ParamList &current, py::dict dict){
-			for (auto item : dict) {
-				if(!current.update_param_value(py::cast<string>(item.first), py::cast<double>(item.second)))
-					return false;
-			}
-			return true;
-		})
-		.def("update", [](ParamList &current, const string name, const double value){
-			return current.update_param_value(name, value);
-		})
 		.def("stepsizes", [](ParamList &current, py::kwargs &kwargs) {
 			bool scale_from_chain = false;
 			double scale_factor = -1.0;
@@ -72,6 +62,7 @@ PYBIND11_MODULE(qlens, m) {
 					}
 				}
 			}
+
 			if (scale_from_chain) {
 				dvector stepsizes(current.nparams);
 				if (current.qlens->get_stepsizes_from_percentiles(scale_factor,stepsizes)==false) throw std::runtime_error("could not get stepsizes from percentiles");
@@ -117,6 +108,28 @@ PYBIND11_MODULE(qlens, m) {
 			if ((stepsize <= 0) and (scale_factor <= 0)) {
 				if (paramnum <= 0) current.print_stepsizes();
 			};
+		})
+		.def("update", [](ParamList &current, py::dict dict){
+			for (auto item : dict) {
+				if(!current.update_param_value(py::cast<string>(item.first), py::cast<double>(item.second)))
+					return false;
+			}
+			return true;
+		})
+		.def("update_all", [](ParamList &current, py::list list){
+			int i=0;
+			double pval;
+			for (auto item : list) {
+				if (i >= current.nparams) throw std::runtime_error("number of input values greater than number of model parameters");
+				pval = py::cast<double>(item);
+				if (current.update_param_value(i++,pval)==false) {
+					throw std::runtime_error("could not update parameter value for parameter "+std::to_string(i));
+				}
+			}
+			return true;
+		})
+		.def("update", [](ParamList &current, const string name, const double value){
+			return current.update_param_value(name, value);
 		})
 		.def("transform", [](ParamList &current, const string name, const string transform_type_in, py::kwargs &kwargs){
 			int paramnum = current.lookup_param_number(name);
@@ -1158,8 +1171,8 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 			bool success = current.load_imgdata(band,filename,pixsize,pix_xy_ratio,x_offset,y_offset,hdu_index,show_header);
-			if (!success) throw std::runtime_error("image data could not be loaded");
 			ImageData* newimgdata = (success) ? current.imgdatalist_ptr[band] : NULL;
+			if (!success) throw std::runtime_error("image data could not be loaded");
 			return newimgdata;
 		})
 		.def("clear", [](ImgDataList &current){
@@ -1781,7 +1794,7 @@ PYBIND11_MODULE(qlens, m) {
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
-				else throw std::runtime_error("need to specify lens redshift or else pass in qlens object to set default redshift");
+				else throw std::runtime_error("need to specify either specific lens redshift, or else pass in qlens object to use default redshift");
 			}
 			if (zsrc_ref==-1) {
 				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
@@ -1853,7 +1866,7 @@ PYBIND11_MODULE(qlens, m) {
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
-				else zlens = default_zlens;
+				else throw std::runtime_error("need to specify either specific lens redshift, or else pass in qlens object to use default redshift");
 			}
 			if (zsrc_ref==-1) {
 				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
@@ -1903,7 +1916,7 @@ PYBIND11_MODULE(qlens, m) {
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
-				else zlens = default_zlens;
+				else throw std::runtime_error("need to specify either specific lens redshift, or else pass in qlens object to use default redshift");
 			}
 			if (zsrc_ref==-1) {
 				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
@@ -1978,7 +1991,7 @@ PYBIND11_MODULE(qlens, m) {
 				process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 				if (zlens==-1) {
 					if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
-					else zlens = default_zlens;
+					else throw std::runtime_error("need to specify either specific lens redshift, or else pass in qlens object to use default redshift");
 				}
 				if (zsrc_ref==-1) {
 					if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
@@ -2062,7 +2075,7 @@ PYBIND11_MODULE(qlens, m) {
 				process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 				if (zlens==-1) {
 					if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
-					else zlens = default_zlens;
+					else throw std::runtime_error("need to specify either specific lens redshift, or else pass in qlens object to use default redshift");
 				}
 				if (zsrc_ref==-1) {
 					if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
@@ -2191,7 +2204,7 @@ PYBIND11_MODULE(qlens, m) {
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
-				else zlens = default_zlens;
+				else throw std::runtime_error("need to specify either specific lens redshift, or else pass in qlens object to use default redshift");
 			}
 			if (zsrc_ref==-1) {
 				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
@@ -2232,7 +2245,7 @@ PYBIND11_MODULE(qlens, m) {
 			process_init_lens_kwargs(pmode, cosmo_in, qlens_ptr, zlens, zsrc_ref, vary_list, transform_to_pixsrc_frame, kwargs);
 			if (zlens==-1) {
 				if (qlens_ptr != NULL) zlens = qlens_ptr->lens_redshift;
-				else zlens = default_zlens;
+				else throw std::runtime_error("need to specify either specific lens redshift, or else pass in qlens object to use default redshift");
 			}
 			if (zsrc_ref==-1) {
 				if (qlens_ptr != NULL) zsrc_ref = qlens_ptr->reference_source_redshift;
@@ -2744,6 +2757,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("nimg_sb_frac_threshold", &QLens_Wrap::n_image_prior_sb_frac)
 		.def_readwrite("srcpixel_clustering", &QLens_Wrap::use_srcpixel_clustering)
 		.def_readwrite("n_cluster_it", &QLens_Wrap::n_cluster_iterations)
+		.def_readwrite("show_wtime", &QLens_Wrap::show_wtime)
 
 		//.def("clear_lenses", &QLens_Wrap::lens_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
 		.def_property("primary_lens_number", &QLens_Wrap::get_primary_lens_number, &QLens_Wrap::set_primary_lens_number)
@@ -2754,36 +2768,13 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("split_imgpixels", &QLens_Wrap::get_split_imgpixels, &QLens_Wrap::set_split_imgpixels)
 		.def_property("imgpixel_nsplit", &QLens_Wrap::get_imgpixel_nsplit, &QLens_Wrap::set_imgpixel_nsplit)
 		.def_property("major_axis_along_y", &QLens_Wrap::get_major_axis_along_y, &QLens_Wrap::toggle_major_axis_along_y)
-		//.def("lens_list", &QLens_Wrap::lens_display)
-		//.def("src_list", &QLens_Wrap::src_display)
-		//.def("pixsrc_list", &QLens_Wrap::pixsrc_display)
-		//.def("pixsrc_clear", &QLens_Wrap::pixsrc_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
-		//.def("remove_pixsrc", &QLens_Wrap::remove_pixellated_source)
-		//.def("lens", &QLens_Wrap::get_lens_pointer)
+		.def_property("fft_convolution", &QLens_Wrap::get_fft_convolution_mode, &QLens_Wrap::set_fft_convolution_mode)
 		.def_readonly("imgdata", &QLens_Wrap::imgdatalist)
 		.def_readonly("ptimgdata", &QLens_Wrap::ptimgdata_list)
 		.def_readonly("lens", &QLens_Wrap::lenslist)
 		.def_readonly("src", &QLens_Wrap::srclist)
 		.def_readonly("pixsrc", &QLens_Wrap::pixsrclist)
 		.def_readonly("ptsrc", &QLens_Wrap::ptsrclist)
-		//.def("add_lens", &QLens_Wrap::add_lens_tuple, "Input should be a tuple that specifies the lens' zl and zs value. \nEx: (Lens1, zl1, zs1)")
-		//.def("add_lens", &QLens_Wrap::add_lens, "Input should be a lens object.")
-		//.def("add_lens_extshear", &QLens_Wrap::add_lens_extshear, "Input should be a	lens object, and a shear lens object to anchor to the original lens object.")
-		//.def("add_lenses", &QLens_Wrap::batch_add_lenses_tuple, "Input should be an array of tuples. Each tuple must specify each lens' zl and zs values. \nEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]")
-		//.def("add_lenses", &QLens_Wrap::batch_add_lenses, "Input should be an array of lenses.")
-		//.def("add_lenses", [](QLens_Wrap &self){
-				//return "Pass in an array of lenses \n\tEx: [Lens1, Lens2, Lens3] \nor an array of tuples. Each tuple must contain the lens, the zl and zs values for each corresponding lens. \n\tEx: [(Lens1, zl1, zs1), (Lens2, zl2, zs2)]";
-		//})
-		//.def("remove_lens", &QLens_Wrap::remove_lens) // lens_clear is the better function to use
-		//.def("clear_lenses", &QLens_Wrap::clear_lenses)
-		//.def("add_src", &QLens_Wrap::add_src_default, "Input should be a source object.")
-		//.def("add_sources", &QLens_Wrap::batch_add_sources, "Input should be an array of sources")
-		//.def("add_sources", &QLens_Wrap::batch_add_sources_tuple, "Input should be an array of tuples. Each tuple must specify each source's zs values. \nEx: [(src1, zs1), (src2, zs2)]")
-		//.def("add_sources", [](QLens_Wrap &self){
-				//return "Pass in an array of sourcees \n\tEx: [src1, src2, src3] \nor an array of tuples. Each tuple must contain the source, the zs values for each corresponding source. \n\tEx: [(src1, zs1), (src2, zs2)]";
-		//})
-		//.def("src_clear", &QLens_Wrap::source_clear, py::arg("min_loc") = -1, py::arg("max_loc") = -1)
-
 		.def("add_pixsrc", [](QLens_Wrap &current, py::kwargs &kwargs){ 
 			int band=0;
 			double zsrc = current.source_redshift;
@@ -2876,6 +2867,9 @@ PYBIND11_MODULE(qlens, m) {
 			if ((adopt_bestfit) and (curr.adopt_model(curr.bestfitparams)==false)) throw std::runtime_error("could not adopt best-fit model");
 		})
 		.def("process_chains", [](QLens_Wrap &curr, const string &fitmethod, py::kwargs &kwargs){
+			bool adopt_bestfit = true;
+			bool skip_run = true;
+
 			if (fitmethod=="multinest") {
 				curr.multinest(false,true);
 				curr.adopt_model(curr.bestfitparams);
@@ -2885,6 +2879,7 @@ PYBIND11_MODULE(qlens, m) {
 			} else {
 					throw std::runtime_error("Can only process chains for multinest or polychord");
 			}
+			if ((adopt_bestfit) and (curr.adopt_model(curr.bestfitparams)==false)) throw std::runtime_error("could not adopt best-fit model");
 		})
 		.def("set_source_mode", [](QLens_Wrap &curr, const string &source_mode="ptsource"){
 			if(source_mode=="ptsource") {

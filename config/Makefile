@@ -31,11 +31,11 @@ CCOMP = g++
 #CCOMP = mpicxx -DUSE_MPI
 #OPTS = -w -fopenmp -O3
 #OPTS = -g -w -fopenmp #for debugging
-OPTS = -Wno-write-strings -O0 -std=c++17
+OPTS = -Wno-write-strings -O3 -std=c++17
 OPTS_NO_OPT = -Wno-write-strings -O0 -std=c++17
 #OPTS = -w -g
 #FLAGS = -DUSE_READLINE -DUSE_FITS -DUSE_OPENMP -DUSE_UMFPACK -DUSE_MULTINEST -DUSE_POLYCHORD -DUSE_FITPACK
-FLAGS = -DUSE_READLINE -DUSE_STAN -D_REENTRANT -DUSE_EIGEN -DUSE_FITS
+FLAGS = -DUSE_READLINE -DUSE_STAN -D_REENTRANT -DUSE_EIGEN_INV -DUSE_FITS
 #FLAGS = -DUSE_READLINE -DUSE_EIGEN
 #FLAGS = -DUSE_READLINE 
 #OTHERLIBS =  -lm -lreadline -ltcmalloc -lcfitsio

@@ -403,6 +403,53 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	virtual double surface_brightness(double x, double y) { return surface_brightness_impl(x,y); }
 #ifdef USE_STAN
 	virtual stan::math::var surface_brightness(stan::math::var x, stan::math::var y) { return surface_brightness_impl(x,y); }
+	stan::math::var surface_brightness_stan(double x, double y) {
+		stan::math::var x_stan = x;
+		stan::math::var y_stan = y;
+		return surface_brightness(x_stan,y_stan); // this is for evaluating foreground surface brightness, where x and y are in imgplane (hence not autodiff)
+	}
+#endif
+	virtual void sb_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& sb, const int nsp) { sb_rsq_vec_impl<Eigen::VectorXd,double>(rsq,sb,nsp); }
+#ifdef USE_STAN
+	virtual void sb_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& sb, const int nsp) { sb_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,sb,nsp); }
+#endif
+
+	template <typename VecType, typename QScalar>
+	void sb_rsq_vec_impl(const VecType& rsq, VecType& sb, const int nsp);
+
+	virtual void surface_brightness_vec(const Eigen::VectorXd& x0, const Eigen::VectorXd& y0, Eigen::VectorXd& sb, const int nsp=1) { surface_brightness_vec_impl<Eigen::VectorXd,double>(x0,y0,sb,nsp); }
+#ifdef USE_STAN
+	virtual void surface_brightness_vec(const stan::math::var_value<Eigen::VectorXd>& x0, const stan::math::var_value<Eigen::VectorXd>& y0, stan::math::var_value<Eigen::VectorXd>& sb, const int nsp=1) { surface_brightness_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(x0,y0,sb,nsp); }
+#endif
+
+	template <typename QScalar>
+	QScalar surface_brightness_impl(QScalar x, QScalar y);
+
+	template <typename VecType, typename QScalar>
+	void surface_brightness_vec_impl(const VecType& x0, const VecType& y0, VecType& sb, const int nsp);
+
+	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
+	template <typename QScalar>
+	QScalar surface_brightness_zoom(lensvector<QScalar> &centerpt, lensvector<QScalar> &pt1, lensvector<QScalar> &pt2, lensvector<QScalar> &pt3, lensvector<QScalar> &pt4, const double sb_noise);
+#ifdef USE_STAN
+	stan::math::var surface_brightness_zoom_stan(lensvector<double> centerpt, lensvector<double> &pt1, lensvector<double> &pt2, lensvector<double> &pt3, lensvector<double> &pt4, const double sb_noise) {
+		lensvector<stan::math::var> centerpt_stan;
+		centerpt_stan[0] = centerpt[0];
+		centerpt_stan[1] = centerpt[1];
+		lensvector<stan::math::var> pt1_stan;
+		pt1_stan[0] = pt1[0];
+		pt1_stan[1] = pt1[1];
+		lensvector<stan::math::var> pt2_stan;
+		pt2_stan[0] = pt2[0];
+		pt2_stan[1] = pt2[1];
+		lensvector<stan::math::var> pt3_stan;
+		pt3_stan[0] = pt3[0];
+		pt3_stan[1] = pt3[1];
+		lensvector<stan::math::var> pt4_stan;
+		pt4_stan[0] = pt4[0];
+		pt4_stan[1] = pt4[1];
+		return surface_brightness_zoom(centerpt_stan,pt1_stan,pt2_stan,pt3_stan,pt4_stan,sb_noise); // this is for evaluating foreground surface brightness, where x and y are in imgplane (hence not autodiff)
+	}
 #endif
 
 	//virtual double calculate_Lmatrix_element(const double x, const double y, const int amp_index); // used by Shapelet subclass
@@ -417,13 +464,6 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	virtual void update_indxptr(const int newval);
 	virtual double get_scale_parameter();
 	virtual void update_scale_parameter(const double scale);
-
-	template <typename QScalar>
-	QScalar surface_brightness_impl(QScalar x, QScalar y);
-
-	//virtual double surface_brightness_zoom(const double x, const double y, const double pixel_xlength, const double pixel_ylength);
-	template <typename QScalar>
-	QScalar surface_brightness_zoom(lensvector<QScalar> &centerpt, lensvector<QScalar> &pt1, lensvector<QScalar> &pt2, lensvector<QScalar> &pt3, lensvector<QScalar> &pt4, const QScalar sb_noise);
 
 	std::string get_model_name() { return model_name; }
 	SB_ProfileName get_sbtype() { return sbtype; }
@@ -496,6 +536,14 @@ class Gaussian : public SB_Profile
 
 	template <typename QScalar>
 	QScalar sb_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+
+	void sb_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& sb, const int nsp) { sb_rsq_vec_impl<Eigen::VectorXd,double>(rsq,sb,nsp); }
+#ifdef USE_STAN
+	void sb_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& sb, const int nsp) { sb_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,sb,nsp); }
+#endif
+
+	template <typename VecType, typename QScalar>
+	void sb_rsq_vec_impl(const VecType& rsq, VecType& sb, const int nsp);
 
 	public:
 	Gaussian() : SB_Profile() {}
@@ -573,6 +621,14 @@ class Sersic : public SB_Profile
 
 	template <typename QScalar>
 	QScalar sb_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
+
+	void sb_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& sb, const int nsp) { sb_rsq_vec_impl<Eigen::VectorXd,double>(rsq,sb,nsp); }
+#ifdef USE_STAN
+	void sb_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& sb, const int nsp) { sb_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,sb,nsp); }
+#endif
+
+	template <typename VecType, typename QScalar>
+	void sb_rsq_vec_impl(const VecType& rsq, VecType& sb, const int nsp);
 
 	public:
 	Sersic() : SB_Profile() {}

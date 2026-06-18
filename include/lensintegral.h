@@ -9,7 +9,7 @@
 
 class LensProfile;
 
-template <typename QScalar>
+template <typename VecType, typename QScalar>
 struct LensIntegral 
 {
 	using GaussQuad = GaussLegendre<std::function<QScalar(const QScalar)>,QScalar>;
@@ -28,23 +28,33 @@ struct LensIntegral
 	double *gausspoints, *gaussweights;
 	//double *pat_points, **pat_weights;
 	QScalar *pat_funcs;
+	VecType *pat_funcs_vec;
 	QScalar **pat_funcs_mult;
 	//double *cc_points, **cc_weights;
 	QScalar *cc_funcs;
+	VecType *cc_funcs_vec;
 	QScalar **cc_funcs_mult;
 	int n_mult;
 
 	LensIntegral()
 	{
 		cosamps=sinamps=NULL;
+		pat_funcs = NULL;
+		pat_funcs_mult = NULL;
+		cc_funcs = NULL;
+		cc_funcs_mult = NULL;
+		pat_funcs_vec = NULL;
+		cc_funcs_vec = NULL;
 		n_mult = 0;
 	}
-	LensIntegral(LensProfile *profile_in, const QScalar xval_in, const QScalar yval_in, const QScalar q = 1, const int n_mult_in = 0) : xval(xval_in), yval(yval_in)
+	LensIntegral(LensProfile *profile_in, const QScalar xval_in, const QScalar yval_in, const QScalar q = 1, const int n_mult_in = 0, const bool use_vecs = false) : xval(xval_in), yval(yval_in)
 	{
 		cosamps=sinamps=NULL;
-		initialize(profile_in,q,n_mult_in);
+		pat_funcs_vec = NULL;
+		cc_funcs_vec = NULL;
+		initialize(profile_in,q,n_mult_in,use_vecs);
 	}
-	void initialize(LensProfile *profile_in, const QScalar q = 1, const int n_mult_in = 0)
+	void initialize(LensProfile *profile_in, const QScalar q = 1, const int n_mult_in = 0, const bool use_vecs = false)
 	{
 		n_mult = n_mult_in;
 		profile = profile_in;
@@ -62,6 +72,9 @@ struct LensIntegral
 				for (int i=0; i < 511; i++) pat_funcs_mult[i] = new QScalar[n_mult];
 			} else {
 				pat_funcs = new QScalar[511];
+				if (use_vecs) {
+					pat_funcs_vec = new VecType[511];
+				}
 			}
 
 		} else if (profile->integral_method==Fejer_Quadrature) {
@@ -70,6 +83,9 @@ struct LensIntegral
 				for (int i=0; i < Fejer::cc_N; i++) cc_funcs_mult[i] = new QScalar[n_mult];
 			} else {
 				cc_funcs = new QScalar[Fejer::cc_N];
+				if (use_vecs) {
+					cc_funcs_vec = new VecType[Fejer::cc_N];
+				}
 			}
 		}
 	}
@@ -80,6 +96,7 @@ struct LensIntegral
 				delete[] pat_funcs_mult;
 			} else {
 				delete[] pat_funcs;
+				if (pat_funcs_vec != NULL) delete[] pat_funcs_vec;
 			}
 		} else if (profile->integral_method==Fejer_Quadrature) {
 			if (n_mult > 0) {
@@ -87,12 +104,17 @@ struct LensIntegral
 				delete[] cc_funcs_mult;
 			} else {
 				delete[] cc_funcs;
+				if (cc_funcs_vec != NULL) delete[] pat_funcs_vec;
 			}
 		}
 	}
 	QScalar GaussIntegrate(QScalar (LensIntegral::*func)(const QScalar), const QScalar a, const QScalar b);
 	QScalar PattersonIntegrate(QScalar (LensIntegral::*func)(const QScalar), const QScalar a, const QScalar b, bool &converged);
 	QScalar FejerIntegrate(QScalar (LensIntegral::*func)(QScalar), QScalar a, QScalar b, bool &converged);
+	void GaussIntegrateVec(void (LensIntegral::*func)(const QScalar, const VecType&, const VecType&, VecType&), const VecType& xsq, const VecType& ysq, VecType& sum, const QScalar a, const QScalar b);
+	void PattersonIntegrateVec(void (LensIntegral::*func)(const QScalar, const VecType&, const VecType&, VecType&), const VecType& xsq, const VecType& ysq, VecType& result, const QScalar a, const QScalar b, bool& converged);
+	void FejerIntegrateVec(void (LensIntegral::*func)(const QScalar, const VecType&, const VecType&, VecType&), const VecType& xsq, const VecType& ysq, VecType& result, const QScalar a, const QScalar b, bool& converged);
+
 
 	// Functions for doing multiple integrals simultaneously
 	void GaussIntegrate(void (LensIntegral::*func)(const QScalar, QScalar*), const QScalar a, const QScalar b, QScalar* results, const int n_funcs);
@@ -102,12 +124,15 @@ struct LensIntegral
 	QScalar i_integrand_prime(const QScalar w);
 	QScalar j_integrand_prime(const QScalar w);
 	QScalar k_integrand_prime(const QScalar w);
+	void j_integrand_vec(const QScalar w, const VecType& xsqval, const VecType& ysqval, VecType& ans);
+
 	//QScalar i_integrand_v2(const QScalar w);
 	//QScalar j_integrand_v2(const QScalar w);
 	//QScalar k_integrand_v2(const QScalar w);
 	QScalar i_integral(bool &converged);
-	QScalar j_integral(const int nval, bool &converged);
-	QScalar k_integral(const int nval, bool &converged);
+	QScalar j_integral(const int nval_in, bool &converged);
+	QScalar k_integral(const int nval_in, bool &converged);
+	void j_integral_vec(const int nval_in, const VecType& x, const VecType& y, VecType& ans, bool &converged);
 
 	QScalar i_integrand_egrad(const QScalar w);
 	//QScalar j_integrand_egrad(const QScalar w);
@@ -136,8 +161,8 @@ struct LensIntegral
 
 /*************************** Integrals when ellipticity is constant ***************************/
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::i_integral(bool &converged)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::i_integral(bool &converged)
 {
 	using std::sqrt;
 #ifdef USE_STAN
@@ -169,8 +194,8 @@ QScalar LensIntegral<QScalar>::i_integral(bool &converged)
 	return ans;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::j_integral(const int nval_in, bool &converged)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::j_integral(const int nval_in, bool &converged)
 {
 	using std::sqrt;
 #ifdef USE_STAN
@@ -205,8 +230,56 @@ QScalar LensIntegral<QScalar>::j_integral(const int nval_in, bool &converged)
 	return ans;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::k_integral(const int nval_in, bool &converged)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::j_integral_vec(const int nval_in, const VecType& x, const VecType& y, VecType& ans, bool &converged)
+{
+	//std::cout << "HERG?" << std::endl;
+	using std::sqrt;
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
+	nval_plus_half = nval_in + 0.5;
+	mnval_plus_half = -nval_in + 0.5;
+	converged = true; // will change if convergence not achieved
+
+	VecType xsq,ysq;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		xsq = stan::math::elt_multiply(x,x);
+		ysq = stan::math::elt_multiply(y,y);
+	} else
+#endif
+	{
+		xsq = (x.array().square()).matrix();
+		ysq = (y.array().square()).matrix();
+	}
+
+	if (profile->integral_method == Romberg_Integration)
+	{
+		// Not supported with vec
+		ans = Eigen::VectorXd::Zero(x.size());
+	}
+	else if (profile->integral_method == Gaussian_Quadrature)
+	{
+		void (LensIntegral::*jptr)(const QScalar,const VecType&,const VecType&,VecType&) = &LensIntegral::j_integrand_vec;
+		GaussIntegrateVec(jptr,xsq,ysq,ans,0,1);
+	}
+	else if (profile->integral_method == Gauss_Patterson_Quadrature)
+	{
+		void (LensIntegral::*jptr)(const QScalar,const VecType&,const VecType&,VecType&) = &LensIntegral::j_integrand_vec;
+		PattersonIntegrateVec(jptr,xsq,ysq,ans,0,1,converged);
+	}
+	else if (profile->integral_method == Fejer_Quadrature)
+	{
+		void (LensIntegral::*jptr)(const QScalar,const VecType&,const VecType&,VecType&) = &LensIntegral::j_integrand_vec;
+		FejerIntegrateVec(jptr,xsq,ysq,ans,0,1,converged);
+	}
+	else die("unknown integral method");
+	ans = ans * sqrt(1-epsilon);
+}
+
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::k_integral(const int nval_in, bool &converged)
 {
 	using std::sqrt;
 #ifdef USE_STAN
@@ -244,8 +317,8 @@ QScalar LensIntegral<QScalar>::k_integral(const int nval_in, bool &converged)
 // definitions of the elliptical radius. I have also made the substitution
 // u=w*w (easier for Gaussian quadrature; makes kappa singularity more manageable)
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::i_integrand_prime(const QScalar w)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::i_integrand_prime(const QScalar w)
 {
 	using std::sqrt;
 #ifdef USE_STAN
@@ -257,26 +330,53 @@ QScalar LensIntegral<QScalar>::i_integrand_prime(const QScalar w)
 	return (2*w*(xisq/u)*(profile->kapavg_spherical_generic)(xisq) / sqrt(qfac))/fsqinv;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::j_integrand_prime(const QScalar w)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::j_integrand_prime(const QScalar w)
 {
 	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 
 	u = w*w;
 	qfac = 1 - epsilon*u;
 	return (2*w*profile->kappa_rsq(u*(xsqval + ysqval/qfac)*fsqinv) / pow(qfac, nval_plus_half));
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::k_integrand_prime(const QScalar w)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::j_integrand_vec(const QScalar w, const VecType& xsqval, const VecType& ysqval, VecType& ans)
+{
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
+
+	QScalar u, qfac;
+	VecType uxisq, kap;
+
+	u = w*w;
+	qfac = 1 - epsilon*u;
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		uxisq = u*(xsqval + ysqval/qfac)*fsqinv;
+		profile->kappa_rsq_vec(uxisq,kap);
+		ans = 2*w*kap/pow(qfac, nval_plus_half);
+	} else
+#endif
+	{
+		uxisq = (u*(xsqval.array() + ysqval.array()/qfac)*fsqinv).matrix();
+		profile->kappa_rsq_vec(uxisq,kap);
+		ans = (2*w*kap.array()/pow(qfac, nval_plus_half)).matrix();
+	}
+}
+
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::k_integrand_prime(const QScalar w)
 {
 	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 
 	u = w*w;
 	qfac = 1 - epsilon*u;
@@ -285,8 +385,8 @@ QScalar LensIntegral<QScalar>::k_integrand_prime(const QScalar w)
 
 /*
 // This version of i_integrand might still be useful in cases where we have no formula for the spherical deflection, since it only requires kappa_rsq_deriv. Keep in mind for later!
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::i_integrand_v2(const QScalar xi)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::i_integrand_v2(const QScalar xi)
 {
 	xisq = xi*xi;
 	qfac = xsqval + ysqval + epsilon*xisq/fsqinv;
@@ -302,8 +402,8 @@ QScalar LensIntegral<QScalar>::i_integrand_v2(const QScalar xi)
 */
 
 /*
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::j_integrand_v2(const QScalar w)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::j_integrand_v2(const QScalar w)
 {
 	xisq = w*w;
 	qfac = xsqval + ysqval + epsilon*xisq/fsqinv;
@@ -316,8 +416,8 @@ QScalar LensIntegral<QScalar>::j_integrand_v2(const QScalar w)
 */
 
 /*
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::k_integrand_v2(const QScalar w)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::k_integrand_v2(const QScalar w)
 {
 	xisq = w*w;
 	qfac = xsqval + ysqval + epsilon*xisq/fsqinv;
@@ -331,12 +431,9 @@ QScalar LensIntegral<QScalar>::k_integrand_v2(const QScalar w)
 
 /******************** Integrals required when ellipticity gradient is present *********************/
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::i_integral_egrad(bool &converged)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::i_integral_egrad(bool &converged)
 {
-	using std::cos;
-	using std::sin;
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -390,12 +487,9 @@ QScalar LensIntegral<QScalar>::i_integral_egrad(bool &converged)
 	return ans;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::i_integrand_egrad(const QScalar xi)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::i_integrand_egrad(const QScalar xi)
 {
-	using std::cos;
-	using std::sin;
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -434,8 +528,8 @@ QScalar LensIntegral<QScalar>::i_integrand_egrad(const QScalar xi)
 }
 
 /*
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::j_integral_egrad(const int nval_in, bool &converged)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::j_integral_egrad(const int nval_in, bool &converged)
 {
 	converged = true; // will change if convergence not achieved
 	QScalar ans;
@@ -491,8 +585,8 @@ QScalar LensIntegral<QScalar>::j_integral_egrad(const int nval_in, bool &converg
 	return ans;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::k_integral_egrad(const int nval_in, bool &converged)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::k_integral_egrad(const int nval_in, bool &converged)
 {
 	converged = true; // will change if convergence not achieved
 	QScalar ans;
@@ -525,8 +619,8 @@ QScalar LensIntegral<QScalar>::k_integral_egrad(const int nval_in, bool &converg
 	return ans;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::jprime_integral_egrad(const int nval_in, bool &converged)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::jprime_integral_egrad(const int nval_in, bool &converged)
 {
 	// If we only need the deflection, and not the hessian, these integrals are faster because it's just two integrals J_0' and J_1'
 	converged = true; // will change if convergence not achieved
@@ -586,8 +680,8 @@ QScalar LensIntegral<QScalar>::jprime_integral_egrad(const int nval_in, bool &co
 */
 
 /*
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::j_integrand_egrad(const QScalar xi)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::j_integrand_egrad(const QScalar xi)
 {
 	xisq = xi*xi;
 	QScalar theta, costh, sinth, xprime, yprime, qufactor, qval;
@@ -627,8 +721,8 @@ QScalar LensIntegral<QScalar>::j_integrand_egrad(const QScalar xi)
 	return (2*xi*(profile->kappa_rsq_deriv(xisq))*qval*gfac);
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::k_integrand_egrad(const QScalar xi)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::k_integrand_egrad(const QScalar xi)
 {
 	xisq = xi*xi;
 	QScalar theta, costh, sinth, xprime, yprime, qval;
@@ -664,8 +758,8 @@ QScalar LensIntegral<QScalar>::k_integrand_egrad(const QScalar xi)
 	//return 2*xi*profile->kappa_rsq_deriv(xisq)*u*qval*pow(1-epsilon*u,-(nval+0.5))/dxisq;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::jprime_integrand_egrad(const QScalar xi)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::jprime_integrand_egrad(const QScalar xi)
 {
 	xisq = xi*xi;
 	QScalar theta, costh, sinth, xprime, yprime, qufactor, qval;
@@ -703,12 +797,9 @@ QScalar LensIntegral<QScalar>::jprime_integrand_egrad(const QScalar xi)
 }
 */
 
-template <typename QScalar>
-void LensIntegral<QScalar>::j_integral_egrad_mult(QScalar *jint, bool &converged)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::j_integral_egrad_mult(QScalar *jint, bool &converged)
 {
-	using std::cos;
-	using std::sin;
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -758,12 +849,9 @@ void LensIntegral<QScalar>::j_integral_egrad_mult(QScalar *jint, bool &converged
 	}
 }
 
-template <typename QScalar>
-void LensIntegral<QScalar>::k_integral_egrad_mult(QScalar *kint, bool &converged)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::k_integral_egrad_mult(QScalar *kint, bool &converged)
 {
-	using std::cos;
-	using std::sin;
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -791,12 +879,9 @@ void LensIntegral<QScalar>::k_integral_egrad_mult(QScalar *kint, bool &converged
 	else die("cannot use chosen integral method with egrad_mult");
 }
 
-template <typename QScalar>
-void LensIntegral<QScalar>::jprime_integral_egrad_mult(QScalar *jint, bool &converged)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::jprime_integral_egrad_mult(QScalar *jint, bool &converged)
 {
-	using std::cos;
-	using std::sin;
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -851,12 +936,9 @@ void LensIntegral<QScalar>::jprime_integral_egrad_mult(QScalar *jint, bool &conv
 	}
 }
 
-template <typename QScalar>
-void LensIntegral<QScalar>::j_integrand_egrad_mult(const QScalar xi, QScalar* jint)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::j_integrand_egrad_mult(const QScalar xi, QScalar* jint)
 {
-	using std::cos;
-	using std::sin;
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -898,12 +980,9 @@ void LensIntegral<QScalar>::j_integrand_egrad_mult(const QScalar xi, QScalar* ji
 	}
 }
 
-template <typename QScalar>
-void LensIntegral<QScalar>::k_integrand_egrad_mult(const QScalar xi, QScalar* kint)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::k_integrand_egrad_mult(const QScalar xi, QScalar* kint)
 {
-	using std::cos;
-	using std::sin;
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -943,12 +1022,9 @@ void LensIntegral<QScalar>::k_integrand_egrad_mult(const QScalar xi, QScalar* ki
 	//return 2*xi*profile->kappa_rsq_deriv(xisq)*u*qval*pow(1-epsilon*u,-(nval+0.5))/dxisq;
 }
 
-template <typename QScalar>
-void LensIntegral<QScalar>::jprime_integrand_egrad_mult(const QScalar xi, QScalar* jint)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::jprime_integrand_egrad_mult(const QScalar xi, QScalar* jint)
 {
-	using std::cos;
-	using std::sin;
-	using std::sqrt;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -989,8 +1065,8 @@ void LensIntegral<QScalar>::jprime_integrand_egrad_mult(const QScalar xi, QScala
 }
 
 
-template <typename QScalar>
-void LensIntegral<QScalar>::calculate_fourier_integrals(const int mval_in, const int fourier_ival_in, const bool cosmode_in, const QScalar rval, QScalar& ileft, QScalar& iright, bool &converged)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::calculate_fourier_integrals(const int mval_in, const int fourier_ival_in, const bool cosmode_in, const QScalar rval, QScalar& ileft, QScalar& iright, bool &converged)
 {
 	mval = mval_in;
 	fourier_ival = fourier_ival_in;
@@ -1043,11 +1119,9 @@ void LensIntegral<QScalar>::calculate_fourier_integrals(const int mval_in, const
 	*/
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::fourier_kappa_m(const QScalar r, const QScalar phi, const int mval_in, const int fourier_ival_in)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::fourier_kappa_m(const QScalar r, const QScalar phi, const int mval_in, const int fourier_ival_in)
 {
-	using std::cos;
-	using std::sin;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -1065,11 +1139,9 @@ QScalar LensIntegral<QScalar>::fourier_kappa_m(const QScalar r, const QScalar ph
 }
 
 
-template <typename QScalar>
-inline QScalar LensIntegral<QScalar>::fourier_kappa_perturbation(const QScalar r)
+template <typename VecType, typename QScalar>
+inline QScalar LensIntegral<VecType,QScalar>::fourier_kappa_perturbation(const QScalar r)
 {
-	using std::cos;
-	using std::sin;
 #ifdef USE_STAN
 	using stan::math::cos;
 	using stan::math::sin;
@@ -1095,30 +1167,30 @@ inline QScalar LensIntegral<QScalar>::fourier_kappa_perturbation(const QScalar r
 	return kapm;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::ileft_integrand(const QScalar r)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::ileft_integrand(const QScalar r)
 {
-	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	return pow(r,mval+1)*fourier_kappa_perturbation(r);
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::iright_integrand(const QScalar u) // here, u = 1/r
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::iright_integrand(const QScalar u) // here, u = 1/r
+		//ans = sqrt(1-epsilon)*PattersonIntegrate(jptr,0,1,converged);
+		//ans = sqrt(1-epsilon)*PattersonIntegrate(jptr,0,1,converged);
 {
-	//using std::pow;
-//#ifdef USE_STAN
-	//using stan::math::pow;
-//#endif
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
 	return pow(u,mval-3)*fourier_kappa_perturbation(1.0/u);
 }
 
 /************************************* Integration algorithms *************************************/
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::GaussIntegrate(QScalar (LensIntegral::*func)(const QScalar), const QScalar a, const QScalar b)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::GaussIntegrate(QScalar (LensIntegral::*func)(const QScalar), const QScalar a, const QScalar b)
 {
 	QScalar result = 0;
 
@@ -1128,8 +1200,8 @@ QScalar LensIntegral<QScalar>::GaussIntegrate(QScalar (LensIntegral::*func)(cons
 	return (b-a)*result/2.0;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::PattersonIntegrate(QScalar (LensIntegral::*func)(const QScalar), const QScalar a, const QScalar b, bool& converged)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::PattersonIntegrate(QScalar (LensIntegral::*func)(const QScalar), const QScalar a, const QScalar b, bool& converged)
 {
 	using std::abs;
 	QScalar result=0, result_old;
@@ -1183,8 +1255,8 @@ QScalar LensIntegral<QScalar>::PattersonIntegrate(QScalar (LensIntegral::*func)(
 	return abdif*result;
 }
 
-template <typename QScalar>
-QScalar LensIntegral<QScalar>::FejerIntegrate(QScalar (LensIntegral::*func)(QScalar), QScalar a, QScalar b, bool &converged)
+template <typename VecType, typename QScalar>
+QScalar LensIntegral<VecType,QScalar>::FejerIntegrate(QScalar (LensIntegral::*func)(QScalar), QScalar a, QScalar b, bool &converged)
 {
 	using std::abs;
 	// Fejer's quadrature rule--seems to be require slightly more function eval's than Patterson quadrature, but can allow for more
@@ -1233,10 +1305,215 @@ QScalar LensIntegral<QScalar>::FejerIntegrate(QScalar (LensIntegral::*func)(QSca
 	return abdif*result;
 }
 
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::GaussIntegrateVec(void (LensIntegral::*func)(const QScalar, const VecType&, const VecType&, VecType&), const VecType& xsq, const VecType& ysq, VecType& result, const QScalar a, const QScalar b)
+{
+	result = Eigen::VectorXd::Zero(xsq.size());
+	VecType ans;
+	for (int i = 0; i < GaussQuad::numberOfPoints; i++) {
+		(this->*func)(((a+b) + (b-a)*gausspoints[i])/2.0,xsq,ysq,ans);
+		result = result + gaussweights[i]*ans;
+	}
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		result = ((b-a)/2)*result;
+	} else
+#endif
+	{
+		result = (((b-a)/2)*result.array()).matrix();
+	}
+}
+
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::PattersonIntegrateVec(void (LensIntegral::*func)(const QScalar, const VecType&, const VecType&, VecType&), const VecType& xsq, const VecType& ysq, VecType& result, const QScalar a, const QScalar b, bool& converged)
+{
+	using std::abs;
+
+	result = Eigen::VectorXd::Zero(xsq.size());
+
+	VecType result_old, ans;
+	int i, level=0, istep, istart;
+	QScalar absum = (a+b)/2, abdif = (b-a)/2;
+	double *weightptr;
+	converged = true;
+
+	int order, j;
+
+	do {
+		weightptr = Patterson::pat_weights[level];
+		result_old = result;
+		order = Patterson::pat_orders[level];
+		istep = 512 / (order+1);
+		istart = istep - 1;
+		istep *= 2;
+		result = Eigen::VectorXd::Zero(xsq.size());
+		for (j=0, i=istart; j < order; j += 2, i += istep) {
+			(this->*func)(absum + abdif*Patterson::pat_points[i],xsq,ysq,ans);
+			pat_funcs_vec[i] = ans;
+			result = result + weightptr[j]*pat_funcs_vec[i];
+		}
+		for (j=1, i=istep-1; j < order; j += 2, i += istep) {
+			result = result + weightptr[j]*pat_funcs_vec[i];
+		}
+
+		Eigen::Index imax;
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+			double maxdiff = (result - result_old).val().cwiseAbs().maxCoeff(&imax);
+			if ((level > 1) and (maxdiff < profile->integral_tolerance*abs(result.val()(imax)))) {
+				break;
+			}
+		} else
+#endif
+		{
+			double maxdiff = (result - result_old).cwiseAbs().maxCoeff(&imax);
+			if ((level > 1) and (maxdiff < profile->integral_tolerance*abs(result(imax)))) {
+				break;
+			}
+		}
+	} while (++level < 9);
+
+	if (level == 9) {
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+			if (((result.val().array()*0.0 != 0.0).any()) or ((result.val().array() > 1e100).any()))
+				warn("integration gave absurdly large or infinite number; suggests numerical problems in evaluating the integrand");
+		} else
+#endif
+		{
+			if (((result.array()*0.0 != 0.0).any()) or ((result.array() > 1e100).any()))
+				warn("integration gave absurdly large or infinite number; suggests numerical problems in evaluating the integrand");
+		}
+
+		if (GaussQuad::numberOfPoints >= 511) {
+			gausspoints = GaussQuad::points;
+			gaussweights = GaussQuad::weights;
+			result = Eigen::VectorXd::Zero(xsq.size());
+			for (int i = 0; i < GaussQuad::numberOfPoints; i++) {
+				(this->*func)(absum + abdif*gausspoints[i],xsq,ysq,ans);
+				result = result + gaussweights[i]*ans;
+			}
+		}
+
+		converged = false;
+	}
+	//if (converged) std::cout << "Converged after " << level << " levels" << std::endl;
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		result = abdif*result;
+	} else
+#endif
+	{
+		result = (abdif*result.array()).matrix();
+	}
+}
+
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::FejerIntegrateVec(void (LensIntegral::*func)(const QScalar, const VecType&, const VecType&, VecType&), const VecType& xsq, const VecType& ysq, VecType& result, const QScalar a, const QScalar b, bool& converged)
+{
+	using std::abs;
+
+	int i, j, level = 0, istep, istart;
+	QScalar abavg = (a+b)/2, abdif = (b-a)/2;
+	double *weightptr;
+
+	converged = true;
+
+	VecType result_old, tmp, fplus, fminus;
+
+	level = 1;
+
+	// initialize endpoints
+	(this->*func)(abavg,xsq,ysq,tmp);
+	cc_funcs_vec[Fejer::cc_N - 1] = tmp;
+
+	result = Eigen::VectorXd::Zero(xsq.size());
+	cc_funcs_vec[0] = result;
+
+	int lval;
+
+	do {
+		weightptr = Fejer::cc_weights[level];
+		result_old = result;
+		lval = Fejer::cc_lvals[level];
+		istart = (Fejer::cc_N - 1) / lval;
+		istep = istart * 2;
+
+		for (j = 1, i = istart; j < lval; j += 2, i += istep) {
+			(this->*func)(abavg + abdif*Fejer::cc_points[i],xsq,ysq,fplus);
+			(this->*func)(abavg - abdif*Fejer::cc_points[i],xsq,ysq,fminus);
+			cc_funcs_vec[i] = fplus + fminus;
+			result = result + weightptr[j] * cc_funcs_vec[i];
+		}
+
+		for (j = 2, i = istep; j <= lval; j += 2, i += istep) {
+			result = result + weightptr[j] * cc_funcs_vec[i];
+		}
+
+		if (level > 1) {
+			Eigen::Index imax;
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+				double maxdiff = (result - result_old).val().cwiseAbs().maxCoeff(&imax);
+				if (maxdiff < profile->integral_tolerance * abs(result.val()(imax))) {
+					converged = true;
+					break;
+				}
+			} else
+#endif
+			{
+				double maxdiff = (result - result_old).cwiseAbs().maxCoeff(&imax);
+				if (maxdiff < profile->integral_tolerance * abs(result(imax))) {
+					converged = true;
+					break;
+				}
+			}
+		}
+	} while (++level < Fejer::cc_nlevels);
+
+	if (level == Fejer::cc_nlevels) {
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+			if (((result.val().array()*0.0 != 0.0).any()) ||
+			    ((result.val().array() > 1e100).any()))
+				warn("integration gave absurdly large or infinite number; suggests numerical problems in evaluating the integrand");
+		} else
+#endif
+		{
+			if (((result.array()*0.0 != 0.0).any()) ||
+			    ((result.array() > 1e100).any()))
+				warn("integration gave absurdly large or infinite number; suggests numerical problems in evaluating the integrand");
+		}
+
+		converged = false;
+
+		if (GaussQuad::numberOfPoints >= Fejer::cc_N) {
+			gausspoints = GaussQuad::points;
+			gaussweights = GaussQuad::weights;
+			result = Eigen::VectorXd::Zero(xsq.size());
+			for (int k = 0; k < GaussQuad::numberOfPoints; k++) {
+				VecType f;
+				(this->*func)(abavg + abdif*gausspoints[k], xsq, ysq, f);
+				result = result + gaussweights[k] * f;
+			}
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		result = abdif*result;
+	} else
+#endif
+	{
+		result = (abdif*result.array()).matrix();
+	}
+}
+
 /***************************** Integration algorithms (for simulateneous integrations) *******************************/
 
-template <typename QScalar>
-void LensIntegral<QScalar>::GaussIntegrate(void (LensIntegral::*func)(const QScalar, QScalar*), const QScalar a, const QScalar b, QScalar* results, const int n_funcs)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::GaussIntegrate(void (LensIntegral::*func)(const QScalar, QScalar*), const QScalar a, const QScalar b, QScalar* results, const int n_funcs)
 {
 	int i,j;
 	for (j=0; j < n_funcs; j++) results[j] = 0;
@@ -1250,8 +1527,8 @@ void LensIntegral<QScalar>::GaussIntegrate(void (LensIntegral::*func)(const QSca
 	delete[] funcs;
 }
 
-template <typename QScalar>
-void LensIntegral<QScalar>::PattersonIntegrate(void (LensIntegral::*func)(const QScalar, QScalar*), const QScalar a, const QScalar b, QScalar* results, const int n_funcs, bool& converged)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::PattersonIntegrate(void (LensIntegral::*func)(const QScalar, QScalar*), const QScalar a, const QScalar b, QScalar* results, const int n_funcs, bool& converged)
 {
 	using std::abs;
 	int i,j,k;
@@ -1344,8 +1621,8 @@ void LensIntegral<QScalar>::PattersonIntegrate(void (LensIntegral::*func)(const 
 	delete[] results_old;
 }
 
-template <typename QScalar>
-void LensIntegral<QScalar>::FejerIntegrate(void (LensIntegral::*func)(const QScalar, QScalar*), const QScalar a, const QScalar b, QScalar* results, const int n_funcs, bool& converged)
+template <typename VecType, typename QScalar>
+void LensIntegral<VecType,QScalar>::FejerIntegrate(void (LensIntegral::*func)(const QScalar, QScalar*), const QScalar a, const QScalar b, QScalar* results, const int n_funcs, bool& converged)
 {
 	using std::abs;
 	// Fejer's quadrature rule--seems to be require slightly more function eval's than Patterson quadrature, but can allow for more

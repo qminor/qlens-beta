@@ -32,6 +32,7 @@ LensProfile::LensProfile(const char *splinefile, const double zlens_in, const do
 	lensparams_spl.f_parameter = f_in;
 	lensparams_spl.kspline.input(splinefile);
 #ifdef USE_STAN
+	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
 	sync_autodif_parameters();
 #endif
 
@@ -516,7 +517,6 @@ void LensProfile::set_spawned_mass_and_anchor_parameters(SB_Profile* sb_in, cons
 	}
 
 	set_integration_pointers();
-	set_model_specific_integration_pointers();
 	// We don't update meta parameters yet because we still need to initialize the cosmology (since cosmology info couldn't be retrieved from source object)
 
 	for (int i=1; i < n_params-1; i++) {
@@ -771,7 +771,6 @@ void LensProfile::update_parameters(const double* params)
 	update_meta_parameters_autodif();
 #endif
 	set_integration_pointers();
-	set_model_specific_integration_pointers();
 	if (qlens != NULL) {
 		qlens->update_anchored_parameters_and_redshift_data();
 		qlens->update_lens_fitparams(lens_number);
@@ -794,6 +793,7 @@ bool LensProfile::update_specific_parameter(const string name_in, const double& 
 		update_parameters(newparams);
 	}
 	delete[] newparams;
+	set_integration_pointers();
 	return found_match;
 }
 
@@ -824,7 +824,6 @@ void LensProfile::update_ellipticity_parameter(const double eparam)
 	update_meta_parameters_autodif();
 #endif
 	set_integration_pointers();
-	set_model_specific_integration_pointers();
 }
 
 // Perhaps should have a function at the model level, called here that reports a "false" status if parameter values are crazy!
@@ -862,7 +861,6 @@ void LensProfile::update_fit_parameters(const QScalar* fitparams, int &index, bo
 #endif
 		update_meta_parameters();
 		set_integration_pointers();
-		set_model_specific_integration_pointers();
 	}
 	// NOTE: to save time, we do not update the qlens->param_list here, since this function is only run during model fitting
 }
@@ -895,7 +893,6 @@ void LensProfile::update_anchored_parameters()
 		update_meta_parameters_autodif();
 #endif
 		set_integration_pointers();
-		set_model_specific_integration_pointers();
 	}
 }
 
@@ -1315,8 +1312,13 @@ void LensProfile::set_geometric_parameters(const QScalar &par1_in, const QScalar
 {
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 	if (use_ellipticity_components) {
-		p.epsilon1 = par1_in;
-		p.epsilon2 = par2_in;
+		//if ((par1_in==0.0) and (par2_in==0.0)) {
+			//p.epsilon1 = 1e-10; // to avoid coordinate singularities messing with autodiff (only do this fudge if we're actually varying ellipticity)
+			//p.epsilon2 = 1e-10;
+		//} else {
+			p.epsilon1 = par1_in;
+			p.epsilon2 = par2_in;
+		//}
 	} else {
 		set_ellipticity_parameter(par1_in);
 		p.theta = degrees_to_radians(par2_in);
@@ -1679,7 +1681,6 @@ template void LensProfile::set_angle_from_components<stan::math::var>(const stan
 void LensProfile::update_meta_parameters_and_pointers()
 {
 	set_integration_pointers();
-	set_model_specific_integration_pointers();
 	update_meta_parameters();
 #ifdef USE_STAN
 	update_meta_parameters_autodif();
@@ -1693,29 +1694,36 @@ void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q
 	potptr = &LensProfile::potential_numerical;
 	kapavgptr_rsq_spherical = &LensProfile::kappa_avg_spherical_integral<double>;
 	potptr_rsq_spherical = &LensProfile::potential_spherical_integral<double>;
+	//kapavgptr_rsq_spherical_vec =  ... There is no integral form that takes in vectors of x/y values. Implement this!
 	if ((lensparams->q==1.0) and (!ellipticity_gradient)) {
 		potptr = &LensProfile::potential_spherical_default<double>;
 		defptr = &LensProfile::deflection_spherical_default<double>;
+		defptr_vec = &LensProfile::deflection_spherical_default_vec<Eigen::VectorXd,double>;
 		hessptr = &LensProfile::hessian_spherical_default<double>;
 	} else {
 		defptr = &LensProfile::deflection_numerical<double>;
 		hessptr = &LensProfile::hessian_numerical<double>;
+		defptr_vec = &LensProfile::deflection_numerical_vec<Eigen::VectorXd,double>; 
 	}
 	def_and_hess_ptr = &LensProfile::deflection_and_hessian_together<double>;
 
 #ifdef USE_STAN
 	kapavgptr_rsq_spherical_autodif = &LensProfile::kappa_avg_spherical_integral<stan::math::var>;
 	potptr_rsq_spherical_autodif = &LensProfile::potential_spherical_integral<stan::math::var>;
-	//if ((lensparams_dif->q==1.0) and (!ellipticity_gradient)) {
+	//kapavgptr_rsq_spherical_vec_autodif =  ... There is no integral form that takes in vectors of x/y values. Implement this!
+	if ((lensparams_dif->q==1.0) and (!ellipticity_gradient)) {
 		//potptr_autodif = &LensProfile::potential_spherical_default<stan::math::var>;
 		//defptr_autodif = &LensProfile::deflection_spherical_default<stan::math::var>;
 		//hessptr_autodif = &LensProfile::hessian_spherical_default<stan::math::var>;
-	//} else {
+		defptr_vec_autodif = &LensProfile::deflection_spherical_default_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>;
+	} else {
 		defptr_autodif = &LensProfile::deflection_numerical<stan::math::var>;
 		hessptr_autodif = &LensProfile::hessian_numerical<stan::math::var>;
-	//}
+		defptr_vec_autodif = &LensProfile::deflection_numerical_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>; 
+	}
 	def_and_hess_ptr_autodif = &LensProfile::deflection_and_hessian_together<stan::math::var>;
 #endif
+	set_model_specific_integration_pointers();
 }
 
 template <typename QScalar>
@@ -1747,6 +1755,20 @@ QScalar LensProfile::kappa_rsq_deriv_impl(const QScalar rsq)
 template double LensProfile::kappa_rsq_deriv_impl<double>(const double rsq);
 #ifdef USE_STAN
 template stan::math::var LensProfile::kappa_rsq_deriv_impl<stan::math::var>(const stan::math::var rsq);
+#endif
+
+template <typename VecType, typename QScalar>
+void LensProfile::kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa)
+{
+#ifdef USE_STAN
+	using stan::math::pow;
+#endif
+	LensSpline_Params<QScalar>& p = assign_lensspline_param_object<QScalar>();
+	kappa = Eigen::VectorXd::Zero(kappa.size());  // implement the spline with vectors/varmats later
+}
+template void LensProfile::kappa_rsq_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa);
+#ifdef USE_STAN
+template void LensProfile::kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa);
 #endif
 
 template <typename QScalar>
@@ -1989,6 +2011,10 @@ void LensProfile::update_ellipticity_meta_parameters()
 		if (((vary_params[ellipticity_paramnum]) or (vary_params[ellipticity_paramnum])) and ((p.epsilon1==0.0) and (p.epsilon2==0.0))) {
 			p.epsilon1 = 1e-10; // to avoid coordinate singularities messing with autodiff (only do this fudge if we're actually varying ellipticity)
 			p.epsilon2 = 1e-10;
+			LensParams<double>& pd = assign_lensparam_object<double>();
+			pd.epsilon1 = 1e-10; // for consistency
+			pd.epsilon2 = 1e-10; // for consistency
+			set_integration_pointers(); // just in case the formulas change
 		}
 #endif
 		if ((ellipticity_mode==0) or (ellipticity_mode==1)) set_ellipticity_parameter(1 - sqrt(SQR(p.epsilon1) + SQR(p.epsilon2)));
@@ -2171,6 +2197,7 @@ template stan::math::var LensProfile::kappa_impl<stan::math::var>(stan::math::va
 template <typename QScalar>
 void LensProfile::deflection_impl(QScalar x, QScalar y, lensvector<QScalar>& def)
 {
+	//cout << "WOOGA" <<  endl;
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 
 	// switch to coordinate system centered on lens profile
@@ -2192,6 +2219,7 @@ void LensProfile::deflection_impl(QScalar x, QScalar y, lensvector<QScalar>& def
 		add_deflection_from_fourier_modes(x,y,def); // this adds the deflection from Fourier modes
 	}
 	if ((!ellipticity_gradient) and (p.sintheta != 0)) def.rotate_back(p.costheta,p.sintheta);
+	//cout << "end WOOGA" <<  endl;
 }
 template void LensProfile::deflection_impl<double>(double x, double y, lensvector<double>& def);
 #ifdef USE_STAN
@@ -2342,6 +2370,70 @@ void LensProfile::deflection_and_hessian_together(const QScalar x, const QScalar
 template void LensProfile::deflection_and_hessian_together<double>(const double x, const double y, lensvector<double> &def, lensmatrix<double>& hess);
 #ifdef USE_STAN
 template void LensProfile::deflection_and_hessian_together<stan::math::var>(const stan::math::var x, const stan::math::var y, lensvector<stan::math::var> &def, lensmatrix<stan::math::var>& hess);
+#endif
+
+template <typename VecType, typename QScalar>
+void LensProfile::deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& def_x, VecType& def_y)
+{
+	//cout << "WUGGA" << endl;
+	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
+
+	// switch to coordinate system centered on lens profile
+	VecType dx,dy;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		dx = x0 - p.x_center;
+		dy = y0 - p.y_center;
+	} else
+#endif
+	{
+		dx = (x0.array() - p.x_center).matrix();
+		dy = (y0.array() - p.y_center).matrix();
+	}
+
+	VecType x = p.costheta * dx + p.sintheta * dy;
+	VecType y = - p.sintheta * dx + p.costheta * dy;
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		//cout << "ABOUT TO DO VEC AUTODIF?" << endl;
+		(this->*defptr_vec_autodif)(x,y,def_x,def_y);
+	} else
+#endif
+	(this->*defptr_vec)(x,y,def_x,def_y);
+
+	// Now we rotate deflection vectors back into original (non-rotated) frame. We'll reuse x as a temporary vector below
+	x = def_x*p.costheta - def_y*p.sintheta;
+	def_y = def_x*p.sintheta + def_y*p.costheta;
+	def_x = x;
+
+	/*
+	lensvector<QScalar> defcheck;
+		//if constexpr (std::is_same_v<QScalar, double>) {
+	//cout << "costh: " << p.costheta << " sinth: " << p.sintheta << endl;
+		//}
+	for (int indx = 0; indx < x.size(); indx++) {
+		deflection_impl<QScalar>(x0(indx),y0(indx),defcheck);
+		QScalar xp = x0(indx)-p.x_center;
+		QScalar yp = y0(indx)-p.y_center;
+		rotate(xp,yp);
+
+		if constexpr (std::is_same_v<VecType, Eigen::VectorXd>) {
+			//cout << "x: " << x(indx) << " y: " << y(indx) << " xcheck: " << xp << " ycheck: " << yp << endl;
+			if ((abs(def_x(indx)-defcheck[0]) > 1e-7) or (abs(def_y(indx)-defcheck[1]) > 1e-7))
+				cout << "DEF: " << def_x(indx) << " " << def_y(indx) << " DEFCHECK: " << defcheck[0] << " " << defcheck[1] << endl;
+		}
+	}
+	*/
+
+	//if (n_fourier_modes > 0) {
+		//add_deflection_from_fourier_modes(x,y,def); // this adds the deflection from Fourier modes
+	//}
+	//cout << "END WUGGA" << endl;
+}
+template void LensProfile::deflection_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, Eigen::VectorXd&);
+#ifdef USE_STAN
+template void LensProfile::deflection_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&);
 #endif
 
 void LensProfile::kappa_and_dkappa_dR(double x, double y, double& kap, double& dkap)
@@ -2516,7 +2608,6 @@ bool LensProfile::enable_ellipticity_gradient(Vector<double>& efunc_params, cons
 
 	update_ellipticity_meta_parameters<double>();
 	set_integration_pointers();
-	set_model_specific_integration_pointers();
 	if (qlens != NULL) qlens->ellipticity_gradient = true;
 	check_for_overlapping_contours();
 	if (contours_overlap) {
@@ -2782,6 +2873,42 @@ template void LensProfile::deflection_spherical_default<double>(const double x, 
 template void LensProfile::deflection_spherical_default<stan::math::var>(const stan::math::var x, const stan::math::var y, lensvector<stan::math::var>& def);
 #endif
 
+template <typename VecType, typename QScalar>
+void LensProfile::deflection_spherical_default_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y)
+{
+	//cout << "DEF SPHERICAL VEC?" << endl;
+	VecType rsq;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		rsq = stan::math::elt_multiply(x,x) + stan::math::elt_multiply(y,y);
+	} else
+#endif
+	rsq = (x.array().square() + y.array().square()).matrix();
+
+	VecType kapavg;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+		(this->*kapavgptr_rsq_spherical_vec_autodif)(rsq,kapavg);
+	else
+#endif
+	(this->*kapavgptr_rsq_spherical_vec)(rsq,kapavg);
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		def_x = elt_multiply(kapavg,x); 
+		def_y = elt_multiply(kapavg,y);
+	} else
+#endif
+	{
+		def_x = kapavg.cwiseProduct(x);
+		def_y = kapavg.cwiseProduct(y);
+	}
+}
+template void LensProfile::deflection_spherical_default_vec<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, Eigen::VectorXd&);
+#ifdef USE_STAN
+template void LensProfile::deflection_spherical_default_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&);
+#endif
+
 template <typename QScalar>
 QScalar LensProfile::potential_spherical_default(const QScalar x, const QScalar y)
 {
@@ -2889,7 +3016,7 @@ QScalar LensProfile::potential_spherical_integral(const QScalar rsq)
 	using std::sqrt;
 	bool converged;
 	QScalar ans;
-	LensIntegral<QScalar> lens_integral(this,sqrt(rsq),0,1.0);
+	LensIntegral<Eigen::VectorXd,QScalar> lens_integral(this,sqrt(rsq),0,1.0);
 	ans = 0.5*lens_integral.i_integral(converged);
 	return ans;
 }
@@ -2911,7 +3038,7 @@ void LensProfile::deflection_numerical(const QScalar x, const QScalar y, lensvec
 	bool converged;
 	if (!ellipticity_gradient) {
 		//cout << "NOT DOING EGRAD" << endl;
-		LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
+		LensIntegral<Eigen::VectorXd,QScalar> lens_integral(this,x,y,lensparams->q);
 		def[0] = x*lens_integral.j_integral(0,converged);
 		warn_if_not_converged(converged,x,y);
 		def[1] = y*lens_integral.j_integral(1,converged);
@@ -2942,7 +3069,7 @@ void LensProfile::deflection_numerical(const QScalar x, const QScalar y, lensvec
 		warn_if_not_converged(converged,x,y);
 		*/
 
-		LensIntegral<QScalar> lens_integral2(this,x,y,lensparams->q,2);
+		LensIntegral<Eigen::VectorXd,QScalar> lens_integral2(this,x,y,lensparams->q,2);
 		//lens_integral2.jprime_integral_egrad_mult(def.array(),converged);
 		warn_if_not_converged(converged,x,y);
 		/*
@@ -2975,7 +3102,7 @@ void LensProfile::hessian_numerical(const QScalar x, const QScalar y, lensmatrix
 
 	bool converged;
 	if (!ellipticity_gradient) {
-		LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
+		LensIntegral<Eigen::VectorXd,QScalar> lens_integral(this,x,y,lensparams->q);
 		QScalar jint0, jint1;
 		jint0 = lens_integral.j_integral(0,converged);
 		warn_if_not_converged(converged,x,y);
@@ -3012,7 +3139,7 @@ void LensProfile::hessian_numerical(const QScalar x, const QScalar y, lensmatrix
 		//cout << "HESS: " << hess[0][0] << " " << hess[1][1] << " " << hess[0][1] << endl;
 	} else {
 		/*
-		LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
+		LensIntegral<Eigen::VectorXd,QScalar> lens_integral(this,x,y,lensparams->q);
 		QScalar jint0, jint1, jint2;
 		QScalar kint0, kint1, kint2;
 		jint0 = lens_integral.j_integral_egrad(0,converged);
@@ -3044,7 +3171,7 @@ void LensProfile::hessian_numerical(const QScalar x, const QScalar y, lensmatrix
 		//hess[1][1] = 2*lens_integral.k_integral_egrad(2,converged) + jint2;
 		//warn_if_not_converged(converged,x,y);
 
-		LensIntegral<QScalar> lens_integral3(this,x,y,lensparams->q,3);
+		LensIntegral<Eigen::VectorXd,QScalar> lens_integral3(this,x,y,lensparams->q,3);
 		QScalar jint[3], kint[3];
 		//lens_integral3.j_integral_egrad_mult(jint,converged);
 		warn_if_not_converged(converged,x,y);
@@ -3089,7 +3216,7 @@ void LensProfile::deflection_and_hessian_numerical(const QScalar x, const QScala
 	// will save a significant amount of time, but might take some doing to implement
 
 	bool converged;
-	LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
+	LensIntegral<Eigen::VectorXd,QScalar> lens_integral(this,x,y,lensparams->q);
 	if (!ellipticity_gradient) {
 		//cout << "NOT DOING EGRAD" << endl;
 		QScalar jint0, jint1;
@@ -3148,7 +3275,7 @@ void LensProfile::deflection_and_hessian_numerical(const QScalar x, const QScala
 		warn_if_not_converged(converged,x,y);
 */
 
-		LensIntegral<QScalar> lens_integral3(this,x,y,lensparams->q,3);
+		LensIntegral<Eigen::VectorXd,QScalar> lens_integral3(this,x,y,lensparams->q,3);
 		QScalar jint[3], kint[3];
 		//lens_integral3.j_integral_egrad_mult(jint,converged);
 		warn_if_not_converged(converged,x,y);
@@ -3177,6 +3304,38 @@ void LensProfile::deflection_and_hessian_numerical(const QScalar x, const QScala
 template void LensProfile::deflection_and_hessian_numerical<double>(const double x, const double y, lensvector<double>& def, lensmatrix<double>& hess);
 #ifdef USE_STAN
 template void LensProfile::deflection_and_hessian_numerical<stan::math::var>(const stan::math::var x, const stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess);
+#endif
+
+template <typename VecType, typename QScalar>
+void LensProfile::deflection_numerical_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y)
+{
+	bool converged;
+	if (!ellipticity_gradient) {
+		LensIntegral<VecType,QScalar> lens_integral(this,0,0,lensparams->q,0,true); // the 'true' tells it to run the "vec" version of the integrals
+		lens_integral.j_integral_vec(0,x,y,def_x,converged);
+		warn_if_not_converged(converged,x(0),y(0));
+		lens_integral.j_integral_vec(1,x,y,def_y,converged);
+		warn_if_not_converged(converged,x(0),y(0));
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		def_x = elt_multiply(def_x,x); 
+		def_y = elt_multiply(def_y,y);
+	} else
+#endif
+	{
+		def_x = def_x.cwiseProduct(x);
+		def_y = def_y.cwiseProduct(y);
+	}
+
+	} else {
+		// Implement this later
+		//LensIntegral<Eigen::VectorXd,QScalar> lens_integral2(this,x,y,lensparams->q,2);
+		//warn_if_not_converged(converged,x,y);
+	}
+}
+template void LensProfile::deflection_numerical_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& x, const Eigen::VectorXd& y, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y);
+#ifdef USE_STAN
+template void LensProfile::deflection_numerical_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& x, const stan::math::var_value<Eigen::VectorXd>& y, stan::math::var_value<Eigen::VectorXd>& def_x, stan::math::var_value<Eigen::VectorXd>& def_y);
 #endif
 
 template <typename QScalar>
@@ -3234,7 +3393,7 @@ QScalar LensProfile::potential_numerical(const QScalar x, const QScalar y)
 	if ((!ellipticity_gradient) and (this->kapavgptr_rsq_spherical==NULL)) return 0.0; // for the integral without egrad, cannot calculate potential without a spherical deflection defined
 	bool converged;
 	QScalar ans;
-	LensIntegral<QScalar> lens_integral(this,x,y,lensparams->q);
+	LensIntegral<Eigen::VectorXd,QScalar> lens_integral(this,x,y,lensparams->q);
 	if (!ellipticity_gradient) {
 		ans = 0.5*lens_integral.i_integral(converged);
 		warn_if_not_converged(converged,x,y);
@@ -3323,7 +3482,7 @@ void LensProfile::add_deflection_from_fourier_modes(const QScalar x, const QScal
 	int m;
 
 	bool converged;
-	LensIntegral<QScalar> lens_integral(this,x,y);
+	LensIntegral<Eigen::VectorXd,QScalar> lens_integral(this,x,y);
 	if (fourier_gradient) {
 		lens_integral.cosamps = new QScalar[n_fourier_modes];
 		lens_integral.sinamps = new QScalar[n_fourier_modes];
@@ -3393,7 +3552,7 @@ void LensProfile::add_hessian_from_fourier_modes(const QScalar x, const QScalar 
 	sincos = cosphi*sinphi;
 
 	bool converged;
-	LensIntegral<QScalar> lens_integral(this,x,y);
+	LensIntegral<Eigen::VectorXd,QScalar> lens_integral(this,x,y);
 	if (fourier_gradient) {
 		lens_integral.cosamps = new QScalar[n_fourier_modes];
 		lens_integral.sinamps = new QScalar[n_fourier_modes];
@@ -3501,7 +3660,7 @@ void LensProfile::spline_fourier_mode_integrals(const QScalar rmin, const QScala
 		nthreads = omp_get_num_threads();
 	}
 #endif
-	LensIntegral<QScalar> *lens_integral = new LensIntegral<QScalar>[nthreads];
+	LensIntegral<Eigen::VectorXd,QScalar> *lens_integral = new LensIntegral<Eigen::VectorXd,QScalar>[nthreads];
 
 	for (i=0; i < nthreads; i++) {
 		lens_integral[i].initialize(this);

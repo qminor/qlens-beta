@@ -468,9 +468,6 @@ void ImgSrchGrid::redraw_grid(double r_min, double r_max, double xcenter_in, dou
 
 	reassign_subcell_lensing_properties_firstlevel();
 
-//#ifdef USE_OPENMP
-	//double wtime, wtime0;
-//#endif
 	for (i=0; i < splitlevels + cc_splitlevels - 1; i++) {
 		// the second argument here, set to 'true', says to subgrid around neighbors of critical curves (this allows us to catch
 		// cells that might have a curve piercing in and out of one side only; we can only detect this by breaking into smaller cells)
@@ -538,9 +535,6 @@ void ImgSrchGrid::redraw_grid(double xcenter_in, double ycenter_in, double xleng
 
 	reassign_subcell_lensing_properties_firstlevel();
 
-//#ifdef USE_OPENMP
-	//double wtime, wtime0;
-//#endif
 	for (i=0; i < splitlevels + cc_splitlevels - 1; i++) {
 		// the second argument here, set to 'true', says to subgrid around neighbors of critical curves (this allows us to catch
 		// cells that might have a curve piercing in and out of one side only; we can only detect this by breaking into smaller cells)
@@ -2851,7 +2845,6 @@ template void PointSource::setup_param_pointers<double>();
 #ifdef USE_STAN
 template void PointSource::setup_param_pointers<stan::math::var>();
 #endif
-
 
 void PointSource::copy_ptsrc_data(PointSource* ptsrc_in)
 {

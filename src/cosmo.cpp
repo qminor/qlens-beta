@@ -178,10 +178,7 @@ void Cosmology::copy_cosmo_data(const Cosmology* cosmo_in)
 	omega_b = cosmo_in->omega_b;
 	A_s = cosmo_in->A_s;
 	copy_param_arrays(cosmo_in);
-	set_cosmology_flat();
-#ifdef USE_STAN
-	sync_autodif_parameters();
-#endif
+	set_cosmology_flat(false);
 }
 
 #ifdef USE_STAN
@@ -189,7 +186,7 @@ void Cosmology::sync_autodif_parameters()
 {
 	cosmo_params_dif.hubble = cosmo_params.hubble;
 	cosmo_params_dif.omega_m = cosmo_params.omega_m;
-
+	// Would it be better to make the set_cosmology function autodiff and run the autodiff version?
 	cosmo_params_dif.hubble_length = 2.99792458e3/cosmo_params_dif.hubble; // in Mpc
 	cosmo_params_dif.dcrit0 = 2.775e11*cosmo_params_dif.hubble*cosmo_params_dif.hubble;  // units are solar masses per Mpc^3
 }
@@ -198,7 +195,7 @@ void Cosmology::sync_autodif_parameters()
 void Cosmology::update_meta_parameters(const bool varied_only_fitparams)
 {
 	CosmoParams<double>& p = assign_cosmo_param_object<double>(); // this reference will point to either the <QScalar> lensparams or <stan::math::var> lensparams for autodiff
-	set_cosmology_flat();
+	set_cosmology_flat(false);
 	if ((qlens) and (n_vary_params > 0)) {
 		qlens->update_zfactors_and_betafactors();
 		for (int i=0; i < qlens->nlens; i++) {

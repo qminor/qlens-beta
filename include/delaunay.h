@@ -2,6 +2,10 @@
 #define DELAUNEY_H
 #include "lensvec.h"
 
+#ifdef USE_STAN
+#include <stan/math.hpp>
+#endif
+
 const unsigned char OK = 0x01;
 const unsigned char NOTOK = 0x00;
 const unsigned char ONSIDE = 0x02;
@@ -12,17 +16,45 @@ const unsigned char USED = 0x04;
 const unsigned char NODEL = 0x08;
 const unsigned char BI = 0x10;
 
+template <typename QScalar>
 struct Triangle // the final triangulation will be stored in an array of triangle structs
 {
-	lensvector<double> vertex[3];
-	lensvector<double> midpoint[3];
-	lensvector<double> circumcenter;
+	lensvector<QScalar> vertex[3];
+	lensvector<QScalar> circumcenter;
 	double circumcircle_radsq;
-	double *sb[3]; // pointer to surface brightness values assigned to each vertex
 	double area; // this will be a signed quantity since it's given by the cross product of the side vectors
 	int vertex_index[3];
 	int neighbor_index[3];
-	//int index;
+	Triangle() {}
+	void copy_triangle(Triangle<double>* tri_in) {
+		for (int i=0; i < 3; i++) {
+			//std::cout << "INDEX " << i << "..." << std::endl;
+			tri_in->vertex_index[i] = vertex_index[i];
+			tri_in->neighbor_index[i] = neighbor_index[i];
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				tri_in->vertex[i][0] = vertex[i][0].val();
+				tri_in->vertex[i][1] = vertex[i][1].val();
+			} else
+#endif
+			{
+				tri_in->vertex[i][0] = vertex[i][0];
+				tri_in->vertex[i][1] = vertex[i][1];
+			}
+		}
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			tri_in->circumcenter[0] = circumcenter[0].val();
+			tri_in->circumcenter[1] = circumcenter[1].val();
+		} else
+#endif
+		{
+			tri_in->circumcenter[0] = circumcenter[0];
+			tri_in->circumcenter[1] = circumcenter[1];
+		}
+		tri_in->circumcircle_radsq = circumcircle_radsq;
+		tri_in->area = area;
+	}
 };
 
 struct triangleBase;
@@ -77,7 +109,7 @@ struct triangleBase
 	
 	void Shift(const int n)
 	{
-		if(n==2)
+		if (n==2)
 		{
 			triangleBase *tempTri = sides[0];
 			int tempIn = sidesindices[0];
@@ -88,7 +120,7 @@ struct triangleBase
 			sidesindices[1] = sidesindices[2];
 			sidesindices[2] = tempIn;
 		}
-		else if(n==0)
+		else if (n==0)
 		{
 			triangleBase *tempTri = sides[0];
 			int tempIn = sidesindices[0];
@@ -102,22 +134,21 @@ struct triangleBase
 	}
 };
 
+template <typename QScalar>
 class Delaunay
 {
 	private:
 		triangleTree *tris;
 		triangleBase *botTris;
 		triangleBase *botPtr;
-		//double d1[2], d2[2], d3[2];
-		//double product1, product2, product3;
 		
 	public:
-		double *x;
-		double *y;
+		QScalar *x;
+		QScalar *y;
 		int nTris;
 		int nvertex;
 
-		Delaunay(double *xin, double *yin, const int n) : x(xin), y(yin), nvertex(n), nTris(2*n+1)
+		Delaunay(QScalar *xin, QScalar *yin, const int n) : x(xin), y(yin), nvertex(n), nTris(2*n+1)
 		{
 			tris = new triangleTree();
 			botPtr = botTris = new triangleBase[nTris];
@@ -139,20 +170,35 @@ class Delaunay
 				ti = tri->vertices[i] >= 0;
 				tj = tri->vertices[i1[i]] >= 0;
 				
-				if (ti&&tj)
+#ifdef USE_STAN
+				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+					if (ti&&tj)
+					{
+						temp = (y[pt].val()-y[tri->vertices[i]].val())*(x[tri->vertices[i1[i]]].val() - x[tri->vertices[i]].val()) - (x[pt].val()-x[tri->vertices[i]].val())*(y[tri->vertices[i1[i]]].val() - y[tri->vertices[i]].val());
+					}	
+					else if (ti)
+					{
+						temp = (y[pt].val()-y[tri->vertices[i]].val())*xInfty[-tri->vertices[i1[i]]] - (x[pt].val()-x[tri->vertices[i]].val())*yInfty[-tri->vertices[i1[i]]];
+					}
+					else if (tj)
+					{
+						temp = (x[pt].val()-x[tri->vertices[i1[i]]].val())*yInfty[-tri->vertices[i]] - (y[pt].val()-y[tri->vertices[i1[i]]].val())*xInfty[-tri->vertices[i]];
+					}
+				} else
+#endif
 				{
-					temp = (y[pt]-y[tri->vertices[i]])*(x[tri->vertices[i1[i]]] - x[tri->vertices[i]])-
-							(x[pt]-x[tri->vertices[i]])*(y[tri->vertices[i1[i]]] - y[tri->vertices[i]]);
-				}	
-				else if (ti)
-				{
-					temp = (y[pt]-y[tri->vertices[i]])*xInfty[-tri->vertices[i1[i]]]-
-							(x[pt]-x[tri->vertices[i]])*yInfty[-tri->vertices[i1[i]]];
-				}
-				else if (tj)
-				{
-					temp = (x[pt]-x[tri->vertices[i1[i]]])*yInfty[-tri->vertices[i]]-
-							(y[pt]-y[tri->vertices[i1[i]]])*xInfty[-tri->vertices[i]];
+					if (ti&&tj)
+					{
+						temp = (y[pt]-y[tri->vertices[i]])*(x[tri->vertices[i1[i]]] - x[tri->vertices[i]])- (x[pt]-x[tri->vertices[i]])*(y[tri->vertices[i1[i]]] - y[tri->vertices[i]]);
+					}	
+					else if (ti)
+					{
+						temp = (y[pt]-y[tri->vertices[i]])*xInfty[-tri->vertices[i1[i]]]- (x[pt]-x[tri->vertices[i]])*yInfty[-tri->vertices[i1[i]]];
+					}
+					else if (tj)
+					{
+						temp = (x[pt]-x[tri->vertices[i1[i]]])*yInfty[-tri->vertices[i]]- (y[pt]-y[tri->vertices[i1[i]]])*xInfty[-tri->vertices[i]];
+					}
 				}
 				
 				if (temp < 0)
@@ -182,26 +228,57 @@ class Delaunay
 			{
 				double a0, a1, c0, c1, det, asq, csq, ctr0, ctr1, rad2, d2;
 		
-				a0 = x[tri->vertices[0]]-x[tri->vertices[1]];
-				a1 = y[tri->vertices[0]]-y[tri->vertices[1]];
-				c0 = x[tri->vertices[2]]-x[tri->vertices[1]];
-				c1 = y[tri->vertices[2]]-y[tri->vertices[1]];
+#ifdef USE_STAN
+				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+					a0 = x[tri->vertices[0]].val()-x[tri->vertices[1]].val();
+					a1 = y[tri->vertices[0]].val()-y[tri->vertices[1]].val();
+					c0 = x[tri->vertices[2]].val()-x[tri->vertices[1]].val();
+					c1 = y[tri->vertices[2]].val()-y[tri->vertices[1]].val();
+				} else
+#endif
+				{
+					a0 = x[tri->vertices[0]]-x[tri->vertices[1]];
+					a1 = y[tri->vertices[0]]-y[tri->vertices[1]];
+					c0 = x[tri->vertices[2]]-x[tri->vertices[1]];
+					c1 = y[tri->vertices[2]]-y[tri->vertices[1]];
+				}
 				det = 0.5/(a0*c1-c0*a1);
 				asq = a0*a0 + a1*a1;
 				csq = c0*c0 + c1*c1;
 				ctr0 = det*(asq*c1 - csq*a1);
 				ctr1 = det*(csq*a0 - asq*c0);
 				rad2 = ctr0*ctr0 + ctr1*ctr1;
-				d2 = (ctr0 + x[tri->vertices[1]] - x[in])*(ctr0 + x[tri->vertices[1]] - x[in])+(ctr1 + y[tri->vertices[1]] - y[in])*(ctr1 + y[tri->vertices[1]] - y[in]);
+#ifdef USE_STAN
+				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+					d2 = (ctr0 + x[tri->vertices[1]].val() - x[in].val())*(ctr0 + x[tri->vertices[1]].val() - x[in].val())+(ctr1 + y[tri->vertices[1]].val() - y[in].val())*(ctr1 + y[tri->vertices[1]].val() - y[in].val());
+				} else
+#endif
+				{
+					d2 = (ctr0 + x[tri->vertices[1]] - x[in])*(ctr0 + x[tri->vertices[1]] - x[in])+(ctr1 + y[tri->vertices[1]] - y[in])*(ctr1 + y[tri->vertices[1]] - y[in]);
+				}
 				return (rad2 > d2);
 			}
-			else if(vert1)
+			else if (vert1)
 			{
-				return (x[tri->vertices[1]] - x[tri->vertices[0]])*(y[in] - y[tri->vertices[0]])-(x[in] - x[tri->vertices[0]])*(y[tri->vertices[1]] - y[tri->vertices[0]]) > 0;
+#ifdef USE_STAN
+				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+					return (x[tri->vertices[1]].val() - x[tri->vertices[0]].val())*(y[in].val() - y[tri->vertices[0]].val())-(x[in].val() - x[tri->vertices[0]].val())*(y[tri->vertices[1]].val() - y[tri->vertices[0]].val()) > 0;
+				} else
+#endif
+				{
+					return (x[tri->vertices[1]] - x[tri->vertices[0]])*(y[in] - y[tri->vertices[0]])-(x[in] - x[tri->vertices[0]])*(y[tri->vertices[1]] - y[tri->vertices[0]]) > 0;
+				}
 			}
-			else if(vert2)
+			else if (vert2)
 			{
-				return ((x[in] - x[tri->vertices[0]])*(y[tri->vertices[2]] - y[tri->vertices[0]])-(x[tri->vertices[2]] - x[tri->vertices[0]])*(y[in] - y[tri->vertices[0]])) > 0;
+#ifdef USE_STAN
+				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+					return ((x[in].val() - x[tri->vertices[0]].val())*(y[tri->vertices[2]].val() - y[tri->vertices[0]].val())-(x[tri->vertices[2]].val() - x[tri->vertices[0]].val())*(y[in].val() - y[tri->vertices[0]].val())) > 0;
+				} else
+#endif
+				{
+					return ((x[in] - x[tri->vertices[0]])*(y[tri->vertices[2]] - y[tri->vertices[0]])-(x[tri->vertices[2]] - x[tri->vertices[0]])*(y[in] - y[tri->vertices[0]])) > 0;
+				}
 			}
 			else 
 				return true;
@@ -426,14 +503,14 @@ class Delaunay
 				}
 			}
 		}	
-		void store_triangles(Triangle *triangle)
+		void store_triangles(Triangle<QScalar> *triangle)
 		{
 			// This stores the triangles in the final triangulation
 			botPtr = botTris;
-			lensvector<double> side1, side2;
+			lensvector<QScalar> side1, side2;
 			for (int i = 0; i < nTris; i++, botPtr++)
 			{
-				double a0, a1, c0, c1, det_inv, asq, csq, ctr0, ctr1;
+				QScalar a0, a1, c0, c1, det_inv, asq, csq, ctr0, ctr1;
 				if (botPtr->tri->vertices[0] >= 0 && botPtr->tri->vertices[1] >= 0 && botPtr->tri->vertices[2] >= 0)
 				{
 					triangle->vertex_index[0] = botPtr->tri->vertices[0];
@@ -448,19 +525,26 @@ class Delaunay
 					//triangle->index = botPtr->index;
 					if (botPtr->sides[0] != NULL) {
 						triangle->neighbor_index[0] = botPtr->sides[0]->index; // not sure if sides is *ever* NULL, but just in case...
-						triangle->midpoint[0] = (triangle->vertex[1] + triangle->vertex[2])/2;
+						//triangle->midpoint[0] = (triangle->vertex[1] + triangle->vertex[2])/2;
 					} else triangle->neighbor_index[0] = -1;
 					if (botPtr->sides[1] != NULL) {
 						triangle->neighbor_index[1] = botPtr->sides[1]->index;
-						triangle->midpoint[1] = (triangle->vertex[0] + triangle->vertex[2])/2;
+						//triangle->midpoint[1] = (triangle->vertex[0] + triangle->vertex[2])/2;
 					} else triangle->neighbor_index[1] = -1;
 					if (botPtr->sides[2] != NULL) {
 						triangle->neighbor_index[2] = botPtr->sides[2]->index;
-						triangle->midpoint[2] = (triangle->vertex[0] + triangle->vertex[1])/2;
+						//triangle->midpoint[2] = (triangle->vertex[0] + triangle->vertex[1])/2;
 					} else triangle->neighbor_index[2] = -1;
 					side1 = triangle->vertex[1] - triangle->vertex[0];
 					side2 = triangle->vertex[2] - triangle->vertex[1];
+#ifdef USE_STAN
+				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+					triangle->area = (side1 ^ side2).val();
+				} else
+#endif
+				{
 					triangle->area = side1 ^ side2;
+				}
 
 					a0 = x[botPtr->tri->vertices[0]]-x[botPtr->tri->vertices[1]];
 					a1 = y[botPtr->tri->vertices[0]]-y[botPtr->tri->vertices[1]];
@@ -473,7 +557,14 @@ class Delaunay
 					ctr1 = det_inv*(csq*a0 - asq*c0);
 					triangle->circumcenter[0] = ctr0 + x[botPtr->tri->vertices[1]];
 					triangle->circumcenter[1] = ctr1 + y[botPtr->tri->vertices[1]];
+#ifdef USE_STAN
+				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+					triangle->circumcircle_radsq = ctr0.val()*ctr0.val()+ctr1.val()*ctr1.val();
+				} else
+#endif
+				{
 					triangle->circumcircle_radsq = ctr0*ctr0+ctr1*ctr1;
+				}
 					triangle++;
 				}
 			}

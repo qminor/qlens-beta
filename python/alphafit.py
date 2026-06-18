@@ -12,9 +12,10 @@ q.sci_notation = False
 ptimgdata.load("alphafit.dat") # this function will become obsolete once the ptimgdata class is wrapped
 print(ptimgdata)               # Note: when in interactive mode you can just type 'ptimgdata' to print the data
 
-sple = SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3})
+zlens = 0.5
+sple = SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3},z=zlens)
 sple.vary([1,0,0,1,1,1,1])
-extshear = Shear({"shear": 0.02, "theta": 10})
+extshear = Shear({"shear": 0.02, "theta": 10},z=zlens)
 extshear.vary([1,1,0,0])
 lens.add(sple,shear=extshear)
 print("Lenses:",lens,"\n")

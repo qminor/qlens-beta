@@ -537,7 +537,71 @@ template void QLens::find_sourcept_from_data<double>(const lensvector<double>& x
 template void QLens::find_sourcept_from_data<stan::math::var>(const lensvector<double>& x, stan::math::var& srcpt_x, stan::math::var& srcpt_y, const int& thread, double* zfacs, double** betafacs);
 #endif
 
+template<typename VecType, typename QScalar>
+void QLens::find_sourcepts_from_data_vec(const VecType& x, const VecType& y, VecType& srcpts_x, VecType& srcpts_y, const int& thread, double* zfacs, double** betafacs)
+{
+	int i,j;
+	int n = x.size();
+	VecType def_tot_x = Eigen::VectorXd::Zero(n);
+	VecType def_tot_y = Eigen::VectorXd::Zero(n);
+	VecType def_x = Eigen::VectorXd::Zero(n);
+	VecType def_y = Eigen::VectorXd::Zero(n);
+	if (n_lens_redshifts > 1) {
+		VecType *defi_x = new VecType[n_lens_redshifts];
+		VecType *defi_y = new VecType[n_lens_redshifts];
+		VecType xi = Eigen::VectorXd::Zero(n);
+		VecType yi = Eigen::VectorXd::Zero(n);
+		for (i=0; i < n_lens_redshifts; i++) {
+			if (zfacs[i] != 0.0) {
+				//std::cout << "redshift " << i << ":\n";
+				defi_x[i] = Eigen::VectorXd::Zero(n);
+				defi_y[i] = Eigen::VectorXd::Zero(n);
+				xi = x;
+				yi = y;
+				for (j=0; j < i; j++) {
+					//std::cout << "Using betafactor " << i-1 << " " << j << " = " << betafacs[i-1][j] << "...\n";
+					xi = xi - betafacs[i-1][j]*defi_x[j];
+					yi = yi - betafacs[i-1][j]*defi_y[j];
+				}
+				for (j=0; j < zlens_group_size[i]; j++) {
+					lens_list[zlens_group_lens_indx[i][j]]->deflection_vec(xi,yi,def_x,def_y);
+					//std::cout << "Lens redshift " << i << ", lens " << zlens_group_lens_indx[i][j] << " def=" << (*def)[0] << " " << (*def)[1] << std::endl;
+					defi_x[i] = defi_x[i] + def_x;
+					defi_y[i] = defi_y[i] + def_y;
+				}
+				//for (j=0; j < n_pixellated_lens; j++) {
+					//if ((lensgrids[j]->include_in_lensing_calculations) and (pixellated_lens_redshift_idx[j]==i)) {
+						////lensgrids[j]->deflection((*x_i)[0],(*x_i)[1],(*def),thread);
+						//defi_x[i] += def_x;
+						//defi_y[i] += def_y;
+					//}
+				//}
+				//std::cout << "Lens redshift" << i << " (z=" << lens_redshifts[i] << "): xi=" << (*x_i)[0] << " " << (*x_i)[1] << std::endl;
+				defi_x[i] = defi_x[i] * zfacs[i];
+				defi_y[i] = defi_y[i] * zfacs[i];
+				def_tot_x = def_tot_x + defi_x[i];
+				def_tot_y = def_tot_y + defi_y[i];
+			}
+		}
+		delete[] defi_x;
+		delete[] defi_y;
+	} else {
+		for (i=0; i < nlens; i++) {
+			//std::cout << "Lens " << i << ": " << std::endl;
+			lens_list[i]->deflection_vec(x,y,def_x,def_y);
+			//std::cout << "def(0) " << def_x(0) << " " << def_y(0) << std::endl;
+			def_tot_x = def_tot_x + (def_x * zfacs[0]);
+			def_tot_y = def_tot_y + (def_y * zfacs[0]);
+		}
+	}
 
+	srcpts_x = x - def_tot_x; // this uses the lens equation, beta = theta - alpha (except without defining an intermediate lensvector<double> alpha, which would be an extra memory operation)
+	srcpts_y = y - def_tot_y;
+}
+template void QLens::find_sourcepts_from_data_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& x, const Eigen::VectorXd& y, Eigen::VectorXd& srcpts_x, Eigen::VectorXd& srcpts_y, const int& thread, double* zfacs, double** betafacs);
+#ifdef USE_STAN
+template void QLens::find_sourcepts_from_data_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& x, const stan::math::var_value<Eigen::VectorXd>& y, stan::math::var_value<Eigen::VectorXd>& srcpts_x, stan::math::var_value<Eigen::VectorXd>& srcpts_y, const int& thread, double* zfacs, double** betafacs);
+#endif
 
 template<typename QScalar>
 QScalar QLens::inverse_magnification(const lensvector<QScalar>& x, const int &thread, double* zfacs, double** betafacs)

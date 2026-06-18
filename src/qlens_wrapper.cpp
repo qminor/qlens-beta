@@ -5,6 +5,8 @@
 #include <vector>
 #include "profile.h"
 
+#include <Eigen/Core>
+
 namespace py = pybind11;
 
 using namespace std;
@@ -47,7 +49,7 @@ public:
 #endif
 		GridCell::allocate_multithreaded_variables(n_omp_threads);
 		CartesianSourceGrid::allocate_multithreaded_variables(n_omp_threads);
-		DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
+		//DelaunayGrid::allocate_multithreaded_variables(n_omp_threads);
 		ImagePixelGrid::allocate_multithreaded_variables(n_omp_threads);
 		QLens::allocate_multithreaded_variables(n_omp_threads);
 		GaussQuad::allocate_quadrature_tables(GaussQuad::numberOfPoints);
@@ -282,7 +284,7 @@ public:
 					if (image_pixel_grids[i] != NULL) {
 						image_pixel_grids[i]->delete_ray_tracing_arrays();
 						image_pixel_grids[i]->setup_ray_tracing_arrays();
-						if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas(true);
+						if (nlens > 0) image_pixel_grids[i]->calculate_sourcepts_and_areas<PlainTypes>(true);
 					}
 				}
 			}
@@ -546,7 +548,7 @@ public:
 	 {
 		GridCell::deallocate_multithreaded_variables();
 		ImagePixelGrid::deallocate_multithreaded_variables();
-		DelaunayGrid::deallocate_multithreaded_variables();
+		//DelaunayGrid::deallocate_multithreaded_variables();
 		CartesianSourceGrid::deallocate_multithreaded_variables();
 		QLens::deallocate_multithreaded_variables();
 		GaussQuad::deallocate_quadrature_tables();

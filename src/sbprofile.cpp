@@ -8,6 +8,9 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+
+#include <tbb/parallel_for.h>
+
 using namespace std;
 
 bool SB_Profile::orient_major_axis_north = false;
@@ -890,6 +893,7 @@ void SB_Profile::set_limits(const Vector<double>& lower, const Vector<double>& u
 	if (upper.size() != n_vary_params) die("number of parameters with upper limits does not match number of variable parameters");
 	lower_limits = lower;
 	upper_limits = upper;
+	if (qlens != NULL) qlens->register_sb_prior_limits(sb_number);
 }
 
 bool SB_Profile::set_limits_specific_parameter(const string name_in, const double& lower, const double& upper)
@@ -910,6 +914,7 @@ bool SB_Profile::set_limits_specific_parameter(const string name_in, const doubl
 		lower_limits[param_i] = lower;
 		upper_limits[param_i] = upper;
 	}
+	if (qlens != NULL) qlens->register_sb_prior_limits(sb_number);
 	return (param_i != -1);
 }
 
@@ -1535,6 +1540,8 @@ void SB_Profile::update_ellipticity_meta_parameters()
 	if (!ellipticity_gradient) {
 		if (use_sb_ellipticity_components) {
 			p.q = 1 - sqrt(SQR(p.epsilon1) + SQR(p.epsilon2));
+			if (p.q > 1) p.q = 1.0; // don't allow q>1
+			if (p.q<=0) p.q = 0.01; // just to avoid catastrophe
 			set_angle_from_components(p.epsilon1,p.epsilon2); // note this will automatically set the costheta, sintheta parameters
 		} else {
 			update_angle_meta_params<QScalar>(); // sets the costheta, sintheta meta-parameters
@@ -1868,7 +1875,7 @@ template stan::math::var SB_Profile::surface_brightness_impl<stan::math::var>(st
 #endif
 
 template <typename QScalar>
-QScalar SB_Profile::surface_brightness_zoom(lensvector<QScalar> &centerpt, lensvector<QScalar> &pt1, lensvector<QScalar> &pt2, lensvector<QScalar> &pt3, lensvector<QScalar> &pt4, const QScalar sb_noise)
+QScalar SB_Profile::surface_brightness_zoom(lensvector<QScalar> &centerpt, lensvector<QScalar> &pt1, lensvector<QScalar> &pt2, lensvector<QScalar> &pt3, lensvector<QScalar> &pt4, const double sb_noise)
 {
 	SB_Params<QScalar>& p = assign_sbparam_object<QScalar>();
 	bool subgrid = false;
@@ -2090,7 +2097,7 @@ QScalar SB_Profile::surface_brightness_zoom(lensvector<QScalar> &centerpt, lensv
 }
 template double SB_Profile::surface_brightness_zoom<double>(lensvector<double> &centerpt, lensvector<double> &pt1, lensvector<double> &pt2, lensvector<double> &pt3, lensvector<double> &pt4, const double sb_noise);
 #ifdef USE_STAN
-template stan::math::var SB_Profile::surface_brightness_zoom<stan::math::var>(lensvector<stan::math::var> &centerpt, lensvector<stan::math::var> &pt1, lensvector<stan::math::var> &pt2, lensvector<stan::math::var> &pt3, lensvector<stan::math::var> &pt4, const stan::math::var sb_noise);
+template stan::math::var SB_Profile::surface_brightness_zoom<stan::math::var>(lensvector<stan::math::var> &centerpt, lensvector<stan::math::var> &pt1, lensvector<stan::math::var> &pt2, lensvector<stan::math::var> &pt3, lensvector<stan::math::var> &pt4, const double sb_noise);
 #endif
 
 template <typename QScalar>
@@ -2102,6 +2109,76 @@ template double SB_Profile::surface_brightness_r<double>(const double r);
 #ifdef USE_STAN
 template stan::math::var SB_Profile::surface_brightness_r<stan::math::var>(const stan::math::var r);
 #endif
+
+/*
+template <typename QScalar>
+void SB_Profile::surface_brightness_impl(const QScalar& x0, const QScalar& y0, QScalar& sb)
+{
+	SB_Params<QScalar>& p = assign_sbparam_object<QScalar>();
+
+	QScalar x = (x0-p.x_center)*p.costheta + (y0-p.y_center)*p.sintheta;
+	QScalar y = -(x0-p.x_center)*p.sintheta + (y0-p.y_center)*p.costheta;
+
+	QScalar xisq, rsq;
+	rsq = x*x + y*y;
+	sb = sb_rsq(xisq);
+}
+template double SB_Profile::surface_brightness_impl<double>(double x, double y);
+#ifdef USE_STAN
+template stan::math::var SB_Profile::surface_brightness_impl<stan::math::var>(stan::math::var x, stan::math::var y);
+#endif
+*/
+
+template <typename VecType, typename QScalar>
+void SB_Profile::surface_brightness_vec_impl(const VecType& x0, const VecType& y0, VecType& sb, const int nsp)
+{
+    auto& p = assign_sbparam_object<QScalar>();
+
+	VecType dx,dy;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		dx = x0 - p.x_center;
+		dy = y0 - p.y_center;
+	} else
+#endif
+	{
+		dx = (x0.array() - p.x_center).matrix();
+		dy = (y0.array() - p.y_center).matrix();
+	}
+
+	VecType x = p.costheta * dx + p.sintheta * dy;
+	VecType y = -p.sintheta * dx + p.costheta * dy;
+
+	VecType xisq;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		if (ellipticity_mode==0) xisq = stan::math::elt_multiply(x,x) + stan::math::elt_multiply(y,y)/(p.q*p.q);
+		else if (ellipticity_mode==1) xisq = p.q*stan::math::elt_multiply(x,x) + stan::math::elt_multiply(y,y)/p.q;
+	} else
+#endif
+	{
+		if (ellipticity_mode==0) xisq = (x.array().square() + y.array().square()/(p.q*p.q)).matrix();
+		else if (ellipticity_mode==1) xisq = (p.q*x.array().square() + y.array().square()/p.q).matrix();
+	}
+   sb_rsq_vec(xisq,sb,nsp);
+}
+template void SB_Profile::surface_brightness_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, const int);
+#ifdef USE_STAN
+template void SB_Profile::surface_brightness_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, const int);
+#endif
+
+template <typename VecType, typename QScalar>
+void SB_Profile::sb_rsq_vec_impl(const VecType& rsq, VecType& sb, const int nsp) // this function should be redefined in all derived classes
+{
+	auto& p = assign_sbparam_object<QScalar>();
+	die("sb_rsq_vec not implemented for the base sbprofile class");
+	//sb = Eigen::VectorXd::Zero(rsq.size());
+}
+template void SB_Profile::sb_rsq_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, Eigen::VectorXd&, const int);
+#ifdef USE_STAN
+template void SB_Profile::sb_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, const int);
+#endif
+
 
 bool SB_Profile::fit_sbprofile_data(IsophoteData& isophote_data, const int fit_mode, const int n_livepts, const int mpi_np, const int mpi_id, const string fit_output_dir)
 {
@@ -2980,6 +3057,46 @@ template double Gaussian::sb_rsq_impl<double>(const double rsq);
 template stan::math::var Gaussian::sb_rsq_impl<stan::math::var>(const stan::math::var rsq);
 #endif
 
+template <typename VecType, typename QScalar>
+void Gaussian::sb_rsq_vec_impl(const VecType& rsq, VecType& sb, const int nsp) // this function should be redefined in all derived classes
+{
+#ifdef USE_STAN
+	using stan::math::sum;
+	using stan::math::exp;
+#endif
+
+	Gaussian_Params<QScalar>& p = assign_gaussian_param_object<QScalar>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
+
+	// note, rsq may be longer than npix*nsp if it include all the pixels in the emask, but the code below operates only up to npix*nsp elements of rsq
+	int npix = sb.size();
+
+	QScalar sigfac = 1.0/(2.0*p.sig_x*p.sig_x);
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		using VecVar = Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1>;
+		VecVar accum(npix);
+		for (int i = 0; i < npix; ++i) {
+			 auto block = rsq.segment(i * nsp, nsp);
+			 stan::math::var sum_i = 0;
+			 for (int j = 0; j < nsp; ++j) {
+				sum_i += exp(-block(j) * sigfac);
+			 }
+			 accum(i) = p.max_sb * sum_i / nsp;
+		}
+		sb = sb + accum;
+	} else
+#endif
+	{
+		Eigen::Map<const Eigen::MatrixXd> rsq_mat(rsq.data(), nsp, npix);
+		auto scaled = (-rsq_mat.array()*sigfac).exp();
+		sb = sb + (p.max_sb * scaled.colwise().sum().transpose().array() / nsp).matrix();
+	}
+}
+template void Gaussian::sb_rsq_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, Eigen::VectorXd&, const int);
+#ifdef USE_STAN
+template void Gaussian::sb_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, const int);
+#endif
+
 double Gaussian::window_rmax() // used to define the window size for pixellated surface brightness maps
 {
 	return 7*sbparams_gaussian.sig_x;
@@ -3133,6 +3250,49 @@ template double Sersic::sb_rsq_impl<double>(const double rsq);
 #ifdef USE_STAN
 template stan::math::var Sersic::sb_rsq_impl<stan::math::var>(const stan::math::var rsq);
 #endif
+
+template <typename VecType, typename QScalar>
+void Sersic::sb_rsq_vec_impl(const VecType& rsq, VecType& sb, const int nsp) // this function should be redefined in all derived classes
+{
+#ifdef USE_STAN
+	using stan::math::sum;
+	using stan::math::exp;
+	using stan::math::pow;
+#endif
+
+	Sersic_Params<QScalar>& p = assign_sersic_param_object<QScalar>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
+
+	// note, rsq may be longer than npix*nsp if it include all the pixels in the emask, but the code below operates only up to npix*nsp elements of rsq
+	int npix = sb.size();
+
+	QScalar reffsq_inv = 1.0/(p.Reff*p.Reff);
+	QScalar ninv_fac = 0.5/p.n;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		using VecVar = Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1>;
+		VecVar accum(npix);
+		for (int i = 0; i < npix; ++i) {
+			 auto block = rsq.segment(i * nsp, nsp);
+			 stan::math::var sum_i = 0;
+			 for (int j = 0; j < nsp; ++j) {
+				 sum_i += exp(-p.b * pow(block(j) * reffsq_inv, ninv_fac));
+			 }
+			 accum(i) = p.s0 * sum_i / nsp;
+		}
+		sb = sb + accum;
+	} else
+#endif
+	{
+		Eigen::Map<const Eigen::MatrixXd> rsq_mat(rsq.data(), nsp, npix);
+		auto scaled = (-p.b*(rsq_mat.array()*reffsq_inv).pow(ninv_fac)).exp();
+		sb = sb + (p.s0 * scaled.colwise().sum().transpose().array() / nsp).matrix();
+	}
+}
+template void Sersic::sb_rsq_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, Eigen::VectorXd&, const int);
+#ifdef USE_STAN
+template void Sersic::sb_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, const int);
+#endif
+
 
 double Sersic::window_rmax()
 {

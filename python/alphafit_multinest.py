@@ -16,7 +16,7 @@ print(ptimgdata)               # Note: when in interactive mode you can just typ
 q.shear_components=True
 q.ellipticity_components=False
 
-Alpha = SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3},pmode=1)
+Alpha = SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3},pmode=0)
 Alpha.vary([1,0,0,1,1,1,1])
 Alpha.set_limits([
     ("b",4,6),

@@ -158,11 +158,11 @@ class Cosmology : public Model, public Brent
 		setup_param_pointers<double>();
 		set_cosmology(omega_matter,omega_baryon,omega_hdm,degen_hdm,omega_lamb,hub,del_R,true);
 	}
-	void set_cosmology_flat(double omega_matter, double omega_baryon, double hub, double del_R) {
+	void set_cosmology_flat(double omega_matter, double omega_baryon, double hub, double del_R, const bool initial_setup = true) {
 	// if this function is called, we assume a flat universe, three massless neutrinos, and find transfer function at redshift zero
 		set_modelparams();
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
-		setup_parameters(true);
+		setup_parameters(initial_setup);
 		setup_param_pointers<double>();
 		double omega_lamb;
 		if (omega_matter > 0) omega_lamb = 1-omega_matter;
@@ -178,7 +178,7 @@ class Cosmology : public Model, public Brent
 		set_cosmology(omega_matter,omega_baryon,default_neutrino_mass,default_n_massive_neutrinos,omega_lamb,hub,del_R,true);
 	}
 	void set_cosmology() { set_cosmology(-1,-1,-1,-1,-1); }
-	void set_cosmology_flat() { set_cosmology_flat(-1,-1,-1,-1); }
+	void set_cosmology_flat(const bool initial_setup) { set_cosmology_flat(-1,-1,-1,-1,initial_setup); }
 	void set_cosmology(CosmologyParams &cosmo) {
 		set_modelparams();
 		k_pivot = default_k_pivot; ns = default_spectral_index; running = default_running;
