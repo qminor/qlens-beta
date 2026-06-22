@@ -2008,12 +2008,14 @@ void LensProfile::update_ellipticity_meta_parameters()
 	// f_major_axis sets the major axis of the elliptical radius xi such that a = f*xi, and b = f*q*xi (and thus, xi = sqrt(x^2 + (y/q)^2)/f)
 	if (use_ellipticity_components) {
 #ifdef USE_STAN
-		if (((vary_params[ellipticity_paramnum]) or (vary_params[ellipticity_paramnum])) and ((p.epsilon1==0.0) and (p.epsilon2==0.0))) {
+		if (((vary_params[ellipticity_paramnum]) or (vary_params[ellipticity_paramnum+1])) and ((p.epsilon1==0.0) and (p.epsilon2==0.0))) {
 			p.epsilon1 = 1e-10; // to avoid coordinate singularities messing with autodiff (only do this fudge if we're actually varying ellipticity)
 			p.epsilon2 = 1e-10;
-			LensParams<double>& pd = assign_lensparam_object<double>();
-			pd.epsilon1 = 1e-10; // for consistency
-			pd.epsilon2 = 1e-10; // for consistency
+			if constexpr (std::is_same_v<QScalar, stan::math::var>)  {
+				LensParams<double>& pd = assign_lensparam_object<double>();
+				pd.epsilon1 = 1e-10; // for consistency
+				pd.epsilon2 = 1e-10; // for consistency
+			}
 			set_integration_pointers(); // just in case the formulas change
 		}
 #endif
@@ -2942,9 +2944,6 @@ template stan::math::var LensProfile::kapavg_spherical_generic<stan::math::var>(
 template <typename QScalar>
 QScalar LensProfile::kappa_avg_spherical_integral(const QScalar rsq)
 {
-//#ifdef USE_STAN
-	//cout << "HERGGLEHARGLE?" << endl;
-//#endif
 	QScalar ans;
 
 	if (integral_method == Romberg_Integration)

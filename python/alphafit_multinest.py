@@ -16,7 +16,7 @@ print(ptimgdata)               # Note: when in interactive mode you can just typ
 q.shear_components=True
 q.ellipticity_components=False
 
-Alpha = SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3},pmode=0)
+Alpha = SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "q": 0.8, "theta": 30, "xc": 0.7, "yc": 0.3},z=0.5,pmode=0)
 Alpha.vary([1,0,0,1,1,1,1])
 Alpha.set_limits([
     ("b",4,6),
@@ -26,7 +26,7 @@ Alpha.set_limits([
     ("yc",0,0.6)
 ])
 
-extshear = Shear({"shear1": 0.03, "shear2": -0.05})
+extshear = Shear({"shear1": 0.03, "shear2": -0.05},z=0.5)
 extshear.vary([1,1,0,0])
 extshear.set_limits([
     ("shear1",-0.2,0.2),

@@ -583,83 +583,27 @@ class ImgGrid_Params
 	using MatType = typename MathTypes::MatType;
 
 	public:
-	bool allocated_ray_tracing_arrays;
-	bool allocated_subpixel_ray_tracing_arrays;
 	int x_N, y_N;
 
 	VecType surface_brightness_vec;
 	VecType surface_brightness_vec_unconvolved;
-	VecType surface_brightness_subpixel_vec;
+	VecType surface_brightness_supersampled_vec;
 	VecType srcpt_x_centers, srcpt_y_centers;
 	VecType srcpt_x_subpixel_centers, srcpt_y_subpixel_centers;
 
-	MatType Lmatrix_dense;
-	MatType Fmatrix_dense;
-
-	//QScalar *twistx, *twisty;
-
-	ImgGrid_Params() { allocated_ray_tracing_arrays = false; allocated_subpixel_ray_tracing_arrays = false; }
-	//void set_null_ray_tracing_arrays() {
-		//if (allocated_ray_tracing_arrays) die("setting ray tracing arrays to NULL that have not been deallocated");
-		//srcpt_x_corners = NULL;
-		//srcpt_y_corners = NULL;
-		//srcpt_x_centers = NULL;
-		//srcpt_y_centers = NULL;
-		//area_tri1 = NULL;
-		//area_tri2 = NULL;
-		//twistx = NULL;
-		//twisty = NULL;
-	//}
-	//void set_null_subpixel_ray_tracing_arrays() {
-		//if (allocated_subpixel_ray_tracing_arrays) die("setting ray tracing arrays to NULL that have not been deallocated");
-		//srcpt_x_subpixel_centers = NULL;
-		//srcpt_y_subpixel_centers = NULL;
-	//}
+	ImgGrid_Params() {}
 	void setup_ray_tracing_arrays(const int ntot_corners, const int img_npixels_emask, const int n_sb_cells) {
-		allocated_ray_tracing_arrays = true;
-		//srcpt_x_corners = Eigen::VectorXd::Zero(ntot_corners);
-		//srcpt_y_corners = Eigen::VectorXd::Zero(ntot_corners);
 		srcpt_x_centers = Eigen::VectorXd::Zero(img_npixels_emask);
 		srcpt_y_centers = Eigen::VectorXd::Zero(img_npixels_emask);
 		// Note, n_sb_cells could be number of pixels from the primary mask, or it could be from fgmask depending on settings
 		surface_brightness_vec_unconvolved = Eigen::VectorXd::Zero(n_sb_cells);
 		surface_brightness_vec = Eigen::VectorXd::Zero(n_sb_cells);
-		//area_tri1 = new QScalar[img_npixels];
-		//area_tri2 = new QScalar[img_npixels];
-		//twistx = new QScalar[img_npixels];
-		//twisty = new QScalar[img_npixels];
 	}
 	void setup_subpixel_ray_tracing_arrays(const int n_subpixels_emask) {
-		allocated_subpixel_ray_tracing_arrays = true;
 		srcpt_x_subpixel_centers = Eigen::VectorXd::Zero(n_subpixels_emask);
 		srcpt_y_subpixel_centers = Eigen::VectorXd::Zero(n_subpixels_emask);
-		surface_brightness_subpixel_vec = Eigen::VectorXd::Zero(n_subpixels_emask);
+		surface_brightness_supersampled_vec = Eigen::VectorXd::Zero(n_subpixels_emask);
 	}
-	void deallocate_ray_tracing_arrays() {
-		if (allocated_ray_tracing_arrays) {
-			//if (srcpt_x_corners != NULL) delete[] srcpt_x_corners;
-			//if (srcpt_y_corners != NULL) delete[] srcpt_y_corners;
-			//if (srcpt_x_centers != NULL) delete[] srcpt_x_centers;
-			//if (srcpt_y_centers != NULL) delete[] srcpt_y_centers;
-			//if (area_tri1 != NULL) delete[] area_tri1;
-			//if (area_tri2 != NULL) delete[] area_tri2;
-			//if (twistx != NULL) delete[] twistx;
-			//if (twisty != NULL) delete[] twisty;
-			allocated_ray_tracing_arrays = false;
-		}
-	}
-	void deallocate_subpixel_ray_tracing_arrays() {
-		if (allocated_subpixel_ray_tracing_arrays) {
-			//if (srcpt_x_subpixel_centers != NULL) delete[] srcpt_x_subpixel_centers;
-			//if (srcpt_y_subpixel_centers != NULL) delete[] srcpt_y_subpixel_centers;
-			allocated_subpixel_ray_tracing_arrays = false;
-		}
-	}
-
-	//~ImgGrid_Params() {
-		//deallocate_ray_tracing_arrays();
-		//deallocate_subpixel_ray_tracing_arrays();
-	//}
 };
 
 struct ConvPlan

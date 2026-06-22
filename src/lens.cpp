@@ -3284,10 +3284,10 @@ void QLens::print_pixellated_source_list(bool show_vary_params)
 {
 	cout << resetiosflags(ios::scientific);
 	double zs;
-	cout << "N_ZSRC: "<< n_extended_src_redshifts << endl;
+	//cout << "N_ZSRC: "<< n_extended_src_redshifts << endl;
 	if (n_pixellated_src > 0) {
 		for (int i=0; i < n_pixellated_src; i++) {
-			cout << "IDX=" << sbprofile_redshift_idx[i] << endl;
+			//cout << "IDX=" << sbprofile_redshift_idx[i] << endl;
 			if (pixellated_src_redshift_idx[i]==-1) zs = -1;
 			else zs = extended_src_redshifts[pixellated_src_redshift_idx[i]];
 			cout << i << ". ";
@@ -14598,6 +14598,9 @@ void QLens::reassign_lensparam_pointers_and_names(const bool reset_plimits)
 	if (nlens > 0) {
 		for (int i=0; i < nlens; i++) {
 			lens_list[i]->calculate_ellipticity_components<double>(); // in case ellipticity components has been turned on
+#if USE_STAN
+			lens_list[i]->calculate_ellipticity_components<stan::math::var>(); // in case ellipticity components has been turned on
+#endif
 			lens_list[i]->assign_param_pointers();
 			lens_list[i]->assign_paramnames();
 			lens_list[i]->update_meta_parameters();
@@ -14614,6 +14617,9 @@ void QLens::reassign_sb_param_pointers_and_names()
 	if (n_sb > 0) {
 		for (int i=0; i < n_sb; i++) {
 			sb_list[i]->calculate_ellipticity_components<double>(); // in case ellipticity components has been turned on
+#if USE_STAN
+			sb_list[i]->calculate_ellipticity_components<stan::math::var>(); // in case ellipticity components has been turned on
+#endif
 			sb_list[i]->assign_param_pointers();
 			sb_list[i]->assign_paramnames();
 		}

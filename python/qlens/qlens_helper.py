@@ -1,6 +1,3 @@
-#import os
-#os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib_cache'
-
 import itertools
 from qlens import *
 import matplotlib.pyplot as plt
@@ -290,7 +287,7 @@ def plotgrid(QLens_Object, *, show_cc=True, lw=_line_width, show=True, show_srcp
     else:
         return (imgplane_fig)
 
-def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, color='black'):
+def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, cc_legend=False, color='black'):
     if(QLens_Object is None or (srcplane_fig is None and imgplane_fig is None)):
         raise RuntimeError("add_crit_to_plot(...) requires first input to be a QLens object, and 2nd and 3rd inputs to be matplotlib ax objects (srcplane,imgplane).")
 
@@ -326,8 +323,8 @@ def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, colo
             cc_x = []
             cc_y = []
 
-        #if len(q.sorted_critical_curve) > 0:
-            #plt.legend(loc="upper right")
+        if len(q.sorted_critical_curve) > 0 and cc_legend is True:
+            plt.legend(loc="upper right")
 
     if srcplane_fig is not None:
         plt.figure(srcplane_fig.number)
@@ -352,8 +349,8 @@ def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, colo
                 label='Caustic ($z_{src}$=' + str(q.zsrc) + ')'
             srcplane_ax.plot(caustic_x, caustic_y, lw=_line_width, color=color, label=label)
             
-        #if len(q.sorted_critical_curve) > 0:
-            #plt.legend(loc="upper right")
+        if len(q.sorted_critical_curve) > 0 and cc_legend is True:
+            plt.legend(loc="upper right")
 
 def add_crit_to_imgplot(QLens_Object, imgplane_fig, color='gray'):
     if(QLens_Object is None or imgplane_fig is None):

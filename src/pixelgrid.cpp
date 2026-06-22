@@ -11990,10 +11990,6 @@ void ImagePixelGrid::delete_ray_tracing_arrays(const bool reset_psf_arrays)
 	//if (defy_corners != NULL) delete[] defy_corners;
 	//if (defx_centers != NULL) delete[] defx_centers;
 	//if (defy_centers != NULL) delete[] defy_centers;
-	imggrid_params.deallocate_ray_tracing_arrays();
-#ifdef USE_STAN
-	imggrid_params_dif.deallocate_ray_tracing_arrays();
-#endif
 	if (twiststat != NULL) delete[] twiststat;
 	if (area_tri1 != NULL) delete[] area_tri1;
 	if (area_tri2 != NULL) delete[] area_tri2;
@@ -12028,10 +12024,6 @@ void ImagePixelGrid::delete_ray_tracing_arrays(const bool reset_psf_arrays)
 
 void ImagePixelGrid::delete_subpixel_ray_tracing_arrays()
 {
-	imggrid_params.deallocate_subpixel_ray_tracing_arrays();
-#ifdef USE_STAN
-	imggrid_params_dif.deallocate_subpixel_ray_tracing_arrays();
-#endif
 	if (extended_mask_subpixel_i != NULL) delete[] extended_mask_subpixel_i;
 	if (extended_mask_subpixel_j != NULL) delete[] extended_mask_subpixel_j;
 	if (extended_mask_subpixel_index != NULL) delete[] extended_mask_subpixel_index;
@@ -14033,9 +14025,9 @@ void ImagePixelGrid::find_surface_brightness_sbprofile(const bool foreground_onl
 	if (qlens->split_imgpixels) {
 		if (supersampling) {
 			int ntot_subpixels = p.srcpt_x_subpixel_centers.size();
-			p.surface_brightness_subpixel_vec = Eigen::VectorXd::Zero(ntot_subpixels);
+			p.surface_brightness_supersampled_vec = Eigen::VectorXd::Zero(ntot_subpixels);
 			for (int k=0; k < sbprofiles_this_imggrid.size(); k++) {
-				sbprofiles_this_imggrid[k]->surface_brightness_vec(p.srcpt_x_subpixel_centers,p.srcpt_y_subpixel_centers,p.surface_brightness_subpixel_vec);
+				sbprofiles_this_imggrid[k]->surface_brightness_vec(p.srcpt_x_subpixel_centers,p.srcpt_y_subpixel_centers,p.surface_brightness_supersampled_vec);
 			}
 		} else {
 			for (int k=0; k < sbprofiles_this_imggrid.size(); k++) {
