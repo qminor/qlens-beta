@@ -1,3 +1,6 @@
+import os
+os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib_cache'
+
 import itertools
 from qlens import *
 import matplotlib.pyplot as plt
@@ -6,7 +9,7 @@ import copy
 import inspect
 import numbers
 import sys
-import os
+#import os
 import linecache
 
 _cmap_scheme = 'turbo'      # this is the colormap scheme that I like the best, but it can be changed with the set_cmap function
@@ -33,7 +36,8 @@ def show_commands():
     state = {"last_lineno": None}
 
     def trace_calls(frame, event, arg):
-        filename = os.path.realpath(frame.f_code.co_filename)
+        if frame.f_code.co_filename != main_file:
+            return None
 
         if event == "call":
             if filename == main_file:
@@ -55,8 +59,8 @@ def show_commands():
 
         return trace_calls
 
-    # Set global tracer
-    sys.settrace(trace_calls)
+    # Set global tracer (I think this is a bad idea, slows everything down way too much and should be unnecessary, so I have commented it out below)
+    #sys.settrace(None)
 
     # Attach to the *caller’s* frame (the main script)
     caller_frame = sys._getframe(1)
@@ -65,8 +69,8 @@ def show_commands():
 def hide_commands():
     global _trace_func
 
-    # Disable future tracing
-    sys.settrace(None)
+    # Disable future tracing (uncomment the line below only if you set a global tracer above)
+    #sys.settrace(None)
 
     # Also disable tracing on the current frame
     frame = sys._getframe()
@@ -323,8 +327,8 @@ def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, colo
             cc_x = []
             cc_y = []
 
-        if len(q.sorted_critical_curve) > 0:
-            plt.legend(loc="upper right")
+        #if len(q.sorted_critical_curve) > 0:
+            #plt.legend(loc="upper right")
 
     if srcplane_fig is not None:
         plt.figure(srcplane_fig.number)
@@ -349,8 +353,8 @@ def add_crit_to_plot(QLens_Object, *, srcplane_fig=None, imgplane_fig=None, colo
                 label='Caustic ($z_{src}$=' + str(q.zsrc) + ')'
             srcplane_ax.plot(caustic_x, caustic_y, lw=_line_width, color=color, label=label)
             
-        if len(q.sorted_critical_curve) > 0:
-            plt.legend(loc="upper right")
+        #if len(q.sorted_critical_curve) > 0:
+            #plt.legend(loc="upper right")
 
 def add_crit_to_imgplot(QLens_Object, imgplane_fig, color='gray'):
     if(QLens_Object is None or imgplane_fig is None):
@@ -366,10 +370,9 @@ def plot_sb(img, QLens_Object, *, show=True, cc_color='gray', show_cc=True, fix_
     q = QLens_Object
     global _cmap_scheme
     plottype = img[0]
-    # For some reason, if we don't make copies of the lists from the tuple (as below), the tuple ends up getting corrupted when matplotlib stuff is called. I have no idea why, it's super annoying.
-    x = copy.deepcopy(img[1])
-    y = copy.deepcopy(img[2])
-    z = copy.deepcopy(img[3])
+    x = img[1]
+    y = img[2]
+    z = img[3]
 
     fig, ax = plt.subplots(figsize=(8, 8))
     extent = [x[0],x[-1],y[0],y[-1]] 

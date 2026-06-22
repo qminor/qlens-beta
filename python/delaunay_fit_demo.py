@@ -22,7 +22,7 @@ sim_hst_data.load_mask("mask.fits")
 #plot_sb(dataimg,q)
 #pause()
 
-#plotdata(q,nomask=True,title="Mock data for delaunay_fit_demo.py")
+plotdata(q,nomask=True,title="Mock data for delaunay_fit_demo.py")
 
 q.sbmap_load_psf("hst_psf.fits")
 
@@ -36,7 +36,7 @@ q.zlens = 0.5
 q.zsrc = 2
 
 #Alpha = SPLE({"b": 1.3634, "alpha": 1.17163, "s": 0.0, "q": 0.963867, "theta": 81.9, "xc": 0.0102892, "yc": 0.00358392}) # true model
-Alpha = SPLE({"b": 1.2, "alpha": 1.17, "s": 0.0, "e1": 0.0, "e2": 0.0, "xc": 0.0, "yc": 0.0})
+Alpha = SPLE({"b": 1.2, "alpha": 1.17, "s": 0.0, "e1": 0.0, "e2": 0.0, "xc": 0.0, "yc": 0.0},qlens=q)
 Alpha.vary([1,1,0,1,1,1,1])
 #Alpha.set_limits([     # if you are doing nested sampling, you can define limits within the lens object, *or*
     #("b",4,6),         # you can define limits using the 'params' object instead (see below after lens.add)
@@ -48,7 +48,7 @@ Alpha.vary([1,1,0,1,1,1,1])
 
 
 #extshear = Shear({"shear1": 0.0647257, "shear2": -0.0575047}) # true model
-extshear = Shear({"shear1": 0.05, "shear2": -0.03})
+extshear = Shear({"shear1": 0.05, "shear2": -0.03},qlens=q)
 extshear.vary([1,1,0,0])
 
 lens.add(Alpha,shear=extshear)
@@ -83,8 +83,8 @@ q.fitmodel()
 q.sbmap_invert()
 #imgdata[0].unmask_all_pixels()
 
-#plotimg(q,nres=True,title="Residuals before optimizing")      # NOTE: plotimg, plotsrc, and plotdata all return figures and axes, so you can also do e.g.
-#plotsrc(q,interp=False,title="Reconstructed source before optimizing")    # (fig, ax) = plotimg(q,show=False) and modify the figures
+plotimg(q,nres=True,title="Residuals before optimizing")      # NOTE: plotimg, plotsrc, and plotdata all return figures and axes, so you can also do e.g.
+plotsrc(q,interp=False,title="Reconstructed source before optimizing")    # (fig, ax) = plotimg(q,show=False) and modify the figures
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
