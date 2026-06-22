@@ -996,6 +996,14 @@ class NFW : public LensProfile
 	template <typename QScalar>
 	QScalar lens_function_xsq(const QScalar);
 
+	void kappa_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa) { kappa_rsq_vec_impl<Eigen::VectorXd,double>(rsq,kappa); }
+#ifdef USE_STAN
+	void kappa_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa) { kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,kappa); }
+#endif
+
+	template <typename VecType, typename QScalar>
+	void kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa);
+
 	template <typename QScalar>
 	QScalar kapavg_spherical_rsq(const QScalar rsq);
 	template <typename QScalar>
@@ -1877,6 +1885,14 @@ class SersicLens : public LensProfile
 	QScalar kappa_rsq_impl(const QScalar rsq); // we use the r^2 version in the integrations rather than r because it is most directly used in cored models
 	template <typename QScalar>
 	QScalar kappa_rsq_deriv_impl(const QScalar rsq);
+
+	void kappa_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa) { kappa_rsq_vec_impl<Eigen::VectorXd,double>(rsq,kappa); }
+#ifdef USE_STAN
+	void kappa_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa) { kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,kappa); }
+#endif
+
+	template <typename VecType, typename QScalar>
+	void kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa);
 
 	template <typename QScalar>
 	QScalar kapavg_spherical_rsq(const QScalar rsq);

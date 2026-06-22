@@ -5,6 +5,8 @@ q = QLens(cosmo)
 (lens,src,pixsrc,imgdata) = q.pix_objects();
 (params,dparams) = q.param_objects();
 
+show_commands()
+
 q.fit_label = 'sbprofile_demo'
 
 q.set_img_npixels(81,81)
@@ -30,7 +32,7 @@ lens.add(dm_halo,anchor_center=0)
 
 #plotcrit(q)
 
-sersic_src = Sersic({"s0": 7, "R_eff": 0.087, "n": 1.5, "q": 0.70, "theta": 80, "xc": 0.06, "yc": -0.03})
+sersic_src = Sersic({"s0": 7, "R_eff": 0.087, "n": 1.5, "q": 0.70, "theta": 80, "xc": 0.06, "yc": -0.03},qlens=q)
 
 src.add(sersic_src)
 

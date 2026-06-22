@@ -3284,10 +3284,10 @@ void QLens::print_pixellated_source_list(bool show_vary_params)
 {
 	cout << resetiosflags(ios::scientific);
 	double zs;
-	//cout << "N_ZSRC: "<< n_extended_src_redshifts << endl;
+	cout << "N_ZSRC: "<< n_extended_src_redshifts << endl;
 	if (n_pixellated_src > 0) {
 		for (int i=0; i < n_pixellated_src; i++) {
-			//cout << "IDX=" << sbprofile_redshift_idx[i] << endl;
+			cout << "IDX=" << sbprofile_redshift_idx[i] << endl;
 			if (pixellated_src_redshift_idx[i]==-1) zs = -1;
 			else zs = extended_src_redshifts[pixellated_src_redshift_idx[i]];
 			cout << i << ". ";
@@ -16194,7 +16194,7 @@ void QLens::set_bg_pixel_noise(double noise_in) {
 	background_pixel_noise = noise_in;
 	if ((!use_noise_map) and (n_image_pixel_grids != 0)) {
 		for (int imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
-			image_pixel_grids[imggrid_i]->setup_noise_map(this);
+			if (image_pixel_grids[imggrid_i] != NULL) image_pixel_grids[imggrid_i]->setup_noise_map(this);
 		}
 	}
 }

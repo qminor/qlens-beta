@@ -1735,6 +1735,43 @@ template double NFW::kappa_rsq_impl<double>(const double rsq);
 template stan::math::var NFW::kappa_rsq_impl<stan::math::var>(const stan::math::var rsq);
 #endif
 
+template <typename VecType, typename QScalar>
+void NFW::kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa)
+{
+#ifdef USE_STAN
+	using stan::math::log;
+	using stan::math::elt_divide;
+#endif
+
+	NFW_Params<QScalar>& p = assign_nfw_param_object<QScalar>();
+	VecType xsq, lensfunc;
+	xsq = rsq/(p.rs*p.rs);
+	lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		kappa = 2*p.ks*elt_divide(1 - lensfunc, (xsq-1));
+		/*
+		// worry about the small x case later
+		for (int i=0; i < xsq.size(); ++i) {
+			if (xsq(i).val() <= 1e-5)
+				kapavg.vi_->val_.coeffRef(i) = -p.ks*(1 + log(xsq(i).val()/4));
+		}
+		*/
+	} else
+#endif
+	{
+		kappa = 2*p.ks*((1 - lensfunc.array())/(xsq.array()-1)).matrix();
+		for (int i=0; i < xsq.size(); ++i) {
+			if (xsq(i) <= 1e-5)
+				kappa(i) = -p.ks*(2+log(xsq(i)/4));
+		}
+	}
+}
+template void NFW::kappa_rsq_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa);
+#ifdef USE_STAN
+template void NFW::kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa);
+#endif
+
 template <typename QScalar>
 QScalar NFW::kappa_rsq_deriv_impl(const QScalar rsq)
 {
@@ -1817,57 +1854,6 @@ template double NFW::potential_spherical_rsq<double>(const double rsq);
 template stan::math::var NFW::potential_spherical_rsq<stan::math::var>(const stan::math::var rsq);
 #endif
 
-template <typename VecType, typename QScalar>
-void Truncated_NFW::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
-{
-#ifdef USE_STAN
-	using stan::math::sqrt;
-	using stan::math::log;
-	using stan::math::elt_divide;
-#endif
-
-	Truncated_NFW_Params<QScalar>& p = assign_tnfw_param_object<QScalar>();
-
-	VecType xsq, sqrttx, lx, tmp, lensfunc;
-	QScalar tau, tsq;
-
-	xsq = rsq/(p.rs*p.rs);
-	tau = p.rt/p.rs;
-	tsq = tau*tau;
-
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
-		sqrttx = sqrt(tsq + xsq);
-		lx = log(elt_divide(sqrt(xsq), sqrttx + sqrt(tsq)));
-		lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
-		if (lens_subclass==0) {
-			tmp = (tsq + 1 + 2*(xsq - 1))*lensfunc + M_PI*tau + (tsq - 1)*log(tau) + sqrttx*(-M_PI + (tsq - 1)*lx/tau);
-			kapavg = 4*p.ks*tsq/SQR(tsq + 1)*elt_divide(tmp, xsq);
-		} else {
-			tmp = 2*(tsq + 1 + 4*(xsq - 1))*lensfunc + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq + xsq) - tsq - 1) + (-tsq*(tsq*tsq - 1) + (tsq + xsq)*(3*tsq*tsq - 6*tsq - 1))*lx)/CUBE(tau)/sqrttx;
-			kapavg = 2*p.ks*tsq*tsq/CUBE(tsq + 1)*elt_divide(tmp, xsq);
-		}
-	} else
-#endif
-	{
-		sqrttx = (tsq + xsq.array()).sqrt().matrix();
-		lx = (xsq.array().sqrt()/(sqrttx.array() + sqrt(tsq))).log().matrix();
-		lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
-		if (lens_subclass==0) {
-			tmp = ((tsq + 1 + 2*(xsq.array() - 1))*lensfunc.array() + M_PI*tau + (tsq - 1)*log(tau) + sqrttx.array()*(-M_PI + (tsq - 1)*lx.array()/tau)).matrix();
-			kapavg = (4*p.ks*tsq/SQR(tsq + 1)*tmp.array()/xsq.array()).matrix();
-		} else {
-			tmp = (2*(tsq + 1 + 4*(xsq.array() - 1))*lensfunc.array() + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq + xsq.array()) - tsq - 1) + (-tsq*(tsq*tsq - 1) + (tsq + xsq.array())*(3*tsq*tsq - 6*tsq - 1))*lx.array())/CUBE(tau)/sqrttx.array()).matrix();
-			kapavg = (2*p.ks*tsq*tsq/CUBE(tsq + 1)*tmp.array()/xsq.array()).matrix();
-		}
-	}
-}
-
-template void Truncated_NFW::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kapavg);
-
-#ifdef USE_STAN
-template void Truncated_NFW::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kapavg);
-#endif
 
 template <typename VecType, typename QScalar>
 void NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
@@ -2444,6 +2430,56 @@ QScalar Truncated_NFW::kapavg_spherical_rsq(const QScalar rsq)
 template double Truncated_NFW::kapavg_spherical_rsq<double>(const double rsq);
 #ifdef USE_STAN
 template stan::math::var Truncated_NFW::kapavg_spherical_rsq<stan::math::var>(const stan::math::var rsq);
+#endif
+
+template <typename VecType, typename QScalar>
+void Truncated_NFW::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
+{
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::log;
+	using stan::math::elt_divide;
+#endif
+
+	Truncated_NFW_Params<QScalar>& p = assign_tnfw_param_object<QScalar>();
+
+	VecType xsq, sqrttx, lx, tmp, lensfunc;
+	QScalar tau, tsq;
+
+	xsq = rsq/(p.rs*p.rs);
+	tau = p.rt/p.rs;
+	tsq = tau*tau;
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		sqrttx = sqrt(tsq + xsq);
+		lx = log(elt_divide(sqrt(xsq), sqrttx + sqrt(tsq)));
+		lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
+		if (lens_subclass==0) {
+			tmp = (tsq + 1 + 2*(xsq - 1))*lensfunc + M_PI*tau + (tsq - 1)*log(tau) + sqrttx*(-M_PI + (tsq - 1)*lx/tau);
+			kapavg = 4*p.ks*tsq/SQR(tsq + 1)*elt_divide(tmp, xsq);
+		} else {
+			tmp = 2*(tsq + 1 + 4*(xsq - 1))*lensfunc + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq + xsq) - tsq - 1) + (-tsq*(tsq*tsq - 1) + (tsq + xsq)*(3*tsq*tsq - 6*tsq - 1))*lx)/CUBE(tau)/sqrttx;
+			kapavg = 2*p.ks*tsq*tsq/CUBE(tsq + 1)*elt_divide(tmp, xsq);
+		}
+	} else
+#endif
+	{
+		sqrttx = (tsq + xsq.array()).sqrt().matrix();
+		lx = (xsq.array().sqrt()/(sqrttx.array() + sqrt(tsq))).log().matrix();
+		lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
+		if (lens_subclass==0) {
+			tmp = ((tsq + 1 + 2*(xsq.array() - 1))*lensfunc.array() + M_PI*tau + (tsq - 1)*log(tau) + sqrttx.array()*(-M_PI + (tsq - 1)*lx.array()/tau)).matrix();
+			kapavg = (4*p.ks*tsq/SQR(tsq + 1)*tmp.array()/xsq.array()).matrix();
+		} else {
+			tmp = (2*(tsq + 1 + 4*(xsq.array() - 1))*lensfunc.array() + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq + xsq.array()) - tsq - 1) + (-tsq*(tsq*tsq - 1) + (tsq + xsq.array())*(3*tsq*tsq - 6*tsq - 1))*lx.array())/CUBE(tau)/sqrttx.array()).matrix();
+			kapavg = (2*p.ks*tsq*tsq/CUBE(tsq + 1)*tmp.array()/xsq.array()).matrix();
+		}
+	}
+}
+template void Truncated_NFW::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kapavg);
+#ifdef USE_STAN
+template void Truncated_NFW::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kapavg);
 #endif
 
 double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
@@ -5222,6 +5258,29 @@ QScalar SersicLens::kappa_rsq_impl(const QScalar rsq)
 template double SersicLens::kappa_rsq_impl<double>(const double rsq);
 #ifdef USE_STAN
 template stan::math::var SersicLens::kappa_rsq_impl<stan::math::var>(const stan::math::var rsq);
+#endif
+
+template <typename VecType, typename QScalar>
+void SersicLens::kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa)
+{
+#ifdef USE_STAN
+	using stan::math::exp;
+	using stan::math::pow;
+#endif
+
+	Sersic_Params<QScalar>& p = assign_sersic_param_object<QScalar>();
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		kappa = p.kappa0*exp(-p.b*pow(rsq/(p.re*p.re),0.5/p.n));
+	} else
+#endif
+	{
+		kappa = (p.kappa0*exp(-p.b*pow(rsq.array()/(p.re*p.re),0.5/p.n))).matrix();
+	}
+}
+template void SersicLens::kappa_rsq_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa);
+#ifdef USE_STAN
+template void SersicLens::kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa);
 #endif
 
 template <typename QScalar>

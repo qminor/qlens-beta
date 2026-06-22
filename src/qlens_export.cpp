@@ -18,6 +18,7 @@ double default_zsrc_ref = 2;
 QLens* global_qlens_ptr = NULL;
 
 void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_ptr, double& z, double& zs, boolvector& vary_list, bool& transform_to_pixsrc_frame, py::kwargs& kwargs); // function definition is at end of file
+void process_init_src_kwargs(int& pmode, int& band, QLens_Wrap*& qlens_ptr, double& zs, boolvector& vary_list, bool& unlensed, bool& lensed_center, py::kwargs& kwargs); // function definition is at end of file
 void check_for_unexpected_params(const py::dict& dict, const std::set<std::string> &allowed);
 
 PYBIND11_MODULE(qlens, m) {
@@ -2448,17 +2449,28 @@ PYBIND11_MODULE(qlens, m) {
 		.def(py::init<>([](){return new Gaussian();}))
 		.def(py::init<const Gaussian*>())
 		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
+			int pmode = 0;
 			int band = 0;
-			double zsrc = default_zsrc;
+			double zsrc = -1;
+			QLens_Wrap* qlens_ptr = NULL;
+			bool unlensed = false;
+			bool lensed_center = false;
+			boolvector vary_list;
+			process_init_src_kwargs(pmode, band, qlens_ptr, zsrc, vary_list, unlensed, lensed_center, kwargs);
+			if (zsrc==-1) {
+				if (unlensed) zsrc = 0;
+				else if (qlens_ptr != NULL) zsrc = qlens_ptr->source_redshift;
+				else throw std::runtime_error("need to specify either specific source redshift (zsrc), or else pass in qlens object to use default redshift");
+			}
 			if (kwargs) {
 				for (auto item : kwargs) {
-					if (py::cast<string>(item.first)=="band") {
-						band = py::cast<int>(item.second);
-					} else if (py::cast<string>(item.first)=="z") {
-						zsrc = py::cast<double>(item.second);
-					} else {
+					//if (py::cast<string>(item.first)=="band") {
+						//band = py::cast<int>(item.second);
+					//} else if (py::cast<string>(item.first)=="z") {
+						//zsrc = py::cast<double>(item.second);
+					//} else {
 						throw std::runtime_error("unknown argument to Gaussian");
-					}
+					//}
 				}
 			}
 	
@@ -2469,7 +2481,15 @@ PYBIND11_MODULE(qlens, m) {
 			SB_Profile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
 			check_for_unexpected_params(dict,allowed);
 
-			return new Gaussian(band,zsrc,p1,p2,q1,q2,xc,yc,NULL);
+			Gaussian* gaussian = new Gaussian(band,zsrc,p1,p2,q1,q2,xc,yc,NULL);
+			if (unlensed) gaussian->set_lensed(false);
+			if (lensed_center) gaussian->set_lensed_center(true);
+			if (vary_list.size() > 0) {
+				if (gaussian->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of source parameters");
+				}
+			}
+			return gaussian;
 		}))
 		;
 
@@ -2478,20 +2498,30 @@ PYBIND11_MODULE(qlens, m) {
 		.def(py::init<>([](){return new Sersic();}))
 		.def(py::init<const Sersic*>())
 		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
+			int pmode = 0;
 			int band = 0;
-			double zsrc = default_zsrc;
-			int pmode=0;
+			double zsrc = -1;
+			QLens_Wrap* qlens_ptr = NULL;
+			bool unlensed = false;
+			bool lensed_center = false;
+			boolvector vary_list;
+			process_init_src_kwargs(pmode, band, qlens_ptr, zsrc, vary_list, unlensed, lensed_center, kwargs);
+			if (zsrc==-1) {
+				if (unlensed) zsrc = 0;
+				else if (qlens_ptr != NULL) zsrc = qlens_ptr->source_redshift;
+				else throw std::runtime_error("need to specify either specific source redshift (zsrc), or else pass in qlens object to use default redshift");
+			}
 			if (kwargs) {
 				for (auto item : kwargs) {
-					if (py::cast<string>(item.first)=="pmode") {
-						pmode = py::cast<int>(item.second);
-					} else if (py::cast<string>(item.first)=="band") {
-						band = py::cast<int>(item.second);
-					} else if (py::cast<string>(item.first)=="z") {
-						zsrc = py::cast<double>(item.second);
-					} else {
+					//if (py::cast<string>(item.first)=="pmode") {
+						//pmode = py::cast<int>(item.second);
+					//} else if (py::cast<string>(item.first)=="band") {
+						//band = py::cast<int>(item.second);
+					//} else if (py::cast<string>(item.first)=="z") {
+						//zsrc = py::cast<double>(item.second);
+					//} else {
 						throw std::runtime_error("unknown argument to Sersic");
-					}
+					//}
 				}
 			}
 
@@ -2509,7 +2539,15 @@ PYBIND11_MODULE(qlens, m) {
 			SB_Profile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
 			check_for_unexpected_params(dict,allowed);
 
-			return new Sersic(band,zsrc,p1,p2,p3,q1,q2,xc,yc,0,NULL);
+			Sersic *sersic = new Sersic(band,zsrc,p1,p2,p3,q1,q2,xc,yc,0,NULL);
+			if (unlensed) sersic->set_lensed(false);
+			if (lensed_center) sersic->set_lensed_center(true);
+			if (vary_list.size() > 0) {
+				if (sersic->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of source parameters");
+				}
+			}
+			return sersic;
 		}))
 		;
 
@@ -2798,11 +2836,23 @@ PYBIND11_MODULE(qlens, m) {
 				py::arg("x_source"), py::arg("y_source"), py::arg("verbal")=false,
 				py::arg("flux")=-1, py::arg("show_labels")=false
 				)
-		.def("find_ptimgs", [](QLens_Wrap &curr, double src_x=0.5, double src_y=0.1, bool verbal=false) {
-				PtImageSet imgset(&curr);
-				curr.get_imageset(src_x, src_y, imgset, verbal);
-				return imgset;
-		},  py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("verbal")=false)		
+		.def("find_ptimgs", [](QLens_Wrap &curr, double x_in=0.5, double y_in=0.1, bool use_imgpt=false, bool verbal=false) {
+			double src_x, src_y;
+			if (use_imgpt) {
+				lensvector<double> pos,src;
+				pos[0] = x_in;
+				pos[1] = y_in;
+				curr.find_sourcept<double>(pos,src,0,curr.reference_zfactors,curr.default_zsrc_beta_factors);
+				src_x = src[0];
+				src_y = src[1];
+			} else {
+				src_x = x_in;
+				src_y = y_in;
+			}
+			PtImageSet imgset(&curr);
+			curr.get_imageset(src_x, src_y, imgset, verbal);
+			return imgset;
+		},  py::arg("src_x") = 0.5, py::arg("src_y") = 0.1, py::arg("use_imgpt")=false, py::arg("verbal")=false)		
 		.def("get_fit_ptimgs", &QLens_Wrap::get_fit_imagesets, py::arg("min_dataset") = 0, py::arg("max_dataset") = -1, py::arg("verbal") = false) 
 		//.def("get_data_imagesets", &QLens_Wrap::export_to_ImageDataSet)
 		.def("output_ptimg_grid", [](QLens_Wrap &curr) {
@@ -3427,6 +3477,53 @@ void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_
 		if ((set_qlens) and (!set_cosmo) and (qlens_ptr != NULL)) cosmo = qlens_ptr->cosmo;
 	}
 }	
+
+void process_init_src_kwargs(int& pmode, int& band, QLens_Wrap*& qlens_ptr, double& zs, boolvector& vary_list, bool& unlensed, bool& lensed_center, py::kwargs& kwargs) // function definition is at end of file
+{
+	bool set_pmode=false, set_band=false, set_qlens=false, set_zs=false, set_vary=false, set_unlensed=false, set_lensed_center=false;
+	if (kwargs) {
+		for (auto item : kwargs) {
+			if (py::cast<string>(item.first)=="band") {
+				band = py::cast<int>(item.second);
+				set_band = true;
+			} else if (py::cast<string>(item.first)=="pmode") {
+				pmode = py::cast<int>(item.second);
+				set_pmode = true;
+			} else if (py::cast<string>(item.first)=="qlens") {
+				qlens_ptr = py::cast<QLens_Wrap*>(item.second);
+				set_qlens = true;
+			} else if (py::cast<string>(item.first)=="z") {
+				zs = py::cast<double>(item.second);
+				set_zs = true;
+			} else if (py::cast<string>(item.first)=="unlensed") {
+				unlensed = py::cast<bool>(item.second);
+				if ((lensed_center) and (unlensed)) throw std::runtime_error("cannot set 'unlensed' and also 'lensed_center' at the same time");
+				set_unlensed = true;
+			} else if (py::cast<string>(item.first)=="lensed_center") {
+				lensed_center = py::cast<bool>(item.second);
+				if ((lensed_center) and (unlensed)) throw std::runtime_error("cannot set 'unlensed' and also 'lensed_center' at the same time");
+				set_lensed_center = true;
+			} else if (py::cast<string>(item.first)=="vary") { // allows for vary flags to be given at the same time as creating model
+				py::list py_vary_list = py::cast<py::list>(item.second);
+				vary_list.input(py_vary_list.size());
+				int iter = 0;
+				for (auto item : py_vary_list) {
+					vary_list[iter] = py::cast<bool>(item); iter++;
+				}
+				set_vary = true;
+			}
+		}
+		if (set_band) kwargs.attr("pop")("band");
+		if (set_pmode) kwargs.attr("pop")("pmode");
+		if (set_qlens) kwargs.attr("pop")("qlens");
+		if (set_zs) kwargs.attr("pop")("z");
+		if (set_vary) kwargs.attr("pop")("vary");
+		if (set_unlensed) kwargs.attr("pop")("unlensed");
+		if (set_lensed_center) kwargs.attr("pop")("lensed_center");
+	}
+}
+
+
 
 void check_for_unexpected_params(const py::dict& dict, const std::set<std::string> &allowed)
 {

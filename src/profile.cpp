@@ -3317,15 +3317,15 @@ void LensProfile::deflection_numerical_vec(const VecType& x, const VecType& y, V
 		lens_integral.j_integral_vec(1,x,y,def_y,converged);
 		warn_if_not_converged(converged,x(0),y(0));
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
-		def_x = elt_multiply(def_x,x); 
-		def_y = elt_multiply(def_y,y);
-	} else
+		if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+			def_x = elt_multiply(def_x,x); 
+			def_y = elt_multiply(def_y,y);
+		} else
 #endif
-	{
-		def_x = def_x.cwiseProduct(x);
-		def_y = def_y.cwiseProduct(y);
-	}
+		{
+			def_x = def_x.cwiseProduct(x);
+			def_y = def_y.cwiseProduct(y);
+		}
 
 	} else {
 		// Implement this later

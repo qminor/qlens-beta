@@ -8757,7 +8757,7 @@ void QLens::process_commands(bool read_file)
 						int n_updates = nwords-3;
 						int nparams;
 						double paramval;
-							get_n_fit_parameters(nparams);
+						get_n_fit_parameters(nparams);
 						if (n_updates > nparams) Complain("cannot have more arguments than fit parameters");
 						for (int i=0; i < n_updates; i++) {
 							if (!(ws[i+3] >> paramval)) Complain("invalid value for parameter " << i);
