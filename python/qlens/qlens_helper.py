@@ -1,5 +1,5 @@
-import os
-os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib_cache'
+#import os
+#os.environ['MPLCONFIGDIR'] = '/tmp/matplotlib_cache'
 
 import itertools
 from qlens import *
@@ -9,7 +9,7 @@ import copy
 import inspect
 import numbers
 import sys
-#import os
+import os
 import linecache
 
 _cmap_scheme = 'turbo'      # this is the colormap scheme that I like the best, but it can be changed with the set_cmap function
@@ -31,13 +31,14 @@ def pause():
 
 def show_commands():
     main_module = sys.modules["__main__"]
-    main_file = os.path.realpath(main_module.__file__)
+    main_file = os.path.abspath(main_module.__file__)
 
     state = {"last_lineno": None}
 
     def trace_calls(frame, event, arg):
-        if frame.f_code.co_filename != main_file:
+        if os.path.abspath(frame.f_code.co_filename) != main_file:
             return None
+        filename = os.path.abspath(frame.f_code.co_filename)
 
         if event == "call":
             if filename == main_file:
@@ -59,8 +60,7 @@ def show_commands():
 
         return trace_calls
 
-    # Set global tracer (I think this is a bad idea, slows everything down way too much and should be unnecessary, so I have commented it out below)
-    #sys.settrace(None)
+    sys.settrace(trace_calls)
 
     # Attach to the *caller’s* frame (the main script)
     caller_frame = sys._getframe(1)
@@ -69,8 +69,7 @@ def show_commands():
 def hide_commands():
     global _trace_func
 
-    # Disable future tracing (uncomment the line below only if you set a global tracer above)
-    #sys.settrace(None)
+    sys.settrace(None)
 
     # Also disable tracing on the current frame
     frame = sys._getframe()

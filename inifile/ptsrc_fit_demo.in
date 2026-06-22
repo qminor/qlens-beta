@@ -63,7 +63,6 @@ outside_sb_prior off        # Imposes a penalty if surface brightness is produce
 nimg_prior off              # This imposes a penalty chi-square if too few images are produced (defined by the threshold below)
 #nimg_threshold 1.4        	# Specify the minimum number of images you expect to get produced for nimg_prior; should be at least above 1
 pause
-									# to avoid solutions where the source looks exactly like the images and no multiple imaging occurs
 
 # To see how terrible the initial guess looks...
 sbmap invert
