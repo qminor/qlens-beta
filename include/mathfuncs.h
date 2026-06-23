@@ -190,6 +190,42 @@ QScalar gammln(const QScalar xx)
 	return (-tmp + log(2.5066282746310005*ser/x));
 }
 
+/*
+template <typename VecType, typename QScalar>
+void gammln_vec(const VecType& xx, VecType &gammln)
+{
+#ifdef USE_STAN
+	using stan::math::log;
+#endif
+
+	VecType x(xx);
+	VecType y(xx);
+	VecType tmp(xx);
+	VecType ser(xx);
+	static double cof[6] = {76.18009172947146,-86.50532032941677,
+		24.01409824083091,-1.231739572450155,
+		0.1208650973866179e-2,-0.5395239384953e-5};
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+// Stan version
+	} else
+#endif
+	{
+		tmp.array() = x.array() + 5.5;
+		tmp.array() -= (x.array()+0.5)*tmp.array().log();
+		ser.setConstant(1.000000000190015);
+		for (int j=0; j < 6; j++) {
+			y.array() += 1.0;
+			ser.array() += cof[j] / y.array();
+		}
+		gammln = (-tmp.array() + (2.5066282746310005*ser.array()/x.array()).log()).matrix();
+	}
+}
+*/
+
+
+
 template <typename QScalar>
 void gser(QScalar &gamser, const QScalar a, const QScalar x, QScalar &gln)
 {
@@ -258,6 +294,42 @@ void gcf(QScalar &gammcf, const QScalar a, const QScalar x, QScalar &gln)
 	gammcf = exp(-x + a*log(x) - (gln)) * h;
 	return;
 }
+
+template <typename VecType, typename QScalar>
+void gser_vec(QScalar &gamser, const VecType a, const VecType x, VecType &gln)
+{
+#ifdef USE_STAN
+	using stan::math::exp;
+	using stan::math::log;
+#endif
+
+	const int ITMAX = 100;
+	const double EPS = 3.0e-7;
+	QScalar sum,del,ap;
+
+	gln = gammln(a);
+	if (x <= 0.0) {
+		if (x < 0.0) die("x less than 0 in routine gser");
+		gamser = 0.0;
+		return;
+	} else {
+		ap = a;
+		del = sum = 1.0/a;
+		for (int n=0; n < ITMAX; n++) {
+			++ap;
+			del *= x/ap;
+			sum += del;
+			if (fabs(del) < fabs(sum)*EPS) {
+				gamser = sum * exp(-x + a*log(x) - (gln));
+				return;
+			}
+		}
+		die("a too large, ITMAX too small in routine gser");
+		return;
+	}
+}
+
+
 
 template <typename QScalar>
 QScalar IncGamma(const QScalar a, const QScalar x)

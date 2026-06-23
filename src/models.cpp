@@ -193,8 +193,8 @@ void SPLE_Lens::set_model_specific_integration_pointers()
 				hessptr = static_cast<void (LensProfile::*)(const double,const double,lensmatrix<double>&)> (&SPLE_Lens::hessian_elliptical_nocore<double>);
 				potptr = static_cast<double (LensProfile::*)(const double,const double)> (&SPLE_Lens::potential_elliptical_nocore<double>);
 				def_and_hess_ptr = static_cast<void (LensProfile::*)(const double,const double,lensvector<double>&,lensmatrix<double>&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore<double>);
-				defptr_vec = static_cast<void (LensProfile::*)(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, Eigen::VectorXd&)> (&SPLE_Lens::deflection_elliptical_nocore_vec<Eigen::VectorXd,double>);
 			}
+			defptr_vec = static_cast<void (LensProfile::*)(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, Eigen::VectorXd&)> (&SPLE_Lens::deflection_elliptical_nocore_vec<Eigen::VectorXd,double>);
 		}
 	}
 #ifdef USE_STAN
@@ -219,9 +219,9 @@ void SPLE_Lens::set_model_specific_integration_pointers()
 				hessptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensmatrix<stan::math::var>&)> (&SPLE_Lens::hessian_elliptical_nocore<stan::math::var>);
 				potptr_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var,const stan::math::var)> (&SPLE_Lens::potential_elliptical_nocore<stan::math::var>);
 				def_and_hess_ptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&,lensmatrix<stan::math::var>&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore<stan::math::var>);
-				defptr_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&SPLE_Lens::deflection_elliptical_nocore_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
 
 			}
+			defptr_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&SPLE_Lens::deflection_elliptical_nocore_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
 		}
 	}
 #endif
@@ -5239,8 +5239,10 @@ void SersicLens::set_auto_ranges()
 void SersicLens::set_model_specific_integration_pointers()
 {
 	kapavgptr_rsq_spherical = static_cast<double (LensProfile::*)(const double)> (&SersicLens::kapavg_spherical_rsq<double>);
+	defptr_vec = &SersicLens::deflection_numerical_vec<Eigen::VectorXd,double>;  // because the spherical version doesn't work at the moment
 #ifdef USE_STAN
 	kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SersicLens::kapavg_spherical_rsq<stan::math::var>);
+	defptr_vec_autodif = &SersicLens::deflection_numerical_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>; 
 #endif
 }
 
@@ -5275,7 +5277,7 @@ void SersicLens::kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa)
 	} else
 #endif
 	{
-		kappa = (p.kappa0*exp(-p.b*pow(rsq.array()/(p.re*p.re),0.5/p.n))).matrix();
+		kappa = (p.kappa0*(-p.b*(rsq.array()/(p.re*p.re)).pow(0.5/p.n)).exp()).matrix();
 	}
 }
 template void SersicLens::kappa_rsq_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa);
@@ -5313,6 +5315,34 @@ template double SersicLens::kapavg_spherical_rsq<double>(const double rsq);
 #ifdef USE_STAN
 template stan::math::var SersicLens::kapavg_spherical_rsq<stan::math::var>(const stan::math::var rsq);
 #endif
+
+/*
+template <typename VecType, typename QScalar>
+void SersicLens::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
+{
+#ifdef USE_STAN
+	using stan::math::log;
+	using stan::math::elt_divide;
+#endif
+
+	Sersic_Params<QScalar>& p = assign_sersic_param_object<QScalar>();
+	VecType xsq, lensfunc;
+	xsq = rsq/(p.rs*p.rs);
+	lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		kapavg = 
+	} else
+#endif
+	{
+		kapavg = 
+	k
+}
+template void NFW::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kapavg);
+#ifdef USE_STAN
+template void NFW::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& xsq, stan::math::var_value<Eigen::VectorXd>& kapavg);
+#endif
+*/
 
 bool SersicLens::output_cosmology_info(const int lens_number)
 {

@@ -1712,9 +1712,9 @@ void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q
 	potptr_rsq_spherical_autodif = &LensProfile::potential_spherical_integral<stan::math::var>;
 	//kapavgptr_rsq_spherical_vec_autodif =  ... There is no integral form that takes in vectors of x/y values. Implement this!
 	if ((lensparams_dif->q==1.0) and (!ellipticity_gradient)) {
-		//potptr_autodif = &LensProfile::potential_spherical_default<stan::math::var>;
-		//defptr_autodif = &LensProfile::deflection_spherical_default<stan::math::var>;
-		//hessptr_autodif = &LensProfile::hessian_spherical_default<stan::math::var>;
+		potptr_autodif = &LensProfile::potential_spherical_default<stan::math::var>;
+		defptr_autodif = &LensProfile::deflection_spherical_default<stan::math::var>;
+		hessptr_autodif = &LensProfile::hessian_spherical_default<stan::math::var>;
 		defptr_vec_autodif = &LensProfile::deflection_spherical_default_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>;
 	} else {
 		defptr_autodif = &LensProfile::deflection_numerical<stan::math::var>;
