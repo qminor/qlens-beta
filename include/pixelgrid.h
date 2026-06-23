@@ -575,37 +575,6 @@ class LensPixelGrid : public DelaunayGrid, public Model
 	~LensPixelGrid();
 };
 
-template <typename MathTypes>
-class ImgGrid_Params
-{
-	using QScalar = typename MathTypes::QScalar;
-	using VecType = typename MathTypes::VecType;
-	using MatType = typename MathTypes::MatType;
-
-	public:
-	int x_N, y_N;
-
-	VecType surface_brightness_vec;
-	VecType surface_brightness_vec_unconvolved;
-	VecType surface_brightness_supersampled_vec;
-	VecType srcpt_x_centers, srcpt_y_centers;
-	VecType srcpt_x_subpixel_centers, srcpt_y_subpixel_centers;
-
-	ImgGrid_Params() {}
-	void setup_ray_tracing_arrays(const int ntot_corners, const int img_npixels_emask, const int n_sb_cells) {
-		srcpt_x_centers = Eigen::VectorXd::Zero(img_npixels_emask);
-		srcpt_y_centers = Eigen::VectorXd::Zero(img_npixels_emask);
-		// Note, n_sb_cells could be number of pixels from the primary mask, or it could be from fgmask depending on settings
-		surface_brightness_vec_unconvolved = Eigen::VectorXd::Zero(n_sb_cells);
-		surface_brightness_vec = Eigen::VectorXd::Zero(n_sb_cells);
-	}
-	void setup_subpixel_ray_tracing_arrays(const int n_subpixels_emask) {
-		srcpt_x_subpixel_centers = Eigen::VectorXd::Zero(n_subpixels_emask);
-		srcpt_y_subpixel_centers = Eigen::VectorXd::Zero(n_subpixels_emask);
-		surface_brightness_supersampled_vec = Eigen::VectorXd::Zero(n_subpixels_emask);
-	}
-};
-
 struct ConvPlan
 {
 	// This stores the coefficients for doing a direct PSF convolution (without using FFT)
@@ -627,6 +596,33 @@ struct ConvPlan
 		weight.clear();
 		out_size = 0;
 		in_size = 0;
+	}
+};
+
+template <typename MathTypes>
+class ImgGrid_Params
+{
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	public:
+	VecType surface_brightness_vec;
+	VecType surface_brightness_supersampled_vec;
+	VecType srcpt_x_centers, srcpt_y_centers;
+	VecType srcpt_x_subpixel_centers, srcpt_y_subpixel_centers;
+
+	ImgGrid_Params() {}
+	void setup_ray_tracing_arrays(const int ntot_corners, const int img_npixels_emask, const int n_sb_cells) {
+		srcpt_x_centers = Eigen::VectorXd::Zero(img_npixels_emask);
+		srcpt_y_centers = Eigen::VectorXd::Zero(img_npixels_emask);
+		// Note, n_sb_cells could be number of pixels from the primary mask, or it could be from fgmask depending on settings
+		surface_brightness_vec = Eigen::VectorXd::Zero(n_sb_cells);
+	}
+	void setup_subpixel_ray_tracing_arrays(const int n_subpixels_emask) {
+		srcpt_x_subpixel_centers = Eigen::VectorXd::Zero(n_subpixels_emask);
+		srcpt_y_subpixel_centers = Eigen::VectorXd::Zero(n_subpixels_emask);
+		surface_brightness_supersampled_vec = Eigen::VectorXd::Zero(n_subpixels_emask);
 	}
 };
 

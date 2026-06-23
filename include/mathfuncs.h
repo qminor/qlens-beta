@@ -224,8 +224,6 @@ void gammln_vec(const VecType& xx, VecType &gammln)
 }
 */
 
-
-
 template <typename QScalar>
 void gser(QScalar &gamser, const QScalar a, const QScalar x, QScalar &gln)
 {

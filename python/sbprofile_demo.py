@@ -33,15 +33,8 @@ lens.add(dm_halo,anchor_center=0)
 #plotcrit(q)
 
 sersic_src = Sersic({"s0": 7, "R_eff": 0.087, "n": 1.5, "q": 0.70, "theta": 80, "xc": 0.06, "yc": -0.03},qlens=q)
-sersic_src.vary([1,1,1,1,1,1,1])
 
 src.add(sersic_src)
-
-params.set_limits([
-    ("s0_src",0.001,10000),
-    ("xc_src",-5,5),
-    ("yc_src",-5,5)
-])
 
 # Plot the analytic source
 print("Plotting the Sersic source...")

@@ -1567,6 +1567,7 @@ void SB_Profile::update_ellipticity_meta_parameters()
 		}
 		*/
 	}
+	if (lensed_center_coords) set_center_if_lensed_coords<QScalar>();
 }
 template void SB_Profile::update_ellipticity_meta_parameters<double>();
 #ifdef USE_STAN

@@ -10287,7 +10287,6 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 			} else {
 				loglike_stan = fitmodel_loglike_extended_source<stan::math::var,AutoDiffTypes>(fitparams_stan);
 			}
-			/*
 			loglike_stan.grad();
 			cout << "stan 2*loglike = " << (2*loglike_stan.val()) << endl;
 			cout << "Autodiff params and GRADIENT comps: " << endl;
@@ -10317,7 +10316,6 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 			cout << endl << endl;
 			//delete[] fitparams2;
 			delete[] derivs;
-		*/
 			delete[] fitparams_stan;
 		}
 		//stan::math::recover_memory_nested();

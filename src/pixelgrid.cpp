@@ -14021,7 +14021,7 @@ void ImagePixelGrid::find_surface_brightness_sbprofile(const bool foreground_onl
 
 	int npix = image_npixels;
 	int nsp = SQR(qlens->default_imgpixel_nsplit);
-	p.surface_brightness_vec_unconvolved = Eigen::VectorXd::Zero(npix);
+	p.surface_brightness_vec = Eigen::VectorXd::Zero(npix);
 	if (qlens->split_imgpixels) {
 		if (supersampling) {
 			int ntot_subpixels = p.srcpt_x_subpixel_centers.size();
@@ -14031,12 +14031,12 @@ void ImagePixelGrid::find_surface_brightness_sbprofile(const bool foreground_onl
 			}
 		} else {
 			for (int k=0; k < sbprofiles_this_imggrid.size(); k++) {
-				sbprofiles_this_imggrid[k]->surface_brightness_vec(p.srcpt_x_subpixel_centers,p.srcpt_y_subpixel_centers,p.surface_brightness_vec_unconvolved,nsp);
+				sbprofiles_this_imggrid[k]->surface_brightness_vec(p.srcpt_x_subpixel_centers,p.srcpt_y_subpixel_centers,p.surface_brightness_vec,nsp);
 			}
 		}
 	} else {
 		for (int k=0; k < sbprofiles_this_imggrid.size(); k++) {
-			sbprofiles_this_imggrid[k]->surface_brightness_vec(p.srcpt_x_centers,p.srcpt_y_centers,p.surface_brightness_vec_unconvolved);
+			sbprofiles_this_imggrid[k]->surface_brightness_vec(p.srcpt_x_centers,p.srcpt_y_centers,p.surface_brightness_vec);
 		}
 	}
 
@@ -14045,9 +14045,7 @@ void ImagePixelGrid::find_surface_brightness_sbprofile(const bool foreground_onl
 			//cout << "checking PSF setup..." << endl;
 			setup_PSF_convolution();
 		}
-		p.surface_brightness_vec = PSF_convolution_pixel_vector_stan(p.surface_brightness_vec_unconvolved);
-	} else {
-		p.surface_brightness_vec = p.surface_brightness_vec_unconvolved;
+		p.surface_brightness_vec = PSF_convolution_pixel_vector_stan(p.surface_brightness_vec);
 	}
 	for (int n=0; n < image_npixels; n++) {
 		i = emask_pixels_i[n];
