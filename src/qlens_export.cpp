@@ -3120,13 +3120,53 @@ PYBIND11_MODULE(qlens, m) {
 				}
 					return current.adopt_model(param_vec);
 		})
-		.def("mkposts", [](QLens_Wrap &current){ 
+		.def("mkposts", [](QLens_Wrap &current, py::kwargs& kwargs){ 
 			int nbins_1d = 50;
 			int nbins_2d = 40;
 			bool resampled_posts = false;
 			bool no2dposts = false;
 			bool use_fisher_matrix = false;
 			bool run_plotting_scripts = true;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="resampled") {
+					try {
+						resampled_posts = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'resampled' argument");
+					}
+				} else if (py::cast<string>(item.first)=="no2d") {
+					try {
+						no2dposts = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'no2d' argument");
+					}
+				} else if (py::cast<string>(item.first)=="fisher") {
+					try {
+						use_fisher_matrix = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'fisher' argument");
+					}
+				} else if (py::cast<string>(item.first)=="run_scripts") {
+					try {
+						run_plotting_scripts = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'run_scripts' argument");
+					}
+				} else if (py::cast<string>(item.first)=="nbins_1d") {
+					try {
+						nbins_1d = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'nbins_1d' argument");
+					}
+				} else if (py::cast<string>(item.first)=="nbins_2d") {
+					try {
+						nbins_2d = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'nbins_2d' argument");
+					}
+				} else throw std::runtime_error("argument to 'plotimg' not recognized");
+			}
+
 			return current.make_histograms(nbins_1d,nbins_2d,resampled_posts,no2dposts,use_fisher_matrix,run_plotting_scripts);
 		})
 
@@ -3316,6 +3356,10 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("sci_notation", &QLens_Wrap::get_sci_notation, &QLens_Wrap::set_sci_notation)
 		.def_property("fit_label", &QLens_Wrap::get_fit_label, &QLens_Wrap::set_fit_label)
 		.def_readwrite("fit_output_dir", &QLens_Wrap::fit_output_dir)
+		.def_readwrite("auto_save_bestfit", &QLens_Wrap::auto_save_bestfit)
+		.def("save_bestfit", [](QLens_Wrap &current) {
+			current.output_bestfit_model(true);
+		})
 		.def_readwrite_static("ansi_output", &QLens_Wrap::use_ansi_output_during_fit)
 		.def("caustic_minmax", [](QLens_Wrap &current){ 
 			double rmin,rmax,rmax_minor_axis;

@@ -11061,7 +11061,7 @@ bool QLens::calculate_fisher_matrix(QScalar *params, const Vector<double> &steps
 		}
 
 		for (j=0; j < n_fitparams; j++) {
-			fisher(i,j) = -(derivs_hi[j] - derivs_lo[j]) / step;
+			fisher(i,j) = (derivs_hi[j] - derivs_lo[j]) / step;
 			if (fisher(i,j)*0.0) warn(warnings,"Fisher matrix element (%i,%i) calculated as 'nan'",i,j);
 			//if (i==j) cout << abs(derivlo+derivhi) << " " << sqrt(abs(fisher(i,j))) << endl;
 			if ((mpi_id==0) and (i==j) and (abs(derivlo+derivhi) > sqrt(abs(fisher(i,j))))) warn(warnings,"Derivatives along parameter %i indicate best-fit point may not be at a local minimum of chi-square",i);
@@ -12747,7 +12747,7 @@ bool QLens::find_chain_file_and_threads(const string file_root, string& filename
 	} else {
 		filename = file_root + ".pcov";
 		if (!file_exists(filename)) {
-			warn("Inverse-Fisher matrix file not found");
+			warn("Parameter covariance matrix file not found");
 			return false;
 		}
 	}

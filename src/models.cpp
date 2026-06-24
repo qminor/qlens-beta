@@ -3636,10 +3636,10 @@ template void Shear::update_meta_parameters_impl<stan::math::var>();
 void Shear::set_auto_stepsizes()
 {
 	if (use_shear_component_params) {
-		stepsizes[0] = 0.035;
-		stepsizes[1] = 0.035;
+		stepsizes[0] = 0.05;
+		stepsizes[1] = 0.05;
 	} else {
-		stepsizes[0] = 0.03;
+		stepsizes[0] = 0.05;
 		stepsizes[1] = 20;
 	}
 	stepsizes[2] = 0.1; // very arbitrary, but p.shear is usually center_anchored anyway

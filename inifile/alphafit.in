@@ -9,7 +9,7 @@
 lens clear              # Just in case we were doing something else before this
 imgdata clear           # Just in case we already had image data loaded before this
 
-fit label alphafitd      # This labels the files that will be produced by the lens fitting
+fit label alphafit      # This labels the files that will be produced by the lens fitting
 fit method simplex      # This is the default fit method (downhill simplex method), which minimizes the chi-square function
 chisqlog off  	         # if turned on, this saves all the chi-square function evaluations in file "<label>.log"
 sci_notation off        # This is just up to your personal preference
@@ -27,7 +27,7 @@ imgdata                      # Shows the image data so you can see what it looks
 #    can be used in addition to the image positions. If you do model the external shear, guess a small
 #    but nonzero value for both gamma and the angle, as we do here.
 
-fit lens sple 4.5 1 0 0.8 30 0.7 0.3 shear=0.02 10 # Now we put our initial guess for the lens parameters
+fit lens sple 4.5 1 0 0.9 30 0.7 0.4 shear=0.01 10 # Now we put our initial guess for the lens parameters
 1 0 0 1 1 1 1 1 1                                   #vary flags; here we vary everything except for alpha and s (core size)
 pause
 
