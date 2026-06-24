@@ -38,12 +38,14 @@ using namespace std;
 #endif
 
 #include <Eigen/Core>
+#include <Eigen/Dense>
 #include "Eigen/Cholesky"
 #include "LBFGSB.h"
 using namespace LBFGSpp;
 
 #ifdef USE_STAN
 #include <stan/math.hpp>
+#include <stan/math/mix/functor/hessian.hpp>
 #endif
 
 #ifdef USE_MKL
@@ -7360,9 +7362,9 @@ bool QLens::add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_f
 	for (i=0; i < n_images; i++) {
 		include[i] = true;
 		if (include_errors_from_fisher_matrix) {
-			err_xsq = abs(fisher_inverse[param_i+indx][param_i+indx]);
+			err_xsq = abs(param_covmatrix(param_i+indx,param_i+indx));
 			indx++;
-			err_ysq = abs(fisher_inverse[param_i+indx][param_i+indx]);
+			err_ysq = abs(param_covmatrix(param_i+indx,param_i+indx));
 			indx++;
 			err_pos[i] = scale_errors*sqrt(dmax(err_xsq,err_ysq)); // right now, imgdata doesn't treat error in x vs. y separately; it uses a common error for both
 		} else {
@@ -10108,7 +10110,7 @@ bool QLens::fit_set_optimizations()
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 	if (nlens==0) {
 		if ((n_sb==0) and (n_ptsrc==0)) {
@@ -10145,7 +10147,7 @@ bool QLens::fit_set_optimizations()
 	auto_store_cc_points = false;
 	if (source_fit_mode==Point_Source) include_time_delays = false; // calculating time delays from images found not necessary during point source fit, since the chisq_time_delays finds time delays separately
 
-	fisher_inverse.erase(); // reset parameter covariance matrix in case it was used in a previous fit
+	param_covmatrix.resize(0,0); // reset parameter covariance matrix in case it was used in a previous fit
 	return true;
 }
 
@@ -10204,7 +10206,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	display_chisq_status = true;
@@ -10285,7 +10287,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 			if (source_fit_mode==Point_Source) {
 				loglike_stan = fitmodel_loglike_point_source<stan::math::var>(fitparams_stan);
 			} else {
-				loglike_stan = fitmodel_loglike_extended_source<stan::math::var,AutoDiffTypes>(fitparams_stan);
+				loglike_stan = fitmodel_loglike_extended_source<stan::math::var>(fitparams_stan);
 			}
 			loglike_stan.grad();
 			cout << "stan 2*loglike = " << (2*loglike_stan.val()) << endl;
@@ -10369,7 +10371,7 @@ void QLens::plot_chisq_2d(const int param1, const int param2, const int n1, cons
 	if (source_fit_mode==Point_Source) {
 		loglikeptr = static_cast<double (QLens::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		loglikeptr = static_cast<double (QLens::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		loglikeptr = static_cast<double (QLens::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	double step1 = (f1-i1)/n1;
@@ -10442,7 +10444,7 @@ void QLens::plot_chisq_1d(const int param, const int n, const double ip, const d
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (QLens::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		LogLikePtr = static_cast<double (QLens::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		LogLikePtr = static_cast<double (QLens::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	double step = (fp-ip)/n;
@@ -10496,7 +10498,7 @@ double QLens::chi_square_fit_simplex(const bool show_parameter_errors)
 	if (source_fit_mode==Point_Source) {
 		loglikeptr = static_cast<double (Simplex::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		loglikeptr = static_cast<double (Simplex::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		loglikeptr = static_cast<double (Simplex::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	int n_fitparams = param_list->nparams;
@@ -10603,7 +10605,7 @@ double QLens::chi_square_fit_powell(const bool show_parameter_errors)
 	if (source_fit_mode==Point_Source) {
 		loglikeptr = static_cast<double (Powell::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		loglikeptr = static_cast<double (Powell::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		loglikeptr = static_cast<double (Powell::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	initialize_powell(loglikeptr,chisq_tolerance);
@@ -10800,8 +10802,10 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 	}
 
 	double (QLens::*loglikeptr)(const double*);
+	bool using_autodiff = false;
 #ifdef USE_STAN
-	use_autodiff = true;
+	use_autodiff = true; // static qlens flag...mostly used to clear autodiff memory tree if necessary
+	using_autodiff = true;
 	stan::math::var (QLens::*loglikeptr_stan)(const stan::math::var*);
 #endif
 	if (source_fit_mode==Point_Source) {
@@ -10810,9 +10814,9 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		loglikeptr_stan = &QLens::fitmodel_loglike_point_source<stan::math::var>;
 #endif
 	} else {
-		loglikeptr = &QLens::fitmodel_loglike_extended_source<double,PlainTypes>;
+		loglikeptr = &QLens::fitmodel_loglike_extended_source<double>;
 #ifdef USE_STAN
-		loglikeptr_stan = &QLens::fitmodel_loglike_extended_source<stan::math::var,AutoDiffTypes>;
+		loglikeptr_stan = &QLens::fitmodel_loglike_extended_source<stan::math::var>;
 #endif
 	}
 
@@ -10823,6 +10827,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 
 	int n_fitparams = param_list->nparams;
 	int n_iterations = 0;
+	Vector<double> stepsizes(param_list->stepsizes,n_fitparams); // we still use stepsizes to help calculate Fisher matrix even if we're using autodiff
 #ifdef USE_STAN
 	LogLikeGrad_Func<stan::math::var> loglikegrad_func(n_fitparams,this);
 	loglikegrad_func.set_function(loglikeptr_stan);
@@ -10830,7 +10835,6 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 #else
 	LogLikeGrad_Func<double> loglikegrad_func(n_fitparams,this);
 	loglikegrad_func.set_function(loglikeptr);
-	Vector<double> stepsizes(param_list->stepsizes,n_fitparams);
 	loglikegrad_func.input_stepsizes(stepsizes.array());
 	if (mpi_id==0) {
 		cout << "Initial stepsizes: ";
@@ -10917,7 +10921,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		cout << "BFGS converged after " << n_iterations << " iterations\n\n";
 	}
 
-	output_fit_results(fitparams,stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors);
+	output_fit_results(fitparams,stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors,using_autodiff); // the autodiff version doesn't seem to work well right now?
 
 	if (turned_on_chisqmag) use_magnification_in_chisq = false; // restore chisqmag to original setting
 	fit_restore_defaults();
@@ -10927,14 +10931,24 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 	return chisq_bestfit;
 }
 
-void QLens::output_fit_results(double *fitparams, Vector<double> &stepsizes, const double chisq_bestfit, const int chisq_evals, const bool show_parameter_errors)
+void QLens::output_fit_results(double *fitparams, Vector<double> &stepsizes, const double chisq_bestfit, const int chisq_evals, const bool show_parameter_errors, const bool used_autodiff)
 {
 	bool fisher_matrix_is_nonsingular;
 	if (show_parameter_errors) {
 		if (mpi_id==0) cout << "Calculating parameter errors... (press CTRL-C to skip)" << endl;
-		fisher_matrix_is_nonsingular = calculate_fisher_matrix(fitparams,stepsizes);
-		if (fisher_matrix_is_nonsingular) bestfit_fisher_inverse.input(fisher_inverse);
-		else bestfit_fisher_inverse.erase(); // just in case it was defined before
+#ifdef USE_STAN
+		if (used_autodiff) {
+			stan::math::var *fitparams_stan = new stan::math::var[param_list->nparams];
+			for (int i=0; i < param_list->nparams; i++) fitparams_stan[i] = fitparams[i];
+			fisher_matrix_is_nonsingular = calculate_fisher_matrix(fitparams_stan,stepsizes);
+			delete[] fitparams_stan;
+		} else
+#endif
+		{
+			fisher_matrix_is_nonsingular = calculate_fisher_matrix(fitparams,stepsizes);
+		}
+		if (fisher_matrix_is_nonsingular) bestfit_param_covmatrix = param_covmatrix;
+		else bestfit_param_covmatrix.resize(0,0); // just in case it was defined before
 		if (mpi_id==0) cout << endl;
 	}
 	if (mpi_id==0) {
@@ -10973,7 +10987,7 @@ void QLens::output_fit_results(double *fitparams, Vector<double> &stepsizes, con
 			if (fisher_matrix_is_nonsingular) {
 				cout << "Marginalized 1-sigma errors from Fisher matrix:\n";
 				for (int i=0; i < n_fitparams; i++) {
-					cout << param_list->param_names[i] << ": " << fitparams[i] << " +/- " << sqrt(abs(fisher_inverse[i][i])) << endl;
+					cout << param_list->param_names[i] << ": " << fitparams[i] << " +/- " << sqrt(abs(param_covmatrix(i,i))) << endl;
 				}
 			} else {
 				cout << "Error: Fisher matrix is singular, marginalized errors cannot be calculated\n";
@@ -11001,20 +11015,28 @@ void fisher_quitproc(int sig)
 	exit(0);
 }
 
-bool QLens::calculate_fisher_matrix(double *params, const Vector<double> &stepsizes)
+template <typename QScalar>
+bool QLens::calculate_fisher_matrix(QScalar *params, const Vector<double> &stepsizes)
 {
 	// this function calculates the marginalized error using the Gaussian approximation
 	// (only accurate if we are near maximum likelihood point and it is close to Gaussian around this point)
-	static const double increment2 = 1e-4;
+	static const double increment2 = 5e-5;
 	if ((mpi_id==0) and (source_fit_mode==Point_Source) and (!imgplane_chisq) and (!use_magnification_in_chisq)) warn("Fisher matrix errors may not be accurate if source plane chi-square is used without magnification");
 
 	int n_fitparams = param_list->nparams;
-	dmatrix fisher(n_fitparams,n_fitparams);
-	fisher_inverse.erase();
-	fisher_inverse.input(n_fitparams,n_fitparams);
-	Vector<double> xhi(params,n_fitparams);
-	Vector<double> xlo(params,n_fitparams);
-	double x0, curvature;
+	Eigen::MatrixXd fisher(n_fitparams,n_fitparams);
+	param_covmatrix = Eigen::MatrixXd::Zero(n_fitparams,n_fitparams);
+	bool nonsingular = true;
+#ifdef USE_STAN
+	stan::math::start_nested();
+	{
+#endif
+
+	Vector<QScalar> xhi(params,n_fitparams);
+	Vector<QScalar> xlo(params,n_fitparams);
+	double* derivs_hi = new double[n_fitparams];
+	double* derivs_lo = new double[n_fitparams];
+	QScalar x0;
 	int i,j;
 	double step, derivlo, derivhi;
 	for (i=0; i < n_fitparams; i++) {
@@ -11023,21 +11045,33 @@ bool QLens::calculate_fisher_matrix(double *params, const Vector<double> &stepsi
 		if ((param_list->defined_prior_limits[i]==true) and (xhi[i] > param_list->prior_limits_hi[i])) xhi[i] = x0;
 		xlo[i] -= increment2*stepsizes[i];
 		if ((param_list->defined_prior_limits[i]==true) and (xlo[i] < param_list->prior_limits_lo[i])) xlo[i] = x0;
-		step = xhi[i] - xlo[i];
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			step = (xhi[i] - xlo[i]).val();
+			loglike_deriv_stan(xlo.array(),derivs_lo);
+			loglike_deriv_stan(xhi.array(),derivs_hi);
+		} else
+#endif
+		{
+			step = xhi[i] - xlo[i];
+			for (j=0; j < n_fitparams; j++) {
+				derivs_lo[j] = loglike_deriv(xlo,j,stepsizes[j]);
+				derivs_hi[j] = loglike_deriv(xhi,j,stepsizes[j]);
+			}
+		}
+
 		for (j=0; j < n_fitparams; j++) {
-			derivlo = loglike_deriv(xlo,j,stepsizes[j]);
-			derivhi = loglike_deriv(xhi,j,stepsizes[j]);
-			fisher[i][j] = (derivhi - derivlo) / step;
-			if (fisher[i][j]*0.0) warn(warnings,"Fisher matrix element (%i,%i) calculated as 'nan'",i,j);
-			//if (i==j) cout << abs(derivlo+derivhi) << " " << sqrt(abs(fisher[i][j])) << endl;
-			if ((mpi_id==0) and (i==j) and (abs(derivlo+derivhi) > sqrt(abs(fisher[i][j])))) warn(warnings,"Derivatives along parameter %i indicate best-fit point may not be at a local minimum of chi-square",i);
+			fisher(i,j) = -(derivs_hi[j] - derivs_lo[j]) / step;
+			if (fisher(i,j)*0.0) warn(warnings,"Fisher matrix element (%i,%i) calculated as 'nan'",i,j);
+			//if (i==j) cout << abs(derivlo+derivhi) << " " << sqrt(abs(fisher(i,j))) << endl;
+			if ((mpi_id==0) and (i==j) and (abs(derivlo+derivhi) > sqrt(abs(fisher(i,j))))) warn(warnings,"Derivatives along parameter %i indicate best-fit point may not be at a local minimum of chi-square",i);
 			signal(SIGABRT, &fisher_sighandler);
 			signal(SIGTERM, &fisher_sighandler);
 			signal(SIGINT, &fisher_sighandler);
 			signal(SIGUSR1, &fisher_sighandler);
 			signal(SIGQUIT, &fisher_quitproc);
 			if (!FISHER_KEEP_RUNNING) {
-				fisher_inverse.erase();
+				param_covmatrix.resize(0,0);
 				return false;
 			}
 		}
@@ -11048,40 +11082,183 @@ bool QLens::calculate_fisher_matrix(double *params, const Vector<double> &stepsi
 	// average the off-diagonal elements to enforce symmetry
 	for (i=1; i < n_fitparams; i++) {
 		for (j=0; j < i; j++) {
-			offdiag_avg = 0.5*(fisher[i][j]+ fisher[j][i]);
-			//if (abs((fisher[i][j]-fisher[j][i])/offdiag_avg) > 0.01) die("Fisher off-diags differ by more than 1%!");
-			fisher[i][j] = fisher[j][i] = offdiag_avg;
+			offdiag_avg = 0.5*(fisher(i,j)+ fisher(j,i));
+			//if (abs((fisher(i,j)-fisher(j,i))/offdiag_avg) > 0.01) die("Fisher off-diags differ by more than 1%!");
+			fisher(i,j) = fisher(j,i) = offdiag_avg;
 		}
 	}
-	bool nonsingular = fisher.check_nan();
-	if (nonsingular) fisher.inverse(fisher_inverse,nonsingular);
+	for (i=0; i < n_fitparams; i++) {
+		for (j=0; j < n_fitparams; j++) {
+			if (std::isnan(fisher(i,j))) {
+				nonsingular = false;
+				break;
+			}
+		}
+	}
+
+	if (nonsingular) {
+		Eigen::FullPivLU<Eigen::MatrixXd> lu(fisher);
+		if (!lu.isInvertible()) nonsingular = true;
+		else param_covmatrix = lu.inverse();
+	}
+	delete[] derivs_hi;
+	delete[] derivs_lo;
+#ifdef USE_STAN
+	}
+	stan::math::recover_memory_nested();
+#endif
+
 	if (!nonsingular) {
 		if (mpi_id==0) warn(warnings,"Fisher matrix is singular, cannot be inverted\n");
-		fisher_inverse.erase();
+		param_covmatrix.resize(0,0);
 		return false;
 	}
 	return true;
 }
+template bool QLens::calculate_fisher_matrix<double>(double *params, const Vector<double> &stepsizes);
+#ifdef USE_STAN
+template bool QLens::calculate_fisher_matrix<stan::math::var>(stan::math::var *params, const Vector<double> &stepsizes);
+#endif
 
-double QLens::loglike_deriv(const Vector<double> &params, const int index, const double step)
+/*
+#ifdef USE_STAN
+bool QLens::calculate_fisher_matrix_autodiff(const Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1>& params)
 {
-	static const double increment = 1e-5;
-	Vector<double> xhi(params);
-	Vector<double> xlo(params);
-	double dif, x0 = xhi[index];
-	xhi[index] += increment*step;
-	if ((param_list->defined_prior_limits[index]==true) and (xhi[index] > param_list->prior_limits_hi[index])) xhi[index] = x0;
-	xlo[index] -= increment*step;
-	if ((param_list->defined_prior_limits[index]==true) and (xlo[index] < param_list->prior_limits_lo[index])) xlo[index] = x0;
-	dif = xhi[index] - xlo[index];
-	double (QLens::*loglikeptr)(const double*);
-	if (source_fit_mode==Point_Source) {
-		loglikeptr = static_cast<double (QLens::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
-	} else {
-		loglikeptr = static_cast<double (QLens::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+	double logl_value;
+	Eigen::VectorXd gradient;
+	Eigen::MatrixXd hessian_matrix;
+
+	// Wrapper lambda
+	auto wrapped_loglike = [this](const auto& x)
+	{
+		//stan::math::var (QLens::*loglikeptr_stan)(const stan::math::var*);
+		//if (this->source_fit_mode==Point_Source) {
+			//loglikeptr_stan = &QLens::fitmodel_loglike_point_source<stan::math::var>;
+		//} else {
+			//loglikeptr_stan = &QLens::fitmodel_loglike_extended_source<stan::math::var>;
+		//}
+		//return (this->*loglikeptr_stan)(x.data());
+
+		if (this->source_fit_mode==Point_Source) {
+			return this->fitmodel_loglike_point_source(x.data());
+		} else {
+			return this->fitmodel_loglike_extended_source(x.data());
+		}
+	};
+
+	stan::math::hessian(wrapped_loglike, params, logl_value, gradient, hessian_matrix);
+	Eigen::MatrixXd fisher = -hessian_matrix;
+
+	cout << "logL =\n" << logl_value << endl;
+	cout << "Gradient =\n" << gradient << endl;
+	cout << "Hessian =\n" << hessian_matrix << endl;
+	cout << "Observed Fisher =\n" << fisher << endl;
+
+	int n_fitparams = param_list->nparams;
+	bool nonsingular = true;
+	int i,j;
+	for (i=0; i < n_fitparams; i++) {
+		for (j=0; j < n_fitparams; j++) {
+			if (std::isnan(fisher(i,j))) {
+				nonsingular = false;
+				break;
+			}
+		}
 	}
-	return (((this->*loglikeptr)(xhi.array()) - (this->*loglikeptr)(xlo.array())) / dif);
+
+	if (nonsingular) {
+		Eigen::FullPivLU<Eigen::MatrixXd> lu(fisher);
+		if (!lu.isInvertible()) nonsingular = true;
+		else param_covmatrix = lu.inverse();
+	}
+	if (!nonsingular) {
+		if (mpi_id==0) warn(warnings,"Fisher matrix is singular, cannot be inverted\n");
+		param_covmatrix.resize(0,0);
+		return false;
+	}
+	return true;
 }
+#endif
+*/
+
+
+template <typename QScalar>
+double QLens::loglike_deriv(const Vector<QScalar> &params, const int index, const double step)
+{
+	double deriv,deriv2,logl;
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		use_autodiff = true;
+		stan::math::var (QLens::*loglikeptr_stan)(const stan::math::var*);
+		if (source_fit_mode==Point_Source) {
+			loglikeptr_stan = &QLens::fitmodel_loglike_point_source<stan::math::var>;
+		} else {
+			loglikeptr_stan = &QLens::fitmodel_loglike_extended_source<stan::math::var>;
+		}
+		stan::math::var loglike_stan = (this->*loglikeptr_stan)(params.array());
+		stan::math::set_zero_all_adjoints();
+		loglike_stan.grad();
+		deriv = params[index].adj();
+		logl=loglike_stan.val();
+	} 
+#endif
+	{
+		double (QLens::*loglikeptr)(const double*);
+		if (source_fit_mode==Point_Source) {
+			loglikeptr = &QLens::fitmodel_loglike_point_source;
+		} else {
+			loglikeptr = &QLens::fitmodel_loglike_extended_source<double>;
+		}
+		static const double increment = 1e-4;
+		dvector params_doub(param_list->nparams);
+		for (int i=0; i < param_list->nparams; i++) {
+#ifdef USE_STAN
+			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				params_doub[i] = params[i].val();
+			} else
+#endif
+			{
+				params_doub[i] = params[i];
+			}
+		}
+		Vector<double> xhi(params_doub);
+		Vector<double> xlo(params_doub);
+		double dif, x0 = xhi[index];
+		xhi[index] += increment*step;
+		if ((param_list->defined_prior_limits[index]==true) and (xhi[index] > param_list->prior_limits_hi[index])) xhi[index] = x0;
+		xlo[index] -= increment*step;
+		if ((param_list->defined_prior_limits[index]==true) and (xlo[index] < param_list->prior_limits_lo[index])) xlo[index] = x0;
+		dif = xhi[index] - xlo[index];
+		deriv2 = (((this->*loglikeptr)(xhi.array()) - (this->*loglikeptr)(xlo.array())) / dif);
+	}
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		//cout << "param " << index << ": deriv_autodif=" << deriv << " deriv_numerical=" << deriv2 << " logl=" << logl << endl;
+		return deriv;
+	} else
+#endif
+	return deriv2;
+}
+template double QLens::loglike_deriv<double>(const Vector<double> &params, const int index, const double step);
+#ifdef USE_STAN
+template double QLens::loglike_deriv<stan::math::var>(const Vector<stan::math::var> &params, const int index, const double step);
+#endif
+
+#ifdef USE_STAN
+void QLens::loglike_deriv_stan(const stan::math::var* params, double* derivs)
+{
+	stan::math::var (QLens::*loglikeptr_stan)(const stan::math::var*);
+	if (source_fit_mode==Point_Source) {
+		loglikeptr_stan = &QLens::fitmodel_loglike_point_source<stan::math::var>;
+	} else {
+		loglikeptr_stan = &QLens::fitmodel_loglike_extended_source<stan::math::var>;
+	}
+	stan::math::var loglike_stan = (this->*loglikeptr_stan)(params);
+	stan::math::set_zero_all_adjoints();
+	loglike_stan.grad();
+	for (int i=0; i < param_list->nparams; i++) derivs[i] = params[i].adj();
+}
+#endif
 
 void QLens::nested_sampling()
 {
@@ -11116,7 +11293,7 @@ void QLens::nested_sampling()
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	if (mpi_id==0) {
@@ -11218,7 +11395,7 @@ void QLens::multinest(const bool resume_previous, const bool skip_run)
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	int n_fitparams = param_list->nparams;
@@ -11507,7 +11684,7 @@ void QLens::polychord(const bool resume_previous, const bool skip_run)
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	int n_fitparams = param_list->nparams;
@@ -11736,7 +11913,7 @@ void QLens::chi_square_twalk()
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	if (mpi_id==0) {
@@ -11885,15 +12062,15 @@ void QLens::output_bestfit_model(const bool show_parameter_errors)
 
 	string outfile_str = fit_output_dir + "/" + fit_output_filename + ".bestfit";
 	ofstream outfile(outfile_str.c_str());
-	if ((show_parameter_errors) and (bestfit_fisher_inverse.is_initialized()))
+	if ((show_parameter_errors) and (bestfit_param_covmatrix.size() > 0))
 	{
-		if (bestfit_fisher_inverse.rows() != n_fitparams) die("dimension of Fisher matrix does not match number of fit parameters (%i vs %i)",bestfit_fisher_inverse.rows(),n_fitparams);
+		if (bestfit_param_covmatrix.rows() != n_fitparams) die("dimension of Fisher matrix does not match number of fit parameters (%i vs %i)",bestfit_param_covmatrix.rows(),n_fitparams);
 		string fisher_inv_filename = fit_output_dir + "/" + fit_output_filename + ".pcov"; // inverse-fisher matrix is the parameter covariance matrix
 		ofstream fisher_inv_out(fisher_inv_filename.c_str());
 		int j;
 		for (i=0; i < n_fitparams; i++) {
 			for (j=0; j < n_fitparams; j++) {
-				fisher_inv_out << bestfit_fisher_inverse[i][j] << " ";
+				fisher_inv_out << bestfit_param_covmatrix(i,j) << " ";
 			}
 			fisher_inv_out << endl;
 		}
@@ -11903,7 +12080,7 @@ void QLens::output_bestfit_model(const bool show_parameter_errors)
 		outfile << endl;
 		outfile << "Marginalized 1-sigma errors from Fisher matrix:\n";
 		for (int i=0; i < n_fitparams; i++) {
-			outfile << param_list->param_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(abs(bestfit_fisher_inverse[i][i])) << endl;
+			outfile << param_list->param_names[i] << ": " << bestfitparams[i] << " +/- " << sqrt(abs(bestfit_param_covmatrix(i,i))) << endl;
 		}
 		outfile << endl;
 	} else {
@@ -11964,7 +12141,7 @@ bool QLens::add_dparams_to_chain(string file_ext)
 	if (source_fit_mode==Point_Source) {
 		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_point_source);
 	} else {
-		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double,PlainTypes>);
+		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
 
 	int i, n_fitparams, nparams, n_derived_params, n_dparams_old;
@@ -13995,7 +14172,7 @@ double QLens::get_einstein_radius_prior(const bool verbal)
 	return loglike_penalty;
 }
 
-template<typename QScalar>
+template <typename QScalar>
 QScalar QLens::fitmodel_loglike_point_source(const QScalar* params)
 {
 	bool showed_first_chisq = false; // used just to know whether to print a comma before showing the next chisq component
@@ -14217,7 +14394,7 @@ template double QLens::fitmodel_loglike_point_source<double>(const double* param
 template stan::math::var QLens::fitmodel_loglike_point_source<stan::math::var>(const stan::math::var* params);
 #endif
 
-template <typename QScalar, typename MathTypes>
+template <typename QScalar>
 QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 {
 	std::chrono::steady_clock::time_point update_wtime0;
@@ -14282,7 +14459,14 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 	}
 
 	if (source_fit_mode==Parameterized_Source) {
-		chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,MathTypes>(chisq0,false);
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,AutoDiffTypes>(chisq0,false);
+		} else
+#endif
+		{
+			chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,PlainTypes>(chisq0,false);
+		}
 		//chisq = fitmodel->pixel_log_evidence_times_two(chisq0,false,0);
 
 			/*
@@ -14445,9 +14629,9 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 //#endif
 	return loglike;
 }
-template double QLens::fitmodel_loglike_extended_source<double,PlainTypes>(const double* params);
+template double QLens::fitmodel_loglike_extended_source<double>(const double* params);
 #ifdef USE_STAN
-template stan::math::var QLens::fitmodel_loglike_extended_source<stan::math::var,AutoDiffTypes>(const stan::math::var* params);
+template stan::math::var QLens::fitmodel_loglike_extended_source<stan::math::var>(const stan::math::var* params);
 #endif
 
 double QLens::loglike_point_source(const double* params)
@@ -17791,7 +17975,7 @@ QScalar QLens::pixel_log_evidence_times_two_sbprofile(QScalar &chisq0, const boo
 		int n, n_data_pixels;
 		QScalar chisq0_imggrid;
 		QScalar pixel_avg_n_images;
-		int chisq0_band = 0;
+		double chisq0_band = 0;
 		foreground_count = 0;
 		count = 0;
 

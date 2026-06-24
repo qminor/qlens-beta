@@ -804,6 +804,13 @@ bool SB_Profile::vary_parameters(const boolvector& vary_params_in)
 
 	int pi, pf;
 	if (qlens) qlens->get_sb_parameter_numbers(sb_number,pi,pf); // these are the old parameter numbers
+	if (vary_params_in.size() != n_params) {
+		if ((vary_params_in.size() == n_params-2) and ((center_anchored_to_source) or (center_anchored_to_lens))) {
+			vary_params[n_params-2] = false;
+			vary_params[n_params-1] = false;
+		}
+		else return false;
+	}
 
 	// Save the old limits, if they exist
 	Vector<double> old_lower_limits(n_params);
@@ -880,7 +887,7 @@ void SB_Profile::get_vary_flags(boolvector& vary_flags)
 
 bool SB_Profile::register_vary_flags()
 {
-	// This function is called if there are already vary flags that have been set before adding the lens to the list
+	// This function is called if there are already vary flags that have been set before adding the source to the list
 	if ((n_vary_params > 0) and (qlens != NULL))
 		return qlens->register_sb_vary_parameters(sb_number);
 	else return false;
@@ -1495,20 +1502,25 @@ template void SB_Profile::set_geometric_parameters_radians<stan::math::var>(cons
 #endif
 
 template <typename QScalar>
-void SB_Profile::set_center_if_lensed_coords()
+void SB_Profile::set_center_if_lensed_coords(QLens* qlens_ptr_in)
 {
+	QLens* qlens_ptr;
 	SB_Params<QScalar>& p = assign_sbparam_object<QScalar>();
 	if (lensed_center_coords) {
-		if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
+		if (qlens_ptr_in != NULL) qlens_ptr = qlens_ptr_in;
+		else {
+			if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
+			else qlens_ptr = qlens;
+		}
 		lensvector<QScalar> xl;
 		xl[0] = p.x_center_lensed;
 		xl[1] = p.y_center_lensed;
-		qlens->find_sourcept<QScalar>(xl,p.x_center,p.y_center,0,qlens->reference_zfactors,qlens->default_zsrc_beta_factors);
+		qlens_ptr->find_sourcept<QScalar>(xl,p.x_center,p.y_center,0,qlens_ptr->reference_zfactors,qlens_ptr->default_zsrc_beta_factors);
 	}
 }
-template void SB_Profile::set_center_if_lensed_coords<double>();
+template void SB_Profile::set_center_if_lensed_coords<double>(QLens* qlens_ptr_in);
 #ifdef USE_STAN
-template void SB_Profile::set_center_if_lensed_coords<stan::math::var>();
+template void SB_Profile::set_center_if_lensed_coords<stan::math::var>(QLens* qlens_ptr_in);
 #endif
 
 template <typename QScalar>

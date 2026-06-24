@@ -452,8 +452,8 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	QLens *fitmodel;
 	QLens *lens_parent;
 	dvector bestfitparams;
-	dmatrix bestfit_fisher_inverse;
-	dmatrix fisher_inverse;
+	Eigen::MatrixXd bestfit_param_covmatrix;
+	Eigen::MatrixXd param_covmatrix;
 	double bestfit_flux;
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
@@ -1170,7 +1170,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double chi_square_fit_simplex(const bool show_parameter_errors);
 	double chi_square_fit_powell(const bool show_parameter_errors);
 	double chi_square_fit_BFGS(const bool show_parameter_errors);
-	void output_fit_results(double* fitparams, dvector& stepsizes, const double chisq_bestfit, const int chisq_evals, const bool calculate_parameter_errors);
+	void output_fit_results(double* fitparams, dvector& stepsizes, const double chisq_bestfit, const int chisq_evals, const bool calculate_parameter_errors, const bool used_autodiff = false);
 	void nested_sampling();
 	void polychord(const bool resume_previous, const bool skip_run);
 	void multinest(const bool resume_previous, const bool skip_run);
@@ -1223,7 +1223,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void update_prior_limits(const double* lower, const double* upper, const bool* changed_limits);
 	template<typename QScalar>
 	QScalar fitmodel_loglike_point_source(const QScalar* params);
-	template <typename QScalar, typename MathTypes>
+	template <typename QScalar>
 	QScalar fitmodel_loglike_extended_source(const QScalar* params);
 	double fitmodel_custom_prior();
 	double LogLikeFunc(double *params) { return (this->*LogLikePtr)(params); }
@@ -1232,8 +1232,17 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void fitmodel_calculate_derived_params(double* params, double* derived_params);
 	double get_lens_parameter_using_pmode(const int lensnum, const int paramnum, const int pmode = -1);
 	double loglike_point_source(const double* params);
-	bool calculate_fisher_matrix(double *params, const dvector &stepsizes);
-	double loglike_deriv(const dvector &params, const int index, const double step);
+	template <typename QScalar>
+	bool calculate_fisher_matrix(QScalar *params, const dvector &stepsizes);
+	template <typename QScalar>
+	double loglike_deriv(const Vector<QScalar> &params, const int index, const double step = 0);
+#ifdef USE_STAN
+	void loglike_deriv_stan(const stan::math::var* params, double* derivs);
+#endif
+
+#ifdef USE_STAN
+	bool calculate_fisher_matrix_autodiff(const Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1>& params);
+#endif
 	void output_bestfit_model(const bool show_parameter_errors = false);
 	bool adopt_model(dvector &fitparams);
 

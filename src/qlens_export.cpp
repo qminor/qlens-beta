@@ -2280,7 +2280,7 @@ PYBIND11_MODULE(qlens, m) {
 			//if (qlens_ptr != NULL) qlens_ptr->add_lens(sersic); // I think it would probably just lead to confusion if you have it automatically add the lens this way
 			if (vary_list.size() > 0) {
 				if (sersic->set_vary_flags(vary_list)==false) {
-					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+					throw std::runtime_error("Number of input vary flags does not match number of source parameters");
 				}
 			}
 			return sersic;
@@ -2483,7 +2483,7 @@ PYBIND11_MODULE(qlens, m) {
 
 			Gaussian* gaussian = new Gaussian(band,zsrc,p1,p2,q1,q2,xc,yc,NULL);
 			if (unlensed) gaussian->set_lensed(false);
-			if (lensed_center) gaussian->set_lensed_center(true);
+			if (lensed_center) gaussian->set_lensed_center(true,qlens_ptr);
 			if (vary_list.size() > 0) {
 				if (gaussian->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of source parameters");
@@ -2541,7 +2541,7 @@ PYBIND11_MODULE(qlens, m) {
 
 			Sersic *sersic = new Sersic(band,zsrc,p1,p2,p3,q1,q2,xc,yc,0,NULL);
 			if (unlensed) sersic->set_lensed(false);
-			if (lensed_center) sersic->set_lensed_center(true);
+			if (lensed_center) sersic->set_lensed_center(true,qlens_ptr);
 			if (vary_list.size() > 0) {
 				if (sersic->set_vary_flags(vary_list)==false) {
 					throw std::runtime_error("Number of input vary flags does not match number of source parameters");

@@ -158,7 +158,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	template <typename QScalar>
 	void set_angle_from_components(QScalar &comp_x, const QScalar &comp_y);
 	template <typename QScalar>
-	void set_center_if_lensed_coords();
+	void set_center_if_lensed_coords(QLens* qlens_ptr_in = NULL);
 	template <typename QScalar>
 	void calculate_ellipticity_components();
 	template <typename QScalar>
@@ -486,11 +486,11 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	}
 	void set_center(double xc_in, double yc_in) { sbparams->x_center = xc_in; sbparams->y_center = yc_in; }
 	void set_include_limits(bool inc) { include_limits = inc; }
-	void set_lensed_center(bool lensed_xcyc) {
+	void set_lensed_center(bool lensed_xcyc, QLens* qlens_ptr_in = NULL) {
 		lensed_center_coords = lensed_xcyc;
 		sbparams->x_center_lensed = sbparams->x_center;
 		sbparams->y_center_lensed = sbparams->y_center;
-		set_center_if_lensed_coords<double>();
+		set_center_if_lensed_coords<double>(qlens_ptr_in);
 		assign_paramnames();
 		assign_param_pointers();
 #ifdef USE_STAN
