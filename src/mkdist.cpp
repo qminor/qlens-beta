@@ -416,16 +416,18 @@ int main(int argc, char *argv[])
 		prior_minvals[i] = -1e30;
 		prior_maxvals[i] = 1e30;
 	}
-	string paramranges_filename = file_root + ".ranges";
-	ifstream paramranges_file(paramranges_filename.c_str());
-	if (paramranges_file.is_open()) {
-		for (i=0; i < nparams; i++) {
-			if (!(paramranges_file >> prior_minvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
-			if (!(paramranges_file >> prior_maxvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
-			if (prior_minvals[i] > prior_maxvals[i]) die("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str());
-		}
-		paramranges_file.close();
-	} else warn("parameter range file '%s' not found",paramranges_filename.c_str());
+	if (!use_fisher_matrix) {
+		string paramranges_filename = file_root + ".ranges";
+		ifstream paramranges_file(paramranges_filename.c_str());
+		if (paramranges_file.is_open()) {
+			for (i=0; i < nparams; i++) {
+				if (!(paramranges_file >> prior_minvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
+				if (!(paramranges_file >> prior_maxvals[i])) die("not all parameter ranges are given in file '%s'",paramranges_filename.c_str());
+				if (prior_minvals[i] > prior_maxvals[i]) die("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str());
+			}
+			paramranges_file.close();
+		} else warn("parameter range file '%s' not found",paramranges_filename.c_str());
+	}
 
 	if ((make_1d_posts) or (make_2d_posts)) {
 		if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too
@@ -906,7 +908,7 @@ int main(int argc, char *argv[])
 			pyscript << "g.export(os.path.join(outdir,'" << output_file_label << ".pdf'))" << endl;
 			pyscript.close();
 			if (run_python_script) {
-				string pycommand = "python " + pyname;
+				string pycommand = "python3 " + pyname;
 				if (system(pycommand.c_str()) == 0) {
 					cout << "Plot for 1D posteriors saved to '" << output_file_label << ".pdf'\n";
 					//string rmcommand = "rm " + pyname;
@@ -943,7 +945,7 @@ int main(int argc, char *argv[])
 			pyscript2d << "g.export(os.path.join(outdir,'" << output_file_label << "_2D.pdf'))" << endl;
 			/*
 			if (run_python_script) {
-				string pycommand = "python " + pyname;
+				string pycommand = "python3 " + pyname;
 				if (system(pycommand.c_str()) == 0) {
 					cout << "Plot for 2D posteriors saved to '" << file_label << "_2D.pdf'\n";
 					//string rmcommand = "rm " + pyname;
@@ -1014,7 +1016,7 @@ int main(int argc, char *argv[])
 					if (k==0) pyscript << "_tri.pdf'))" << endl;
 					else pyscript << "_subtri.pdf'))" << endl;
 					if (run_python_script) {
-						string pycommand = "python " + pyname;
+						string pycommand = "python3 " + pyname;
 						if (system(pycommand.c_str()) == 0) {
 							if (k==0) cout << "Triangle plot (1D+2D posteriors) saved to '" << output_file_label << "_tri.pdf'\n";
 							else cout << "Triangle subplot saved to '" << output_file_label << "_subtri.pdf'\n";

@@ -13043,16 +13043,18 @@ bool QLens::make_histograms(const int nbins_1d, const int nbins_2d, bool resampl
 		prior_minvals[i] = -1e30;
 		prior_maxvals[i] = 1e30;
 	}
-	string paramranges_filename = file_root + ".ranges";
-	ifstream paramranges_file(paramranges_filename.c_str());
-	if (paramranges_file.is_open()) {
-		for (i=0; i < nparams; i++) {
-			if (!(paramranges_file >> prior_minvals[i])) { warn("not all parameter ranges are given in file '%s'",paramranges_filename.c_str()); delete[] latex_param_names; delete[] prior_minvals; delete[] prior_maxvals; return false; }
-			if (!(paramranges_file >> prior_maxvals[i])) { warn("not all parameter ranges are given in file '%s'",paramranges_filename.c_str()); delete[] latex_param_names; delete[] prior_minvals; delete[] prior_maxvals; return false; }
-			if (prior_minvals[i] > prior_maxvals[i]) { warn("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str()); delete[] latex_param_names; delete[] prior_minvals; delete[] prior_maxvals; return false; }
-		}
-		paramranges_file.close();
-	} else warn("parameter range file '%s' not found",paramranges_filename.c_str());
+	if (!use_fisher_matrix) {
+		string paramranges_filename = file_root + ".ranges";
+		ifstream paramranges_file(paramranges_filename.c_str());
+		if (paramranges_file.is_open()) {
+			for (i=0; i < nparams; i++) {
+				if (!(paramranges_file >> prior_minvals[i])) { warn("not all parameter ranges are given in file '%s'",paramranges_filename.c_str()); delete[] latex_param_names; delete[] prior_minvals; delete[] prior_maxvals; return false; }
+				if (!(paramranges_file >> prior_maxvals[i])) { warn("not all parameter ranges are given in file '%s'",paramranges_filename.c_str()); delete[] latex_param_names; delete[] prior_minvals; delete[] prior_maxvals; return false; }
+				if (prior_minvals[i] > prior_maxvals[i]) { warn("cannot have minimum parameter value greater than maximum parameter value in file '%s'",paramranges_filename.c_str()); delete[] latex_param_names; delete[] prior_minvals; delete[] prior_maxvals; return false; }
+			}
+			paramranges_file.close();
+		} else warn("parameter range file '%s' not found",paramranges_filename.c_str());
+	}
 
 	if ((make_1d_posts) or (make_2d_posts)) {
 		if (!use_fisher_matrix) Eval.transform_parameter_names(param_names, latex_param_names); // should have this option for the Fisher analysis version too

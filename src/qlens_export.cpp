@@ -3169,7 +3169,6 @@ PYBIND11_MODULE(qlens, m) {
 
 			return current.make_histograms(nbins_1d,nbins_2d,resampled_posts,no2dposts,use_fisher_matrix,run_plotting_scripts);
 		})
-
 		.def("fit_chisq",&QLens_Wrap::chisq_single_evaluation, py::arg("init_fitmodel") = false, py::arg("show_total_wtime") = false, py::arg("show_wtime") = false, py::arg("showdiag") = false, py::arg("show_status") = true, py::arg("show_lensmodel") = false)
 		.def("LogLike", &QLens_Wrap::LogLikeListFunc)
 		.def("sbmap_invert", [](QLens_Wrap &current){
