@@ -36,7 +36,7 @@ q.zlens = 0.5
 q.zsrc = 2
 
 #Alpha = SPLE({"b": 1.3634, "alpha": 1.17163, "s": 0.0, "q": 0.963867, "theta": 81.9, "xc": 0.0102892, "yc": 0.00358392}) # true model
-Alpha = SPLE({"b": 1.2, "alpha": 1.17, "s": 0.0, "e1": 0.0, "e2": 0.0, "xc": 0.0, "yc": 0.0},qlens=q)
+Alpha = SPLE({"b": 1.2, "alpha": 1.17, "s": 0.0, "e1": 0.0, "e2": 0.0, "xc": 0.01, "yc": 0.036},qlens=q)
 Alpha.vary([1,1,0,1,1,1,1])
 #Alpha.set_limits([     # if you are doing nested sampling, you can define limits within the lens object, *or*
     #("b",4,6),         # you can define limits using the 'params' object instead (see below after lens.add)

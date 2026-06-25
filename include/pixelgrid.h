@@ -607,22 +607,26 @@ class ImgGrid_Params
 	using MatType = typename MathTypes::MatType;
 
 	public:
-	VecType surface_brightness_vec;
-	VecType surface_brightness_supersampled_vec;
+	VecType image_surface_brightness;
+	VecType image_surface_brightness_emask;
+	VecType image_surface_brightness_supersampled;
+	VecType sbprofile_surface_brightness;
 	VecType srcpt_x_centers, srcpt_y_centers;
 	VecType srcpt_x_subpixel_centers, srcpt_y_subpixel_centers;
 
 	ImgGrid_Params() {}
-	void setup_ray_tracing_arrays(const int ntot_corners, const int img_npixels_emask, const int n_sb_cells) {
+	void setup_ray_tracing_arrays(const int ntot_corners, const int img_npixels_emask, const int n_imgpixels, const int img_npixels_fgmask) {
 		srcpt_x_centers = Eigen::VectorXd::Zero(img_npixels_emask);
 		srcpt_y_centers = Eigen::VectorXd::Zero(img_npixels_emask);
 		// Note, n_sb_cells could be number of pixels from the primary mask, or it could be from fgmask depending on settings
-		surface_brightness_vec = Eigen::VectorXd::Zero(n_sb_cells);
+		image_surface_brightness = Eigen::VectorXd::Zero(n_imgpixels);
+		image_surface_brightness_emask = Eigen::VectorXd::Zero(img_npixels_emask);
+		sbprofile_surface_brightness = Eigen::VectorXd::Zero(img_npixels_fgmask);
 	}
 	void setup_subpixel_ray_tracing_arrays(const int n_subpixels_emask) {
 		srcpt_x_subpixel_centers = Eigen::VectorXd::Zero(n_subpixels_emask);
 		srcpt_y_subpixel_centers = Eigen::VectorXd::Zero(n_subpixels_emask);
-		surface_brightness_supersampled_vec = Eigen::VectorXd::Zero(n_subpixels_emask);
+		image_surface_brightness_supersampled = Eigen::VectorXd::Zero(n_subpixels_emask);
 	}
 };
 
@@ -640,13 +644,13 @@ class ImagePixelGrid : private Sort
 	private:
 	ImgGrid_Params<PlainTypes> imggrid_params;
 #ifdef USE_STAN
-	ImgGrid_Params<AutoDiffTypes> imggrid_params_dif; // autodiff version
+	ImgGrid_Params<VarmatTypes> imggrid_params_dif; // autodiff version
 #endif
 	template <typename MathTypes>
 	ImgGrid_Params<MathTypes>& assign_imggrid_param_object()
 	{
 #ifdef USE_STAN
-		if constexpr (std::is_same_v<MathTypes, AutoDiffTypes>)
+		if constexpr (std::is_same_v<MathTypes, VarmatTypes>)
 			return imggrid_params_dif;
 		else
 #endif
@@ -659,8 +663,6 @@ class ImagePixelGrid : private Sort
 	lensvector<double> **center_sourcepts;
 	lensvector<double> ***subpixel_center_sourcepts;
 	double ***subpixel_surface_brightness;
-	//double *defx_corners, *defy_corners, *defx_centers, *defy_centers, *area_tri1, *area_tri2;
-	//double *defx_subpixel_centers, *defy_subpixel_centers;
 	double *srcpt_x_corners, *srcpt_y_corners;
 	double *twistx, *twisty;
 	double *area_tri1, *area_tri2;
@@ -720,7 +722,9 @@ class ImagePixelGrid : private Sort
 	int fft_imin_fgmask, fft_jmin_fgmask, fft_ni_fgmask, fft_nj_fgmask;
 #ifdef USE_FFTW
 	std::complex<double> *psf_transform;
+	std::complex<double> *psf_transform_conj;
 	std::complex<double> *psf_transform_fgmask;
+	std::complex<double> *psf_transform_conj_fgmask;
 	std::complex<double> **Lmatrix_transform;
 	double **Lmatrix_imgs_rvec;
 	double *single_img_rvec;
@@ -733,6 +737,17 @@ class ImagePixelGrid : private Sort
 	fftw_plan fftplan_inverse_fgmask;
 	fftw_plan *fftplans_Lmatrix;
 	fftw_plan *fftplans_Lmatrix_inverse;
+#ifdef USE_STAN
+	// FFT plans and arrays for the adjoints (derivatives)
+	double *adj_single_img_rvec;
+	double *adj_single_img_rvec_fgmask;
+	std::complex<double> *adj_img_transform;
+	std::complex<double> *adj_img_transform_fgmask;
+	fftw_plan adj_fftplan;
+	fftw_plan adj_fftplan_inverse;
+	fftw_plan adj_fftplan_fgmask;
+	fftw_plan adj_fftplan_inverse_fgmask;
+#endif
 #endif
 	bool psf_convolution_is_setup;
 	bool fg_psf_convolution_is_setup;
@@ -783,12 +798,11 @@ class ImagePixelGrid : private Sort
 	int source_npixels, source_npixels_inv, lensgrid_npixels, n_mge_sets, n_mge_amps, source_and_lens_n_amps, n_amps; // note, n_amps can also include point image fluxes
 	SB_Profile** mge_list;
 
-	Eigen::VectorXd image_surface_brightness;
-	Eigen::VectorXd image_surface_brightness_emask;
-	Eigen::VectorXd image_surface_brightness_supersampled;
+	//Eigen::VectorXd image_surface_brightness;
+	//Eigen::VectorXd image_surface_brightness_emask;
+	//Eigen::VectorXd image_surface_brightness_supersampled;
 	Eigen::VectorXd imgpixel_covinv_vector;
 	Eigen::VectorXd point_image_surface_brightness;
-	Eigen::VectorXd sbprofile_surface_brightness;
 	Eigen::VectorXd img_minus_sbprofile;
 	Eigen::VectorXd amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	Eigen::VectorXd amplitude_vector;
@@ -949,7 +963,6 @@ class ImagePixelGrid : private Sort
 	void calculate_image_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness_dense();
 	void calculate_foreground_pixel_surface_brightness(const bool allow_lensed_nonshapelet_sources = true);
-	void add_foreground_to_image_pixel_vector();
 	void store_image_pixel_surface_brightness(const bool use_emask = false);
 	void store_foreground_pixel_surface_brightness();
 	void vectorize_image_pixel_surface_brightness(const bool use_emask = false);
@@ -1019,6 +1032,11 @@ class ImagePixelGrid : private Sort
 	bool setup_FFT_convolution(const bool supersampling, const bool foreground, const bool include_fgmask_in_inversion, const bool verbal);
 	void cleanup_FFT_convolution_arrays();
 	void cleanup_foreground_FFT_convolution_arrays();
+
+	template <typename MathTypes>
+	void PSF_convolution_pixel_vector_wrapper(const bool foreground = false, const bool verbal = false, const bool use_fft = false, const bool use_extended_mask = false);
+	template <typename VecType>
+	VecType PSF_convolution_pixel_vector_stan_FFT(const VecType& sbvec, const bool foreground = false, const bool verbal = false);
 
 	~ImagePixelGrid();
 	template <typename MathTypes>

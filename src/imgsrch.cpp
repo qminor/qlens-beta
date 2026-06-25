@@ -1928,10 +1928,10 @@ image<QScalar>* ImgSrchGrid::tree_search(const lensvector<QScalar> source_in)
 	p.sourcept[0] = source_in[0];
 	p.sourcept[1] = source_in[1];
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+	if constexpr (stan::is_autodiff_v<QScalar>) {
 		// we want the "double" version which will be used for grid search stuff etc.
-		gridparams.sourcept[0] = source_in[0].val();
-		gridparams.sourcept[1] = source_in[1].val();
+		gridparams.sourcept[0] = stan::math::value_of(source_in[0]);
+		gridparams.sourcept[1] = stan::math::value_of(source_in[1]);
 	} 
 #endif
 
@@ -1980,20 +1980,8 @@ void QLens::find_images(image<QScalar>*& images_found, const lensvector<QScalar>
 		double td, min_td=1e30;
 		int i;
 		for (i = 0; i < grid->nfound; i++) {
-#ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-				td = images_found[i].td.val();
-			} else
-#endif
-			td = images_found[i].td;
-			if (td < min_td) {
-#ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-					min_td = images_found[i].td.val();
-				} else
-#endif
-				min_td = images_found[i].td;
-			}
+			td = value_of(images_found[i].td);
+			if (td < min_td) min_td = value_of(images_found[i].td);
 		}
 		for (i = 0; i < grid->nfound; i++) {
 			images_found[i].td -= min_td;
@@ -2378,16 +2366,8 @@ bool GridCell::run_newton(lensvector<QScalar>& xroot, const int& thread)
 	}
 	if (lens->reject_images_found_outside_cell) {
 		lensvector<double> xroot_doub;
-#ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-			xroot_doub[0] = xroot[0].val();
-			xroot_doub[1] = xroot[1].val();
-		} else
-#endif
-		{
-			xroot_doub[0] = xroot[0];
-			xroot_doub[1] = xroot[1];
-		}
+		xroot_doub[0] = value_of(xroot[0]);
+		xroot_doub[1] = value_of(xroot[1]);
 		if (test_if_inside_cell(xroot_doub,thread)==false) {
 			warn(lens->warnings,"Rejecting image found outside cell for source (%g,%g), level %i, cell center (%g,%g)",parent_grid->gridparams.sourcept[0],parent_grid->gridparams.sourcept[1],level,center_imgplane[0],center_imgplane[1],xroot_doub[0],xroot_doub[1]);
 			return false;
@@ -2397,16 +2377,8 @@ bool GridCell::run_newton(lensvector<QScalar>& xroot, const int& thread)
 	lensvector<QScalar> lens_eq_f;
 	lens->lens_equation<QScalar>(xroot,p.sourcept,lens_eq_f,thread,parent_grid->grid_zfactors,parent_grid->grid_betafactors);
 	lensvector<double> xroot_doub;
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		xroot_doub[0] = xroot[0].val();
-		xroot_doub[1] = xroot[1].val();
-	} else
-#endif
-	{
-		xroot_doub[0] = xroot[0];
-		xroot_doub[1] = xroot[1];
-	}
+	xroot_doub[0] = value_of(xroot[0]);
+	xroot_doub[1] = value_of(xroot[1]);
 
 	//QScalar lenseq_mag = sqrt(SQR(lens_eq_f[0]) + SQR(lens_eq_f[1]));
 	//QScalar tryacc = parent_grid->image_pos_accuracy / sqrt(abs(lens->magnification(xroot,thread,zfactor)));
@@ -2489,13 +2461,7 @@ bool GridCell::NewtonsMethod(lensvector<QScalar>& x, bool &check, const int& thr
 		return true; 
 
 	QScalar fold, stpmax, temp, test;
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		double stpmax_doub = max_step_length * maxval(x.norm().val(), 2.0); 
-		stpmax = stpmax_doub;
-	} else
-#endif
-	stpmax = max_step_length * maxval(x.norm(), 2.0); 
+	stpmax = max_step_length * maxval(value_of(x.norm()), 2.0); 
 	for (int its=0; its < max_iterations; its++) {
 		lens->hessian<QScalar>(x[0],x[1],fjac,thread,parent_grid->grid_zfactors,parent_grid->grid_betafactors);
 		fjac[0][0] = -1 + fjac[0][0];
@@ -2961,12 +2927,12 @@ void PointSource::update_srcpos(const lensvector<QScalar>& srcpt)
 	}
 #ifdef USE_STAN
 		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency. Maybe revisit this later? Might not be necessary
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-			ptsrc_params.pos[0] = (ptsrc_params_dif.pos[0]).val();
-			ptsrc_params.pos[1] = (ptsrc_params_dif.pos[1]).val();
+		if constexpr (stan::is_autodiff_v<QScalar>) {
+			ptsrc_params.pos[0] = stan::math::value_of(p.pos[0]);
+			ptsrc_params.pos[1] = stan::math::value_of(p.pos[1]);
 		} else {
-			ptsrc_params_dif.pos[0] = ptsrc_params.pos[0];
-			ptsrc_params_dif.pos[1] = ptsrc_params.pos[1];
+			ptsrc_params_dif.pos[0] = p.pos[0];
+			ptsrc_params_dif.pos[1] = p.pos[1];
 		}
 #endif
 }

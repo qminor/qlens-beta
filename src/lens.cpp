@@ -6833,9 +6833,9 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 
 		kappaval_stan = kappa<stan::math::var>(x_phi_stan,y_phi_stan,reference_zfactors,default_zsrc_beta_factors);
 		shear<stan::math::var>(pt_stan,sheartot_stan,shear_angle_stan,0,reference_zfactors,default_zsrc_beta_factors);
-		theta_perp_shear = degrees_to_radians(shear_angle_stan.val()-90);
+		theta_perp_shear = degrees_to_radians(stan::math::value_of(shear_angle_stan)-90);
 
-		kappaval = kappaval_stan.val();
+		kappaval = stan::math::value_of(kappaval_stan);
 		kappaval_stan.grad();
 		//dkappa = tt.adj();
 		double uvec_x = cos(theta_perp_shear);
@@ -7170,12 +7170,12 @@ void QLens::print_lensing_info_at_point(const double x, const double y)
 
 				stan::math::var sb = find_sbprofile_surface_brightness(point);
 				sb.grad();
-				cout << "surface brightness from analytic sources = " << sb.val() << endl;
+				cout << "surface brightness from analytic sources = " << stan::math::value_of(sb) << endl;
 				cout << "d(sb)/dx = " << point[0].adj() << " d(sb)/dy = " << point[1].adj() << endl;
 			}
 			stan::math::recover_memory_nested();
+#else
 			*/	
-//#else
 			double sb = find_sbprofile_surface_brightness(point);
 			cout << "surface brightness from analytic sources = " << sb << endl;
 //#endif
@@ -8800,12 +8800,7 @@ double QLens::update_model(const QScalar* params)
 	if (ellipticity_gradient) contours_overlap = false; // we will test to see whether new parameters cause density contours to overlap
 	int i, index=0;
 	double* temp_doub_params = new double[param_list->nparams];
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		for (i=0; i < param_list->nparams; i++) temp_doub_params[i] = params[i].val();
-	} else
-#endif
-	for (i=0; i < param_list->nparams; i++) temp_doub_params[i] = params[i];
+	for (i=0; i < param_list->nparams; i++) temp_doub_params[i] = value_of(params[i]);
 
 	for (i=0; i < nlens; i++) {
 		lens_list[i]->update_fit_parameters(params,index,status);
@@ -9025,7 +9020,7 @@ QScalar QLens::chisq_pos_source_plane()
 
 					//cout << "Matrix for image " << j << ":" << endl;
 					//if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-						//cout << "Det = " << det.val() << endl;
+						//cout << "Det = " << stan::math::value_of(det) << endl;
 					//cout << mag00[j].val() << " " << mag01[j].val() << " " << mag11[j].val() << endl;
 					//} else {
 						//cout << "Det = " << det << endl;
@@ -9069,17 +9064,11 @@ QScalar QLens::chisq_pos_source_plane()
 		} else {
 #ifdef USE_STAN
 			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-				//beta = &ptsrc_list[i]->get_pos_autodif(); 
 				beta = &ptsrc_list[i]->ptsrc_params_dif.pos;
-				//beta_x = ptsrc_list[i]->ptsrc_params_dif.pos_x;
-				//beta_y = ptsrc_list[i]->ptsrc_params_dif.pos_y;
 			} else
 #endif
 			{
-				//beta = &ptsrc_list[i]->get_pos();
 				beta = &ptsrc_list[i]->ptsrc_params.pos;
-				//beta_x = ptsrc_list[i]->ptsrc_params.pos_x;
-				//beta_y = ptsrc_list[i]->ptsrc_params.pos_y;
 			}
 		}
 		//sigsq = SQR(point_image_data[i].images[0].sigma_pos);
@@ -9324,11 +9313,6 @@ QScalar QLens::chisq_pos_image_plane()
 			beta = &ptsrc_list[i]->get_pos();
 
 			image<QScalar> *img = get_images<QScalar>((*beta), n_images, false);
-#ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-				//cout << "WHAZZUP " << (img[0].pos[0]).val() << " " << (img[0].pos[1]).val() << endl;
-			} 
-#endif
 			n_visible_images = n_images;
 			bool *ignore = new bool[n_images];
 			for (j=0; j < n_images; j++) ignore[j] = false;
@@ -9600,27 +9584,17 @@ QScalar QLens::chisq_pos_image_plane_diagnostic(const bool verbose, const bool o
 	}
 	if ((mpi_id==0) and (verbose)) cout << endl;
 #ifdef USE_MPI
+	double rms_part_val = value_of(rms_part);
 	MPI_Allreduce(&chisq_part, &chisq, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		MPI_Allreduce(&rms_part.val(), &rms_imgpos_err, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
-	} else
-#endif
-	MPI_Allreduce(&rms_part, &rms_imgpos_err, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
+	MPI_Allreduce(&rms_part_val, &rms_imgpos_err, 1, MPI_DOUBLE, MPI_SUM, sub_comm);
 	MPI_Allreduce(&n_tot_images_part, &n_tot_images, 1, MPI_INT, MPI_SUM, sub_comm);
 	MPI_Allreduce(&n_matched_images_part, &n_matched_images, 1, MPI_INT, MPI_SUM, sub_comm);
 #else
 	chisq = chisq_part;
 	n_tot_images = n_tot_images_part;
 	n_matched_images = n_matched_images_part;
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		rms_imgpos_err = rms_part.val();
-	} else
 #endif
-	rms_imgpos_err = rms_part;
-#endif
-	rms_imgpos_err = sqrt(rms_imgpos_err/n_matched_images);
+	rms_imgpos_err = sqrt(value_of(rms_part)/n_matched_images);
 	QScalar *chi_all_images = new QScalar[2*n_matched_images];
 	QScalar *model_xvals_all_images = new QScalar[2*n_matched_images];
 	QScalar *model_yvals_all_images = new QScalar[2*n_matched_images];
@@ -10279,7 +10253,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 
 		double *fitparams = new double[param_list->nparams];
 		param_list->get_values(fitparams);
-		//stan::math::start_nested();
+		stan::math::start_nested();
 		{
 			stan::math::var *fitparams_stan = new stan::math::var[param_list->nparams];
 			for (int i=0; i < param_list->nparams; i++) fitparams_stan[i] = fitparams[i];
@@ -10290,9 +10264,9 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 				loglike_stan = fitmodel_loglike_extended_source<stan::math::var>(fitparams_stan);
 			}
 			loglike_stan.grad();
-			cout << "stan 2*loglike = " << (2*loglike_stan.val()) << endl;
+			cout << "stan 2*loglike = " << (2*stan::math::value_of(loglike_stan)) << endl;
 			cout << "Autodiff params and GRADIENT comps: " << endl;
-			for (int i=0; i < param_list->nparams; i++) cout << fitparams_stan[i].val() << " " << fitparams_stan[i].adj() << endl;
+			for (int i=0; i < param_list->nparams; i++) cout << stan::math::value_of(fitparams_stan[i]) << " " << fitparams_stan[i].adj() << endl;
 			cout << endl << endl;
 
 			double epsilon = 1e-10;
@@ -10320,7 +10294,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 			delete[] derivs;
 			delete[] fitparams_stan;
 		}
-		//stan::math::recover_memory_nested();
+		stan::math::recover_memory_nested();
 		delete[] fitparams;
 	}
 #endif
@@ -10703,7 +10677,7 @@ class LogLikeGrad_Func
 			//logl0 = (qptr->*doublefunc)(params.data());
 			//ridders_method(params,grad);
 #ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		if constexpr (stan::is_autodiff_v<QScalar>) {
 			stan::math::start_nested();
 			{
 				stan::math::var* params_stan = new stan::math::var[n];
@@ -10711,7 +10685,7 @@ class LogLikeGrad_Func
 				stan::math::var loglike_stan = (qptr->*func)(params_stan);
 
 				//double logl0_stan = loglike_stan.val();
-				logl0 = loglike_stan.val();
+				logl0 = stan::math::value_of(loglike_stan);
 				//cout << "LOGLIKE: " << logl0_stan << " " << logl0 << endl;
 				if (qptr->show_wtime) tot_wtime0=std::chrono::steady_clock::now();
 				loglike_stan.grad();
@@ -10855,9 +10829,9 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		for (int i=0; i < param_list->nparams; i++) fitparams_stan[i] = fitparams[i];
 		stan::math::var loglike_stan = fitmodel_loglike_point_source<stan::math::var>(fitparams_stan);
 		loglike_stan.grad();
-		cout << "loglike = " << loglike_stan.val() << endl;
+		cout << "loglike = " << stan::math::value_of(loglike_stan) << endl;
 		cout << "Autodiff params and GRADIENT comps: " << endl;
-		for (int i=0; i < param_list->nparams; i++) cout << fitparams_stan[i].val() << " " << fitparams_stan[i].adj() << endl;
+		for (int i=0; i < param_list->nparams; i++) cout << stan::math::value_of(fitparams_stan[i]) << " " << fitparams_stan[i].adj() << endl;
 		cout << endl << endl;
 		delete[] fitparams_stan;
 	}
@@ -11046,8 +11020,8 @@ bool QLens::calculate_fisher_matrix(QScalar *params, const Vector<double> &steps
 		xlo[i] -= increment2*stepsizes[i];
 		if ((param_list->defined_prior_limits[i]==true) and (xlo[i] < param_list->prior_limits_lo[i])) xlo[i] = x0;
 #ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-			step = (xhi[i] - xlo[i]).val();
+		if constexpr (stan::is_autodiff_v<QScalar>) {
+			step = stan::math::value_of(xhi[i] - xlo[i]);
 			loglike_deriv_stan(xlo.array(),derivs_lo);
 			loglike_deriv_stan(xhi.array(),derivs_hi);
 		} else
@@ -11187,7 +11161,7 @@ double QLens::loglike_deriv(const Vector<QScalar> &params, const int index, cons
 {
 	double deriv,deriv2,logl;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+	if constexpr (stan::is_autodiff_v<QScalar>) {
 		use_autodiff = true;
 		stan::math::var (QLens::*loglikeptr_stan)(const stan::math::var*);
 		if (source_fit_mode==Point_Source) {
@@ -11199,7 +11173,7 @@ double QLens::loglike_deriv(const Vector<QScalar> &params, const int index, cons
 		stan::math::set_zero_all_adjoints();
 		loglike_stan.grad();
 		deriv = params[index].adj();
-		logl=loglike_stan.val();
+		logl = stan::math::value_of(loglike_stan);
 	} 
 #endif
 	{
@@ -11213,13 +11187,10 @@ double QLens::loglike_deriv(const Vector<QScalar> &params, const int index, cons
 		dvector params_doub(param_list->nparams);
 		for (int i=0; i < param_list->nparams; i++) {
 #ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-				params_doub[i] = params[i].val();
-			} else
+			params_doub[i] = stan::math::value_of(params[i]);
+#else
+			params_doub[i] = params[i];
 #endif
-			{
-				params_doub[i] = params[i];
-			}
 		}
 		Vector<double> xhi(params_doub);
 		Vector<double> xlo(params_doub);
@@ -11232,7 +11203,7 @@ double QLens::loglike_deriv(const Vector<QScalar> &params, const int index, cons
 		deriv2 = (((this->*loglikeptr)(xhi.array()) - (this->*loglikeptr)(xlo.array())) / dif);
 	}
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+	if constexpr (stan::is_autodiff_v<QScalar>) {
 		//cout << "param " << index << ": deriv_autodif=" << deriv << " deriv_numerical=" << deriv2 << " logl=" << logl << endl;
 		return deriv;
 	} else
@@ -14186,22 +14157,10 @@ QScalar QLens::fitmodel_loglike_point_source(const QScalar* params)
 		fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
 		//fitmodel->param_list->print_penalty_limits();
 		bool penalty_incurred = false;
-#ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-			for (int i=0; i < n_fitparams; i++) {
-				if (fitmodel->param_list->defined_prior_limits[i]==true) {
-					//cout << "USE_LIMITS " << i << endl;
-					if (((transformed_params[i]).val() < fitmodel->param_list->untransformed_prior_limits_lo[i]) or ((transformed_params[i]).val() > fitmodel->param_list->untransformed_prior_limits_hi[i])) penalty_incurred = true;
-				}
-			}
-		} else
-#endif
-		{
-			for (int i=0; i < n_fitparams; i++) {
-				if (fitmodel->param_list->defined_prior_limits[i]==true) {
-					//cout << "USE_LIMITS " << i << endl;
-					if ((transformed_params[i] < fitmodel->param_list->untransformed_prior_limits_lo[i]) or (transformed_params[i] > fitmodel->param_list->untransformed_prior_limits_hi[i])) penalty_incurred = true;
-				}
+		for (int i=0; i < n_fitparams; i++) {
+			if (fitmodel->param_list->defined_prior_limits[i]==true) {
+				//cout << "USE_LIMITS " << i << endl;
+				if ((value_of(transformed_params[i]) < fitmodel->param_list->untransformed_prior_limits_lo[i]) or (value_of(transformed_params[i]) > fitmodel->param_list->untransformed_prior_limits_hi[i])) penalty_incurred = true;
 			}
 		}
 		//fitmodel->param_list->print_penalty_limits();
@@ -14220,27 +14179,6 @@ QScalar QLens::fitmodel_loglike_point_source(const QScalar* params)
 			fitmodel->logfile << flush;
 		}
 	}
-	//fitmodel->update_model(params);
-	//chisq = fitmodel->chisq_pos_source_plane_test<QScalar>(params[7],params[8]);
-	/*
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		//ptsrc_list[0]->ptsrc_params_dif.pos_x = params[7];
-		//ptsrc_list[0]->ptsrc_params_dif.pos_y = params[8];
-		chisq = fitmodel->chisq_pos_source_plane_test<QScalar>(ptsrc_list[0]->ptsrc_params_dif.pos_x,ptsrc_list[0]->ptsrc_params_dif.pos_y);
-	} else {
-		ptsrc_list[0]->ptsrc_params.pos_x = params[7];
-		ptsrc_list[0]->ptsrc_params.pos_y = params[8];
-		chisq = fitmodel->chisq_pos_source_plane_test<QScalar>(ptsrc_list[0]->ptsrc_params.pos_x,ptsrc_list[0]->ptsrc_params.pos_y);
-	}
-	*/
-	//chisq = fitmodel->chisq_pos_source_plane<QScalar>();
-//#ifdef USE_STAN
-	//if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		//chisq.grad();
-	//}
-//#endif
-
-	//return chisq/2;
 
 	if (include_imgpos_chisq) {
 		bool used_imgplane_chisq; // keeps track of whether image plane chi-square gets used, since there is an option to switch from srcplane to imgplane below a given threshold
@@ -14254,21 +14192,6 @@ QScalar QLens::fitmodel_loglike_point_source(const QScalar* params)
 		else {
 			used_imgplane_chisq = false;
 			chisq = fitmodel->chisq_pos_source_plane<QScalar>();
-			/*
-#ifdef USE_STAN
-			stan::math::var chisq_stan = fitmodel->chisq_pos_source_plane<stan::math::var>();
-			chisq_stan.grad();
-			cout << "xsrc=" << (*(ptsrc_list[0]->modelparams_dif->param[0])).val() << endl;
-			cout << "d(chisq)/dxsrc = " << (*(ptsrc_list[0]->modelparams_dif->param[0])).adj() << endl;
-			cout << "CHISQ: " << chisq << endl;
-			cout << "CHISQ_STAN: " << chisq_stan.val() << endl;
-			double epsilon = 1e-6;
-			ptsrc_list[0]->update_specific_parameter("xsrc",params[7]+epsilon);
-			double chisq2 = fitmodel->chisq_pos_source_plane<QScalar>();
-			double chisq_deriv = (chisq2-chisq)/epsilon;
-			cout << " numerical d(chisq)/dxsrc = " << chisq_deriv << endl;
-#endif
-			*/
 			if (chisq < chisq_imgplane_substitute_threshold) {
 				if (chisq_diagnostic) chisq = fitmodel->chisq_pos_image_plane_diagnostic<QScalar>(true,false,rms_err,n_matched_imgs);
 				else chisq = fitmodel->chisq_pos_image_plane<QScalar>();
@@ -14357,16 +14280,8 @@ QScalar QLens::fitmodel_loglike_point_source(const QScalar* params)
 			if (fitmodel->chisq_it % chisq_display_frequency == 0) cout << "chisq_weak_lensing=" << chisq;
 		}
 	}
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		raw_chisq = chisq_total.val(); // in case the chi-square is being used as a derived parameter
-		fitmodel->raw_chisq = chisq_total.val();
-	} else
-#endif
-	{
-		raw_chisq = chisq_total; // in case the chi-square is being used as a derived parameter
-		fitmodel->raw_chisq = chisq_total;
-	}
+	raw_chisq = value_of(chisq_total); // in case the chi-square is being used as a derived parameter
+	fitmodel->raw_chisq = value_of(chisq_total);
 	loglike += chisq_total/2;
 	if (chisq*0.0 != 0.0) {
 		warn("chi-square is returning NaN (%g)",chisq);
@@ -14412,22 +14327,9 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 		fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
 
 		bool penalty_incurred = false;
-#ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-			for (int i=0; i < n_fitparams; i++) {
-				if (fitmodel->param_list->defined_prior_limits[i]==true) {
-					//cout << "USE_LIMITS " << i << endl;
-					if (((transformed_params[i]).val() < fitmodel->param_list->untransformed_prior_limits_lo[i]) or ((transformed_params[i]).val() > fitmodel->param_list->untransformed_prior_limits_hi[i])) penalty_incurred = true;
-				}
-			}
-		} else
-#endif
-		{
-			for (int i=0; i < n_fitparams; i++) {
-				if (fitmodel->param_list->defined_prior_limits[i]==true) {
-					//cout << "USE_LIMITS " << i << endl;
-					if ((transformed_params[i] < fitmodel->param_list->untransformed_prior_limits_lo[i]) or (transformed_params[i] > fitmodel->param_list->untransformed_prior_limits_hi[i])) penalty_incurred = true;
-				}
+		for (int i=0; i < n_fitparams; i++) {
+			if (fitmodel->param_list->defined_prior_limits[i]==true) {
+				if ((value_of(transformed_params[i]) < fitmodel->param_list->untransformed_prior_limits_lo[i]) or (value_of(transformed_params[i]) > fitmodel->param_list->untransformed_prior_limits_hi[i])) penalty_incurred = true;
 			}
 		}
 		//fitmodel->param_list->print_penalty_limits();
@@ -14463,11 +14365,11 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 	if (source_fit_mode==Parameterized_Source) {
 #ifdef USE_STAN
 		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-			chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,AutoDiffTypes>(chisq0,false);
+			chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,VarmatTypes>(chisq0,false);
 		} else
 #endif
 		{
-			chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,PlainTypes>(chisq0,false);
+			chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,EigenTypes<QScalar>>(chisq0,false);
 		}
 		//chisq = fitmodel->pixel_log_evidence_times_two(chisq0,false,0);
 
@@ -14486,7 +14388,7 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 			int n = image_pixel_grid->pixel_index[pix_i][pix_j];
 
 			cout << "HI2" << endl;
-			stan::math::var sb_stan = imggrid_params.surface_brightness_vec(n);
+			stan::math::var sb_stan = imggrid_params.image_surface_brightness(n);
 			//cout << "HI3" << endl;
 			sb_stan.grad();
 			//chisq.grad();
@@ -14498,15 +14400,15 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 			string sbparname2 = "sigma";
 
 			cout << "HI4" << endl;
-			cout << "sb_stan: " << sb_stan.val() << endl;
-			cout << sbparname + "=" << (*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar])).val() << endl;
+			cout << "sb_stan: " << stan::math::value_of(sb_stan) << endl;
+			cout << sbparname + "=" << stan::math::value_of(*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar])) << endl;
 			cout << "d(sb)/d" << sbparname << " = " << (*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar])).adj() << endl;
-			cout << sbparname2 + "=" << (*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar2])).val() << endl;
+			cout << sbparname2 + "=" << stan::math::value_of(*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar2])) << endl;
 			cout << "d(sb)/d" << sbparname2 << " = " << (*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar2])).adj() << endl;
 
-			cout << "CHECK: " << sbparname << "=" << (params[par_i]).val() << endl;
+			cout << "CHECK: " << sbparname << "=" << stan::math::value_of(params[par_i]) << endl;
 			cout << "CHECK: " << "d(sb)/d" << sbparname << " = " << (params[par_i]).adj() << endl;
-			cout << "CHECK: " << sbparname2 << "=" << (params[par_i2]).val() << endl;
+			cout << "CHECK: " << sbparname2 << "=" << stan::math::value_of(params[par_i2]) << endl;
 			cout << "CHECK: " << "d(sb)/d" << sbparname2 << " = " << (params[par_i2]).adj() << endl;
 
 			cout << "HI5" << endl;
@@ -14514,36 +14416,36 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 			double chisqd, chisqp, chisqm;
 			chisqd = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
 			//double sb = image_pixel_grid->surface_brightness[pix_i][pix_j];
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname,params[par_i].val()+epsilon);
+			fitmodel->sb_list[0]->update_specific_parameter(sbparname,stan::math::value_of(params[par_i])+epsilon);
 			//image_pixel_grid->find_surface_brightness_sbprofile<double>(false,true);
 			chisqp = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
 			//double sbp = image_pixel_grid->surface_brightness[pix_i][pix_j];
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname,params[par_i].val()-epsilon);
+			fitmodel->sb_list[0]->update_specific_parameter(sbparname,stan::math::value_of(params[par_i])-epsilon);
 			chisqm = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
 			//image_pixel_grid->find_surface_brightness_sbprofile<double>(false,true);
 			//double sbm = image_pixel_grid->surface_brightness[pix_i][pix_j];
 			double chisq_xder = (chisqp-chisqm)/(2*epsilon);
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname,params[par_i].val());
+			fitmodel->sb_list[0]->update_specific_parameter(sbparname,stan::math::value_of(params[par_i]));
 
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname2,params[par_i2].val()+epsilon);
+			fitmodel->sb_list[0]->update_specific_parameter(sbparname2,stan::math::value_of(params[par_i2])+epsilon);
 			chisqp = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
 			//image_pixel_grid->find_surface_brightness_sbprofile<double>(false,true);
 			//sbp = image_pixel_grid->surface_brightness[pix_i][pix_j];
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname2,params[par_i2].val()-epsilon);
+			fitmodel->sb_list[0]->update_specific_parameter(sbparname2,stan::math::value_of(params[par_i2])-epsilon);
 			chisqm = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
 			//image_pixel_grid->find_surface_brightness_sbprofile<double>(false,true);
 			//sbm = image_pixel_grid->surface_brightness[pix_i][pix_j];
 			double chisq_yder = (chisqp-chisqm)/(2*epsilon);
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname2,params[par_i2].val());
+			fitmodel->sb_list[0]->update_specific_parameter(sbparname2,stan::math::value_of(params[par_i2]));
 
 			cout << "LOGL: " << chisq << endl;
 			cout << " numerical d(logl)/d" + sbparname + " = " << chisq_xder << endl;
 			cout << " numerical d(logl)/d" + sbparname2 + " = " << chisq_yder << endl;
 
 
-			//cout << "xsrc=" << xs.val() << endl;
+			//cout << "xsrc=" << stan::math::value_of(xs) << endl;
 			//cout << "d(sb)/dxsrc = " << xs.adj() << endl;
-			//cout << "ysrc=" << ys.val() << endl;
+			//cout << "ysrc=" << stan::math::value_of(ys) << endl;
 			//cout << "d(sb)/dysrc = " << ys.adj() << endl;
 
 			//double sb = sb_list[0]->surface_brightness(xd,yd);
@@ -14586,16 +14488,8 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 		chisq0 = chisq0_doub;
 	}
 
-#ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		raw_chisq = chisq0.val(); // in case the chi-square is being used as a derived parameter
-		fitmodel->raw_chisq = chisq0.val();
-	} else
-#endif
-	{
-		raw_chisq = chisq0; // in case the chi-square is being used as a derived parameter
-		fitmodel->raw_chisq = chisq0;
-	}
+	raw_chisq = value_of(chisq0); // in case the chi-square is being used as a derived parameter
+	fitmodel->raw_chisq = value_of(chisq0);
 	loglike += chisq/2;
 	if (include_time_delay_chisq) {
 		chisq_td = fitmodel->chisq_time_delays_from_model_imgs<QScalar>();
@@ -15445,7 +15339,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	//ImgGrid_Params<double>& imggrid_params = image_pixel_grids[imggrid_i]->assign_imggrid_param_object<double>();
 	bool do_clustering = ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) ? true : false;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+	if constexpr (stan::is_autodiff_v<QScalar>) {
 		if (do_clustering) {
 			warn("autodiff is not supported for source pixel clustering; turning source pixel_clustering off");
 			do_clustering = false;
@@ -15647,20 +15541,10 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		} else {
 			iweights_norm = new int[npix];
 			int totweight=0;
-#ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-				for (i=0; i < npix; i++) {
-					iweights_norm[i] = (int) (pow((weights[i]/min_weight).val(),0.3)); // trying the square root in an attempt to reduce noise in the original centroid assignments
-					totweight += iweights_norm[i];
-				}
-			} else
-			{
-				for (i=0; i < npix; i++) {
-					iweights_norm[i] = (int) (pow(weights[i]/min_weight,0.3)); // trying the square root in an attempt to reduce noise in the original centroid assignments
-					totweight += iweights_norm[i];
-				}
+			for (i=0; i < npix; i++) {
+				iweights_norm[i] = (int) (pow(value_of(weights[i]/min_weight),0.3)); // trying the square root in an attempt to reduce noise in the original centroid assignments
+				totweight += iweights_norm[i];
 			}
-#endif
 			data_reduce_factor = totweight / n_src_centroids;
 			n_src_centroids = totweight / data_reduce_factor;
 			if (totweight % data_reduce_factor != 0) n_src_centroids++;
@@ -15713,13 +15597,13 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		arma::mat centroids;
 
 #ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		if constexpr (stan::is_autodiff_v<QScalar>) {
 			double *input_data_doub = new double[2*npix];
 			double *weights_doub = new double[npix];
 			double *initial_centroids_doub = new double[2*n_src_centroids];
-			for (int i=0; i < (2*npix); i++) input_data_doub[i] = input_data[i].val();
-			for (int i=0; i < npix; i++) weights_doub[i] = weights[i].val();
-			for (int i=0; i < (2*n_src_centroids); i++) initial_centroids_doub[i] = initial_centroids[i].val();
+			for (int i=0; i < (2*npix); i++) input_data_doub[i] = stan::math::value_of(input_data[i]);
+			for (int i=0; i < npix; i++) weights_doub[i] = stan::math::value_of(weights[i]);
+			for (int i=0; i < (2*n_src_centroids); i++) initial_centroids_doub[i] = stan::math::value_of(initial_centroids[i]);
 			dataset = arma::mat(input_data_doub, 2, npix);
 			weightvec = arma::Col<double> (weights_doub, npix);
 			centroids = arma::mat(initial_centroids_doub, 2, n_src_centroids);
@@ -15761,13 +15645,13 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 				arma::mat centroids2;
 
 #ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				if constexpr (stan::is_autodiff_v<QScalar>) {
 					double *input_data_doub = new double[2*npix];
 					double *weights_doub = new double[npix];
 					double *initial_centroids_doub = new double[2*n_src_centroids];
-					for (int i=0; i < (2*npix); i++) input_data_doub[i] = input_data[i].val();
-					for (int i=0; i < npix; i++) weights_doub[i] = weights[i].val();
-					for (int i=0; i < (2*n_src_centroids); i++) initial_centroids_doub[i] = initial_centroids[i].val();
+					for (int i=0; i < (2*npix); i++) input_data_doub[i] = stan::math::value_of(input_data[i]);
+					for (int i=0; i < npix; i++) weights_doub[i] = stan::math::value_of(weights[i]);
+					for (int i=0; i < (2*n_src_centroids); i++) initial_centroids_doub[i] = stan::math::value_of(initial_centroids[i]);
 					dataset2 = arma::mat(input_data_doub, 2, npix);
 					weightvec2 = arma::Col<double> (weights_doub, npix);
 					centroids2 = arma::mat(initial_centroids_doub, 2, n_src_centroids);
@@ -15831,7 +15715,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 }
 template bool QLens::create_sourcegrid_from_imggrid_delaunay<PlainTypes>(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal);
 #ifdef USE_STAN
-template bool QLens::create_sourcegrid_from_imggrid_delaunay<AutoDiffTypes>(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal);
+template bool QLens::create_sourcegrid_from_imggrid_delaunay<VarmatTypes>(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal);
 #endif
 
 bool QLens::create_lensgrid_cartesian(const int band_number, const int zsrc_i, const int pixlens_i, const bool verbal, const bool use_mask)
@@ -17617,31 +17501,31 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 						pt[1] = -0.13;
 						QScalar sb = delaunay_srcgrids[src_i]->interpolate_surface_brightness(pt,false,0);
 #ifdef USE_STAN
-						if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-							cout << "Interpolated SB: " << sb.val() << endl;
+						if constexpr (stan::is_autodiff_v<QScalar>) {
+							cout << "Interpolated SB: " << stan::math::value_of(sb) << endl;
 							sb.grad();
 							double dsb_db = (*(lens_list[0]->lensparams_dif->param[0])).adj();
 							cout << "d(sb)/db = " << dsb_db << endl;
 
-						double bval = (*(lens_list[0]->lensparams_dif->param[0])).val();
+						double bval = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[0])));
 						const double increment = 1e-4;
 						lens_list[0]->update_specific_parameter(0,bval+increment);
-						double bval2 = (*(lens_list[0]->lensparams_dif->param[0])).val();
+						double bval2 = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[0])));
 						cout << "bval=" << bval << " bval2=" << bval2 << endl;
 						image_pixel_grids[imggrid_i]->redo_lensing_calculations<MathTypes>(verbal);
 						create_sourcegrid_from_imggrid_delaunay<MathTypes>(use_weighted_clustering,band_number,zsrc_i,verbal);
 						delaunay_srcgrids[src_i]->assign_surface_brightness_from_analytic_source<QScalar>(zsrc_i);
 						QScalar sbp = delaunay_srcgrids[src_i]->interpolate_surface_brightness(pt,false,0);
-							cout << "Interpolated SB: " << sbp.val() << endl;
+							cout << "Interpolated SB: " << stan::math::value_of(sbp) << endl;
 
 						lens_list[0]->update_specific_parameter(0,bval-increment);
 						image_pixel_grids[imggrid_i]->redo_lensing_calculations<MathTypes>(verbal);
 						create_sourcegrid_from_imggrid_delaunay<MathTypes>(use_weighted_clustering,band_number,zsrc_i,verbal);
 						delaunay_srcgrids[src_i]->assign_surface_brightness_from_analytic_source<QScalar>(zsrc_i);
 						QScalar sbm = delaunay_srcgrids[src_i]->interpolate_surface_brightness(pt,false,0);
-							cout << "Interpolated SB: " << sbm.val() << endl;
+							cout << "Interpolated SB: " << stan::math::value_of(sbm) << endl;
 
-						double sbder = (sbp.val()-sbm.val())/(2*increment);
+						double sbder = (stan::math::value_of(sbp)-stan::math::value_of(sbm))/(2*increment);
 						cout << "d(sb)/db from finite diff = " << sbder << endl;
 
 
@@ -17856,7 +17740,7 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 }
 template double QLens::pixel_log_evidence_times_two_delaunay<double,PlainTypes>(double &chisq0, const bool verbal, const int ranchisq_i);
 #ifdef USE_STAN
-template stan::math::var QLens::pixel_log_evidence_times_two_delaunay<stan::math::var,AutoDiffTypes>(stan::math::var &chisq0, const bool verbal, const int ranchisq_i);
+template stan::math::var QLens::pixel_log_evidence_times_two_delaunay<stan::math::var,VarmatTypes>(stan::math::var &chisq0, const bool verbal, const int ranchisq_i);
 #endif
 
 template <typename QScalar, typename MathTypes>
@@ -17959,9 +17843,9 @@ QScalar QLens::pixel_log_evidence_times_two_sbprofile(QScalar &chisq0, const boo
 			int pix_j = 40;
 			int n = image_pixel_grid->pixel_index[pix_i][pix_j];
 
-			stan::math::var sb_stan = imggrid_params.surface_brightness_vec(n);
-			double sbcheck = imggrid_params_nodif.surface_brightness_vec(n);
-			cout << "sb_stan_wtf: " << sb_stan.val() << endl;
+			stan::math::var sb_stan = imggrid_params.image_surface_brightness(n);
+			double sbcheck = imggrid_params_nodif.image_surface_brightness(n);
+			cout << "sb_stan_wtf: " << stan::math::value_of(sb_stan) << endl;
 			cout << "sb_nostan_wtf: " << sbcheck << endl;
 		}
 #endif
@@ -17998,11 +17882,11 @@ QScalar QLens::pixel_log_evidence_times_two_sbprofile(QScalar &chisq0, const boo
 						if ((image_pixel_grid->pixel_in_mask[i][j]) and (image_pixel_grid->maps_to_source_pixel[i][j])) {
 							n = image_pixel_grid->pixel_index[i][j];
 							if (include_foreground_sb) {
-								chisq0_imggrid += SQR(imggrid.surface_brightness_vec(n) + image_pixel_grid->foreground_surface_brightness[i][j] - image_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+								chisq0_imggrid += SQR(imggrid.image_surface_brightness(n) + image_pixel_grid->foreground_surface_brightness[i][j] - image_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 								//chisq0_imggrid += SQR(image_pixel_grid->surface_brightness[i][j] + image_pixel_grid->foreground_surface_brightness[i][j] - image_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 								foreground_count++;
 							} else {
-								chisq0_imggrid += SQR(imggrid.surface_brightness_vec(n) - image_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
+								chisq0_imggrid += SQR(imggrid.image_surface_brightness(n) - image_data->surface_brightness[i][j])*cov_inverse; // generalize to full cov_inverse matrix later
 							}
 							count++;
 						} else {
@@ -18016,12 +17900,7 @@ QScalar QLens::pixel_log_evidence_times_two_sbprofile(QScalar &chisq0, const boo
 					}
 				}
 			}
-#ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-				chisq0_band += chisq0_imggrid.val();
-			} else
-#endif
-			chisq0_band += chisq0_imggrid;
+			chisq0_band += value_of(chisq0_imggrid);
 			logev_times_two_band += chisq0_imggrid; // logev_times_two_band includes the prior terms
 
 			if (group_id==0) {
@@ -18058,7 +17937,7 @@ QScalar QLens::pixel_log_evidence_times_two_sbprofile(QScalar &chisq0, const boo
 }
 template double QLens::pixel_log_evidence_times_two_sbprofile<double,PlainTypes>(double &chisq0, const bool verbal);
 #ifdef USE_STAN
-template stan::math::var QLens::pixel_log_evidence_times_two_sbprofile<stan::math::var,AutoDiffTypes>(stan::math::var &chisq0, const bool verbal);
+template stan::math::var QLens::pixel_log_evidence_times_two_sbprofile<stan::math::var,VarmatTypes>(stan::math::var &chisq0, const bool verbal);
 #endif
 
 void QLens::setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bool verbal)

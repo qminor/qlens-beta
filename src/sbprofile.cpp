@@ -1099,16 +1099,16 @@ void SB_Profile::update_fit_parameters(const QScalar* fitparams, int &index, boo
 		}
 #ifdef USE_STAN
 		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency. Maybe revisit this later? Might not be necessary
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		if constexpr (stan::is_autodiff_v<QScalar>) {
 			for (int i=0; i < n_params; i++) {
 				if (vary_params[i]==true) {
-					*(sbparams->param[i]) = (*(sbparams_dif->param[i])).val();
+					*(sbparams->param[i]) = stan::math::value_of(*(p.param[i]));
 				}
 			}
 		} else {
 			for (int i=0; i < n_params; i++) {
 				if (vary_params[i]==true) {
-					*(sbparams_dif->param[i]) = (*(sbparams->param[i]));
+					*(sbparams_dif->param[i]) = (*(p.param[i]));
 				}
 			}
 		}
@@ -1962,16 +1962,8 @@ QScalar SB_Profile::surface_brightness_zoom(lensvector<QScalar> &centerpt, lensv
 			QScalar npix_approx = (rmax-rmin)/optimal_scale;
 			if (npix_approx > 1) {
 				subgrid = true;
-#ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-					xsplit = ((int) npix_approx.val()) + 1;
-					ysplit = ((int) npix_approx.val()) + 1;
-				} else
-#endif
-				{
-					xsplit = ((int) npix_approx) + 1;
-					ysplit = ((int) npix_approx) + 1;
-				}
+				xsplit = ((int) value_of(npix_approx)) + 1;
+				ysplit = ((int) value_of(npix_approx)) + 1;
 				if (xsplit > max_split) {
 					//cout << "xsplit wants to be " << xsplit << endl;
 					xsplit = max_split; // limit on number of splittings
@@ -2074,16 +2066,8 @@ QScalar SB_Profile::surface_brightness_zoom(lensvector<QScalar> &centerpt, lensv
 			d2 = pt4 - pt2;
 			pixel_ylength = maxval(d1.norm(),d2.norm());
 			QScalar lscale = 0.01*length_scale();
-#ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-				xsplit = ((int) (zoom_split_factor*pixel_xlength/lscale).val()) + 1;
-				ysplit = ((int) (zoom_split_factor*pixel_ylength/lscale).val()) + 1;
-			} else
-#endif
-			{
-				xsplit = ((int) (zoom_split_factor*pixel_xlength/lscale)) + 1;
-				ysplit = ((int) (zoom_split_factor*pixel_ylength/lscale)) + 1;
-			}
+			xsplit = ((int) value_of(zoom_split_factor*pixel_xlength/lscale)) + 1;
+			ysplit = ((int) value_of(zoom_split_factor*pixel_ylength/lscale)) + 1;
 		}
 	}
 	if (!subgrid) return surface_brightness(centerpt[0],centerpt[1]);

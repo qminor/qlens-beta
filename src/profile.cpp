@@ -844,16 +844,16 @@ void LensProfile::update_fit_parameters(const QScalar* fitparams, int &index, bo
 		}
 #ifdef USE_STAN
 		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency. Maybe revisit this later? Might not be necessary
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		if constexpr (stan::is_autodiff_v<QScalar>) {
 			for (int i=0; i < n_params; i++) {
 				if (vary_params[i]==true) {
-					*(lensparams->param[i]) = (*(lensparams_dif->param[i])).val();
+					*(lensparams->param[i]) = stan::math::value_of(*(p.param[i]));
 				}
 			}
 		} else {
 			for (int i=0; i < n_params; i++) {
 				if (vary_params[i]==true) {
-					*(lensparams_dif->param[i]) = (*(lensparams->param[i]));
+					*(lensparams_dif->param[i]) = (*(p.param[i]));
 				}
 			}
 		}
@@ -3343,29 +3343,14 @@ void LensProfile::warn_if_not_converged(const bool& converged, const QScalar &x,
 	if ((!converged) and (integration_warnings)) {
 		if ((integral_method==Gauss_Patterson_Quadrature) or (integral_method==Fejer_Quadrature)) {
 			if (qlens->mpi_id==0) {
-#ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-
-					if (integral_method==Gauss_Patterson_Quadrature) {
-						cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x.val() << ",y=" << y.val() << ")";
-						if (GaussQuad::numberOfPoints >= 511) cout << "; switched to Gauss-Legendre quadrature              " << endl;
-						else cout << endl;	
-					} else if (integral_method==Fejer_Quadrature) {
-						cout << "*WARNING*: Fejer quadrature did not converge (x=" << x.val() << ",y=" << y.val() << ")" << endl;
-					}
-					else cout << endl;
-				} else
-#endif
-				{
-					if (integral_method==Gauss_Patterson_Quadrature) {
-						cout << "*WARNING*: Gauss-Patterson did not converge (x=" << x << ",y=" << y << ")";
-						if (GaussQuad::numberOfPoints >= 511) cout << "; switched to Gauss-Legendre quadrature              " << endl;
-						else cout << endl;	
-					} else if (integral_method==Fejer_Quadrature) {
-						cout << "*WARNING*: Fejer quadrature did not converge (x=" << x << ",y=" << y << ")" << endl;
-					}
-					else cout << endl;
+				if (integral_method==Gauss_Patterson_Quadrature) {
+					cout << "*WARNING*: Gauss-Patterson did not converge (x=" << value_of(x) << ",y=" << value_of(y) << ")";
+					if (GaussQuad::numberOfPoints >= 511) cout << "; switched to Gauss-Legendre quadrature              " << endl;
+					else cout << endl;	
+				} else if (integral_method==Fejer_Quadrature) {
+					cout << "*WARNING*: Fejer quadrature did not converge (x=" << value_of(x) << ",y=" << value_of(y) << ")" << endl;
 				}
+				else cout << endl;
 				cout << "Lens: " << model_name << ", Params: ";
 				for (int i=0; i < n_params; i++) {
 					cout << paramnames[i] << "=";

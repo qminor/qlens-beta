@@ -50,19 +50,35 @@
 
 using std::string;
 
-struct PlainTypes {
-	using QScalar = double;
-	using VecType = Eigen::VectorXd;
-	using MatType = Eigen::MatrixXd;
+// Eventually, I'd like to be able to instantiate EigenTypes with fvar (forward-mode autodif variable), which will be useful for getting the Hessian.
+// But for now, it's only being instantiated with doubles.
+template <typename Scalar>
+struct EigenTypes {
+	using QScalar = Scalar;
+	using VecType = Eigen::VectorX<Scalar>;
+	using MatType = Eigen::MatrixX<Scalar>;
 };
 
+using PlainTypes = EigenTypes<double>;
+
 #ifdef USE_STAN
-struct AutoDiffTypes {
+struct VarmatTypes {
 	using QScalar = stan::math::var;
 	using VecType = stan::math::var_value<Eigen::VectorXd>;
 	using MatType = stan::math::var_value<Eigen::MatrixXd>;
 };
 #endif
+
+// this function is for assigning value that sorts out whether it's autodiff or not. (This should not add overhead as long as compiling with -O2 or -O3)
+template <typename T>
+inline auto value_of(const T& x)
+{
+#ifdef USE_STAN
+    return stan::math::value_of(x);
+#else
+    return x;
+#endif
+}
 
 enum SourceFitMode { Point_Source, Cartesian_Source, Delaunay_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
