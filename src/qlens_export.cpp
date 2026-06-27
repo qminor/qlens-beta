@@ -1217,12 +1217,19 @@ PYBIND11_MODULE(qlens, m) {
 		.def("add", [](PtImgDataList &current, const double x, const double y, py::kwargs &kwargs){
 			//double zsrc = current.qlens->source_redshift;
 			double srcflux = 1.0;
+			bool ignore_noise = false;
 			for (auto item : kwargs) {
 				if (py::cast<string>(item.first)=="srcflux") {
 					try {
 						srcflux = py::cast<double>(item.second);
 					} catch (...) {
 						throw std::runtime_error("Invalid srcflux");
+					}
+				} else if (py::cast<string>(item.first)=="ignore_noise") {
+					try {
+						ignore_noise = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean argument for 'ignore_noise'");
 					}
 				} else {
 					throw std::runtime_error("Keyword argument not recognized for ptimgdata.add");
@@ -1231,7 +1238,7 @@ PYBIND11_MODULE(qlens, m) {
 			lensvector<double> pos;
 			pos[0]=x;
 			pos[1]=y;
-			current.add_ptimgdata(pos,srcflux);
+			current.add_ptimgdata(pos,srcflux,ignore_noise);
 		})
 		.def("clear", [](PtImgDataList &current){
 			current.clear();

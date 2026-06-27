@@ -572,7 +572,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	bool fits_format;
 	double default_data_pixel_size;
-	bool add_simulated_point_image_data(const lensvector<double> &sourcept, const double srcflux = 1);
+	bool add_simulated_point_image_data(const lensvector<double> &sourcept, const double srcflux = 1, const bool ignore_noise = false);
 	bool add_ptimage_data_from_unlensed_sourcepts(const bool include_errors_from_fisher_matrix = false, const int param_i = 0, const double scale_errors = 2);
 	//bool add_fit_sourcept(const lensvector<double> &sourcept, const double zsrc);
 	void write_point_image_data(string filename);
@@ -1793,8 +1793,8 @@ class PtImgDataList
 		qlens->write_point_image_data(filename);
 	}
 
-	bool add_ptimgdata(const lensvector<double> &sourcept, const double srcflux) {
-		return (qlens->add_simulated_point_image_data(sourcept, srcflux));
+	bool add_ptimgdata(const lensvector<double> &sourcept, const double srcflux, const bool ignore_noise = false) {
+		return (qlens->add_simulated_point_image_data(sourcept, srcflux, ignore_noise));
 	}
 
 	bool clear(const int min_loc=-1, const int max_loc=-1) {

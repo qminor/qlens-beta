@@ -2894,6 +2894,7 @@ void PointSource::copy_imageset(const lensvector<double>& pos_in, const double z
 	for (int i=0; i < n_images; i++) {
 		images[i].pos = images_in[i].pos;
 		images[i].mag = images_in[i].mag;
+		images[i].flux = srcflux_in*images_in[i].mag;
 		images[i].td = images_in[i].td;
 		images[i].parity = images_in[i].parity;
 	}

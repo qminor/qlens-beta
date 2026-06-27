@@ -610,9 +610,28 @@ class ImgGrid_Params
 	VecType image_surface_brightness;
 	VecType image_surface_brightness_emask;
 	VecType image_surface_brightness_supersampled;
+	VecType point_image_surface_brightness;
+	VecType img_minus_sbprofile;
+	VecType amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
+	VecType amplitude_vector;
+
 	VecType sbprofile_surface_brightness;
 	VecType srcpt_x_centers, srcpt_y_centers;
 	VecType srcpt_x_subpixel_centers, srcpt_y_subpixel_centers;
+
+	VecType Lmatrix_trans_dense;
+	VecType Lmatrix_trans_supersampled;
+
+	MatType Fmatrix_dense;
+	MatType Fmatrix_dense_copy;
+	MatType Gmatrix;
+	MatType Gmatrix_copy;
+
+	QScalar Fmatrix_log_determinant;
+	QScalar Gmatrix_log_determinant;
+
+	QScalar Rmatrix_log_determinant;
+	QScalar Rmatrix_pot_log_determinant;
 
 	ImgGrid_Params() {}
 	void setup_ray_tracing_arrays(const int ntot_corners, const int img_npixels_emask, const int n_imgpixels, const int img_npixels_fgmask) {
@@ -620,6 +639,7 @@ class ImgGrid_Params
 		srcpt_y_centers = Eigen::VectorXd::Zero(img_npixels_emask);
 		// Note, n_sb_cells could be number of pixels from the primary mask, or it could be from fgmask depending on settings
 		image_surface_brightness = Eigen::VectorXd::Zero(n_imgpixels);
+		point_image_surface_brightness = Eigen::VectorXd::Zero(n_imgpixels);
 		image_surface_brightness_emask = Eigen::VectorXd::Zero(img_npixels_emask);
 		sbprofile_surface_brightness = Eigen::VectorXd::Zero(img_npixels_fgmask);
 	}
@@ -798,14 +818,7 @@ class ImagePixelGrid : private Sort
 	int source_npixels, source_npixels_inv, lensgrid_npixels, n_mge_sets, n_mge_amps, source_and_lens_n_amps, n_amps; // note, n_amps can also include point image fluxes
 	SB_Profile** mge_list;
 
-	//Eigen::VectorXd image_surface_brightness;
-	//Eigen::VectorXd image_surface_brightness_emask;
-	//Eigen::VectorXd image_surface_brightness_supersampled;
 	Eigen::VectorXd imgpixel_covinv_vector;
-	Eigen::VectorXd point_image_surface_brightness;
-	Eigen::VectorXd img_minus_sbprofile;
-	Eigen::VectorXd amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
-	Eigen::VectorXd amplitude_vector;
 	Eigen::VectorXi img_index_datapixels;
 
 	int *image_pixel_location_Lmatrix;

@@ -7250,7 +7250,7 @@ void QLens::raytrace_image_rectangle(const double xmin, const double xmax, const
 
 /********************************* Functions for point image data (reading, writing, simulating etc.) *********************************/
 
-bool QLens::add_simulated_point_image_data(const lensvector<double> &sourcept, const double srcflux)
+bool QLens::add_simulated_point_image_data(const lensvector<double> &sourcept, const double srcflux, const bool ignore_noise)
 {
 	int i,n_images;
 	if (nlens==0) { warn("no lens model has been created"); return false; }
@@ -7274,13 +7274,17 @@ bool QLens::add_simulated_point_image_data(const lensvector<double> &sourcept, c
 		else include_image[i] = true;
 		err_pos[i] = sim_err_pos;
 		err_flux[i] = sim_err_flux;
-		imgs[i].pos[0] += sim_err_pos*NormalDeviate();
-		imgs[i].pos[1] += sim_err_pos*NormalDeviate();
-		imgs[i].mag *= srcflux; // now imgs[i].mag is in fact the flux, not just the magnification
-		imgs[i].mag += sim_err_flux*NormalDeviate();
-		if (include_time_delays) {
-			imgs[i].td += sim_err_td*NormalDeviate();
-			if (imgs[i].td < min_td) min_td = imgs[i].td;
+		//cout << "IMG " << i  << " mag: " << imgs[i].mag << endl;
+		imgs[i].flux = srcflux*imgs[i].mag; 
+		//cout << "IMG " << i  << " flux: " << imgs[i].mag << endl;
+		if (!ignore_noise) {
+			imgs[i].pos[0] += sim_err_pos*NormalDeviate();
+			imgs[i].pos[1] += sim_err_pos*NormalDeviate();
+			imgs[i].mag += sim_err_flux*NormalDeviate();
+			if (include_time_delays) {
+				imgs[i].td += sim_err_td*NormalDeviate();
+				if (imgs[i].td < min_td) min_td = imgs[i].td;
+			}
 		}
 	}
 	if (include_time_delays) {
@@ -16944,7 +16948,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				int nimgs_tot = 0;
 				for (i=0; i < n_ptsrc; i++) nimgs_tot += ptsrc_list[i]->images.size(); // in this case, source amplitudes include point image amplitudes as well as pixel values
 				if (nimgs_tot==0) {
-					if (verbal) warn("cannot perform inversion because no shapelet/MGE objects and no images with invertible amplitudes have been produced");
+					if (verbal) warn("cannot perform inversion because no shapelet/MGE objects and no images with invertible amplitudes have been produced (no imgs)");
 					skip_inversion = true;
 				}
 			}
@@ -16954,6 +16958,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
 				int src_i = src_i_list[imggrid_i];
 				ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i]; 
+				ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 				if (src_i < 0) {
 					// no cartesian source at this redshift, so assume there is an analytic source and find/store the corresponding surface brightness
 					image_pixel_grid->find_surface_brightness();
@@ -16997,7 +17002,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					else image_pixel_grid->calculate_image_pixel_surface_brightness();
 					image_pixel_grid->store_image_pixel_surface_brightness();
 					if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-						image_pixel_grid->add_point_images(image_pixel_grid->point_image_surface_brightness,image_pixel_grid->n_active_pixels);
+						image_pixel_grid->add_point_images(imggrid.point_image_surface_brightness,image_pixel_grid->n_active_pixels);
 					}
 
 					if (regularization_method != None) image_pixel_grid->add_regularization_prior_terms_to_logev(logev_times_two_band,loglike_reg,regterms,false,verbal);
@@ -17049,6 +17054,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
 				//cout << "BAND_I=" << band_number << ", ZSRC_I=" << zsrc_i << " imggrid_i=" << imggrid_i << endl;
 				ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i]; 
+				ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 				src_i = src_i_list[imggrid_i];
 				if (src_i < 0) {
 					// no Delaunay source at this redshift, so assume there is an analytic source and find/store the corresponding surface brightness
@@ -17083,7 +17089,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					else image_pixel_grid->calculate_image_pixel_surface_brightness();
 					image_pixel_grid->store_image_pixel_surface_brightness();
 					if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-						image_pixel_grid->add_point_images(image_pixel_grid->point_image_surface_brightness,image_pixel_grid->n_active_pixels);
+						image_pixel_grid->add_point_images(imggrid.point_image_surface_brightness,image_pixel_grid->n_active_pixels);
 					}
 					if (regularization_method != None) image_pixel_grid->add_regularization_prior_terms_to_logev(logev_times_two_band,loglike_reg,regterms,include_potential_perturbations,verbal);
 					if (show_wtime) {
@@ -17120,7 +17126,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				if (save_sbweights_during_inversion) image_pixel_grid->calculate_subpixel_sbweights(true,verbal); // these are sb-weights to be used later in Delaunay mode for luminosity weighting
 			}
 			if (n_ptsrc > 0) {
-				image_pixel_grids[0]->point_image_surface_brightness.resize(image_pixel_grids[0]->image_npixels);
+				image_pixel_grids[0]->imggrid_params.point_image_surface_brightness.resize(image_pixel_grids[0]->image_npixels);
 				if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 				for (i=0; i < n_ptsrc; i++) {
 					image_pixel_grids[0]->generate_and_add_point_images(ptsrc_list[i]->images, false, ptsrc_list[i]->get_srcflux());
@@ -17130,6 +17136,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 			// Shapelet_Source mode
 			for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
 				ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i]; 
+				ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 				if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
 				//image_pixel_grid->assign_foreground_mappings(); // note, this is done even if there is no foreground "source" object; foreground sb vector just has all elements equal zero
 				if ((at_least_one_noninverted_foreground_src) or (at_least_one_lensed_nonshapelet_src)) {
@@ -17176,7 +17183,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 						if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 							if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 							for (i=0; i < n_ptsrc; i++) {
-								image_pixel_grid->generate_point_images(ptsrc_list[i]->images, image_pixel_grid->point_image_surface_brightness.data(), false, ptsrc_list[i]->get_srcflux());
+								image_pixel_grid->generate_point_images(ptsrc_list[i]->images, imggrid.point_image_surface_brightness.data(), false, ptsrc_list[i]->get_srcflux());
 							}
 						}
 					}
@@ -17196,7 +17203,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					image_pixel_grid->calculate_image_pixel_surface_brightness_dense();
 					image_pixel_grid->store_image_pixel_surface_brightness();
 					if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
-						image_pixel_grid->add_point_images(image_pixel_grid->point_image_surface_brightness,image_pixel_grid->n_active_pixels);
+						image_pixel_grid->add_point_images(imggrid.point_image_surface_brightness,image_pixel_grid->n_active_pixels);
 					}
 
 					if (regularization_method != None) image_pixel_grid->add_regularization_prior_terms_to_logev(logev_times_two_band,loglike_reg,regterms,false,verbal);
@@ -18051,6 +18058,7 @@ bool QLens::setup_cartesian_sourcegrid(const int imggrid_i, const int src_i, int
 bool QLens::generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, const int src_i, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal)
 {
 	ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i]; 
+	ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 	if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
 	if (image_pixel_grid->assign_pixel_mappings(false,verbal)==false) {
 		return false;
@@ -18090,7 +18098,7 @@ bool QLens::generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, co
 	if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 		if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 		for (int i=0; i < n_ptsrc; i++) {
-			image_pixel_grid->generate_point_images(ptsrc_list[i]->images, image_pixel_grid->point_image_surface_brightness.data(), include_imgfluxes_in_inversion, ptsrc_list[i]->get_srcflux());
+			image_pixel_grid->generate_point_images(ptsrc_list[i]->images, imggrid.point_image_surface_brightness.data(), include_imgfluxes_in_inversion, ptsrc_list[i]->get_srcflux());
 		}
 	}
 
@@ -18126,6 +18134,7 @@ bool QLens::generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, co
 bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal)
 {
 	ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i]; 
+	ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 	if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings...\n";
 	if (image_pixel_grid->assign_pixel_mappings(potential_perturbations,verbal)==false) {
 		image_pixel_grid->clear_pixel_matrices();
@@ -18163,7 +18172,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		// they will be included in the Lmatrix. Otherwise, we add them using the code below.
 		if ((mpi_id==0) and (verbal)) cout << "Generating point images..." << endl;
 		for (int i=0; i < n_ptsrc; i++) {
-			image_pixel_grid->generate_point_images(ptsrc_list[i]->images, image_pixel_grid->point_image_surface_brightness.data(), include_imgfluxes_in_inversion, ptsrc_list[i]->get_srcflux());
+			image_pixel_grid->generate_point_images(ptsrc_list[i]->images, imggrid.point_image_surface_brightness.data(), include_imgfluxes_in_inversion, ptsrc_list[i]->get_srcflux());
 		}
 	}
 
@@ -18229,7 +18238,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		}
 		if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 			for (int i=0; i < n_ptsrc; i++) {
-				image_pixel_grid->generate_point_images(ptsrc_list[i]->images, image_pixel_grid->point_image_surface_brightness.data(), include_imgfluxes_in_inversion, ptsrc_list[i]->get_srcflux());
+				image_pixel_grid->generate_point_images(ptsrc_list[i]->images, imggrid.point_image_surface_brightness.data(), include_imgfluxes_in_inversion, ptsrc_list[i]->get_srcflux());
 			}
 		}
 
