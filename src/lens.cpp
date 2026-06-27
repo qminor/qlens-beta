@@ -16824,7 +16824,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 		add_new_extended_src_redshift(source_redshift,-1,false);
 	}
 
-	if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source))) add_pixellated_source(source_redshift,0);
+	if ((n_pixellated_src==0) and ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Cartesian_Source) or ((source_fit_mode==Shapelet_Source) and (n_ptsrc > 0)))) add_pixellated_source(source_redshift,0);
 	else if (n_extended_src_redshifts == 0) {
 		add_new_extended_src_redshift(source_redshift,-1,false);
 	}

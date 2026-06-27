@@ -3355,6 +3355,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("central_image", &QLens_Wrap::include_central_image)
 		.def_readwrite("skip_newtons_method", &QLens_Wrap::skip_newtons_method)
 		.def_readwrite("invert_imgflux", &QLens_Wrap::include_imgfluxes_in_inversion)
+		.def_readwrite("invert_srcflux", &QLens_Wrap::include_srcflux_in_inversion)
 		//.def_readwrite("sourcepts_fit", &QLens_Wrap::sourcepts_fit)
 		.def_readwrite("n_livepts", &QLens_Wrap::n_livepts)
 		//.def_readwrite("warnings", &QLens_Wrap::warnings)
