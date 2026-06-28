@@ -16938,9 +16938,9 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 		if (at_least_one_noninverted_foreground_src) include_foreground_sb = true;
 		if ((!ignore_foreground_in_chisq) and (include_fgmask_in_inversion)) { include_foreground_sbmask = true; } 
 		else if (((at_least_one_lensed_nonshapelet_src) or ((source_fit_mode != Shapelet_Source) and (at_least_one_lensed_src)))) include_foreground_sb = true; // if doing a pixel inversion, parameterized sources can still be added to the SB by using the "foreground" sb array...it's a bit confusing and convoluted, however
-		if ((source_fit_mode==Shapelet_Source) and (!at_least_one_shapelet_src) and (!at_least_one_mge_src) and ((n_ptsrc==0) or ((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)))) {
+		if ((source_fit_mode==Shapelet_Source) and (!at_least_one_shapelet_src) and (!at_least_one_mge_src) and ((n_ptsrc==0) or (ptsrc_list[0]->images.size()==0) or ((!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)))) {
 			if (verbal) warn("cannot perform inversion because no shapelet/MGE objects and no point sources with invertible amplitudes are defined");
-			chisq0=-1e30; delete[] src_i_list; return -1e30;
+			chisq0=2e30; delete[] src_i_list; return 2e30;
 		}
 		if (n_ptsrc > 0) {
 			if ((source_fit_mode==Shapelet_Source) and (!at_least_one_shapelet_src) and (include_imgfluxes_in_inversion)) {
@@ -17310,7 +17310,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 
 			// Now we evaluate the nimg_prior to penalize the solution if it produces the wrong number of lensed images
 			if (src_i_list[imggrid_i] != -1) {
-				if ((n_image_prior) and (source_fit_mode != Cartesian_Source) and (source_fit_mode != Parameterized_Source)) {
+				if ((n_image_prior) and (source_fit_mode == Cartesian_Source) or ((source_fit_mode == Shapelet_Source) and (at_least_one_shapelet_src))) {
 					if (show_wtime) {
 						wtime0 = std::chrono::steady_clock::now();
 					}
@@ -17325,13 +17325,22 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 						if (mpi_id==0) cout << "Wall time for assigning SB for nimg_prior: " << wtime.count() << endl;
 					}
 				}
-				if ((n_image_prior) and (source_fit_mode != Parameterized_Source)) {
+				if ((n_image_prior) and (source_fit_mode == Cartesian_Source) or (source_fit_mode == Delaunay_Source) or ((source_fit_mode==Shapelet_Source) and (at_least_one_shapelet_src))) {
 					double chisq_penalty;
 					if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
 					if (pixel_avg_n_images < n_image_threshold) {
 						chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,60) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
 						logev_times_two_band += chisq_penalty;
 						if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_images << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
+					}
+				}
+				if ((n_image_prior) and (n_ptsrc > 0)) {
+					for (i=0; i < n_ptsrc; i++) {
+						if (ptsrc_list[i]->images.size() < n_image_threshold) {
+							int n_ptimgs = ptsrc_list[i]->images.size();
+							logev_times_two_band += n_ptimgs*2e30;
+							if ((mpi_id==0) and (verbal)) cout << "*NOTE: number of point images is below the prior threshold (" << n_ptimgs << " vs. " << n_image_threshold << "), resulting in penalty prior" << endl;
+						}
 					}
 				}
 			}
@@ -17967,7 +17976,7 @@ void QLens::setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bo
 			if (nlens > 0) {
 				// create auxiliary source grid for findimg number of images or finding point images (if not using cartesian source grid already)
 				if ((source_fit_mode==Shapelet_Source) and (n_image_prior)) { // note, in shapelet mode, we only need the auxiliary grid if using n_image_prior
-					create_sourcegrid_cartesian(band_number,zsrc_i,verbal,true,true,true,true);
+					create_sourcegrid_cartesian(band_number,zsrc_i,verbal,true,false,true,true);
 					source_grid_defined = true;
 				} else if (source_fit_mode==Delaunay_Source) {
 					create_sourcegrid_cartesian(band_number,zsrc_i,verbal,true,false,true,true);

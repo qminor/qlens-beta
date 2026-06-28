@@ -14282,10 +14282,15 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 	int i_center, j_center;
 	for (it = imgs.begin(); it != imgs.end(); it++) {
 		// check to see if the image is inside the pixel grid; if not, discard it since it can't fit any image in the data
+		// Better yet...if it's outside, have it calculate how far it is from image window, so this can be used for a penalty prior (IMPLEMENT THIS)
 		i_center = (it->pos[0] - xmin)/pixel_xlength;
 		j_center = (it->pos[1] - ymin)/pixel_ylength;
 		//cout << "icenter=" << i_center << " jcenter=" << j_center << endl;
 		if ((i_center < 0) or (i_center >= x_N) or (j_center < 0) or (j_center >= y_N)) {
+			//if (i_center < 0) extra_ptimg_penalty += SQR(xmin - it->pos[0]);
+			//else if (i_center >= x_N) extra_ptimg_penalty += SQR(it->pos[0]-xmax);
+			//if (j_center < 0) extra_ptimg_penalty += SQR(ymin - it->pos[1]);
+			//else if (j_center >= y_N) extra_ptimg_penalty += SQR(it->pos[1]-ymax);
 			warn("image point (%g,%g) lies outside image pixel grid; will eliminate from image set",it->pos[0],it->pos[1]);
 			if (it == imgs.end()-1) {
 				imgs.pop_back();
