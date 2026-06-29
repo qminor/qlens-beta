@@ -619,19 +619,19 @@ class ImgGrid_Params
 	VecType srcpt_x_centers, srcpt_y_centers;
 	VecType srcpt_x_subpixel_centers, srcpt_y_subpixel_centers;
 
-	VecType Lmatrix_trans_dense;
-	VecType Lmatrix_trans_supersampled;
+	//VecType Lmatrix_trans_dense;
+	//VecType Lmatrix_trans_supersampled;
 
-	MatType Fmatrix_dense;
-	MatType Fmatrix_dense_copy;
-	MatType Gmatrix;
-	MatType Gmatrix_copy;
+	//MatType Fmatrix_dense;
+	//MatType Fmatrix_dense_copy;
+	//MatType Gmatrix;
+	//MatType Gmatrix_copy;
 
-	QScalar Fmatrix_log_determinant;
-	QScalar Gmatrix_log_determinant;
+	//QScalar Fmatrix_log_determinant;
+	//QScalar Gmatrix_log_determinant;
 
-	QScalar Rmatrix_log_determinant;
-	QScalar Rmatrix_pot_log_determinant;
+	//QScalar Rmatrix_log_determinant;
+	//QScalar Rmatrix_pot_log_determinant;
 
 	ImgGrid_Params() {}
 	void setup_ray_tracing_arrays(const int ntot_corners, const int img_npixels_emask, const int n_imgpixels, const int img_npixels_fgmask) {

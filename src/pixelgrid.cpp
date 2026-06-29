@@ -4549,7 +4549,7 @@ void DelaunaySourceGrid::calculate_Lmatrix_elements(const int img_index, PtsWgts
 	for (i=0; i < (*n_mapped_srcpixels); i++) {
 		//cout << "Lmatrix_sparse srcpixel " << mapped_delaunay_srcpixels->indx << " active_indx=" << active_index[mapped_delaunay_srcpixels->indx] << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
 		//image_pixel_grid->Lmatrix_dense(img_index,active_index[mapped_delaunay_srcpixels->indx]) += weight*mapped_delaunay_srcpixels->wgt;
-		imggrid.Lmatrix_trans_dense(active_index[mapped_delaunay_srcpixels->indx],img_index) += weight*mapped_delaunay_srcpixels->wgt;
+		image_pixel_grid->Lmatrix_trans_dense(active_index[mapped_delaunay_srcpixels->indx],img_index) += weight*mapped_delaunay_srcpixels->wgt;
 		//image_pixel_grid->Lmatrix_dense0[img_index][active_index[mapped_delaunay_srcpixels->indx]] += weight*mapped_delaunay_srcpixels->wgt;
 		mapped_delaunay_srcpixels++;
 	}

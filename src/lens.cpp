@@ -17310,36 +17310,38 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 
 			// Now we evaluate the nimg_prior to penalize the solution if it produces the wrong number of lensed images
 			if (src_i_list[imggrid_i] != -1) {
-				if ((n_image_prior) and (source_fit_mode == Cartesian_Source) or ((source_fit_mode == Shapelet_Source) and (at_least_one_shapelet_src))) {
-					if (show_wtime) {
-						wtime0 = std::chrono::steady_clock::now();
+				if (n_image_prior) {
+					if ((source_fit_mode == Cartesian_Source) or (source_fit_mode == Delaunay_Source) or ((source_fit_mode==Shapelet_Source) and (at_least_one_shapelet_src))) {
+						if (show_wtime) {
+							wtime0 = std::chrono::steady_clock::now();
+						}
+						if (source_fit_mode != Cartesian_Source) {
+							if (source_fit_mode==Shapelet_Source) {
+								image_pixel_grids[imggrid_i]->cartesian_srcgrid->assign_surface_brightness_from_analytic_source(zsrc_i);
+							} else if (source_fit_mode==Delaunay_Source) {
+								image_pixel_grids[imggrid_i]->cartesian_srcgrid->assign_surface_brightness_from_delaunay_grid(image_pixel_grids[imggrid_i]->delaunay_srcgrid);
+							}
+						}
+						double chisq_penalty;
+						pixel_avg_n_images = image_pixel_grids[imggrid_i]->cartesian_srcgrid->find_avg_n_images(n_image_prior_sb_frac);
+						if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
+						if (pixel_avg_n_images < n_image_threshold) {
+							chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,60) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
+							logev_times_two_band += chisq_penalty;
+							if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_images << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
+						}
+						if (show_wtime) {
+							wtime = std::chrono::steady_clock::now() - wtime0;
+							if (mpi_id==0) cout << "Wall time for assigning SB for nimg_prior: " << wtime.count() << endl;
+						}
 					}
-					if ((source_fit_mode==Parameterized_Source) or (source_fit_mode==Shapelet_Source)) {
-						image_pixel_grids[imggrid_i]->cartesian_srcgrid->assign_surface_brightness_from_analytic_source(zsrc_i);
-					} else if (source_fit_mode==Delaunay_Source) {
-						image_pixel_grids[imggrid_i]->cartesian_srcgrid->assign_surface_brightness_from_delaunay_grid(image_pixel_grids[imggrid_i]->delaunay_srcgrid);
-					}
-					pixel_avg_n_images = image_pixel_grids[imggrid_i]->cartesian_srcgrid->find_avg_n_images(n_image_prior_sb_frac);
-					if (show_wtime) {
-						wtime = std::chrono::steady_clock::now() - wtime0;
-						if (mpi_id==0) cout << "Wall time for assigning SB for nimg_prior: " << wtime.count() << endl;
-					}
-				}
-				if ((n_image_prior) and (source_fit_mode == Cartesian_Source) or (source_fit_mode == Delaunay_Source) or ((source_fit_mode==Shapelet_Source) and (at_least_one_shapelet_src))) {
-					double chisq_penalty;
-					if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
-					if (pixel_avg_n_images < n_image_threshold) {
-						chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,60) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
-						logev_times_two_band += chisq_penalty;
-						if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_images << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
-					}
-				}
-				if ((n_image_prior) and (n_ptsrc > 0)) {
-					for (i=0; i < n_ptsrc; i++) {
-						if (ptsrc_list[i]->images.size() < n_image_threshold) {
-							int n_ptimgs = ptsrc_list[i]->images.size();
-							logev_times_two_band += n_ptimgs*2e30;
-							if ((mpi_id==0) and (verbal)) cout << "*NOTE: number of point images is below the prior threshold (" << n_ptimgs << " vs. " << n_image_threshold << "), resulting in penalty prior" << endl;
+					if (n_ptsrc > 0) {
+						for (i=0; i < n_ptsrc; i++) {
+							if (ptsrc_list[i]->images.size() < n_image_threshold) {
+								int n_ptimgs = ptsrc_list[i]->images.size();
+								logev_times_two_band += n_ptimgs*2e30;
+								if ((mpi_id==0) and (verbal)) cout << "*NOTE: number of point images is below the prior threshold (" << n_ptimgs << " vs. " << n_image_threshold << "), resulting in penalty prior" << endl;
+							}
 						}
 					}
 				}
