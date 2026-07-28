@@ -143,11 +143,36 @@ class CartesianSourcePixel
 	~CartesianSourcePixel();
 };
 
+template <typename QScalar>
+class CartesianSourceGrid_Params : public ModelParams<QScalar>
+{
+	public:
+	QScalar regparam;
+	QScalar pixel_fraction, srcgrid_size_scale, pixel_magnification_threshold;
+
+};
+
 class CartesianSourceGrid : public CartesianSourcePixel, public Model
 {
 	friend class QLens;
 	friend class ImagePixelGrid;
 	friend class CartesianSourcePixel;
+
+	public:
+	CartesianSourceGrid_Params<double> cartesian_srcgrid_params;
+#ifdef USE_STAN
+	CartesianSourceGrid_Params<stan::math::var> cartesian_srcgrid_params_dif; // autodiff version
+#endif
+	template <typename QScalar>
+	CartesianSourceGrid_Params<QScalar>& assign_cartesian_srcgrid_param_object()
+	{
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>)
+			return cartesian_srcgrid_params_dif;
+		else
+#endif
+		return cartesian_srcgrid_params;
+	}
 
 	int n_active_pixels;
 	double xcenter, ycenter;
@@ -183,9 +208,11 @@ class CartesianSourceGrid : public CartesianSourcePixel, public Model
 	void create_pixel_grid(QLens* lens_in, string pixel_data_fileroot, const double minarea_in);
 	//void copy_source_pixel_grid(CartesianSourceGrid* input_pixel_grid);
 	void setup_parameters(const bool initial_setup);
-
-	double regparam;
-	double pixel_fraction, srcgrid_size_scale, pixel_magnification_threshold;
+	template <typename QScalar>
+	void setup_param_pointers();
+#ifdef USE_STAN
+	void sync_autodif_parameters();
+#endif
 
 	void calculate_pixel_magnifications(const bool use_emask = false);
 	void adaptive_subgrid();
@@ -306,20 +333,20 @@ class DelaunayGrid : private Sort
 	template <typename QScalar>
 	void create_pixel_grid(QScalar* gridpts_x, QScalar* gridpts_y, const int n_gridpts);
 
-	int search_grid(int initial_srcpixel, const lensvector<double>& pt, bool& inside_triangle);
-	bool test_if_inside(int &tri_number, const lensvector<double>& pt, bool& inside_triangle);
-	bool test_if_inside(const int tri_number, const lensvector<double>& pt);
+	int search_grid(int initial_srcpixel, const double pt_x, const double pt_y, bool& inside_triangle);
+	bool test_if_inside(int &tri_number, const double pt_x, const double pt_y, bool& inside_triangle);
+	bool test_if_inside(const int tri_number, const double pt_x, const double pt_y);
 	void record_adjacent_triangles_xy();
 
 	int find_closest_vertex(const int tri_number, const lensvector<double>& pt);
 	double sum_edge_sqrlengths(const double min_sb);
-	void find_containing_triangle(const lensvector<double> &input_pt, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
+	void find_containing_triangle(const double input_pt_x, const double input_pt_y, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	//double interpolate(lensvector<double> &input_pt, const bool interp_mag = false, const int thread = 0);
 
 	template <typename QScalar>
-	void find_interpolation_weights_3pt(const lensvector<QScalar>& input_pt, const int trinum, int& npts, const int thread);
+	void find_interpolation_weights_3pt(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread);
 	template <typename QScalar>
-	void find_interpolation_weights_nn(const lensvector<QScalar> &input_pt, const int trinum, int& npts, const int thread); // natural neighbor interpolation
+	void find_interpolation_weights_nn(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread); // natural neighbor interpolation
 	//void plot_voronoi_grid(string root);
 
 	//void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
@@ -388,12 +415,6 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 
 	bool activate_unmapped_source_pixels;
 
-	//double regparam;
-	//double regparam_lsc, regparam_lum_index, distreg_rc;
-	//double distreg_xcenter, distreg_ycenter, distreg_e1, distreg_e2; // for position-weighted regularization
-	//double mag_weight_sc, mag_weight_index; // magnification-weighted regularization
-	//double alpha_clus, beta_clus;
-
 	public:
 	DelaunaySourceGrid(QLens* qlens_in, const int band = 0, const double zsrc_in = -1);
 	DelaunaySourceGrid(const DelaunaySourceGrid* pixsrc_in) : Model(), DelaunayGrid() {
@@ -423,19 +444,23 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 	template <typename QScalar>
 	void assign_surface_brightness_from_analytic_source(const int imggrid_i=-1);
 	void fill_surface_brightness_vector();
+	template <typename MathTypes>
 	void update_surface_brightness(int& index);
 	double sum_edge_sqrlengths(const double min_sb);
 	template <typename QScalar>
-	QScalar find_lensed_surface_brightness(const lensvector<QScalar> &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread);
-	bool find_containing_triangle_with_imgpix(const lensvector<double> &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
+	QScalar find_lensed_surface_brightness(const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, const int thread);
+	bool find_containing_triangle_with_imgpix(const double input_pt_x, const double input_pt_y, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	template <typename QScalar>
-	QScalar interpolate_surface_brightness(const lensvector<QScalar> &input_pt, const bool interp_mag = false, const int thread = 0);
+	QScalar interpolate_surface_brightness(const QScalar input_pt_x, const QScalar input_pt_y, const bool interp_mag = false, const int thread = 0);
 	double interpolate_voronoi_length(const lensvector<double> &input_pt, const int thread = 0);
 
-	bool assign_source_mapping_flags(lensvector<double> &input_pt, vector<PtsWgts<double>>& mapped_delaunay_srcpixels, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex);
+	bool assign_source_mapping_flags(const double input_pt_x, const double input_pt_y, vector<PtsWgts<double>>& mapped_delaunay_srcpixels, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex);
 	void record_srcpixel_mappings();
 	void calculate_Lmatrix(const int img_index, PtsWgts<double>* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, const int& ii, const double weight, const int& thread);
-	void calculate_Lmatrix_elements(const int img_index, PtsWgts<double>* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, const int& subpixel_indx, const double weight, const int& thread);
+	void calculate_Lmatrix_dense(const int img_index, PtsWgts<double>* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, const int& subpixel_indx, const double weight, const int& thread);
+	template <typename MathTypes, typename QScalar>
+	void calculate_Lmatrix_dense_direct(const int img_index, const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, const double weight, const int thread, bool& trouble_with_starting_vertex);
+
 	int assign_active_indices_and_count_source_pixels(const int source_pixel_i_initial, const bool activate_unmapped_pixels);
 	void output_surface_brightness(Vector<double>& xvals, Vector<double>& yvals, Vector<double>& zvals, const int npix = 600, const bool interpolate = false, const bool plot_magnification = false);
 	void plot_voronoi_grid(string root);
@@ -523,12 +548,6 @@ class LensPixelGrid : public DelaunayGrid, public Model
 
 	bool activate_unmapped_source_pixels;
 
-	//double regparam;
-	//double regparam_lsc, regparam_lum_index, distreg_rc;
-	//double distreg_xcenter, distreg_ycenter, distreg_e1, distreg_e2; // for position-weighted regularization
-	//double mag_weight_sc, mag_weight_index; // magnification-weighted regularization
-	//double alpha_clus, beta_clus;
-
 	public:
 	LensPixelGrid(QLens* lens_in, const int lens_redshift_indx_in);
 	void copy_pixlens_data(LensPixelGrid* grid_in);
@@ -554,11 +573,13 @@ class LensPixelGrid : public DelaunayGrid, public Model
 	double kappa(const double x, const double y, const int thread);
 	void kappa_and_potential_derivatives(const double x, const double y, double& kappa, lensvector<double>& def, lensmatrix<double>& hess, const int thread);
 	void potential_derivatives(const double x, const double y, lensvector<double>& def, lensmatrix<double>& hess, const int thread);
-	bool assign_mapping_flags(lensvector<double> &input_pt, vector<PtsWgts<double>>& mapped_potpixels_ij, int& n_mapped_potpixels, const int img_pixel_i, const int img_pixel_j, const int thread);
+	bool assign_mapping_flags(const double x, const double y, vector<PtsWgts<double>>& mapped_potpixels_ij, int& n_mapped_potpixels, const int img_pixel_i, const int img_pixel_j, const int thread);
 	void calculate_Lmatrix(const int img_index, PtsWgts<double>* mapped_potpixels, int* n_mapped_potpixels, lensvector<double>& S0_derivs, int& index, const int& subpixel_indx, const int offset, const double weight, const int& thread);
-	double first_order_surface_brightness_correction(const lensvector<double> &input_pt, const lensvector<double>& S0_deriv, const int thread);
+	void calculate_Lmatrix_dense(const int img_index, PtsWgts<double>* mapped_potpixels, int* n_mapped_potpixels, lensvector<double>& S0_derivs, int& index, const int& subpixel_indx, const int offset, const double weight, const int& thread);
 
-	void find_interpolation_weights_cartesian(const lensvector<double> &input_pt, int& npts, const int deriv_type, const int thread);
+	double first_order_surface_brightness_correction(const double x, const double y, const lensvector<double>& S0_deriv, const int thread);
+
+	void find_interpolation_weights_cartesian(const double x, const double y, int& npts, const int deriv_type, const int thread);
 
 	bool assign_lens_mapping_flags(lensvector<double> &input_pt, vector<PtsWgts<double>>& mapped_delaunay_lenspixels, int& n_mapped_lenspixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex);
 	void record_lenspixel_mappings();
@@ -619,19 +640,14 @@ class ImgGrid_Params
 	VecType srcpt_x_centers, srcpt_y_centers;
 	VecType srcpt_x_subpixel_centers, srcpt_y_subpixel_centers;
 
-	//VecType Lmatrix_trans_dense;
-	//VecType Lmatrix_trans_supersampled;
+	MatType Lmatrix_trans_dense;
+	MatType Lmatrix_trans_supersampled;
 
-	//MatType Fmatrix_dense;
-	//MatType Fmatrix_dense_copy;
-	//MatType Gmatrix;
-	//MatType Gmatrix_copy;
+	QScalar Fmatrix_log_determinant;
+	QScalar Gmatrix_log_determinant;
 
-	//QScalar Fmatrix_log_determinant;
-	//QScalar Gmatrix_log_determinant;
-
-	//QScalar Rmatrix_log_determinant;
-	//QScalar Rmatrix_pot_log_determinant;
+	QScalar *regparam_ptr; // points to regularization parameter for given source pixel grid or shapelet object
+	QScalar *regparam_pot_ptr; // points to regularization parameter for potential of given lens pixel grid
 
 	ImgGrid_Params() {}
 	void setup_ray_tracing_arrays(const int ntot_corners, const int img_npixels_emask, const int n_imgpixels, const int img_npixels_fgmask) {
@@ -686,7 +702,6 @@ class ImagePixelGrid : private Sort
 	double *srcpt_x_corners, *srcpt_y_corners;
 	double *twistx, *twisty;
 	double *area_tri1, *area_tri2;
-	Eigen::MatrixXd reduce_matrix;
 
 	QLens *qlens;
 	CartesianSourceGrid *cartesian_srcgrid;
@@ -767,6 +782,12 @@ class ImagePixelGrid : private Sort
 	fftw_plan adj_fftplan_inverse;
 	fftw_plan adj_fftplan_fgmask;
 	fftw_plan adj_fftplan_inverse_fgmask;
+	double **adj_Lmatrix_imgs_rvec;
+	std::complex<double>** adj_Lmatrix_transform;
+	fftw_plan *adj_fftplans_Lmatrix;
+	fftw_plan *adj_fftplans_Lmatrix_inverse;
+
+
 #endif
 #endif
 	bool psf_convolution_is_setup;
@@ -818,6 +839,16 @@ class ImagePixelGrid : private Sort
 	int source_npixels, source_npixels_inv, lensgrid_npixels, n_mge_sets, n_mge_amps, source_and_lens_n_amps, n_amps; // note, n_amps can also include point image fluxes
 	SB_Profile** mge_list;
 
+	Eigen::MatrixXd Fmatrix_dense;
+	Eigen::MatrixXd Fmatrix_dense_copy;
+	Eigen::MatrixXd Gmatrix;
+	Eigen::MatrixXd Gmatrix_copy;
+
+	Eigen::VectorXd image_surface_brightness_data;
+	Eigen::VectorXd Dvector;
+	Eigen::VectorXd Dvector_cov;
+	Eigen::VectorXd Dvector_cov_copy;
+
 	Eigen::VectorXd imgpixel_covinv_vector;
 	Eigen::VectorXi img_index_datapixels;
 
@@ -828,18 +859,12 @@ class ImagePixelGrid : private Sort
 	std::vector<double> *Lmatrix_rows;
 	std::vector<int> *Lmatrix_index_rows;
 
-	Eigen::VectorXd Dvector;
-	Eigen::VectorXd Dvector_cov;
-	Eigen::VectorXd Dvector_cov_copy;
 	int Fmatrix_nn;
 	double *Fmatrix_sparse;
 	double *Fmatrix_copy; // used when optimizing the regularization parameter
 	int *Fmatrix_index;
 	double regopt_chisqmin, regopt_logdet;
 	double *reg_weight_factor;
-
-	double *regparam_ptr; // points to regularization parameter for given source pixel grid or shapelet object
-	double *regparam_pot_ptr; // points to regularization parameter for potential of given lens pixel grid
 
 	int n_src_inv; // specifies how many pixellated (or shapelet) sources will be included in the Lmatrix
 	int src_npixels_inv; // gives # of srcpixels for src associated with this ImagePixelGrid (source_npixels may be larger if other ImagePixelGrid's are included in inversion)
@@ -866,17 +891,6 @@ class ImagePixelGrid : private Sort
 
 	dvector *Rmatrix_MGE_packed;
 	double *Rmatrix_MGE_log_determinants;
-
-	Eigen::MatrixXd Lmatrix_trans_dense;
-	Eigen::MatrixXd Lmatrix_trans_supersampled;
-
-	Eigen::MatrixXd Fmatrix_dense;
-	Eigen::MatrixXd Fmatrix_dense_copy;
-	Eigen::MatrixXd Gmatrix;
-	Eigen::MatrixXd Gmatrix_copy;
-
-	double Fmatrix_log_determinant;
-	double Gmatrix_log_determinant;
 
 	double Rmatrix_log_determinant;
 	double Rmatrix_pot_log_determinant;
@@ -908,15 +922,25 @@ class ImagePixelGrid : private Sort
 	void assign_foreground_mappings(const bool use_data = true);
 	void construct_Lmatrix_shapelets();
 	void add_MGE_amplitudes_to_Lmatrix();
-	void PSF_convolution_Lmatrix_dense(const bool verbal=false);
+	//void PSF_convolution_Lmatrix_dense(const bool verbal=false);
+	template <typename MathTypes>
 	void create_lensing_matrices_from_Lmatrix_dense(const bool potential_perturbations=false, const bool verbal=false);
-	void get_source_regparam_ptr(const int imggrid_include_i, double* &regparam);
+	template <typename QScalar>
+	void get_source_regparam_ptr(const int imggrid_include_i, QScalar* &regparam);
 	void generate_Gmatrix();
-	void add_regularization_term_to_dense_Fmatrix(ImagePixelGrid* imggrid, double *regparam, const bool potential_perturbations=false);
+	template <typename MathTypes>
+	void add_regularization_term_to_dense_Fmatrix(ImagePixelGrid* imggrid, typename MathTypes::QScalar *regparam, const bool potential_perturbations=false);
 	void add_MGE_regularization_terms_to_dense_Fmatrix();
 	double calculate_regularization_prior_term(double *regparam_ptr, const bool potential_perturbations=false);
 	double calculate_MGE_regularization_prior_term();
 	void add_regularization_prior_terms_to_logev(double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
+
+	template <typename QScalar, typename MathTypes>
+	QScalar calculate_regularization_prior_term_stan(QScalar *regparam_ptr, const bool potential_perturbations=false);
+	template <typename QScalar, typename MathTypes>
+	void add_regularization_prior_terms_to_logev_stan(QScalar& logev_times_two, QScalar& loglike_reg, QScalar& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
+
+
 
 	bool optimize_regularization_parameter(const bool dense_Fmatrix=false, const bool verbal=false, const bool pre_srcgrid = false);
 	void setup_regparam_optimization(const bool dense_Fmatrix=false);
@@ -938,6 +962,7 @@ class ImagePixelGrid : private Sort
 	void generate_Rmatrix_shapelet_gradient();
 	void generate_Rmatrix_shapelet_curvature();
 
+	template <typename MathTypes>
 	void initialize_pixel_matrices(const bool potential_perturbations=false, bool verbal=false);
 	void initialize_pixel_matrices_shapelets(bool verbal=false);
 	void count_shapelet_amplitudes();
@@ -946,6 +971,7 @@ class ImagePixelGrid : private Sort
 	void clear_sparse_lensing_matrices();
 	void construct_Lmatrix(const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
 	void construct_Lmatrix_supersampled(const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
+	template <typename MathTypes>
 	void construct_Lmatrix_dense(const bool delaunay, const bool potential_perturbations, const bool verbal);
 	void PSF_convolution_Lmatrix(bool verbal = false);
 	void PSF_convolution_pixel_vector(const bool foreground = false, const bool verbal = false, const bool use_fft = false, const bool use_emask = false);
@@ -962,20 +988,27 @@ class ImagePixelGrid : private Sort
 	bool generate_Rmatrix_from_covariance_kernel(const int kernel_type=0, const bool include_lum_weighting=false, const bool potential_perturbations = false, const bool verbal = false);
 
 	void create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix=false, const bool potential_perturbations=false, const bool verbal=false);
+	void convert_Rmatrix_to_dense();
 	void invert_lens_mapping_dense(bool verbal=false);
+	template <typename MathTypes>
+	void invert_lens_mapping_dense_stan(bool verbal=false);
+
 	void invert_lens_mapping_EIGEN_sparse(double& logdet, const bool verbal, const bool use_copy = false);
 	void invert_lens_mapping_MUMPS(double& logdet, const bool verbal, const bool use_copy = false);
 	void invert_lens_mapping_UMFPACK(double& logdet, const bool verbal, const bool use_copy = false);
 	void Rmatrix_determinant_EIGEN(const bool potential_perturbations);
 
 	void invert_lens_mapping_CG_method(bool verbal);
+	template <typename MathTypes>
 	void update_source_and_lensgrid_amplitudes(const bool verbal=false);
 	void indexx(int* arr, int* indx, int nn);
 
 	void calculate_source_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness();
+	template <typename MathTypes>
 	void calculate_image_pixel_surface_brightness_dense();
 	void calculate_foreground_pixel_surface_brightness(const bool allow_lensed_nonshapelet_sources = true);
+	template <typename MathTypes>
 	void store_image_pixel_surface_brightness(const bool use_emask = false);
 	void store_foreground_pixel_surface_brightness();
 	void vectorize_image_pixel_surface_brightness(const bool use_emask = false);
@@ -1009,7 +1042,7 @@ class ImagePixelGrid : private Sort
 
 	//ImagePixelGrid(QLens* lens_in, double* zfactor_in, double** betafactor_in, SourceFitMode mode, ImageData& pixel_data);
 	void load_data(ImageData& pixel_data);
-	void generate_point_images(const vector<image<double>>& imgs, double* ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num = -1); // -1 means use all images
+	void generate_point_images(const vector<image<double>>& imgs, Eigen::VectorXd& ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num = -1); // -1 means use all images
 	void add_point_images(Eigen::VectorXd& ptimage_surface_brightness, const int npix);
 	void generate_and_add_point_images(const vector<image<double>>& imgs, const bool include_imgfluxes, const double srcflux);
 	void find_point_images(const double src_x, const double src_y, vector<image<double>>& imgs, const bool use_overlap, const bool is_lensed, const bool verbal);
@@ -1040,6 +1073,14 @@ class ImagePixelGrid : private Sort
 	void setup_PSF_convolution(const bool foreground = false);
 	template <typename VecType>
 	VecType PSF_convolution_pixel_vector_stan(const VecType& sbvec, const bool foreground = false);
+	template <typename VecType>
+	VecType PSF_convolution_pixel_vector_stan_FFT(const VecType& sbvec, const bool foreground = false, const bool verbal = false);
+	template <typename MatType>
+	MatType PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat);
+	template <typename MatType>
+	MatType PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lmat, const bool verbal = false);
+
+
 	void reset_psfconv_plans();
 
 	bool setup_FFT_convolution(const bool supersampling, const bool foreground, const bool include_fgmask_in_inversion, const bool verbal);
@@ -1048,8 +1089,8 @@ class ImagePixelGrid : private Sort
 
 	template <typename MathTypes>
 	void PSF_convolution_pixel_vector_wrapper(const bool foreground = false, const bool verbal = false, const bool use_fft = false, const bool use_extended_mask = false);
-	template <typename VecType>
-	VecType PSF_convolution_pixel_vector_stan_FFT(const VecType& sbvec, const bool foreground = false, const bool verbal = false);
+	template <typename MathTypes>
+	void PSF_convolution_Lmatrix_dense_wrapper(const bool verbal = false);
 
 	~ImagePixelGrid();
 	template <typename MathTypes>
@@ -1073,7 +1114,7 @@ class ImagePixelGrid : private Sort
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_surface_brightness(const bool use_emask = false, const bool foreground_only = false, const bool lensed_sources_only = false, const bool include_first_order_corrections = false, const bool show_only_first_order_corrections = false, const bool omit_noninverted_sources = false);
 	template <typename MathTypes>
-	void find_surface_brightness_sbprofile(const bool foreground_only = false, const bool lensed_sources_only = false, const bool omit_noninverted_sources = false, const bool psf_convolution = false);
+	void find_surface_brightness_sbprofile(const bool foreground_only = false, const bool lensed_sources_only = false, const bool omit_noninverted_sources = false);
 
 	template <typename QScalar>
 	void set_zero_lensed_surface_brightness();

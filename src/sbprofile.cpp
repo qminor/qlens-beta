@@ -2665,6 +2665,13 @@ void SB_Profile::get_regularization_param_ptr(double*& regparam_ptr)
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
+#ifdef USE_STAN
+void SB_Profile::get_regularization_param_ptr(stan::math::var*& regparam_ptr)
+{
+	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
+}
+#endif
+
 void SB_Profile::update_amplitudes(double*& ampvec)
 {
 	return; // this is only used in the derived classes Shapelet, MGE
@@ -4427,6 +4434,14 @@ void Shapelet::get_regularization_param_ptr(double*& regparam_ptr)
 	regparam_ptr = &p.regparam;
 }
 
+#ifdef USE_STAN
+void Shapelet::get_regularization_param_ptr(stan::math::var*& regparam_ptr)
+{
+	Shapelet_Params<stan::math::var>& p = assign_shapelet_param_object<stan::math::var>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
+	regparam_ptr = &p.regparam;
+}
+#endif
+
 void Shapelet::update_amplitudes(double*& ampvec)
 {
 	Shapelet_Params<double>& p = assign_shapelet_param_object<double>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
@@ -4707,6 +4722,14 @@ void MGE::get_regularization_param_ptr(double*& regparam_ptr)
 {
 	regparam_ptr = &sbparams_mge.regparam;
 }
+
+#ifdef USE_STAN
+void MGE::get_regularization_param_ptr(stan::math::var*& regparam_ptr)
+{
+	regparam_ptr = &sbparams_mge_dif.regparam;
+}
+#endif
+
 
 void MGE::update_amplitudes(double*& ampvec)
 {

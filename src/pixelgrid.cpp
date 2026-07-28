@@ -176,6 +176,11 @@ void CartesianSourcePixel::deallocate_multithreaded_variables()
 
 CartesianSourceGrid::CartesianSourceGrid(QLens* qlens_in, const int band, const double zsrc_in) : Model(), CartesianSourcePixel(qlens_in)
 {
+	modelparams = &cartesian_srcgrid_params;
+#ifdef USE_STAN
+	modelparams_dif = &cartesian_srcgrid_params_dif;
+#endif
+
 	parent_grid = this;
 	qlens = qlens_in;
 	if (zsrc_in < 0) model_name = "cartesian_srcgrid";
@@ -197,6 +202,10 @@ CartesianSourceGrid::CartesianSourceGrid(QLens* qlens_in, const int band, const 
 	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
 	*/
 	setup_parameters(true);
+	setup_param_pointers<double>();
+#ifdef USE_STAN
+	setup_param_pointers<stan::math::var>();
+#endif
 }
 
 void CartesianSourceGrid::create_pixel_grid(QLens* qlens_in, double x_min, double x_max, double y_min, double y_max, const int usplit0, const int wsplit0) // use for top-level cell only; subcells use constructor below
@@ -355,12 +364,6 @@ void CartesianSourceGrid::create_pixel_grid(QLens* qlens_in, string pixel_data_f
 void CartesianSourceGrid::setup_parameters(const bool initial_setup)
 {
 	if (initial_setup) {
-		// default initial values
-		regparam = 100;
-		pixel_fraction = 0.3;
-		pixel_magnification_threshold = 7;
-		srcgrid_size_scale = 0; // note, the source grid is scaled as xlength*(1+srcgrid_size_scale), etc.
-
 		setup_parameter_arrays(4);
 	} else {
 		// always reset the active parameter flags, since the active ones will be determined below
@@ -381,7 +384,6 @@ void CartesianSourceGrid::setup_parameters(const bool initial_setup)
 	auto_srcgrid = qlens->auto_sourcegrid;
 
 	if (initial_setup) {
-		param[indx] = &regparam;
 		paramnames[indx] = "regparam"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = "";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -393,7 +395,6 @@ void CartesianSourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		param[indx] = &pixel_fraction;
 		paramnames[indx] = "pixfrac"; latex_paramnames[indx] = "f"; latex_param_subscripts[indx] = "pixel";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = false;
@@ -405,7 +406,6 @@ void CartesianSourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		param[indx] = &pixel_magnification_threshold;
 		paramnames[indx] = "mag_threshold"; latex_paramnames[indx] = "m"; latex_param_subscripts[indx] = "split";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = false;
@@ -417,7 +417,6 @@ void CartesianSourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		param[indx] = &srcgrid_size_scale;
 		paramnames[indx] = "srcgrid_scale"; latex_paramnames[indx] = "f"; latex_param_subscripts[indx] = "sg";
 		set_auto_penalty_limits[indx] = false;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = false;
@@ -429,15 +428,49 @@ void CartesianSourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 }
 
+template <typename QScalar>
+void CartesianSourceGrid::setup_param_pointers()
+{
+	CartesianSourceGrid_Params<QScalar>& p = assign_cartesian_srcgrid_param_object<QScalar>();
+	p.regparam = 100;
+	p.pixel_fraction = 0.3;
+	p.pixel_magnification_threshold = 7;
+	p.srcgrid_size_scale = 0; // note, the source grid is scaled as xlength*(1+srcgrid_size_scale), etc.
+
+	QScalar** param_ptr = p.param;
+	*(param_ptr++) = &p.regparam;
+	*(param_ptr++) = &p.pixel_fraction;
+	*(param_ptr++) = &p.pixel_magnification_threshold;
+	*(param_ptr++) = &p.srcgrid_size_scale;
+}
+template void CartesianSourceGrid::setup_param_pointers<double>();
+#ifdef USE_STAN
+template void CartesianSourceGrid::setup_param_pointers<stan::math::var>();
+#endif
+
+#ifdef USE_STAN
+void CartesianSourceGrid::sync_autodif_parameters()
+{
+	cartesian_srcgrid_params_dif.regparam = cartesian_srcgrid_params.regparam;
+	cartesian_srcgrid_params_dif.pixel_fraction = cartesian_srcgrid_params.pixel_fraction;
+	cartesian_srcgrid_params_dif.pixel_magnification_threshold = cartesian_srcgrid_params.pixel_magnification_threshold;
+	cartesian_srcgrid_params_dif.srcgrid_size_scale = cartesian_srcgrid_params.srcgrid_size_scale;
+}
+#endif
+
 void CartesianSourceGrid::copy_pixsrc_data(CartesianSourceGrid* grid_in)
 {
+	CartesianSourceGrid_Params<double>& p = assign_cartesian_srcgrid_param_object<double>();
 	model_name = grid_in->model_name;
 	srcgrid_redshift = grid_in->srcgrid_redshift;
-	regparam = grid_in->regparam;
-	pixel_fraction = grid_in->pixel_fraction;
-	pixel_magnification_threshold = grid_in->pixel_magnification_threshold;
-	srcgrid_size_scale = grid_in->srcgrid_size_scale; // note, the source grid is scaled as xlength*(1+srcgrid_size_scale), etc.
+	p.regparam = grid_in->cartesian_srcgrid_params.regparam;
+	p.pixel_fraction = grid_in->cartesian_srcgrid_params.pixel_fraction;
+	p.pixel_magnification_threshold = grid_in->cartesian_srcgrid_params.pixel_magnification_threshold;
+	p.srcgrid_size_scale = grid_in->cartesian_srcgrid_params.srcgrid_size_scale; // note, the source grid is scaled as xlength*(1+srcgrid_size_scale), etc.
 	copy_param_arrays(grid_in);
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
 }
 
 void CartesianSourceGrid::update_meta_parameters(const bool varied_only_fitparams)
@@ -635,7 +668,7 @@ void CartesianSourcePixel::assign_surface_brightness_from_delaunay_grid(Delaunay
 		for (i=0; i < u_N; i++) {
 			if (cell[i][j]->cell != NULL) cell[i][j]->assign_surface_brightness_from_delaunay_grid(delaunay_grid,add_sb);
 			else {
-				sb = delaunay_grid->find_lensed_surface_brightness(cell[i][j]->center_pt,-1,-1,0); // it would be nice to use Greg's method for searching so it doesn't start from an arbitrary triangle...but it's pretty fast as-is
+				sb = delaunay_grid->find_lensed_surface_brightness(cell[i][j]->center_pt[0],cell[i][j]->center_pt[1],-1,-1,0); // it would be nice to use Greg's method for searching so it doesn't start from an arbitrary triangle...but it's pretty fast as-is
 				if (add_sb) cell[i][j]->surface_brightness += sb;
 				else cell[i][j]->surface_brightness = sb;
 			}
@@ -1401,7 +1434,7 @@ bool CartesianSourceGrid::bisection_search_overlap(lensvector<double> &a, lensve
 
 void CartesianSourceGrid::calculate_pixel_magnifications(const bool use_emask)
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
+	ImgGrid_Params<PlainTypes>& p = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 	ImageData *imgpixel_data = image_pixel_grid->image_data;
 
 	qlens->total_srcgrid_overlap_area = 0; // Used to find the total coverage of the sourcegrid, which helps determine optimal source pixel size
@@ -1718,6 +1751,7 @@ void CartesianSourceGrid::adaptive_subgrid()
 
 void CartesianSourceGrid::split_subcells_firstlevel(const int splitlevel)
 {
+	CartesianSourceGrid_Params<double>& p = assign_cartesian_srcgrid_param_object<double>();
 	ImgGrid_Params<PlainTypes>& imggrid_params = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 	if (level >= max_levels+1)
 		die("maximum number of splittings has been reached (%i)", max_levels);
@@ -1769,7 +1803,7 @@ void CartesianSourceGrid::split_subcells_firstlevel(const int splitlevel)
 				j = n / u_N;
 				i = n % u_N;
 				subgrid = false;
-				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/(qlens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) > pixel_magnification_threshold) subgrid = true;
+				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/(qlens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) > p.pixel_magnification_threshold) subgrid = true;
 				if (subgrid) {
 					//cout << "SPLITTING(FIRST): level=" << cell[i][j]->level << ", mag=" << cell[i][j]->total_magnification << " fac=" << (cell[i][j]->cell_area/(qlens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) << endl;
 					cell[i][j]->split_cells(2,2,thread);
@@ -1878,7 +1912,7 @@ void CartesianSourcePixel::split_subcells(const int splitlevel, const int thread
 		for (i=0; i < u_N; i++) {
 			for (j=0; j < w_N; j++) {
 				subgrid = false;
-				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/(lens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) > parent_grid->pixel_magnification_threshold) subgrid = true;
+				if ((cell[i][j]->total_magnification*cell[i][j]->cell_area/(lens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) > parent_grid->cartesian_srcgrid_params.pixel_magnification_threshold) subgrid = true;
 
 				if (subgrid) {
 					//cout << "SPLITTING: level=" << cell[i][j]->level << ", mag=" << cell[i][j]->total_magnification << " fac=" << (cell[i][j]->cell_area/(lens->base_srcpixel_imgpixel_ratio*image_pixel_grid->pixel_area)) << endl;
@@ -3135,19 +3169,19 @@ void DelaunayGrid::record_adjacent_triangles_xy()
 		pty_m.input(x,ym);
 
 		for (j=0; j < n_shared_triangles[i]; j++) {
-			if ((!foundxp) and (test_if_inside(shared_triangles[i][j],ptx_p)==true)) {
+			if ((!foundxp) and (test_if_inside(shared_triangles[i][j],ptx_p[0],ptx_p[1])==true)) {
 				adj_triangles[0][i] = shared_triangles[i][j];
 				foundxp = true;
 			}
-			if ((!foundxm) and (test_if_inside(shared_triangles[i][j],ptx_m)==true)) {
+			if ((!foundxm) and (test_if_inside(shared_triangles[i][j],ptx_m[0],ptx_m[1])==true)) {
 				adj_triangles[1][i] = shared_triangles[i][j];
 				foundxm = true;
 			}
-			if ((!foundyp) and (test_if_inside(shared_triangles[i][j],pty_p)==true)) {
+			if ((!foundyp) and (test_if_inside(shared_triangles[i][j],pty_p[0],ptx_p[1])==true)) {
 				adj_triangles[2][i] = shared_triangles[i][j];
 				foundyp = true;
 			}
-			if ((!foundym) and (test_if_inside(shared_triangles[i][j],pty_m)==true)) {
+			if ((!foundym) and (test_if_inside(shared_triangles[i][j],pty_m[0],ptx_m[1])==true)) {
 				adj_triangles[3][i] = shared_triangles[i][j];
 				foundym = true;
 			}
@@ -3159,7 +3193,7 @@ void DelaunayGrid::record_adjacent_triangles_xy()
 	}
 }
 
-int DelaunayGrid::search_grid(int initial_srcpixel, const lensvector<double>& pt, bool& inside_triangle)
+int DelaunayGrid::search_grid(int initial_srcpixel, const double pt_x, const double pt_y, bool& inside_triangle)
 {
 	DelaunayGrid_Params<double>& p = assign_delaunay_param_object<double>();
 	if (n_shared_triangles[initial_srcpixel]==0) {
@@ -3167,7 +3201,7 @@ int DelaunayGrid::search_grid(int initial_srcpixel, const lensvector<double>& pt
 		//die("something is really wrong! This vertex doesn't share any triangle sides (vertex %i, ntot=%i)",initial_srcpixel,n_gridpts);
 	}
 	int n, triangle_num = shared_triangles[initial_srcpixel][0]; // there might be a better way to discern which shared triangle to start with, but we can optimize this later
-	if ((pt[0]==p.gridpts[initial_srcpixel][0]) and (pt[1]==p.gridpts[initial_srcpixel][1])) {
+	if ((pt_x==p.gridpts[initial_srcpixel][0]) and (pt_y==p.gridpts[initial_srcpixel][1])) {
 		inside_triangle = true;
 		return triangle_num;
 	}
@@ -3175,7 +3209,7 @@ int DelaunayGrid::search_grid(int initial_srcpixel, const lensvector<double>& pt
 	inside_triangle = false;
 	for (n=0; n < n_triangles; n++) {
 		// NOTE: bear in mind that if the point is outside the grid, there are multiple border triangles that might accept the point as being on "their" side. This is why having a good starting triangle is valuable
-		if (test_if_inside(triangle_num,pt,inside_triangle)==true) break; // note, will return 'true' if the point is outside the grid but closest to that triangle (compared to neighbors); 'inside_triangle' flag reveals if it's actually inside the triangle or not
+		if (test_if_inside(triangle_num,pt_x,pt_y,inside_triangle)==true) break; // note, will return 'true' if the point is outside the grid but closest to that triangle (compared to neighbors); 'inside_triangle' flag reveals if it's actually inside the triangle or not
 	}
 
 	/*
@@ -3191,7 +3225,7 @@ int DelaunayGrid::search_grid(int initial_srcpixel, const lensvector<double>& pt
 		bool in1 = test_if_inside(triangle_num,pt,inside_triangle);
 		bool in2 = test_if_inside(triangle_num2,pt,inside_triangle);
 		cout << "found1=" << in1 << " found2=" << in2 << endl;
-		cout << "pt=" << pt[0] << "," << pt[1] << endl;
+		cout << "pt=" << pt_x << "," << pt_y << endl;
 		cout << "TRI0:" << endl;
 		cout << triangle[triangle_num].vertex[0][0] << " " << triangle[triangle_num].vertex[0][1] << endl;
 		cout << triangle[triangle_num].vertex[1][0] << " " << triangle[triangle_num].vertex[1][1] << endl;
@@ -3204,12 +3238,12 @@ int DelaunayGrid::search_grid(int initial_srcpixel, const lensvector<double>& pt
 	}
 	*/
 
-	if (n > n_triangles) die("searched all triangles (or else searched in a loop), still did not find triangle enclosing point--this shouldn't happen! pt=(%g,%g), pixel0=%i",pt[0],pt[1],initial_srcpixel);
+	if (n > n_triangles) die("searched all triangles (or else searched in a loop), still did not find triangle enclosing point--this shouldn't happen! pt=(%g,%g), pixel0=%i",pt_x,pt_y,initial_srcpixel);
 	return triangle_num;
 }
 
 #define SAME_SIGN(a,b) (((a>0) and (b>0)) or ((a<0) and (b<0)))
-bool DelaunayGrid::test_if_inside(int &tri_number, const lensvector<double>& pt, bool& inside_triangle)
+bool DelaunayGrid::test_if_inside(int &tri_number, const double pt_x, const double pt_y, bool& inside_triangle)
 {
 	DelaunayGrid_Params<double>& p = assign_delaunay_param_object<double>();
 	// To speed things up, these things can be made static and have an array for each (so each thread uses a different set of static elements)
@@ -3222,12 +3256,12 @@ bool DelaunayGrid::test_if_inside(int &tri_number, const lensvector<double>& pt,
 	bool prod2_samesign = false;
 	bool prod3_samesign = false;
 
-	dt1[0] = pt[0] - triptr->vertex[0][0];
-	dt1[1] = pt[1] - triptr->vertex[0][1];
-	dt2[0] = pt[0] - triptr->vertex[1][0];
-	dt2[1] = pt[1] - triptr->vertex[1][1];
-	dt3[0] = pt[0] - triptr->vertex[2][0];
-	dt3[1] = pt[1] - triptr->vertex[2][1];
+	dt1[0] = pt_x - triptr->vertex[0][0];
+	dt1[1] = pt_y - triptr->vertex[0][1];
+	dt2[0] = pt_x - triptr->vertex[1][0];
+	dt2[1] = pt_y - triptr->vertex[1][1];
+	dt3[0] = pt_x - triptr->vertex[2][0];
+	dt3[1] = pt_y - triptr->vertex[2][1];
 	cross_prod = dt1[0]*dt2[1] - dt1[1]*dt2[0];
 	if SAME_SIGN(cross_prod,triptr->area) { prod1_samesign = true; same_sign++; }
 	cross_prod = dt3[0]*dt1[1] - dt3[1]*dt1[0];
@@ -3238,7 +3272,7 @@ bool DelaunayGrid::test_if_inside(int &tri_number, const lensvector<double>& pt,
 		inside_triangle = true;
 		return true; // point is inside the triangle
 	}
-	if (same_sign==0) die("none of cross products have same sign as triangle parity (%g vs %g), pt=(%g,%g); this shouldn't happen",cross_prod,triptr->area,pt[0],pt[1]);
+	if (same_sign==0) die("none of cross products have same sign as triangle parity (%g vs %g), pt=(%g,%g); this shouldn't happen",cross_prod,triptr->area,pt_x,pt_y);
 	if (same_sign==2) {
 		if (!prod1_samesign) side = 2; // on the side opposite vertex 2
 		else if (!prod2_samesign) side = 1; // on the side opposite vertex 1
@@ -3268,7 +3302,7 @@ bool DelaunayGrid::test_if_inside(int &tri_number, const lensvector<double>& pt,
 	return false; // if returning 'false', we don't bother to set the 'inside_triangle' flag because it will be ignored anyway
 }
 
-bool DelaunayGrid::test_if_inside(const int tri_number, const lensvector<double>& pt)
+bool DelaunayGrid::test_if_inside(const int tri_number, const double pt_x, const double pt_y)
 {
 	// To speed things up, these things can be made static and have an array for each (so each thread uses a different set of static elements)
 	DelaunayGrid_Params<double>& p = assign_delaunay_param_object<double>();
@@ -3278,12 +3312,12 @@ bool DelaunayGrid::test_if_inside(const int tri_number, const lensvector<double>
 	//cout << "TRINUM=" << tri_number << endl;
 	Triangle<double> *triptr = &p.triangle[tri_number];
 	int same_sign=0;
-	dt1[0] = pt[0] - triptr->vertex[0][0];
-	dt1[1] = pt[1] - triptr->vertex[0][1];
-	dt2[0] = pt[0] - triptr->vertex[1][0];
-	dt2[1] = pt[1] - triptr->vertex[1][1];
-	dt3[0] = pt[0] - triptr->vertex[2][0];
-	dt3[1] = pt[1] - triptr->vertex[2][1];
+	dt1[0] = pt_x - triptr->vertex[0][0];
+	dt1[1] = pt_y - triptr->vertex[0][1];
+	dt2[0] = pt_x - triptr->vertex[1][0];
+	dt2[1] = pt_y - triptr->vertex[1][1];
+	dt3[0] = pt_x - triptr->vertex[2][0];
+	dt3[1] = pt_y - triptr->vertex[2][1];
 	cross_prod = dt1[0]*dt2[1] - dt1[1]*dt2[0];
 	if SAME_SIGN(cross_prod,triptr->area) same_sign++;
 	cross_prod = dt3[0]*dt1[1] - dt3[1]*dt1[0];
@@ -3333,9 +3367,8 @@ int DelaunayGrid::find_closest_vertex(const int tri_number, const lensvector<dou
 	return indx;
 }
 
-
 template <typename QScalar>
-void DelaunayGrid::find_interpolation_weights_3pt(const lensvector<QScalar>& input_pt, const int trinum, int& npts, const int thread)
+void DelaunayGrid::find_interpolation_weights_3pt(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread)
 {
 	DelaunayGrid_Params<QScalar>& p = assign_delaunay_param_object<QScalar>();
 	Triangle<QScalar> *triptr = &p.triangle[trinum];
@@ -3351,19 +3384,19 @@ void DelaunayGrid::find_interpolation_weights_3pt(const lensvector<QScalar>& inp
 		p.interpolation_wgts[0] = 1.0;
 		npts = 1;
 	} else {
-		p.interpolation_wgts[0] = (input_pt[0]*((*p.interpolation_pts[1])[1]-(*p.interpolation_pts[2])[1]) + input_pt[1]*((*p.interpolation_pts[2])[0]-(*p.interpolation_pts[1])[0]) + (*p.interpolation_pts[1])[0]*(*p.interpolation_pts[2])[1] - (*p.interpolation_pts[1])[1]*(*p.interpolation_pts[2])[0])/d;
-		p.interpolation_wgts[1] = (input_pt[0]*((*p.interpolation_pts[2])[1]-(*p.interpolation_pts[0])[1]) + input_pt[1]*((*p.interpolation_pts[0])[0]-(*p.interpolation_pts[2])[0]) + (*p.interpolation_pts[0])[1]*(*p.interpolation_pts[2])[0] - (*p.interpolation_pts[0])[0]*(*p.interpolation_pts[2])[1])/d;
-		p.interpolation_wgts[2] = (input_pt[0]*((*p.interpolation_pts[0])[1]-(*p.interpolation_pts[1])[1]) + input_pt[1]*((*p.interpolation_pts[1])[0]-(*p.interpolation_pts[0])[0]) + (*p.interpolation_pts[0])[0]*(*p.interpolation_pts[1])[1] - (*p.interpolation_pts[0])[1]*(*p.interpolation_pts[1])[0])/d;
+		p.interpolation_wgts[0] = (input_pt_x*((*p.interpolation_pts[1])[1]-(*p.interpolation_pts[2])[1]) + input_pt_y*((*p.interpolation_pts[2])[0]-(*p.interpolation_pts[1])[0]) + (*p.interpolation_pts[1])[0]*(*p.interpolation_pts[2])[1] - (*p.interpolation_pts[1])[1]*(*p.interpolation_pts[2])[0])/d;
+		p.interpolation_wgts[1] = (input_pt_x*((*p.interpolation_pts[2])[1]-(*p.interpolation_pts[0])[1]) + input_pt_y*((*p.interpolation_pts[0])[0]-(*p.interpolation_pts[2])[0]) + (*p.interpolation_pts[0])[1]*(*p.interpolation_pts[2])[0] - (*p.interpolation_pts[0])[0]*(*p.interpolation_pts[2])[1])/d;
+		p.interpolation_wgts[2] = (input_pt_x*((*p.interpolation_pts[0])[1]-(*p.interpolation_pts[1])[1]) + input_pt_y*((*p.interpolation_pts[1])[0]-(*p.interpolation_pts[0])[0]) + (*p.interpolation_pts[0])[0]*(*p.interpolation_pts[1])[1] - (*p.interpolation_pts[0])[1]*(*p.interpolation_pts[1])[0])/d;
 		npts = 3;
 	}
 }
-template void DelaunayGrid::find_interpolation_weights_3pt<double>(const lensvector<double>& input_pt, const int trinum, int& npts, const int thread);
+template void DelaunayGrid::find_interpolation_weights_3pt<double>(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, const int thread);
 #ifdef USE_STAN
-template void DelaunayGrid::find_interpolation_weights_3pt<stan::math::var>(const lensvector<stan::math::var>& input_pt, const int trinum, int& npts, const int thread);
+template void DelaunayGrid::find_interpolation_weights_3pt<stan::math::var>(const stan::math::var input_pt_x, const stan::math::var input_pt_y, const int trinum, int& npts, const int thread);
 #endif
 
 template <typename QScalar>
-void DelaunayGrid::find_interpolation_weights_nn(const lensvector<QScalar> &input_pt, const int trinum, int& npts, const int thread) // natural neighbor interpolation
+void DelaunayGrid::find_interpolation_weights_nn(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread) // natural neighbor interpolation
 {
 	DelaunayGrid_Params<QScalar>& p = assign_delaunay_param_object<QScalar>();
 	npts = 0;
@@ -3401,7 +3434,7 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector<QScalar> &inpu
 		neighbor_num2 = neighbor_ptr->neighbor_index[l_right];
 		if (neighbor_num2 != -1) {
 			neighbor_ptr2 = &p.triangle[neighbor_num2];
-			distsq = SQR(input_pt[0]-neighbor_ptr2->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr2->circumcenter[1]);
+			distsq = SQR(input_pt_x-neighbor_ptr2->circumcenter[0]) + SQR(input_pt_y-neighbor_ptr2->circumcenter[1]);
 			if (distsq < neighbor_ptr2->circumcircle_radsq) {
 				if (!find_triangles_in_envelope(neighbor_ptr2,neighbor_num,neighbor_num2,npt,ntri)) return false;
 			}
@@ -3416,7 +3449,7 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector<QScalar> &inpu
 		neighbor_num2 = neighbor_ptr->neighbor_index[l_left];
 		if (neighbor_num2 != -1) {
 			neighbor_ptr2 = &p.triangle[neighbor_num2];
-			distsq = SQR(input_pt[0]-neighbor_ptr2->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr2->circumcenter[1]);
+			distsq = SQR(input_pt_x-neighbor_ptr2->circumcenter[0]) + SQR(input_pt_y-neighbor_ptr2->circumcenter[1]);
 			if (distsq < neighbor_ptr2->circumcircle_radsq) {
 				if (!find_triangles_in_envelope(neighbor_ptr2,neighbor_num,neighbor_num2,npt,ntri)) return false;
 			}
@@ -3430,7 +3463,7 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector<QScalar> &inpu
 	for (k=0; k < 3; k++) {
 		if (npts >= nmax_pts_interp) {
 			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point",(npts+1),nmax_pts_interp);
-			find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+			find_interpolation_weights_3pt(input_pt_x, input_pt_y, trinum, npts, thread);
 			return;
 		}
 		interpolation_indx[npts] = triptr->vertex_index[k];
@@ -3441,11 +3474,11 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector<QScalar> &inpu
 		neighbor_num = triptr->neighbor_index[kleft];
 		if (neighbor_num != -1) {
 			neighbor_ptr = &p.triangle[neighbor_num];
-			distsq = SQR(input_pt[0]-neighbor_ptr->circumcenter[0]) + SQR(input_pt[1]-neighbor_ptr->circumcenter[1]);
+			distsq = SQR(input_pt_x-neighbor_ptr->circumcenter[0]) + SQR(input_pt_y-neighbor_ptr->circumcenter[1]);
 			if (distsq < neighbor_ptr->circumcircle_radsq) {
 				if (!find_triangles_in_envelope(neighbor_ptr,trinum,neighbor_num,npts,ntri_in_envelope)) {
 					// exceeded max number of points allowed, so just using 3-pt interpolation instead
-					find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+					find_interpolation_weights_3pt(input_pt_x, input_pt_y, trinum, npts, thread);
 					return;
 				}
 			}
@@ -3461,17 +3494,17 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector<QScalar> &inpu
 	for (k=0; k < npts; k++) {
 		kright = k+1;
 		if (kright==npts) kright = 0;
-		a0 = (*p.interpolation_pts[k])[0]-input_pt[0];
-		a1 = (*p.interpolation_pts[k])[1]-input_pt[1];
-		c0 = (*p.interpolation_pts[kright])[0]-input_pt[0];
-		c1 = (*p.interpolation_pts[kright])[1]-input_pt[1];
+		a0 = (*p.interpolation_pts[k])[0]-input_pt_x;
+		a1 = (*p.interpolation_pts[k])[1]-input_pt_y;
+		c0 = (*p.interpolation_pts[kright])[0]-input_pt_x;
+		c1 = (*p.interpolation_pts[kright])[1]-input_pt_y;
 		det_inv = 0.5/(a0*c1-c0*a1);
 		asq = a0*a0 + a1*a1;
 		csq = c0*c0 + c1*c1;
 		ctr0 = det_inv*(asq*c1 - csq*a1);
 		ctr1 = det_inv*(csq*a0 - asq*c0);
-		p.new_circumcenter[k][0] = ctr0 + input_pt[0];
-		p.new_circumcenter[k][1] = ctr1 + input_pt[1];
+		p.new_circumcenter[k][0] = ctr0 + input_pt_x;
+		p.new_circumcenter[k][1] = ctr1 + input_pt_y;
 	}
 
 	lensvector<QScalar> midpt_left, midpt_right;
@@ -3618,21 +3651,21 @@ void DelaunayGrid::find_interpolation_weights_nn(const lensvector<QScalar> &inpu
 		p.interpolation_wgts[k] /= totwgt;
 	}
 }
-template void DelaunayGrid::find_interpolation_weights_nn<double>(const lensvector<double> &input_pt, const int trinum, int& npts, const int thread); // natural neighbor interpolation;
+template void DelaunayGrid::find_interpolation_weights_nn<double>(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, const int thread); // natural neighbor interpolation;
 #ifdef USE_STAN
-template void DelaunayGrid::find_interpolation_weights_nn<stan::math::var>(const lensvector<stan::math::var> &input_pt, const int trinum, int& npts, const int thread); // natural neighbor interpolation;
+template void DelaunayGrid::find_interpolation_weights_nn<stan::math::var>(const stan::math::var input_pt_x, const stan::math::var input_pt_y, const int trinum, int& npts, const int thread); // natural neighbor interpolation;
 #endif
 
-void DelaunayGrid::find_containing_triangle(const lensvector<double> &input_pt, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin)
+void DelaunayGrid::find_containing_triangle(const double input_pt_x, const double input_pt_y, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin)
 {
 	DelaunayGrid_Params<double>& p = assign_delaunay_param_object<double>();
 	// this version does not use information from lensing to find a starting triangle during the search; it just starts with triangle zero
 	on_vertex = false;
-	trinum = search_grid(0,input_pt,inside_triangle);
+	trinum = search_grid(0,input_pt_x,input_pt_y,inside_triangle);
 	Triangle<double> *triptr = &p.triangle[trinum];
 	double sqrdist, sqrdistmin=1e30;
 	for (int k=0; k < 3; k++) {
-		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
+		sqrdist = SQR(input_pt_x-triptr->vertex[k][0]) + SQR(input_pt_y-triptr->vertex[k][1]);
 		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
 	}
 	if ((inside_triangle) and (sqrdistmin < 1e-6)) {
@@ -3698,8 +3731,6 @@ void DelaunayGrid::generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, const
 		}
 	}
 }
-
-
 
 double DelaunayGrid::modified_bessel_function(const double x, const double nu)
 {
@@ -4064,7 +4095,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	else kernel_based_regularization = false;
 
 	if (initial_setup) {
-		//param[indx] = &regparam;
 		paramnames[indx] = "regparam"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = "";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -4076,7 +4106,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &kernel_correlation_length;
 		paramnames[indx] = "corrlength"; latex_paramnames[indx] = "l"; latex_param_subscripts[indx] = "corr";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -4088,7 +4117,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &matern_index;
 		paramnames[indx] = "matern_index"; latex_paramnames[indx] = "\\nu"; latex_param_subscripts[indx] = "src";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0.01; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = false;
@@ -4100,7 +4128,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &regparam_lsc;
 		paramnames[indx] = "regparam_lsc"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = "sc";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -4112,7 +4139,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &regparam_lum_index;
 		paramnames[indx] = "regparam_lum_index"; latex_paramnames[indx] = "\\gamma"; latex_param_subscripts[indx] = "reg";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = false;
@@ -4124,7 +4150,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_xcenter;
 		paramnames[indx] = "distreg_xcenter"; latex_paramnames[indx] = "x"; latex_param_subscripts[indx] = "c,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -4136,7 +4161,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_ycenter;
 		paramnames[indx] = "distreg_ycenter"; latex_paramnames[indx] = "y"; latex_param_subscripts[indx] = "c,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -4148,7 +4172,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_e1;
 		paramnames[indx] = "distreg_e1"; latex_paramnames[indx] = "e"; latex_param_subscripts[indx] = "1,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -4160,7 +4183,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_e2;
 		paramnames[indx] = "distreg_e2"; latex_paramnames[indx] = "e"; latex_param_subscripts[indx] = "2,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -4172,7 +4194,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_rc;
 		paramnames[indx] = "distreg_rc"; latex_paramnames[indx] = "r"; latex_param_subscripts[indx] = "c,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -4184,7 +4205,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &mag_weight_sc;
 		paramnames[indx] = "mag_weight_sc"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = "\\mu,sc";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -4196,7 +4216,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &mag_weight_index;
 		paramnames[indx] = "mag_weight_index"; latex_paramnames[indx] = "\\gamma"; latex_param_subscripts[indx] = "\\mu";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = false;
@@ -4208,7 +4227,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &alpha_clus;
 		paramnames[indx] = "alpha_clus"; latex_paramnames[indx] = "\\alpha"; latex_param_subscripts[indx] = "clus";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -4220,7 +4238,6 @@ void DelaunaySourceGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &beta_clus;
 		paramnames[indx] = "beta_clus"; latex_paramnames[indx] = "\\beta"; latex_param_subscripts[indx] = "clus";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -4472,25 +4489,31 @@ void DelaunaySourceGrid::fill_surface_brightness_vector()
 	}
 }
 
+template <typename MathTypes>
 void DelaunaySourceGrid::update_surface_brightness(int& index)
 {
+	using QScalar = typename MathTypes::QScalar;
 	if (image_pixel_grid==NULL) warn("delaunay source pixels cannot access image pixel grid; cannot update surface brightness from amplitudes");
-	DelaunaySourceGrid_Params<double>& p = assign_delaunay_srcgrid_param_object<double>();
-	ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
+	DelaunaySourceGrid_Params<QScalar>& p = assign_delaunay_srcgrid_param_object<QScalar>();
+	ImgGrid_Params<MathTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
 	int i;
 	//cout << "SOURCE SB: " << endl;
 	for (i=0; i < n_gridpts; i++) {
-		p.surface_brightness[i] = imggrid.amplitude_vector[index++];
+		p.surface_brightness[i] = imggrid.amplitude_vector(index++);
 		//cout << "pixel " << i << ": SB=" << surface_brightness[i] << " (index=" << (index-1) << ")" << endl;
 	}
 }
+template void DelaunaySourceGrid::update_surface_brightness<PlainTypes>(int& index);
+#ifdef USE_STAN
+template void DelaunaySourceGrid::update_surface_brightness<VarmatTypes>(int& index);
+#endif
 
-bool DelaunaySourceGrid::assign_source_mapping_flags(lensvector<double> &input_pt, vector<PtsWgts<double>>& mapped_delaunay_srcpixels_ij, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex)
+bool DelaunaySourceGrid::assign_source_mapping_flags(const double input_pt_x, const double input_pt_y, vector<PtsWgts<double>>& mapped_delaunay_srcpixels_ij, int& n_mapped_srcpixels, const int img_pixel_i, const int img_pixel_j, const int thread, bool& trouble_with_starting_vertex)
 {
 	DelaunaySourceGrid_Params<double>& p = assign_delaunay_srcgrid_param_object<double>();
 	int trinum,kmin;
 	bool inside_triangle, on_vertex;
-	if (!find_containing_triangle_with_imgpix(input_pt,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin)) trouble_with_starting_vertex = true;
+	if (!find_containing_triangle_with_imgpix(input_pt_x,input_pt_y,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin)) trouble_with_starting_vertex = true;
 	Triangle<double> *triptr = &p.triangle[trinum];
 
 	if (!inside_triangle) {
@@ -4500,8 +4523,12 @@ bool DelaunaySourceGrid::assign_source_mapping_flags(lensvector<double> &input_p
 			return true;
 		}
 		// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
-		lensvector<double> dist = input_pt - p.gridpts[triptr->vertex_index[kmin]];
-		if ((!qlens->natural_neighbor_interpolation) or (dist.norm() < 1e-6)) {
+#ifdef USE_STAN
+		double distnorm = SQR(stan::math::value_of(input_pt_x) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][0])) + SQR(stan::math::value_of(input_pt_y) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][1]));
+#else
+		double distnorm = SQR(input_pt_x - p.gridpts[triptr->vertex_index[kmin]][0]) + SQR(input_pt_y - p.gridpts[triptr->vertex_index[kmin]][1]);
+#endif
+		if ((!qlens->natural_neighbor_interpolation) or (distnorm < 1e-6)) {
 			PtsWgts<double> pt(triptr->vertex_index[kmin],1);
 			mapped_delaunay_srcpixels_ij.push_back(pt);
 			maps_to_image_pixel[triptr->vertex_index[kmin]] = true;
@@ -4510,9 +4537,9 @@ bool DelaunaySourceGrid::assign_source_mapping_flags(lensvector<double> &input_p
 		}
 	}
 	if (qlens->natural_neighbor_interpolation) {
-		find_interpolation_weights_nn(input_pt, trinum, n_mapped_srcpixels, thread);
+		find_interpolation_weights_nn(input_pt_x, input_pt_y, trinum, n_mapped_srcpixels, thread);
 	} else {
-		find_interpolation_weights_3pt(input_pt, trinum, n_mapped_srcpixels, thread);
+		find_interpolation_weights_3pt(input_pt_x, input_pt_y, trinum, n_mapped_srcpixels, thread);
 	}
 	PtsWgts<double> pt;
 	//cout << "n_mapped_srcpixels=" << n_mapped_srcpixels << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
@@ -4539,40 +4566,92 @@ void DelaunaySourceGrid::calculate_Lmatrix(const int img_index, PtsWgts<double>*
 	index += (*n_mapped_srcpixels);
 }
 
-void DelaunaySourceGrid::calculate_Lmatrix_elements(const int img_index, PtsWgts<double>* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, const int& subpixel_indx, const double weight, const int& thread)
+void DelaunaySourceGrid::calculate_Lmatrix_dense(const int img_index, PtsWgts<double>* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, const int& subpixel_indx, const double weight, const int& thread)
 {
+	// This function constructs a dense Lmatrix (as opposed to the sparse Lmatrix constructed in the function above).
 	DelaunaySourceGrid_Params<double>& p = assign_delaunay_srcgrid_param_object<double>();
 	ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 	int i;
 	for (i=0; i < subpixel_indx; i++) mapped_delaunay_srcpixels += (*n_mapped_srcpixels++); // each mapped image subpixel can have its own number of pixels in the Delaunay grid it maps to, so we must skip through these to the requested subpixel index
-	//if ((image_pixel_grid->src_redshift_index==1) and (*n_mapped_srcpixels != 0)) cout << "Lmatrix_sparse: n_mapped_srcpixels=" << (*n_mapped_srcpixels) << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
 	for (i=0; i < (*n_mapped_srcpixels); i++) {
-		//cout << "Lmatrix_sparse srcpixel " << mapped_delaunay_srcpixels->indx << " active_indx=" << active_index[mapped_delaunay_srcpixels->indx] << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
-		//image_pixel_grid->Lmatrix_dense(img_index,active_index[mapped_delaunay_srcpixels->indx]) += weight*mapped_delaunay_srcpixels->wgt;
-		image_pixel_grid->Lmatrix_trans_dense(active_index[mapped_delaunay_srcpixels->indx],img_index) += weight*mapped_delaunay_srcpixels->wgt;
-		//image_pixel_grid->Lmatrix_dense0[img_index][active_index[mapped_delaunay_srcpixels->indx]] += weight*mapped_delaunay_srcpixels->wgt;
+		imggrid.Lmatrix_trans_dense(active_index[mapped_delaunay_srcpixels->indx],img_index) += weight*mapped_delaunay_srcpixels->wgt;
 		mapped_delaunay_srcpixels++;
 	}
 	index += (*n_mapped_srcpixels);
 }
 
+template <typename MathTypes, typename QScalar>
+void DelaunaySourceGrid::calculate_Lmatrix_dense_direct(const int img_index, const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, const double weight, const int thread, bool& trouble_with_starting_vertex)
+{
+	// This function constructs a dense Lmatrix (as opposed to the sparse Lmatrix constructed in the function above) without needing to call assign_source_mapping_flags first.
+	DelaunaySourceGrid_Params<QScalar>& p = assign_delaunay_srcgrid_param_object<QScalar>();
+	ImgGrid_Params<MathTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
+	int trinum,kmin;
+	int n_mapped_srcpixels = -1;
+	bool inside_triangle, on_vertex;
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<QScalar>) {
+		if (!find_containing_triangle_with_imgpix(stan::math::value_of(input_pt_x),stan::math::value_of(input_pt_y),img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin)) trouble_with_starting_vertex = true;
+	} else
+#endif
+	{
+		if (!find_containing_triangle_with_imgpix(input_pt_x,input_pt_y,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin)) trouble_with_starting_vertex = true;
+	}
+
+	Triangle<QScalar> *triptr = &p.triangle[trinum];
+
+	if (!inside_triangle) {
+		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
+		if ((zero_outside_border) and (!on_vertex)) {
+			return;
+		} else {
+			// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
+			double distnorm;
+#ifdef USE_STAN
+			distnorm = SQR(stan::math::value_of(input_pt_x) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][0])) + SQR(stan::math::value_of(input_pt_y) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][1]));
+#else
+			distnorm = SQR(input_pt_x - p.gridpts[triptr->vertex_index[kmin]][0]) + SQR(input_pt_y - p.gridpts[triptr->vertex_index[kmin]][1]);
+#endif
+			if ((!qlens->natural_neighbor_interpolation) or (distnorm < 1e-6)) {
+				interpolation_indx[0] = triptr->vertex_index[kmin];
+				p.interpolation_wgts[0] = 1.0;
+				n_mapped_srcpixels = 1;
+			}
+		}
+	}
+	if (n_mapped_srcpixels < 0) {
+		if (qlens->natural_neighbor_interpolation) {
+			find_interpolation_weights_nn(input_pt_x, input_pt_y, trinum, n_mapped_srcpixels, thread);
+		} else {
+			find_interpolation_weights_3pt(input_pt_x, input_pt_y, trinum, n_mapped_srcpixels, thread);
+		}
+	}
+	//cout << "n_mapped_srcpixels=" << n_mapped_srcpixels << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
+	for (int i=0; i < n_mapped_srcpixels; i++) {
+		maps_to_image_pixel[interpolation_indx[i]] = true;
+		imggrid.Lmatrix_trans_dense(active_index[interpolation_indx[i]],img_index) += weight*p.interpolation_wgts[i];
+		//cout << "point: " << interpolation_indx[i] << " active_index=" << active_index[interpolation_indx[i]] << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
+	}
+}
+template void DelaunaySourceGrid::calculate_Lmatrix_dense_direct<PlainTypes,double>(const int img_index, const double input_pt_x, const double input_pt_y, const int img_pixel_i, const int img_pixel_j, const double weight, const int thread, bool& trouble_with_starting_vertex);
+#ifdef USE_STAN
+template void DelaunaySourceGrid::calculate_Lmatrix_dense_direct<VarmatTypes,stan::math::var>(const int img_index, const stan::math::var input_pt_x, const stan::math::var input_pt_y, const int img_pixel_i, const int img_pixel_j, const double weight, const int thread, bool& trouble_with_starting_vertex);
+#endif
+
 template <typename QScalar>
-QScalar DelaunaySourceGrid::find_lensed_surface_brightness(const lensvector<QScalar> &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread)
+QScalar DelaunaySourceGrid::find_lensed_surface_brightness(const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, const int thread)
 {
 	DelaunaySourceGrid_Params<QScalar>& p = assign_delaunay_srcgrid_param_object<QScalar>();
 	bool inside_triangle, on_vertex;
 	int trinum,kmin;
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<QScalar>) {
-		lensvector<double> input_pt_doub;
-		// This is inefficient. You should modify the functions involved so you can pass in the components, so you don't have to create another lensvector<double>
-		input_pt_doub[0] = stan::math::value_of(input_pt[0]);
-		input_pt_doub[1] = stan::math::value_of(input_pt[1]);
-		find_containing_triangle_with_imgpix(input_pt_doub,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
+		find_containing_triangle_with_imgpix(stan::math::value_of(input_pt_x),stan::math::value_of(input_pt_y),img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
 	} else
 #endif
 	{
-		find_containing_triangle_with_imgpix(input_pt,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
+		find_containing_triangle_with_imgpix(input_pt_x,input_pt_y,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
 	}
 
 	if (!inside_triangle) {
@@ -4582,9 +4661,12 @@ QScalar DelaunaySourceGrid::find_lensed_surface_brightness(const lensvector<QSca
 			return 0;
 		} else {
 			// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
-			lensvector<QScalar> dist = input_pt - p.gridpts[triptr->vertex_index[kmin]];
-			//if ((!qlens->natural_neighbor_interpolation) or (dist.norm() < 1e-6)) return *triptr->sb[kmin];
-			double distnorm = value_of(dist.norm());
+#ifdef USE_STAN
+			double distnorm = SQR(stan::math::value_of(input_pt_x) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][0])) + SQR(stan::math::value_of(input_pt_y) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][1]));
+#else
+			double distnorm = SQR(input_pt_x - p.gridpts[triptr->vertex_index[kmin]][0]) + SQR(input_pt_y - p.gridpts[triptr->vertex_index[kmin]][1]);
+#endif
+			//if ((!qlens->natural_neighbor_interpolation) or (distnorm < 1e-6)) return *triptr->sb[kmin];
 			if ((!qlens->natural_neighbor_interpolation) or (distnorm < 1e-6)) return p.surface_brightness[triptr->vertex_index[kmin]];
 
 		}
@@ -4592,37 +4674,33 @@ QScalar DelaunaySourceGrid::find_lensed_surface_brightness(const lensvector<QSca
 	int npts;
 	QScalar sb_interp = 0;
 	if (qlens->natural_neighbor_interpolation) {
-		find_interpolation_weights_nn(input_pt, trinum, npts, thread);
+		find_interpolation_weights_nn(input_pt_x, input_pt_y, trinum, npts, thread);
 	} else {
-		find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+		find_interpolation_weights_3pt(input_pt_x, input_pt_y, trinum, npts, thread);
 	}
 	for (int i=0; i < npts; i++) {
 		sb_interp += p.surface_brightness[interpolation_indx[i]]*p.interpolation_wgts[i];
 	}
 	return sb_interp;
 }
-template double DelaunaySourceGrid::find_lensed_surface_brightness<double>(const lensvector<double> &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread);
+template double DelaunaySourceGrid::find_lensed_surface_brightness<double>(const double input_pt_x, const double input_pt_y, const int img_pixel_i, const int img_pixel_j, const int thread);
 #ifdef USE_STAN
-template stan::math::var DelaunaySourceGrid::find_lensed_surface_brightness<stan::math::var>(const lensvector<stan::math::var> &input_pt, const int img_pixel_i, const int img_pixel_j, const int thread);
+template stan::math::var DelaunaySourceGrid::find_lensed_surface_brightness<stan::math::var>(const stan::math::var input_pt_x, const stan::math::var input_pt_y, const int img_pixel_i, const int img_pixel_j, const int thread);
 #endif
 
 template <typename QScalar>
-QScalar DelaunaySourceGrid::interpolate_surface_brightness(const lensvector<QScalar> &input_pt, const bool interp_mag, const int thread)
+QScalar DelaunaySourceGrid::interpolate_surface_brightness(const QScalar input_pt_x, const QScalar input_pt_y, const bool interp_mag, const int thread)
 {
 	DelaunaySourceGrid_Params<QScalar>& p = assign_delaunay_srcgrid_param_object<QScalar>();
 	bool inside_triangle, on_vertex;
 	int trinum,kmin;
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<QScalar>) {
-		lensvector<double> input_pt_doub;
-		// This is inefficient. You should modify the functions involved so you can pass in the components, so you don't have to create another lensvector<double>
-		input_pt_doub[0] = stan::math::value_of(input_pt[0]);
-		input_pt_doub[1] = stan::math::value_of(input_pt[1]);
-		find_containing_triangle(input_pt_doub,trinum,inside_triangle,on_vertex,kmin);
+		find_containing_triangle(stan::math::value_of(input_pt_x),stan::math::value_of(input_pt_y),trinum,inside_triangle,on_vertex,kmin);
 	} else
 #endif
 	{
-		find_containing_triangle(input_pt,trinum,inside_triangle,on_vertex,kmin);
+		find_containing_triangle(input_pt_x,input_pt_y,trinum,inside_triangle,on_vertex,kmin);
 	}
 
 	if (!inside_triangle) {
@@ -4633,9 +4711,12 @@ QScalar DelaunaySourceGrid::interpolate_surface_brightness(const lensvector<QSca
 			return 0;
 		} else {
 			// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
-			lensvector<QScalar> dist = input_pt - p.gridpts[triptr->vertex_index[kmin]];
-			//if ((!qlens->natural_neighbor_interpolation) or (dist.norm() < 1e-6)) return *triptr->sb[kmin];
-			double distnorm = value_of(dist.norm());
+#ifdef USE_STAN
+			double distnorm = SQR(stan::math::value_of(input_pt_x) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][0])) + SQR(stan::math::value_of(input_pt_y) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][1]));
+#else
+			double distnorm = SQR(input_pt_x - p.gridpts[triptr->vertex_index[kmin]][0]) + SQR(input_pt_y - p.gridpts[triptr->vertex_index[kmin]][1]);
+#endif
+			//if ((!qlens->natural_neighbor_interpolation) or (distnorm() < 1e-6)) return *triptr->sb[kmin];
 			if ((!qlens->natural_neighbor_interpolation) or (distnorm < 1e-6)) return p.surface_brightness[triptr->vertex_index[kmin]];
 		}
 	}
@@ -4643,9 +4724,9 @@ QScalar DelaunaySourceGrid::interpolate_surface_brightness(const lensvector<QSca
 	int npts;
 	QScalar interp_val = 0;
 	if (qlens->natural_neighbor_interpolation) {
-		find_interpolation_weights_nn(input_pt, trinum, npts, thread);
+		find_interpolation_weights_nn(input_pt_x, input_pt_y, trinum, npts, thread);
 	} else {
-		find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+		find_interpolation_weights_3pt(input_pt_x, input_pt_y, trinum, npts, thread);
 	}
 	//if (interp_mag) {
 		//for (int i=0; i < npts; i++) {
@@ -4666,9 +4747,9 @@ QScalar DelaunaySourceGrid::interpolate_surface_brightness(const lensvector<QSca
 	//}
 	return interp_val;
 }
-template double DelaunaySourceGrid::interpolate_surface_brightness<double>(const lensvector<double> &input_pt, const bool interp_mag, const int thread);
+template double DelaunaySourceGrid::interpolate_surface_brightness<double>(const double input_pt_x, const double input_pt_y, const bool interp_mag, const int thread);
 #ifdef USE_STAN
-template stan::math::var DelaunaySourceGrid::interpolate_surface_brightness<stan::math::var>(const lensvector<stan::math::var> &input_pt, const bool interp_mag, const int thread);
+template stan::math::var DelaunaySourceGrid::interpolate_surface_brightness<stan::math::var>(const stan::math::var input_pt_x, const stan::math::var input_pt_y, const bool interp_mag, const int thread);
 #endif
 
 void DelaunaySourceGrid::print_pixel_values()
@@ -4685,7 +4766,7 @@ double DelaunaySourceGrid::interpolate_voronoi_length(const lensvector<double> &
 	bool inside_triangle;
 	bool on_vertex;
 	int trinum,kmin;
-	find_containing_triangle(input_pt,trinum,inside_triangle,on_vertex,kmin);
+	find_containing_triangle(input_pt[0],input_pt[1],trinum,inside_triangle,on_vertex,kmin);
 	//cout << "point: " << input_pt[0] << " " << input_pt[1] << endl;
 	if (!inside_triangle) {
 		return (voronoi_length[p.triangle[trinum].vertex_index[kmin]]);
@@ -4694,9 +4775,9 @@ double DelaunaySourceGrid::interpolate_voronoi_length(const lensvector<double> &
 	int npts;
 	double interp_val = 0;
 	if (qlens->natural_neighbor_interpolation) {
-		find_interpolation_weights_nn(input_pt, trinum, npts, thread);
+		find_interpolation_weights_nn(input_pt[0], input_pt[1], trinum, npts, thread);
 	} else {
-		find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+		find_interpolation_weights_3pt(input_pt[0], input_pt[1], trinum, npts, thread);
 	}
 	//cout << "NPTS=" << npts << endl;
 	for (int i=0; i < npts; i++) {
@@ -4707,7 +4788,7 @@ double DelaunaySourceGrid::interpolate_voronoi_length(const lensvector<double> &
 	return interp_val;
 }
 
-bool DelaunaySourceGrid::find_containing_triangle_with_imgpix(const lensvector<double> &input_pt, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin)
+bool DelaunaySourceGrid::find_containing_triangle_with_imgpix(const double input_pt_x, const double input_pt_y, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin)
 {
 	DelaunaySourceGrid_Params<double>& p = assign_delaunay_srcgrid_param_object<double>();
 	bool found_good_starting_vertex = true; // until proven otherwise
@@ -4748,12 +4829,12 @@ bool DelaunaySourceGrid::find_containing_triangle_with_imgpix(const lensvector<d
 	}
 	//cout << "searching for point (" << input_pt[0] << "," << input_pt[1] << "), starting with pixel " << n << " (" << gridpts[n][0] << " " << gridpts[n][1] << ")" << endl;
 	on_vertex = false;
-	trinum = search_grid(n,input_pt,inside_triangle);
+	trinum = search_grid(n,input_pt_x,input_pt_y,inside_triangle);
 	//cout << "...found in triangle " << trinum << endl;
 	Triangle<double> *triptr = &p.triangle[trinum];
 	double sqrdist, sqrdistmin=1e30;
 	for (k=0; k < 3; k++) {
-		sqrdist = SQR(input_pt[0]-triptr->vertex[k][0]) + SQR(input_pt[1]-triptr->vertex[k][1]);
+		sqrdist = SQR(input_pt_x-triptr->vertex[k][0]) + SQR(input_pt_y-triptr->vertex[k][1]);
 		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
 	}
 	if ((inside_triangle) and (sqrdistmin < 1e-6)) {
@@ -4826,14 +4907,14 @@ void DelaunaySourceGrid::generate_hmatrices(const bool interpolate)
 			for (j=0; j < 4; j++) {
 				if (j > 1) l = 1;
 				else l = 0;
-				find_containing_triangle(interp_pt[j],trinum,inside_triangle,on_vertex,kmin);
+				find_containing_triangle(interp_pt[j][0],interp_pt[j][1],trinum,inside_triangle,on_vertex,kmin);
 				if (!inside_triangle) {
 					if (!on_vertex) continue; // assume SB = 0 outside grid
 				}
 				if (qlens->natural_neighbor_interpolation) {
-					find_interpolation_weights_nn(interp_pt[j], trinum, npts, 0);
+					find_interpolation_weights_nn(interp_pt[j][0],interp_pt[j][1], trinum, npts, 0);
 				} else {
-					find_interpolation_weights_3pt(interp_pt[j], trinum, npts, 0);
+					find_interpolation_weights_3pt(interp_pt[j][0],interp_pt[j][1], trinum, npts, 0);
 				}
 				for (k=0; k < npts; k++) {
 					add_hmatrix_entry(image_pixel_grid,l,i,interpolation_indx[k],p.interpolation_wgts[k]); 
@@ -4958,17 +5039,17 @@ void DelaunaySourceGrid::generate_gmatrices(const bool interpolate)
 			for (l=0; l < 4; l++) {
 				//cout << "BLERG l=" << l << endl;
 				add_gmatrix_entry(image_pixel_grid,l,i,i,1.0);
-				find_containing_triangle(interp_pt[l],trinum,inside_triangle,on_vertex,kmin);
+				find_containing_triangle(interp_pt[l][0],interp_pt[l][1],trinum,inside_triangle,on_vertex,kmin);
 				//cout << "BLERG1 l=" << l << endl;
 				if (!inside_triangle) {
 					if (!on_vertex) continue; // assume SB = 0 outside grid
 				}
 				if (qlens->natural_neighbor_interpolation) {
 				//cout << "BLERG2 l=" << l << endl;
-					find_interpolation_weights_nn(interp_pt[l], trinum, npts, 0);
+					find_interpolation_weights_nn(interp_pt[l][0],interp_pt[l][1], trinum, npts, 0);
 				//cout << "BLERG3 l=" << l << endl;
 				} else {
-					find_interpolation_weights_3pt(interp_pt[l], trinum, npts, 0);
+					find_interpolation_weights_3pt(interp_pt[l][0],interp_pt[l][1], trinum, npts, 0);
 				}
 				//cout << "BLERG4 l=" << l << endl;
 				for (k=0; k < npts; k++) {
@@ -5061,13 +5142,13 @@ void DelaunaySourceGrid::find_source_gradient(const lensvector<double>& input_pt
 	pt_p[1] = input_pt[1];
 	pt_m[0] = input_pt[0] - interval;
 	pt_m[1] = input_pt[1];
-	src_grad[0] = (interpolate_surface_brightness(pt_p,false,thread) - interpolate_surface_brightness(pt_m,false,thread)) / (2*interval);
+	src_grad[0] = (interpolate_surface_brightness(pt_p[0],pt_p[1],false,thread) - interpolate_surface_brightness(pt_m[0],pt_m[1],false,thread)) / (2*interval);
 
 	pt_p[0] = input_pt[0];
 	pt_p[1] = input_pt[1] + interval;
 	pt_m[0] = input_pt[0];
 	pt_m[1] = input_pt[1] - interval;
-	src_grad[1] = (interpolate_surface_brightness(pt_p,false,thread) - interpolate_surface_brightness(pt_m,false,thread)) / (2*interval);
+	src_grad[1] = (interpolate_surface_brightness(pt_p[0],pt_p[1],false,thread) - interpolate_surface_brightness(pt_m[0],pt_m[1],false,thread)) / (2*interval);
 	//cout << "SOURCE GRAD: " << src_grad[0] << " " << src_grad[1] << endl;
 }
 
@@ -5101,13 +5182,13 @@ void DelaunaySourceGrid::output_surface_brightness(Vector<double>& xvals, Vector
 		for (i=0, x=srcgrid_xmin+pixel_xlength/2; i < npts_x; i++, x += pixel_xlength) {
 			pt[0] = x;
 			if (interpolate_sb) {
-				sb = interpolate_surface_brightness(pt,plot_magnification);
+				sb = interpolate_surface_brightness(pt[0],pt[1],plot_magnification);
 			} else {
 				// The following lines will plot the Voronoi cells that are dual to the Delaunay triangulation. Note however, that when SB interpolation is
 				// performed during ray-tracing, we use the vertices of the triangle that a point lands in, which may not include the closest vertex (i.e. the
 				// Voronoi cell it lies in). Thus, the Voronoi cells are for visualization only, and do not directly show what the ray-traced SB will look like.
 				bool inside_triangle;
-				trinum = search_grid(0,pt,inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
+				trinum = search_grid(0,pt[0],pt[1],inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
 				srcpt_i = find_closest_vertex(trinum,pt);
 				if (plot_magnification) sb = log(1.0/inv_magnification[srcpt_i])/ln10;
 				else sb = p.surface_brightness[srcpt_i];
@@ -5189,7 +5270,7 @@ double DelaunaySourceGrid::find_moment(const int p, const int q, const int npix,
 
 				pt[0] = x;
 				for (k=0,xp=1;k<p;k++) xp *= x;
-				sb = interpolate_surface_brightness(pt,false,thread);
+				sb = interpolate_surface_brightness(pt[0],pt[1],false,thread);
 				#pragma omp atomic
 				moment += sb*xp*yq;
 			}
@@ -5453,7 +5534,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	else kernel_based_regularization = false;
 
 	if (initial_setup) {
-		//param[indx] = &regparam;
 		paramnames[indx] = "regparam"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = "";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -5465,7 +5545,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &kernel_correlation_length;
 		paramnames[indx] = "corrlength"; latex_paramnames[indx] = "l"; latex_param_subscripts[indx] = "corr";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -5477,7 +5556,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &matern_index;
 		paramnames[indx] = "matern_index"; latex_paramnames[indx] = "\\nu"; latex_param_subscripts[indx] = "src";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0.01; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = false;
@@ -5489,7 +5567,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &regparam_lsc;
 		paramnames[indx] = "regparam_lsc"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = "sc";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -5501,7 +5578,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &regparam_lum_index;
 		paramnames[indx] = "regparam_lum_index"; latex_paramnames[indx] = "\\gamma"; latex_param_subscripts[indx] = "reg";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = false;
@@ -5513,7 +5589,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_xcenter;
 		paramnames[indx] = "distreg_xcenter"; latex_paramnames[indx] = "x"; latex_param_subscripts[indx] = "c,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -5525,7 +5600,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_ycenter;
 		paramnames[indx] = "distreg_ycenter"; latex_paramnames[indx] = "y"; latex_param_subscripts[indx] = "c,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -5537,7 +5611,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_e1;
 		paramnames[indx] = "distreg_e1"; latex_paramnames[indx] = "e"; latex_param_subscripts[indx] = "1,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -5549,7 +5622,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_e2;
 		paramnames[indx] = "distreg_e2"; latex_paramnames[indx] = "e"; latex_param_subscripts[indx] = "2,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -5561,7 +5633,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &distreg_rc;
 		paramnames[indx] = "distreg_rc"; latex_paramnames[indx] = "r"; latex_param_subscripts[indx] = "c,\\lambda";
 		set_auto_penalty_limits[indx] = false; 
 		stepsizes[indx] = 0.1; scale_stepsize_by_param_value[indx] = false;
@@ -5573,7 +5644,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &mag_weight_sc;
 		paramnames[indx] = "mag_weight_sc"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = "\\mu,sc";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -5585,7 +5655,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &mag_weight_index;
 		paramnames[indx] = "mag_weight_index"; latex_paramnames[indx] = "\\gamma"; latex_param_subscripts[indx] = "\\mu";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = false;
@@ -5597,7 +5666,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &alpha_clus;
 		paramnames[indx] = "alpha_clus"; latex_paramnames[indx] = "\\alpha"; latex_param_subscripts[indx] = "clus";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -5609,7 +5677,6 @@ void LensPixelGrid::setup_parameters(const bool initial_setup)
 	indx++;
 
 	if (initial_setup) {
-		//param[indx] = &beta_clus;
 		paramnames[indx] = "beta_clus"; latex_paramnames[indx] = "\\beta"; latex_param_subscripts[indx] = "clus";
 		set_auto_penalty_limits[indx] = true; penalty_lower_limits[indx] = 0; penalty_upper_limits[indx] = 1e30;
 		stepsizes[indx] = 0.3; scale_stepsize_by_param_value[indx] = true;
@@ -5768,17 +5835,13 @@ double LensPixelGrid::interpolate_potential(const double x, const double y, cons
 {
 	LensPixelGrid_Params<double>& p = assign_lensgrid_param_object<double>();
 	int npts;
-	lensvector<double> input_pt;
-	input_pt[0] = x;
-	input_pt[1] = y;
-
 	if (grid_type==CartesianPixelGrid) {
-		find_interpolation_weights_cartesian(input_pt, npts, 0, thread);
+		find_interpolation_weights_cartesian(x, y, npts, 0, thread);
 	} else {
 		bool inside_triangle;
 		bool on_vertex;
 		int trinum,kmin;
-		find_containing_triangle(input_pt,trinum,inside_triangle,on_vertex,kmin);
+		find_containing_triangle(x,y,trinum,inside_triangle,on_vertex,kmin);
 		if (!inside_triangle) {
 			if ((zero_outside_border) and (!on_vertex)) {
 				return 0;
@@ -5788,9 +5851,9 @@ double LensPixelGrid::interpolate_potential(const double x, const double y, cons
 			}
 		}
 		if (qlens->natural_neighbor_interpolation) {
-			find_interpolation_weights_nn(input_pt, trinum, npts, thread);
+			find_interpolation_weights_nn(x,y, trinum, npts, thread);
 		} else {
-			find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+			find_interpolation_weights_3pt(x,y, trinum, npts, thread);
 		}
 	}
 
@@ -5807,17 +5870,14 @@ void LensPixelGrid::deflection(const double x, const double y, lensvector<double
 {
 	LensPixelGrid_Params<double>& p = assign_lensgrid_param_object<double>();
 	int npts, half_npts;
-	lensvector<double> input_pt;
-	input_pt[0] = x;
-	input_pt[1] = y;
 
 	if (grid_type==CartesianPixelGrid) {
-		find_interpolation_weights_cartesian(input_pt, npts, 1, thread);
+		find_interpolation_weights_cartesian(x, y, npts, 1, thread);
 	} else {
 		bool inside_triangle;
 		bool on_vertex;
 		int trinum,kmin;
-		find_containing_triangle(input_pt,trinum,inside_triangle,on_vertex,kmin);
+		find_containing_triangle(x,y,trinum,inside_triangle,on_vertex,kmin);
 		//if (!inside_triangle) {
 			//if ((zero_outside_border) and (!on_vertex)) {
 				//return 0;
@@ -5828,9 +5888,9 @@ void LensPixelGrid::deflection(const double x, const double y, lensvector<double
 		// need to implement the corresponding delaunay code for getting deflection
 		die("haven't implemented this yet");
 		if (qlens->natural_neighbor_interpolation) {
-			find_interpolation_weights_nn(input_pt, trinum, npts, thread);
+			find_interpolation_weights_nn(x, y, trinum, npts, thread);
 		} else {
-			find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+			find_interpolation_weights_3pt(x, y, trinum, npts, thread);
 		}
 	}
 	half_npts = npts/2;
@@ -5850,17 +5910,13 @@ void LensPixelGrid::hessian(const double x, const double y, lensmatrix<double>& 
 {
 	LensPixelGrid_Params<double>& p = assign_lensgrid_param_object<double>();
 	int npts;
-	lensvector<double> input_pt;
-	input_pt[0] = x;
-	input_pt[1] = y;
-
 	if (grid_type==CartesianPixelGrid) {
-		find_interpolation_weights_cartesian(input_pt, npts, 2, thread);
+		find_interpolation_weights_cartesian(x, y, npts, 2, thread);
 	} else {
 		bool inside_triangle;
 		bool on_vertex;
 		int trinum,kmin;
-		find_containing_triangle(input_pt,trinum,inside_triangle,on_vertex,kmin);
+		find_containing_triangle(x,y,trinum,inside_triangle,on_vertex,kmin);
 		//if (!inside_triangle) {
 			//if ((zero_outside_border) and (!on_vertex)) {
 				//return 0;
@@ -5871,9 +5927,9 @@ void LensPixelGrid::hessian(const double x, const double y, lensmatrix<double>& 
 		// need to implement the corresponding delaunay code for getting deflection
 		die("haven't implemented this yet");
 		if (qlens->natural_neighbor_interpolation) {
-			find_interpolation_weights_nn(input_pt, trinum, npts, thread);
+			find_interpolation_weights_nn(x, y, trinum, npts, thread);
 		} else {
-			find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+			find_interpolation_weights_3pt(x, y, trinum, npts, thread);
 		}
 	}
 
@@ -5896,16 +5952,16 @@ void LensPixelGrid::hessian(const double x, const double y, lensmatrix<double>& 
 	hess[1][0] = hess[0][1];
 }
 
-bool LensPixelGrid::assign_mapping_flags(lensvector<double> &input_pt, vector<PtsWgts<double>>& mapped_potpixels_ij, int& n_mapped_potpixels, const int img_pixel_i, const int img_pixel_j, const int thread)
+bool LensPixelGrid::assign_mapping_flags(const double x, const double y, vector<PtsWgts<double>>& mapped_potpixels_ij, int& n_mapped_potpixels, const int img_pixel_i, const int img_pixel_j, const int thread)
 {
 	LensPixelGrid_Params<double>& p = assign_lensgrid_param_object<double>();
 	if (grid_type==CartesianPixelGrid) {
-		find_interpolation_weights_cartesian(input_pt, n_mapped_potpixels, 1, thread);
+		find_interpolation_weights_cartesian(x, y, n_mapped_potpixels, 1, thread);
 	} else {
 		bool inside_triangle;
 		bool on_vertex;
 		int trinum,kmin;
-		find_containing_triangle(input_pt,trinum,inside_triangle,on_vertex,kmin);
+		find_containing_triangle(x,y,trinum,inside_triangle,on_vertex,kmin);
 		//if (!inside_triangle) {
 			//// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
 			//if ((zero_outside_border) and (!on_vertex)) {
@@ -5920,9 +5976,9 @@ bool LensPixelGrid::assign_mapping_flags(lensvector<double> &input_pt, vector<Pt
 		// need to implement the corresponding delaunay code for getting deflections
 		die("haven't implemented this yet");
 		if (qlens->natural_neighbor_interpolation) {
-			find_interpolation_weights_nn(input_pt, trinum, n_mapped_potpixels, thread);
+			find_interpolation_weights_nn(x, y, trinum, n_mapped_potpixels, thread);
 		} else {
-			find_interpolation_weights_3pt(input_pt, trinum, n_mapped_potpixels, thread);
+			find_interpolation_weights_3pt(x, y, trinum, n_mapped_potpixels, thread);
 		}
 	}
 
@@ -5957,17 +6013,37 @@ void LensPixelGrid::calculate_Lmatrix(const int img_index, PtsWgts<double>* mapp
 	index += (*n_mapped_potpixels);
 }
 
-double LensPixelGrid::first_order_surface_brightness_correction(const lensvector<double>& input_pt, const lensvector<double>& S0_deriv, const int thread)
+void LensPixelGrid::calculate_Lmatrix_dense(const int img_index, PtsWgts<double>* mapped_potpixels, int* n_mapped_potpixels, lensvector<double>& S0_derivs, int& index, const int& subpixel_indx, const int offset, const double weight, const int& thread)
+{
+	int i,j,n_halfpts;
+	for (i=0; i < subpixel_indx; i++) {
+		mapped_potpixels += (*n_mapped_potpixels); // each mapped image subpixel can have its own number of pixels in the potential grid it maps to, so we must skip through these to the requested subpixel index
+		n_mapped_potpixels++;
+	}
+	ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
+
+	n_halfpts = (*n_mapped_potpixels)/2;
+	for (i=0,j=0; i < (*n_mapped_potpixels); i++) {
+		if (i==n_halfpts) j++; // switch to y-derivative now
+		// (NOTE: when we implement the Delaunay version, it won't always be npts/2. Probably will need to have a separate variable that indicates the index where we should switch to the y-deriative of S0.
+		imggrid.Lmatrix_trans_dense(active_index[offset+mapped_potpixels->indx],img_index) += -S0_derivs[j]*weight*mapped_potpixels->wgt;
+
+		mapped_potpixels++;
+	}
+	index += (*n_mapped_potpixels);
+}
+
+double LensPixelGrid::first_order_surface_brightness_correction(const double x, const double y, const lensvector<double>& S0_deriv, const int thread)
 {
 	LensPixelGrid_Params<double>& p = assign_lensgrid_param_object<double>();
 	int npts,n_halfpts;
 	if (grid_type==CartesianPixelGrid) {
-		find_interpolation_weights_cartesian(input_pt, npts, 1, thread); // the '1' tells it to find the weights for the deflection
+		find_interpolation_weights_cartesian(x, y, npts, 1, thread); // the '1' tells it to find the weights for the deflection
 	} else {
 		bool inside_triangle;
 		bool on_vertex;
 		int trinum,kmin;
-		find_containing_triangle(input_pt,trinum,inside_triangle,on_vertex,kmin);
+		find_containing_triangle(x,y,trinum,inside_triangle,on_vertex,kmin);
 		//if (!inside_triangle) {
 			//// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
 			//if ((zero_outside_border) and (!on_vertex)) {
@@ -5977,9 +6053,9 @@ double LensPixelGrid::first_order_surface_brightness_correction(const lensvector
 		// need to implement the corresponding delaunay code for getting deflections
 		die("haven't implemented this yet");
 		if (qlens->natural_neighbor_interpolation) {
-			find_interpolation_weights_nn(input_pt, trinum, npts, thread);
+			find_interpolation_weights_nn(x, y, trinum, npts, thread);
 		} else {
-			find_interpolation_weights_3pt(input_pt, trinum, npts, thread);
+			find_interpolation_weights_3pt(x, y, trinum, npts, thread);
 		}
 	}
 	n_halfpts = npts/2;
@@ -6035,20 +6111,20 @@ void LensPixelGrid::potential_derivatives(const double x, const double y, lensve
 	hessian(x,y,hess,thread);
 }
 
-void LensPixelGrid::find_interpolation_weights_cartesian(const lensvector<double> &input_pt, int& npts, const int deriv_type, const int thread) // bilinear interpolation
+void LensPixelGrid::find_interpolation_weights_cartesian(const double x, const double y, int& npts, const int deriv_type, const int thread) // bilinear interpolation
 {
 	LensPixelGrid_Params<double>& p = assign_lensgrid_param_object<double>();
 	int ii, jj;
 	double tt, uu, w00, w01, w10, w11;
-	//if (input_pt[0] < lensgrid_xmin) die("input point outside of cartesian grid");
-	//if (input_pt[0] > lensgrid_xmax) die("input point outside of cartesian grid");
-	//if (input_pt[1] < lensgrid_ymin) die("input point outside of cartesian grid");
-	//if (input_pt[1] > lensgrid_ymax) die("input point outside of cartesian grid");
+	//if (x < lensgrid_xmin) die("input point outside of cartesian grid");
+	//if (x > lensgrid_xmax) die("input point outside of cartesian grid");
+	//if (y < lensgrid_ymin) die("input point outside of cartesian grid");
+	//if (y > lensgrid_ymax) die("input point outside of cartesian grid");
 	//double idoub, jdoub;
-	//idoub  = ((input_pt[0]-xmin_cartesian) / cartesian_pixel_xlength);
-	//jdoub  = ((input_pt[1]-ymin_cartesian) / cartesian_pixel_ylength);
-	ii = (int) ((input_pt[0]-xmin_cartesian) / cartesian_pixel_xlength); // NOTE: this does not find the pixel we're in, but rather, the lower left-hand pixel of the interpolation that will be used (note that xmin_cartesian is actually the x-coordinate of the CENTER of the left-most pixel)
-	jj = (int) ((input_pt[1]-ymin_cartesian) / cartesian_pixel_ylength); // NOTE: same note as above, but for y-coordinate
+	//idoub  = ((x-xmin_cartesian) / cartesian_pixel_xlength);
+	//jdoub  = ((y-ymin_cartesian) / cartesian_pixel_ylength);
+	ii = (int) ((x-xmin_cartesian) / cartesian_pixel_xlength); // NOTE: this does not find the pixel we're in, but rather, the lower left-hand pixel of the interpolation that will be used (note that xmin_cartesian is actually the x-coordinate of the CENTER of the left-most pixel)
+	jj = (int) ((y-ymin_cartesian) / cartesian_pixel_ylength); // NOTE: same note as above, but for y-coordinate
 	//cout << "ii before fixing: " << ii << endl;
 	//cout << "jj before fixing: " << jj << endl;
 	//if (ii==-1) die("negative ii");
@@ -6056,10 +6132,10 @@ void LensPixelGrid::find_interpolation_weights_cartesian(const lensvector<double
 	if (jj < 0) jj=0;
 	if (ii >= (npix_x-1)) ii = npix_x-2;
 	if (jj >= (npix_y-1)) jj = npix_y-2;
-	tt = (input_pt[0]-xvals_cartesian[ii])/(xvals_cartesian[ii+1]-xvals_cartesian[ii]);
-	uu = (input_pt[1]-yvals_cartesian[jj])/(yvals_cartesian[jj+1]-yvals_cartesian[jj]);
-	//cout << "PINT: " << idoub << " " << jdoub << " " << ii << " " << jj << " " << input_pt[0] << " " << input_pt[1] << " " << xvals_cartesian[ii] << " " << yvals_cartesian[jj] << endl;
-	//cout << "pt_x=" << input_pt[0] << " pt_y=" << input_pt[1] << " ii=" << ii << " jj=" << jj << " indx=" << cartesian_pixel_index[ii][jj] << " indx_a=" << active_index[cartesian_pixel_index[ii][jj]] << " xi=" << xvals_cartesian[ii] << " xip=" << xvals_cartesian[ii+1] << " yj=" << yvals_cartesian[jj] << " yjp=" << yvals_cartesian[jj+1] << " tt=" << tt << " uu=" << uu << endl;
+	tt = (x-xvals_cartesian[ii])/(xvals_cartesian[ii+1]-xvals_cartesian[ii]);
+	uu = (y-yvals_cartesian[jj])/(yvals_cartesian[jj+1]-yvals_cartesian[jj]);
+	//cout << "PINT: " << idoub << " " << jdoub << " " << ii << " " << jj << " " << x << " " << y << " " << xvals_cartesian[ii] << " " << yvals_cartesian[jj] << endl;
+	//cout << "pt_x=" << x << " pt_y=" << y << " ii=" << ii << " jj=" << jj << " indx=" << cartesian_pixel_index[ii][jj] << " indx_a=" << active_index[cartesian_pixel_index[ii][jj]] << " xi=" << xvals_cartesian[ii] << " xip=" << xvals_cartesian[ii+1] << " yj=" << yvals_cartesian[jj] << " yjp=" << yvals_cartesian[jj+1] << " tt=" << tt << " uu=" << uu << endl;
 	//if ((tt < 0) or (tt > 1)) die("tt=%g",tt);
 	//if ((uu < 0) or (uu > 1)) die("uu=%g",uu);
 	// you'll need to put in code to deal with masking, i.e. if a pixel is "inactive" (so maps_to_image_pixel==false)...ignoring this for now
@@ -6318,14 +6394,14 @@ void LensPixelGrid::generate_hmatrices(const bool interpolate)
 				for (j=0; j < 4; j++) {
 					if (j > 1) l = 1;
 					else l = 0;
-					find_containing_triangle(interp_pt[j],trinum,inside_triangle,on_vertex,kmin);
+					find_containing_triangle(interp_pt[j][0],interp_pt[j][1],trinum,inside_triangle,on_vertex,kmin);
 					if (!inside_triangle) {
 						if (!on_vertex) continue; // assume SB = 0 outside grid
 					}
 					if (qlens->natural_neighbor_interpolation) {
-						find_interpolation_weights_nn(interp_pt[j], trinum, npts, 0);
+						find_interpolation_weights_nn(interp_pt[j][0],interp_pt[j][1], trinum, npts, 0);
 					} else {
-						find_interpolation_weights_3pt(interp_pt[j], trinum, npts, 0);
+						find_interpolation_weights_3pt(interp_pt[j][0],interp_pt[j][1], trinum, npts, 0);
 					}
 					for (k=0; k < npts; k++) {
 						add_hmatrix_entry(image_pixel_grid,l,i,interpolation_indx[k],p.interpolation_wgts[k]); 
@@ -6471,14 +6547,14 @@ void LensPixelGrid::generate_gmatrices(const bool interpolate)
 				interp_pt[3].input(x,ym);
 				for (l=0; l < 4; l++) {
 					add_gmatrix_entry(image_pixel_grid,l,i,i,1.0);
-					find_containing_triangle(interp_pt[l],trinum,inside_triangle,on_vertex,kmin);
+					find_containing_triangle(interp_pt[l][0],interp_pt[l][1],trinum,inside_triangle,on_vertex,kmin);
 					if (!inside_triangle) {
 						if (!on_vertex) continue; // assume SB = 0 outside grid
 					}
 					if (qlens->natural_neighbor_interpolation) {
-						find_interpolation_weights_nn(interp_pt[l], trinum, npts, 0);
+						find_interpolation_weights_nn(interp_pt[l][0],interp_pt[l][1], trinum, npts, 0);
 					} else {
-						find_interpolation_weights_3pt(interp_pt[l], trinum, npts, 0);
+						find_interpolation_weights_3pt(interp_pt[l][0],interp_pt[l][1], trinum, npts, 0);
 					}
 					for (k=0; k < npts; k++) {
 						add_gmatrix_entry(image_pixel_grid,l,i,interpolation_indx[k],-p.interpolation_wgts[k]);
@@ -6611,7 +6687,7 @@ void LensPixelGrid::plot_potential(string root, const int npix, const bool inter
 					pt_i = cartesian_pixel_index[ii][jj];
 				} else {
 					bool inside_triangle;
-					trinum = search_grid(0,pt,inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
+					trinum = search_grid(0,pt[0],pt[1],inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
 					pt_i = find_closest_vertex(trinum,pt);
 				}
 				if (!plot_convergence) pot = potential[pt_i];
@@ -13265,14 +13341,13 @@ void ImagePixelGrid::find_optimal_shapelet_scale(double& scale, double& xcenter,
 
 void ImagePixelGrid::set_surface_brightness_vector_to_data()
 {
-	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	int column_j = 0;
 	int i,j;
+	image_surface_brightness_data.resize(image_npixels);
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
 			if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
-				//image_surface_brightness[column_j++] = surface_brightness[i][j];
-				p.image_surface_brightness[column_j++] = image_data->surface_brightness[i][j];
+				image_surface_brightness_data[column_j++] = image_data->surface_brightness[i][j];
 			}
 		}
 	}
@@ -13319,7 +13394,7 @@ void ImagePixelGrid::find_optimal_sourcegrid_npixels(double srcgrid_xmin, double
 	}
 	double dx = srcgrid_xmax-srcgrid_xmin;
 	double dy = srcgrid_ymax-srcgrid_ymin;
-	nsrcpixel_x = (int) sqrt(cartesian_srcgrid->pixel_fraction*count*dx/dy);
+	nsrcpixel_x = (int) sqrt(cartesian_srcgrid->cartesian_srcgrid_params.pixel_fraction*count*dx/dy);
 	nsrcpixel_y = (int) nsrcpixel_x*dy/dx;
 	n_expected_active_pixels = count;
 }
@@ -13343,7 +13418,7 @@ void ImagePixelGrid::find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_x
 
 	double pixel_area, source_lowlevel_pixel_area, dx, dy, srcgrid_area, srcgrid_firstlevel_npixels;
 	pixel_area = pixel_xlength * pixel_ylength;
-	source_lowlevel_pixel_area = pixel_area / (1.3*cartesian_srcgrid->pixel_magnification_threshold);
+	source_lowlevel_pixel_area = pixel_area / (1.3*cartesian_srcgrid->cartesian_srcgrid_params.pixel_magnification_threshold);
 	dx = srcgrid_xmax-srcgrid_xmin;
 	dy = srcgrid_ymax-srcgrid_ymin;
 	srcgrid_area = dx*dy;
@@ -13433,8 +13508,7 @@ int ImagePixelGrid::count_nonzero_lensgrid_pixel_mappings()
 
 void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool potential_perturbations, const bool map_all_imgpixels)
 {
-	//ImgGrid_Params<Eigen::VectorXd,Eigen::MatrixXd,double>& p = assign_imggrid_param_object<Eigen::VectorXd,Eigen::MatrixXd,double>();
-	//cout << "ASSIGNING MAPPING FLASGS" << endl;
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	int i,j,k;
 	n_active_pixels = 0;
 	n_high_sn_pixels = 0;
@@ -13461,73 +13535,60 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 		}
 	}
 	bool trouble_with_starting_vertex = false;
-	//#pragma omp parallel
 	{
-		int thread;
-//#ifdef USE_OPENMP
-		//thread = omp_get_thread_num();
-//#else
-		thread = 0;
-//#endif
+		int thread = 0;
 		if ((qlens->split_imgpixels) and (!qlens->raytrace_using_pixel_centers)) {
-			int subcell_index;
+			int subcell_index, subpixel_index=0; // subcell_index is just within a particular pixel, whereas subpixel_index is global
 			bool maps_to_something = true;
-			//#pragma omp for private(i,j,nsubpix,subcell_index,maps_to_something) schedule(dynamic)
-			for (j=0; j < y_N; j++) {
-				for (i=0; i < x_N; i++) {
-					if ((pixel_in_mask == NULL) or (pixel_in_mask[i][j])) {
-						if (!map_all_imgpixels) maps_to_something = false;
-						for (subcell_index=0; subcell_index < n_subpix_per_pixel; subcell_index++)
-						{
-							if ((delaunay) and ((delaunay_srcgrid == NULL) or (delaunay_srcgrid->assign_source_mapping_flags(subpixel_center_sourcepts[i][j][subcell_index],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][subcell_index],i,j,thread,trouble_with_starting_vertex)==true))) {
-								maps_to_something = true;
-								subpixel_maps_to_srcpixel[i][j][subcell_index] = true;
-							} else if ((!delaunay) and (cartesian_srcgrid->assign_source_mapping_flags_interpolate(subpixel_center_sourcepts[i][j][subcell_index],mapped_cartesian_srcpixels[i][j],thread,i,j)==true)) {
-								maps_to_something = true;
-								subpixel_maps_to_srcpixel[i][j][subcell_index] = true;
-							} else {
-								subpixel_maps_to_srcpixel[i][j][subcell_index] = false;
-							}
-							if (potential_perturbations) lensgrid->assign_mapping_flags(subpixel_center_pts[i][j][subcell_index],mapped_potpixels[i][j],n_mapped_potpixels[i][j][subcell_index],i,j,thread);
-							//cout << "n_mapped_srcpixels: " << n_mapped_srcpixels[i][j][subcell_index] << " (imggrid_i=" << src_redshift_index << ")" << endl;
+			for (int pixel_idx=0; pixel_idx < image_npixels; pixel_idx++) {
+				j = emask_pixels_j[pixel_idx];
+				i = emask_pixels_i[pixel_idx];
+				if ((pixel_in_mask == NULL) or (pixel_in_mask[i][j])) {
+					if (!map_all_imgpixels) maps_to_something = false;
+					for (subcell_index=0; subcell_index < n_subpix_per_pixel; subcell_index++)
+					{
+						if ((delaunay) and ((delaunay_srcgrid == NULL) or (delaunay_srcgrid->assign_source_mapping_flags(p.srcpt_x_subpixel_centers[subpixel_index],p.srcpt_y_subpixel_centers[subpixel_index],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][subcell_index],i,j,thread,trouble_with_starting_vertex)==true))) {
+							maps_to_something = true;
+							subpixel_maps_to_srcpixel[i][j][subcell_index] = true;
+						} else if ((!delaunay) and (cartesian_srcgrid->assign_source_mapping_flags_interpolate(subpixel_center_sourcepts[i][j][subcell_index],mapped_cartesian_srcpixels[i][j],thread,i,j)==true)) {
+							maps_to_something = true;
+							subpixel_maps_to_srcpixel[i][j][subcell_index] = true;
+						} else {
+							subpixel_maps_to_srcpixel[i][j][subcell_index] = false;
 						}
-						if (maps_to_something==true) {
-							maps_to_source_pixel[i][j] = true;
-							#pragma omp atomic
-							n_active_pixels++;
-							if ((pixel_in_mask != NULL) and (pixel_in_mask[i][j]) and (image_data->high_sn_pixel[i][j])) {
-								#pragma omp atomic
-								n_high_sn_pixels++;
-							}
+						if (potential_perturbations) lensgrid->assign_mapping_flags(subpixel_center_pts[i][j][subcell_index][0],subpixel_center_pts[i][j][subcell_index][1],mapped_potpixels[i][j],n_mapped_potpixels[i][j][subcell_index],i,j,thread);
+						//cout << "n_mapped_srcpixels: " << n_mapped_srcpixels[i][j][subcell_index] << " (imggrid_i=" << src_redshift_index << ")" << endl;
+						subpixel_index++;
+					}
+					if (maps_to_something==true) {
+						maps_to_source_pixel[i][j] = true;
+						n_active_pixels++;
+						if ((pixel_in_mask != NULL) and (pixel_in_mask[i][j]) and (image_data->high_sn_pixel[i][j])) {
+							n_high_sn_pixels++;
 						}
 					}
 				}
 			}
 		} else {
-			//#pragma omp for private(i,j) schedule(dynamic)	
-			for (j=0; j < y_N; j++) {
-				for (i=0; i < x_N; i++) {
-					if ((pixel_in_mask == NULL) or (pixel_in_mask[i][j])) {
-						if ((delaunay) and ((delaunay_srcgrid==NULL) or (delaunay_srcgrid->assign_source_mapping_flags(center_sourcepts[i][j],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][0],i,j,thread,trouble_with_starting_vertex)==true))) {
-							maps_to_source_pixel[i][j] = true;
-							#pragma omp atomic
-							n_active_pixels++;
-							if ((pixel_in_mask != NULL) and (pixel_in_mask[i][j]) and (image_data->high_sn_pixel[i][j])) {
-								#pragma omp atomic
-								n_high_sn_pixels++;
-							}
-						} else if ((!delaunay) and (cartesian_srcgrid->assign_source_mapping_flags_interpolate(center_sourcepts[i][j],mapped_cartesian_srcpixels[i][j],thread,i,j)==true)) {
-							maps_to_source_pixel[i][j] = true;
-							#pragma omp atomic
-							n_active_pixels++;
-							if ((pixel_in_mask != NULL) and (pixel_in_mask[i][j]) and (image_data->high_sn_pixel[i][j])) {
-								#pragma omp atomic
-								n_high_sn_pixels++;
-							}
+			for (int pixel_idx=0; pixel_idx < image_npixels; pixel_idx++) {
+				j = emask_pixels_j[pixel_idx];
+				i = emask_pixels_i[pixel_idx];
+				if ((pixel_in_mask == NULL) or (pixel_in_mask[i][j])) {
+					if ((delaunay) and ((delaunay_srcgrid==NULL) or (delaunay_srcgrid->assign_source_mapping_flags(p.srcpt_x_centers[pixel_idx],p.srcpt_y_centers[pixel_idx],mapped_delaunay_srcpixels[i][j],n_mapped_srcpixels[i][j][0],i,j,thread,trouble_with_starting_vertex)==true))) {
+						maps_to_source_pixel[i][j] = true;
+						n_active_pixels++;
+						if ((pixel_in_mask != NULL) and (pixel_in_mask[i][j]) and (image_data->high_sn_pixel[i][j])) {
+							n_high_sn_pixels++;
 						}
-						if (potential_perturbations) {
-							lensgrid->assign_mapping_flags(center_pts[i][j],mapped_potpixels[i][j],n_mapped_potpixels[i][j][0],i,j,thread);
+					} else if ((!delaunay) and (cartesian_srcgrid->assign_source_mapping_flags_interpolate(center_sourcepts[i][j],mapped_cartesian_srcpixels[i][j],thread,i,j)==true)) {
+						maps_to_source_pixel[i][j] = true;
+						n_active_pixels++;
+						if ((pixel_in_mask != NULL) and (pixel_in_mask[i][j]) and (image_data->high_sn_pixel[i][j])) {
+							n_high_sn_pixels++;
 						}
+					}
+					if (potential_perturbations) {
+						lensgrid->assign_mapping_flags(center_pts[i][j][0],center_pts[i][j][1],mapped_potpixels[i][j],n_mapped_potpixels[i][j][0],i,j,thread);
 					}
 				}
 			}
@@ -13535,18 +13596,6 @@ void ImagePixelGrid::assign_image_mapping_flags(const bool delaunay, const bool 
 	}
 
 	if (trouble_with_starting_vertex) warn(qlens->warnings,"could not find good starting vertices for Delaunay grid; started with vertex 0 when searching for enclosing triangles");
-
-
-	//int toto=0;
-	//for (j=0; j < y_N; j++) {
-		//for (i=0; i < x_N; i++) {
-			//for (k=0; k < nsubpix; k++) {
-				////if (n_mapped_srcpixels[i][j][k] != 0) cout << "YO n_mapped_srcpixels: " << n_mapped_srcpixels[i][j][k] << " (imggrid_i=" << src_redshift_index << ")" << endl;
-				//toto += n_mapped_srcpixels[i][j][k];
-			//}
-		//}
-	//}
-	//cout << "TOT n_mapped_srcpixels=" << toto << " (imggrid_i=" << src_redshift_index << ")" << endl;
 }
 
 template <typename QScalar>
@@ -13652,53 +13701,12 @@ void ImagePixelGrid::find_surface_brightness(const bool use_extended_mask, const
 								if (!foreground_only) {
 									if (source_fit_mode==Delaunay_Source) {
 										if (!show_only_first_order_corrections) {
-											sb = delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread);
+											sb = delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index][0],center_srcpt[subcell_index][1],i,j,thread);
 										} else {
 											sb = 0;
 										}
 										if ((include_first_order_corrections) and (lensgrid)) {
-											//lensvector<double> S0_gradient;
-											//delaunay_srcgrid->find_source_gradient(center_sourcepts[i][j],S0_gradient,thread);
-											//sb += lensgrid->first_order_surface_brightness_correction(center_srcpt[subcell_index],S0_gradient,thread);
-
-											/*
-											double unperturbed_sb = sb;
-											lensvector<double> defl;
-											lensgrid->deflection(center_pt[subcell_index][0],center_pt[subcell_index][1],defl,thread);
-											lensvector<double> new_srcpt = center_srcpt[subcell_index] - defl;
-											double SB_check = delaunay_srcgrid->find_lensed_surface_brightness(new_srcpt,i,j,thread);
-											double sb_pert0 = SB_check - sb;
-
-											double sb_pert1 = lensgrid->first_order_surface_brightness_correction(center_pt[subcell_index],subpixel_source_gradient[i][j][subcell_index],thread);
-
-											double interval = 1e-4;
-											lensvector<double> ptp = center_srcpt[subcell_index];
-											ptp[0] += interval;
-											lensvector<double> ptm = center_srcpt[subcell_index];
-											ptm[0] -= interval;
-											//double sbgrad_x = (delaunay_srcgrid->find_lensed_surface_brightness(ptp,i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(ptm,i,j,thread)) / (2*interval);
-											double sbgrad_xp = (delaunay_srcgrid->find_lensed_surface_brightness(ptp,i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread)) / interval;
-											double sbgrad_xm = (delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(ptm,i,j,thread)) / interval;
-											lensvector<double> ptpy = center_srcpt[subcell_index];
-											ptpy[1] += interval;
-											lensvector<double> ptmy = center_srcpt[subcell_index];
-											ptmy[1] -= interval;
-											//double sbgrad_y = (delaunay_srcgrid->find_lensed_surface_brightness(ptpy,i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(ptmy,i,j,thread)) / (2*interval);
-											double sbgrad_yp = (delaunay_srcgrid->find_lensed_surface_brightness(ptpy,i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread)) / interval;
-											double sbgrad_ym = (delaunay_srcgrid->find_lensed_surface_brightness(center_srcpt[subcell_index],i,j,thread) - delaunay_srcgrid->find_lensed_surface_brightness(ptmy,i,j,thread)) / interval;
-											double sbgrad_x = (defl[0] < 0) ? sbgrad_xp : sbgrad_xm;
-											double sbgrad_y = (defl[1] < 0) ? sbgrad_yp : sbgrad_ym;
-											double sbcheck2 = unperturbed_sb - sbgrad_x*defl[0] - sbgrad_y*defl[1];
-											double pert = -sbgrad_x*defl[0] - sbgrad_y*defl[1];
-											//sb += lensgrid->first_order_surface_brightness_correction(center_pt[subcell_index],S0_gradient,thread);
-
-											if (unperturbed_sb > 0.13) cout << "SB_CHECK: S0=" << unperturbed_sb << " SBpert_1st=" << sb_pert1 << " SBpert_def=" << sb_pert0 << " pertcheck=" << pert << " sbgradc_x=" << sbgrad_x << " sbgradc_y=" << sbgrad_y << " sbgrad_x=" << subpixel_source_gradient[i][j][subcell_index][0] << " sbgrad_y=" << subpixel_source_gradient[i][j][subcell_index][1] << " def: " << defl[0] << " " << defl[1] << endl;
-											//lensvector<double> SBgrad(sbgrad_x,sbgrad_y);
-											//sb += lensgrid->first_order_surface_brightness_correction(center_pt[subcell_index],SBgrad,thread);
-											//sb = SB_check;
-											*/
-
-											sb += lensgrid->first_order_surface_brightness_correction(center_pt[subcell_index],subpixel_source_gradient[i][j][subcell_index],thread);
+											sb += lensgrid->first_order_surface_brightness_correction(center_pt[subcell_index][0],center_pt[subcell_index][1],subpixel_source_gradient[i][j][subcell_index],thread);
 										}
 									}
 									else if (source_fit_mode==Cartesian_Source) sb = cartesian_srcgrid->find_lensed_surface_brightness_interpolate(center_srcpt[subcell_index],thread);
@@ -13720,96 +13728,18 @@ void ImagePixelGrid::find_surface_brightness(const bool use_extended_mask, const
 						if (!foreground_only) {
 							if (source_fit_mode==Delaunay_Source) {
 								if (!show_only_first_order_corrections) {
-									surface_brightness[i][j] = delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0);
+									surface_brightness[i][j] = delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j][0],center_sourcepts[i][j][1],i,j,0);
 								} else {
 									surface_brightness[i][j] = 0;
 								}
-								//if ((abs(center_sourcepts[i][j][0]) < 0.3) and (abs(center_sourcepts[i][j][1]) < 0.3)) cout << "HARG " << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " " << surface_brightness[i][j] << endl;
-								//hergls << center_pts[i][j][0] << " " << center_pts[i][j][1] << " " << surface_brightness[i][j] << endl;
 								if (include_first_order_corrections) {
-								//lensvector<double> S0_gradient;
-									//delaunay_srcgrid->find_source_gradient(center_sourcepts[i][j],S0_gradient,0);
-									//
-									//double S0_check2 = delaunay_srcgrid->interpolate_surface_brightness(center_sourcepts[i][j],false,0);
-									//cout << "CHECK x0: " << x0_check[i][j][0] << " " << center_sourcepts[i][j][0] << endl;
-									//cout << "CHECK y0: " << x0_check[i][j][1] << " " << center_sourcepts[i][j][1] << endl;
-									//cout << "CHECK SB0: " << S0_check[i][j] << " " << S0_check2 << endl;
-									//cout << "CHECK SBGRAD: " << S0_gradient[0] << " " << subpixel_source_gradient[i][j][0][0] << " " << S0_gradient[1] << " " << subpixel_source_gradient[i][j][0][1] << endl;
-									/*
-									double unperturbed_sb = surface_brightness[i][j];
-									lensvector<double> defl;
-									lensgrid->deflection(center_pts[i][j][0],center_pts[i][j][1],defl,0);
-									lensvector<double> new_srcpt = center_sourcepts[i][j] - defl;
-									double SB_check = delaunay_srcgrid->find_lensed_surface_brightness(new_srcpt,i,j,0);
-									double sb_pert0 = SB_check - surface_brightness[i][j];
-
-									double sb_pert1 = lensgrid->first_order_surface_brightness_correction(center_pts[i][j],subpixel_source_gradient[i][j][0],0);
-
-									double interval = 1e-4;
-									lensvector<double> ptp = center_sourcepts[i][j];
-									ptp[0] += interval;
-									lensvector<double> ptm = center_sourcepts[i][j];
-									ptm[0] -= interval;
-									//double sbgrad_x = (delaunay_srcgrid->find_lensed_surface_brightness(ptp,i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(ptm,i,j,0)) / (2*interval);
-									double sbgrad_xp = (delaunay_srcgrid->find_lensed_surface_brightness(ptp,i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0)) / interval;
-									double sbgrad_xm = (delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(ptm,i,j,0)) / interval;
-									lensvector<double> ptpy = center_sourcepts[i][j];
-									ptpy[1] += interval;
-									lensvector<double> ptmy = center_sourcepts[i][j];
-									ptmy[1] -= interval;
-									//double sbgrad_y = (delaunay_srcgrid->find_lensed_surface_brightness(ptpy,i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(ptmy,i,j,0)) / (2*interval);
-									double sbgrad_yp = (delaunay_srcgrid->find_lensed_surface_brightness(ptpy,i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0)) / interval;
-									double sbgrad_ym = (delaunay_srcgrid->find_lensed_surface_brightness(center_sourcepts[i][j],i,j,0) - delaunay_srcgrid->find_lensed_surface_brightness(ptmy,i,j,0)) / interval;
-									double sbgrad_x = (defl[0] < 0) ? sbgrad_xp : sbgrad_xm;
-									double sbgrad_y = (defl[1] < 0) ? sbgrad_yp : sbgrad_ym;
-									double sbcheck2 = unperturbed_sb - sbgrad_x*defl[0] - sbgrad_y*defl[1];
-									double pert = -sbgrad_x*defl[0] - sbgrad_y*defl[1];
-									//surface_brightness[i][j] += lensgrid->first_order_surface_brightness_correction(center_pts[i][j],S0_gradient,0);
-
-									cout << "SB_CHECK: S0=" << unperturbed_sb << " SBpert_1st=" << sb_pert1 << " SBpert_def=" << sb_pert0 << " pertcheck=" << pert << " sbgradc_x=" << sbgrad_x << " sbgradc_y=" << sbgrad_y << " sbgrad_x=" << subpixel_source_gradient[i][j][0][0] << " sbgrad_y=" << subpixel_source_gradient[i][j][0][1] << " def: " << defl[0] << " " << defl[1] << endl;
-									*/
-									surface_brightness[i][j] += lensgrid->first_order_surface_brightness_correction(center_pts[i][j],subpixel_source_gradient[i][j][0],0);
-									//lensvector<double> SBgrad(sbgrad_x,sbgrad_y);
-									//surface_brightness[i][j] += lensgrid->first_order_surface_brightness_correction(center_pts[i][j],SBgrad,0);
-									//surface_brightness[i][j] = unperturbed_sb + pert;
-
-/*
-									double smin = -defl.norm()*2;
-									double smax = defl.norm()*2;
-									int ii, nsteps=600;
-									double s, sstep = 2*smax/nsteps;
-									lensvector<double> unitvec = defl/defl.norm();
-									double SB_checkbla;
-									if (surface_brightness[i][j] > 0.5) {
-										ofstream sbcheckout("sbcheck.dat");
-										for (ii=0,s=smin; ii < nsteps; ii++, s += sstep) {
-											new_srcpt = center_sourcepts[i][j] + s*unitvec;
-											SB_checkbla = delaunay_srcgrid->find_lensed_surface_brightness(new_srcpt,i,j,0);
-											sbcheckout << s << " " << SB_checkbla << endl;
-										}
-									cout << "SB_CHECK: S0=" << unperturbed_sb << " SB_1st=" << surface_brightness[i][j] << " SB_def=" << SB_check << " SB_check2=" << sbcheck2 << " " << pert << " " << sbgrad_x << " " << sbgrad_y << " " << defl[0] << " " << defl[1] << endl;
-									double blerk = abs((surface_brightness[i][j] - SB_check)/SB_check);
-									if (blerk > 1.0) die();
-									}
-									*/
+									surface_brightness[i][j] += lensgrid->first_order_surface_brightness_correction(center_pts[i][j][0],center_pts[i][j][1],subpixel_source_gradient[i][j][0],0);
 								}
 							} else {
 								surface_brightness[i][j] = cartesian_srcgrid->find_lensed_surface_brightness_interpolate(center_sourcepts[i][j],0);
 							}
 						}
 					}
-					//if ((at_least_one_noninverted_foreground_src) and (!lensed_sources_only) and (src_redshift_index==0)) {
-						//for (int k=0; k < qlens->n_sb; k++) {
-							//if (!qlens->sb_list[k]->is_lensed) {
-								//if (!qlens->sb_list[k]->zoom_subgridding) {
-									//surface_brightness[i][j] += qlens->sb_list[k]->surface_brightness(center_pts[i][j][0],center_pts[i][j][1]);
-								//} else {
-									//noise = (qlens->use_noise_map) ? noise_map[i][j] : qlens->background_pixel_noise;
-									//surface_brightness[i][j] += qlens->sb_list[k]->surface_brightness_zoom(center_pts[i][j],corner_pts[i][j],corner_pts[i+1][j],corner_pts[i][j+1],corner_pts[i+1][j+1],noise);
-								//}
-							//}
-						//}
-					//}
 				}
 			}
 		}
@@ -13931,7 +13861,7 @@ void ImagePixelGrid::find_surface_brightness(const bool use_extended_mask, const
 }
 
 template <typename MathTypes>
-void ImagePixelGrid::find_surface_brightness_sbprofile(const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources, const bool psf_convolution)
+void ImagePixelGrid::find_surface_brightness_sbprofile(const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources)
 {
 	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	bool supersampling = qlens->psf_supersampling;
@@ -13988,28 +13918,10 @@ void ImagePixelGrid::find_surface_brightness_sbprofile(const bool foreground_onl
 			sbprofiles_this_imggrid[k]->surface_brightness_vec(p.srcpt_x_centers,p.srcpt_y_centers,p.image_surface_brightness);
 		}
 	}
-
-	if ((psf_convolution) and (psf != NULL) and (psf->use_input_psf_matrix)) {
-		if (!psf_convolution_is_setup) {
-			//cout << "checking PSF setup..." << endl;
-			setup_PSF_convolution();
-		}
-		PSF_convolution_pixel_vector_wrapper<MathTypes>(false,false,qlens->fft_convolution);
-		//if (!qlens->fft_convolution) {
-			//p.image_surface_brightness = PSF_convolution_pixel_vector_stan(p.image_surface_brightness);
-		//} else {
-			//p.image_surface_brightness = PSF_convolution_pixel_vector_stan_FFT(p.image_surface_brightness);
-		//}
-	}
-	for (int n=0; n < image_npixels; n++) {
-		i = emask_pixels_i[n];
-		j = emask_pixels_j[n];
-		surface_brightness[i][j] = value_of(p.image_surface_brightness(n));
-	}
 }
-template void ImagePixelGrid::find_surface_brightness_sbprofile<PlainTypes>(const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources, const bool psf_convolution);
+template void ImagePixelGrid::find_surface_brightness_sbprofile<PlainTypes>(const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources);
 #ifdef USE_STAN
-template void ImagePixelGrid::find_surface_brightness_sbprofile<VarmatTypes>(const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources, const bool psf_convolution);
+template void ImagePixelGrid::find_surface_brightness_sbprofile<VarmatTypes>(const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources);
 #endif
 
 void ImagePixelGrid::find_point_images(const double src_x, const double src_y, vector<image<double>>& imgs, const bool use_overlap_in, const bool is_lensed, const bool verbal)
@@ -14342,7 +14254,7 @@ void ImagePixelGrid::find_point_images(const double src_x, const double src_y, v
 	}
 }
 
-void ImagePixelGrid::generate_point_images(const vector<image<double>>& imgs, double* ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num)
+void ImagePixelGrid::generate_point_images(const vector<image<double>>& imgs, Eigen::VectorXd& ptimage_surface_brightness, const bool use_img_fluxes, const double srcflux, const int img_num)
 {
 	int nx_half, ny_half;
 	double normfac, sigx, sigy;
@@ -14495,7 +14407,7 @@ void ImagePixelGrid::add_point_images(VectorXd& ptimage_surface_brightness, cons
 void ImagePixelGrid::generate_and_add_point_images(const vector<image<double>>& imgs, const bool include_imgfluxes, const double srcflux)
 {
 	Eigen::VectorXd ptimgs(image_npixels);
-	generate_point_images(imgs,ptimgs.data(),include_imgfluxes,srcflux);
+	generate_point_images(imgs,ptimgs,include_imgfluxes,srcflux);
 	add_point_images(ptimgs,image_npixels);
 }	
 
@@ -14778,7 +14690,7 @@ bool ImagePixelGrid::LineSearch(lensvector<double>& xold, double fold, lensvecto
 
 bool ImagePixelGrid::assign_pixel_mappings(const bool potential_perturbations, const bool verbal)
 {
-	int i, j, ii, jj, subcell_index, nsubpix, image_pixel_index, image_subpixel_index;
+	int i, j, ii, jj, subcell_index;
 	CartesianSourceGrid *cartesian_srcgrid = cartesian_srcgrid;
 
 	if (qlens->show_wtime) {
@@ -14794,14 +14706,13 @@ bool ImagePixelGrid::assign_pixel_mappings(const bool potential_perturbations, c
 	ImagePixelGrid *imggrid;
 	for (int imggrid_i_inv=0; imggrid_i_inv < n_pixsrc_to_include_in_Lmatrix; imggrid_i_inv++) {
 		imggrid = qlens->image_pixel_grids[imggrid_indx_to_include_in_Lmatrix[imggrid_i_inv]];
-		nsubpix = imggrid->n_subpix_per_pixel;
-		image_pixel_index=0;
-		image_subpixel_index=0;
+		//nsubpix = imggrid->n_subpix_per_pixel;
 		if (qlens->source_fit_mode==Delaunay_Source) {
-			imggrid->assign_image_mapping_flags(true,potential_perturbations,map_all_imgpixels);
+			//imggrid->assign_image_mapping_flags(true,potential_perturbations,map_all_imgpixels);
 			if (imggrid->delaunay_srcgrid != NULL) { 
 				 // note, the following line *adds* to the source_npixels that are already there (if more than one source included in inversion)
 				source_npixels = imggrid->delaunay_srcgrid->assign_active_indices_and_count_source_pixels(source_npixels,qlens->activate_unmapped_source_pixels);
+				n_active_pixels = image_npixels; // since we're leaving all image pixels active
 			}
 		} else {
 			tot_npixels_count = imggrid->cartesian_srcgrid->assign_indices_and_count_levels();
@@ -14897,15 +14808,16 @@ void ImagePixelGrid::assign_foreground_mappings(const bool use_data)
 	}
 }
 
+template <typename MathTypes>
 void ImagePixelGrid::initialize_pixel_matrices(const bool potential_perturbations, bool verbal)
 {
-	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	CartesianSourceGrid *cartesian_srcgrid = cartesian_srcgrid; // only used here if n_image_prior is on
 	SB_Profile** sb_list = qlens->sb_list;
 
 	if (Lmatrix_sparse != NULL) die("Lmatrix_sparse already initialized");
 	//if (amplitude_vector != NULL) die("source surface brightness vector already initialized");
-	p.amplitude_vector.resize(n_amps);
+	p.amplitude_vector = Eigen::VectorXd::Zero(n_amps);
 	if ((qlens->use_lum_weighted_regularization) or (qlens->use_distance_weighted_regularization) or (qlens->use_mag_weighted_regularization)) {
 		if (reg_weight_factor != NULL) die("FUCK reg_ewight_factor");
 		reg_weight_factor = new double[source_npixels];
@@ -14981,7 +14893,7 @@ void ImagePixelGrid::initialize_pixel_matrices(const bool potential_perturbation
 
 	if ((qlens->mpi_id==0) and (verbal)) cout << "Creating Lmatrix...\n";
 	if (!qlens->psf_supersampling) {
-		if (qlens->matrix_format==DENSE) construct_Lmatrix_dense(delaunay,potential_perturbations,verbal);
+		if (qlens->matrix_format==DENSE) construct_Lmatrix_dense<MathTypes>(delaunay,potential_perturbations,verbal);
 		else construct_Lmatrix(delaunay,potential_perturbations,verbal);
 		//construct_Lmatrix(delaunay,potential_perturbations,verbal);
 	} else construct_Lmatrix_supersampled(delaunay,potential_perturbations,verbal);
@@ -14990,6 +14902,10 @@ void ImagePixelGrid::initialize_pixel_matrices(const bool potential_perturbation
 		if (n_mge_amps > 0) add_MGE_amplitudes_to_Lmatrix();
 	}
 }
+template void ImagePixelGrid::initialize_pixel_matrices<PlainTypes>(const bool potential_perturbations, bool verbal);
+#ifdef USE_STAN
+template void ImagePixelGrid::initialize_pixel_matrices<VarmatTypes>(const bool potential_perturbations, bool verbal);
+#endif
 
 void ImagePixelGrid::count_shapelet_amplitudes()
 {
@@ -15055,7 +14971,7 @@ void ImagePixelGrid::initialize_pixel_matrices_shapelets(bool verbal)
 	//Lmatrix_dense0.input(image_npixels,n_amps);
 	//Lmatrix_dense0 = 0;
 	//Lmatrix_dense = Eigen::MatrixXd::Zero(image_npixels,n_amps);
-	Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,image_npixels);
+	p.Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,image_npixels);
 	if (qlens->include_imgfluxes_in_inversion) {
 		int nimgs = 0;
 		for (int i=0; i < qlens->n_ptsrc; i++) nimgs += qlens->ptsrc_list[i]->images.size();
@@ -15092,7 +15008,7 @@ void ImagePixelGrid::clear_pixel_matrices()
 
 void ImagePixelGrid::construct_Lmatrix(const bool delaunay, const bool potential_perturbations, const bool verbal)
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = assign_imggrid_param_object<PlainTypes>();
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 
 	int n_imggrids = n_pixsrc_to_include_in_Lmatrix;
 	if (n_imggrids==0) die("No image grids are included for constructing Lmatrix_sparse");
@@ -15221,9 +15137,11 @@ void ImagePixelGrid::construct_Lmatrix(const bool delaunay, const bool potential
 	delete[] imggrids;
 }
 
+template <typename MathTypes>
 void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool potential_perturbations, const bool verbal)
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = assign_imggrid_param_object<PlainTypes>();
+	using QScalar = typename MathTypes::QScalar;
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 
 	int n_imggrids = n_pixsrc_to_include_in_Lmatrix;
 	if (n_imggrids==0) die("No image grids are included for constructing Lmatrix");
@@ -15234,63 +15152,55 @@ void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool pot
 	ImagePixelGrid **imggrid_end = imggrids+n_imggrids;
 
 	int img_index;
-	int index;
+	//int index;
 	int i,j;
 
-	//Lmatrix_dense0.input(image_npixels,n_amps);
-	//Lmatrix_dense0 = 0;
-	//Lmatrix_dense = Eigen::MatrixXd::Zero(image_npixels,n_amps);
-	Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,image_npixels);
+	p.Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,image_npixels);
 
 	if (qlens->show_wtime) {
 		wtime0 = std::chrono::steady_clock::now();
 	}
 	ImagePixelGrid** imggrid_ptr;
 	ImagePixelGrid* imggrid;
+	bool trouble_with_starting_vertex = false;
 	//#pragma omp parallel
 	{
 		int thread;
-//#ifdef USE_OPENMP
-		//thread = omp_get_thread_num();
-//#else
 		thread = 0;
-//#endif
-		int nsubpix,subcell_index;
-		lensvector<double> *center_srcpt;
-		nsubpix = n_subpix_per_pixel;
+		int subcell_index;
+		int subpixel_idx = 0;
 
 		if ((qlens->split_imgpixels) and (!qlens->raytrace_using_pixel_centers)) {
 			//#pragma omp for private(img_index,i,j,imggrid_ptr,imggrid,index,center_srcpt) schedule(dynamic)
 			for (img_index=0; img_index < image_npixels; img_index++) {
-				index = 0;
+				//index = 0;
 				i = mask_pixels_i[img_index];
 				j = mask_pixels_j[img_index];
 
-				center_srcpt = subpixel_center_sourcepts[i][j];
+				//center_srcpt = subpixel_center_sourcepts[i][j];
 				if (delaunay) {
 					if (delaunay_srcgrid != NULL) {
 						for (imggrid_ptr = imggrids; imggrid_ptr != imggrid_end; imggrid_ptr++) {
 							imggrid = (*imggrid_ptr);
-							//ImgGrid_Params<Eigen::VectorXd,Eigen::MatrixXd,double>& p = imggrid->assign_imggrid_param_object<Eigen::VectorXd,Eigen::MatrixXd,double>();
-							for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+							ImgGrid_Params<MathTypes>& imggrid_p = imggrid->assign_imggrid_param_object<MathTypes>();
+							for (subcell_index=0; subcell_index < n_subpix_per_pixel; subcell_index++) {
 								//cout << "source " << kk << ": adding Lmatrix_sparse elements (redshift_index=" << imggrid->src_redshift_index << ")" << endl;
-								//if (imggrid->n_mapped_srcpixels[i][j][subcell_index] != 0) cout << "MAPPED SRCPIXELS! (redshift_index=" << imggrid->src_redshift_index << ")" << endl;
-								imggrid->delaunay_srcgrid->calculate_Lmatrix_elements(img_index,imggrid->mapped_delaunay_srcpixels[i][j].data(),imggrid->n_mapped_srcpixels[i][j],index,subcell_index,1.0/nsubpix,thread);
-								//if (kk==0) ntot_mapped += imggrid->n_mapped_srcpixels[i][j][subcell_index];
-								//else ntot_mapped2 += imggrid->n_mapped_srcpixels[i][j][subcell_index];
+								//imggrid->delaunay_srcgrid->calculate_Lmatrix_dense(img_index,imggrid->mapped_delaunay_srcpixels[i][j].data(),imggrid->n_mapped_srcpixels[i][j],index,subcell_index,1.0/n_subpix_per_pixel,thread);
+								imggrid->delaunay_srcgrid->calculate_Lmatrix_dense_direct<MathTypes,QScalar>(img_index,imggrid_p.srcpt_x_subpixel_centers(subpixel_idx),imggrid_p.srcpt_y_subpixel_centers(subpixel_idx),i,j,1.0/n_subpix_per_pixel,thread,trouble_with_starting_vertex);
+								subpixel_idx++;
 							}
 						}
 					}
 					//if ((potential_perturbations) and (lensgrid != NULL)) {
-						//for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-							//lensgrid->calculate_Lmatrix(img_index,mapped_potpixels[i][j].data(),n_mapped_potpixels[i][j],subpixel_source_gradient[i][j][subcell_index],index,subcell_index,source_npixels,1.0/nsubpix,thread);
+						//for (subcell_index=0; subcell_index < n_subpix_per_pixel; subcell_index++) {
+							//lensgrid->calculate_Lmatrix(img_index,mapped_potpixels[i][j].data(),n_mapped_potpixels[i][j],subpixel_source_gradient[i][j][subcell_index],index,subcell_index,source_npixels,1.0/n_subpix_per_pixel,thread);
 						//}
 					//}
 				//} else {
-					//for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
+					//for (subcell_index=0; subcell_index < n_subpix_per_pixel; subcell_index++) {
 						//for (imggrid_ptr = imggrids; imggrid_ptr != imggrid_end; imggrid_ptr++) {
 							//imggrid = (*imggrid_ptr);
-							//imggrid->cartesian_srcgrid->calculate_Lmatrix_interpolate(img_index,imggrid->mapped_cartesian_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0/nsubpix,thread);
+							//imggrid->cartesian_srcgrid->calculate_Lmatrix_interpolate(img_index,imggrid->mapped_cartesian_srcpixels[i][j],index,center_srcpt[subcell_index],subcell_index,1.0/n_subpix_per_pixel,thread);
 						//}
 					//}
 				}
@@ -15298,14 +15208,16 @@ void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool pot
 		} else {
 			//#pragma omp for private(img_index,i,j,imggrid_ptr,imggrid,index) schedule(dynamic)	
 			for (img_index=0; img_index < image_npixels; img_index++) {
-				index = 0;
+				//index = 0;
 				i = mask_pixels_i[img_index];
 				j = mask_pixels_j[img_index];
 				if (delaunay) {
 					if (delaunay_srcgrid != NULL) {
 						for (imggrid_ptr = imggrids; imggrid_ptr != imggrid_end; imggrid_ptr++) {
 							imggrid = (*imggrid_ptr);
-							imggrid->delaunay_srcgrid->calculate_Lmatrix_elements(img_index,imggrid->mapped_delaunay_srcpixels[i][j].data(),imggrid->n_mapped_srcpixels[i][j],index,0,1.0,thread);
+							ImgGrid_Params<MathTypes>& imggrid_p = imggrid->assign_imggrid_param_object<MathTypes>();
+							//imggrid->delaunay_srcgrid->calculate_Lmatrix_dense(img_index,imggrid->mapped_delaunay_srcpixels[i][j].data(),imggrid->n_mapped_srcpixels[i][j],index,0,1.0,thread);
+							imggrid->delaunay_srcgrid->calculate_Lmatrix_dense_direct<MathTypes,QScalar>(img_index,imggrid_p.srcpt_x_centers(img_index),imggrid_p.srcpt_y_centers(img_index),i,j,1.0,thread,trouble_with_starting_vertex);
 						}
 					}
 				//} else {
@@ -15327,18 +15239,25 @@ void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool pot
 		wtime = std::chrono::steady_clock::now() - wtime0;
 		if (qlens->mpi_id==0) cout << "Wall time for constructing Lmatrix: "  << wtime.count() << endl;
 	}
-	if ((qlens->mpi_id==0) and (verbal)) {
-		int Lmatrix_ntot = n_amps*image_npixels;
-		double sparseness = ((double) Lmatrix_n_elements)/Lmatrix_ntot;
-		cout << "image has " << image_npixels << " pixels in mask, Lmatrix has " << Lmatrix_n_elements << " nonzero elements (sparseness " << sparseness << ")\n";
-	}
+	//if ((qlens->mpi_id==0) and (verbal)) {
+		//int Lmatrix_ntot = n_amps*image_npixels;
+		//double sparseness = ((double) Lmatrix_n_elements)/Lmatrix_ntot;
+		//cout << "image has " << image_npixels << " pixels in mask, Lmatrix has " << Lmatrix_n_elements << " nonzero elements (sparseness " << sparseness << ")\n";
+	//}
 
+	if (trouble_with_starting_vertex) warn(qlens->warnings,"could not find good starting vertices for Delaunay grid; started with vertex 0 when searching for enclosing triangles");
 	delete[] imggrids;
 }
+template void ImagePixelGrid::construct_Lmatrix_dense<PlainTypes>(const bool delaunay, const bool potential_perturbations, const bool verbal);
+#ifdef USE_STAN
+template void ImagePixelGrid::construct_Lmatrix_dense<VarmatTypes>(const bool delaunay, const bool potential_perturbations, const bool verbal);
+#endif
 
 void ImagePixelGrid::construct_Lmatrix_supersampled(const bool delaunay, const bool potential_perturbations, const bool verbal)
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = assign_imggrid_param_object<PlainTypes>();
+	//ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
+
+	// Right now, supersampling will not work if Lmatrix is dense. Need to add supersampling option to construct_Lmatrix_dense!
 
 	int n_imggrids = n_pixsrc_to_include_in_Lmatrix;
 	if (n_imggrids==0) die("No image grids are included for constructing Lmatrix");
@@ -15432,7 +15351,7 @@ void ImagePixelGrid::construct_Lmatrix_supersampled(const bool delaunay, const b
 
 void ImagePixelGrid::construct_Lmatrix_shapelets()
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = assign_imggrid_param_object<PlainTypes>();
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	SB_Profile** sb_list = qlens->sb_list;
 	int img_index;
 	if (qlens->show_wtime) {
@@ -15478,7 +15397,7 @@ void ImagePixelGrid::construct_Lmatrix_shapelets()
 				center_pt = subpixel_center_pts[i][j];
 				for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
 					//double *Lmatptr = Lmatrix_dense0.subarray(img_index);
-					double *Lmatptr = Lmatrix_trans_dense.col(img_index).data();
+					double *Lmatptr = p.Lmatrix_trans_dense.col(img_index).data();
 					for (k=0; k < n_shapelet_sets; k++) {
 						if (shapelet[k]->is_lensed) {
 							//Note that calculate_Lmatrix_elements(...) will increment Lmatptr as it goes
@@ -15498,7 +15417,7 @@ void ImagePixelGrid::construct_Lmatrix_shapelets()
 				i = emask_pixels_i[img_index];
 				j = emask_pixels_j[img_index];
 
-				double *Lmatptr = Lmatrix_trans_dense.col(img_index).data();
+				double *Lmatptr = p.Lmatrix_trans_dense.col(img_index).data();
 				for (k=0; k < n_shapelet_sets; k++) {
 					if (shapelet[k]->is_lensed) {
 						center_srcpt = center_sourcepts[i][j];
@@ -15521,7 +15440,7 @@ void ImagePixelGrid::construct_Lmatrix_shapelets()
 
 void ImagePixelGrid::add_MGE_amplitudes_to_Lmatrix()
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = assign_imggrid_param_object<PlainTypes>();
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	int img_index;
 	if (qlens->show_wtime) {
 		wtime0 = std::chrono::steady_clock::now();
@@ -15551,7 +15470,7 @@ void ImagePixelGrid::add_MGE_amplitudes_to_Lmatrix()
 				center_srcpt = subpixel_center_sourcepts[i][j];
 				center_pt = subpixel_center_pts[i][j];
 				for (subcell_index=0; subcell_index < nsubpix; subcell_index++) {
-					double *Lmatptr = Lmatrix_trans_dense.col(img_index).data() + source_npixels + lensgrid_npixels;
+					double *Lmatptr = p.Lmatrix_trans_dense.col(img_index).data() + source_npixels + lensgrid_npixels;
 					for (k=0; k < n_mge_sets; k++) {
 						if (mge_list[k]->is_lensed) {
 							//Note that calculate_Lmatrix_elements(...) will increment Lmatptr as it goes
@@ -15571,7 +15490,7 @@ void ImagePixelGrid::add_MGE_amplitudes_to_Lmatrix()
 				i = emask_pixels_i[img_index];
 				j = emask_pixels_j[img_index];
 
-				double *Lmatptr = Lmatrix_trans_dense.col(img_index).data();
+				double *Lmatptr = p.Lmatrix_trans_dense.col(img_index).data();
 				for (k=0; k < n_mge_sets; k++) {
 					if (mge_list[k]->is_lensed) {
 						center_srcpt = center_sourcepts[i][j];
@@ -15675,7 +15594,7 @@ void ImagePixelGrid::PSF_convolution_Lmatrix(bool verbal)
 		for (j=0; j < qlens->n_ptsrc; j++) {
 			for (k=0; k < qlens->ptsrc_list[j]->images.size(); k++) {
 				//Lmatptr = Lmatrix_transpose_ptimg_amps.row(i).data();
-				generate_point_images(qlens->ptsrc_list[j]->images, p.point_image_surface_brightness.data(), false, -1, k);
+				generate_point_images(qlens->ptsrc_list[j]->images, p.point_image_surface_brightness, false, -1, k);
 				src_amp_i = source_and_lens_n_amps + i;
 				for (int img_index=0; img_index < image_npixels; img_index++) {
 					if (p.point_image_surface_brightness[img_index] != 0) {
@@ -15710,7 +15629,7 @@ void ImagePixelGrid::PSF_convolution_Lmatrix(bool verbal)
 		int src_amp_i;
 		for (j=0; j < qlens->n_ptsrc; j++) {
 			//Lmatptr = Lmatrix_transpose_ptimg_amps.row(j).data();
-			generate_point_images(qlens->ptsrc_list[j]->images, p.point_image_surface_brightness.data(), false, 1.0);
+			generate_point_images(qlens->ptsrc_list[j]->images, p.point_image_surface_brightness, false, 1.0);
 			src_amp_i = source_and_lens_n_amps + j;
 			for (int img_index=0; img_index < image_npixels; img_index++) {
 				if (p.point_image_surface_brightness[img_index] != 0) {
@@ -15899,7 +15818,6 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 	for (i=0; i < npix_conv; i++) single_img_rvec_ptr[i] = 0;
 
 #ifdef USE_STAN
-
 	if (noninverted_foreground) adj_single_img_rvec_fgmask = new double[npix_conv];
 	else adj_single_img_rvec = new double[npix_conv];
 	double *adj_single_img_rvec_ptr = (noninverted_foreground) ? adj_single_img_rvec_fgmask : adj_single_img_rvec;
@@ -15926,6 +15844,20 @@ bool ImagePixelGrid::setup_FFT_convolution(const bool supersampling, const bool 
 			fftplans_Lmatrix_inverse[i] = fftw_plan_dft_c2r_2d(nj,ni,reinterpret_cast<fftw_complex*>(Lmatrix_transform[i]),Lmatrix_imgs_rvec[i],FFTW_MEASURE);
 			for (j=0; j < npix_conv; j++) Lmatrix_imgs_rvec[i][j] = 0;
 		}
+#ifdef USE_STAN
+		adj_Lmatrix_imgs_rvec = new double*[Lmatrix_n_amps];
+		adj_Lmatrix_transform = new complex<double>*[Lmatrix_n_amps];
+		adj_fftplans_Lmatrix = new fftw_plan[Lmatrix_n_amps];
+		adj_fftplans_Lmatrix_inverse = new fftw_plan[Lmatrix_n_amps];
+
+		for (i=0; i < Lmatrix_n_amps; i++) {
+			adj_Lmatrix_imgs_rvec[i] = new double[npix_conv];
+			adj_Lmatrix_transform[i] = new complex<double>[ncomplex];
+			adj_fftplans_Lmatrix[i] = fftw_plan_dft_r2c_2d(nj,ni,adj_Lmatrix_imgs_rvec[i],reinterpret_cast<fftw_complex*>(adj_Lmatrix_transform[i]),FFTW_MEASURE);
+			adj_fftplans_Lmatrix_inverse[i] = fftw_plan_dft_c2r_2d(nj,ni,reinterpret_cast<fftw_complex*>(adj_Lmatrix_transform[i]),adj_Lmatrix_imgs_rvec[i],FFTW_MEASURE);
+			for (j=0; j < npix_conv; j++) adj_Lmatrix_imgs_rvec[i][j] = 0;
+		}
+#endif
 	}
 #else
 	while (ni < il0) ni *= 2; // need multiple of 2 to do FFT (note, this is only necessary with native code; it is not necessary with FFTW)
@@ -16001,11 +15933,23 @@ void ImagePixelGrid::cleanup_FFT_convolution_arrays()
 			delete[] Lmatrix_transform[i];
 			fftw_destroy_plan(fftplans_Lmatrix[i]);
 			fftw_destroy_plan(fftplans_Lmatrix_inverse[i]);
+#ifdef USE_STAN
+			delete[] adj_Lmatrix_imgs_rvec[i];
+			delete[] adj_Lmatrix_transform[i];
+			fftw_destroy_plan(adj_fftplans_Lmatrix[i]);
+			fftw_destroy_plan(adj_fftplans_Lmatrix_inverse[i]);
+#endif
 		}
 		delete[] Lmatrix_imgs_rvec;
 		delete[] Lmatrix_transform;
 		delete[] fftplans_Lmatrix;
 		delete[] fftplans_Lmatrix_inverse;
+#ifdef USE_STAN
+		delete[] adj_Lmatrix_imgs_rvec;
+		delete[] adj_Lmatrix_transform;
+		delete[] adj_fftplans_Lmatrix;
+		delete[] adj_fftplans_Lmatrix_inverse;
+#endif
 	}
 	fftw_destroy_plan(fftplan);
 	fftw_destroy_plan(fftplan_inverse);
@@ -16051,6 +15995,7 @@ void ImagePixelGrid::cleanup_foreground_FFT_convolution_arrays()
 	fg_fft_convolution_is_setup = false;
 }
 
+/*
 void ImagePixelGrid::PSF_convolution_Lmatrix_dense(const bool verbal)
 {
 	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
@@ -16064,14 +16009,14 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense(const bool verbal)
 
 		Eigen::MatrixXd *Lptr;
 		if (!qlens->psf_supersampling) {
-			Lptr = &Lmatrix_trans_dense;
+			Lptr = &(p.Lmatrix_trans_dense);
 			npix = image_npixels;
 			psf_nx = psf->psf_npixels_x;
 			psf_ny = psf->psf_npixels_y;
 			pixel_map_ii = emask_pixels_i;
 			pixel_map_jj = emask_pixels_j;
 		} else {
-			Lptr = &Lmatrix_trans_supersampled;
+			Lptr = &(p.Lmatrix_trans_supersampled);
 			npix = image_n_subpixels;
 			psf_nx = psf->supersampled_psf_npixels_x;
 			psf_ny = psf->supersampled_psf_npixels_y;
@@ -16227,7 +16172,7 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense(const bool verbal)
 				max_ny = y_N*imgpixel_nsplit;
 			}
 
-			Eigen::MatrixXd Lmatrix_trans_psf = Eigen::MatrixXd::Zero(n_amps,npix);
+			Eigen::MatrixXd Lmatrix_trans_convolved = Eigen::MatrixXd::Zero(n_amps,npix);
 
 			if (qlens->show_wtime) {
 				wtime0 = std::chrono::steady_clock::now();
@@ -16262,10 +16207,10 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense(const bool verbal)
 									psfval = psf_ptr[psf_k][psf_l];
 									img_index2 = pix_index[ii][jj];
 									lmatptr = (*Lptr).col(img_index2).data();
-									lmatpsfptr = Lmatrix_trans_psf.col(img_index1).data();
+									lmatpsfptr = Lmatrix_trans_convolved.col(img_index1).data();
 									for (src_index=0; src_index < source_and_lens_n_amps; src_index++) {
 										//Lmatrix_psf(img_index1,src_index) += psfval*(*Lptr)(img_index2,src_index);
-										//Lmatrix_trans_psf(src_index,img_index1) += psfval*(*Lptr)(src_index,img_index2);
+										//Lmatrix_trans_convolved(src_index,img_index1) += psfval*(*Lptr)(src_index,img_index2);
 										(*(lmatpsfptr++)) += psfval*(*(lmatptr++));
 									}
 								}
@@ -16275,8 +16220,8 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense(const bool verbal)
 				}
 			}
 
-			// note, the following function sets the pointer in Lmatrix_dense to Lmatrix_trans_psf (and deletes the old memory allocation), so no garbage collection necessary afterwards
-			(*Lptr) = std::move(Lmatrix_trans_psf);
+			// note, the following function sets the pointer in Lmatrix_dense to Lmatrix_trans_convolved (and deletes the old memory allocation), so no garbage collection necessary afterwards
+			(*Lptr) = std::move(Lmatrix_trans_convolved);
 
 
 			if (qlens->show_wtime) {
@@ -16296,7 +16241,7 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense(const bool verbal)
 					for (k=0; k < n_amps; k++) {
 						//Lmatrix_dense0[img_index][k] = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
 						//Lmatrix_dense(img_index,k) = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
-						Lmatrix_trans_dense(k,img_index) = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
+						p.Lmatrix_trans_dense(k,img_index) = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
 					}
 				}
 			}
@@ -16305,55 +16250,32 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense(const bool verbal)
 
 	if (qlens->include_imgfluxes_in_inversion) {
 		int i,j,k;
-		//double *Lmatptr;
 		i=0;
 		int src_amp_i;
 		for (j=0; j < qlens->n_ptsrc; j++) {
 			for (k=0; k < qlens->ptsrc_list[j]->images.size(); k++) {
-				//Lmatptr = Lmatrix_transpose_ptimg_amps.row(i).data();
 				// NOTE: we cannot pass a pointer in directly from Lmatrix_transpose_dense because it is in column-major format (whereas Lmatrix_transpose_ptimg_amps is row-major)
-				generate_point_images(qlens->ptsrc_list[j]->images, p.point_image_surface_brightness.data(), false, -1, k);
+				generate_point_images(qlens->ptsrc_list[j]->images, p.point_image_surface_brightness, false, -1, k);
 				src_amp_i = source_and_lens_n_amps + i;
 				for (int img_index=0; img_index < image_npixels; img_index++) {
-					Lmatrix_trans_dense(src_amp_i,img_index) = p.point_image_surface_brightness[img_index];
+					p.Lmatrix_trans_dense(src_amp_i,img_index) = p.point_image_surface_brightness[img_index];
 				}
 				i++;
 			}
 		}
-		//double *Lmatrix_transpose_line;
-		//i=0;
-		//for (j=0; j < qlens->n_ptsrc; j++) {
-			//for (k=0; k < qlens->ptsrc_list[j]->images.size(); k++) {
-				//src_amp_i = source_and_lens_n_amps + i;
-				//Lmatrix_transpose_line = Lmatrix_transpose_ptimg_amps.row(i).data();
-				//for (int img_index=0; img_index < image_npixels; img_index++) {
-					//Lmatrix_trans_dense(src_amp_i,img_index) = Lmatrix_transpose_line[img_index];
-				//}
-				//i++;
-			//}
-		//}
 	} else if (qlens->include_srcflux_in_inversion) {
 		int j,k;
-		//double *Lmatptr;
 		int src_amp_i;
 		for (j=0; j < qlens->n_ptsrc; j++) {
-			//Lmatptr = Lmatrix_transpose_ptimg_amps.row(j).data();
-			generate_point_images(qlens->ptsrc_list[j]->images, p.point_image_surface_brightness.data(), false, 1.0);
+			generate_point_images(qlens->ptsrc_list[j]->images, p.point_image_surface_brightness, false, 1.0);
 			src_amp_i = source_and_lens_n_amps + j;
 			for (int img_index=0; img_index < image_npixels; img_index++) {
-				Lmatrix_trans_dense(src_amp_i,img_index) = p.point_image_surface_brightness[img_index];
+				p.Lmatrix_trans_dense(src_amp_i,img_index) = p.point_image_surface_brightness[img_index];
 			}
 		}
-		//double *Lmatrix_transpose_line;
-		//for (j=0; j < qlens->n_ptsrc; j++) {
-			//src_amp_i = source_and_lens_n_amps + j;
-			//Lmatrix_transpose_line = Lmatrix_transpose_ptimg_amps.row(j).data();
-			//for (int img_index=0; img_index < image_npixels; img_index++) {
-				//Lmatrix_trans_dense(src_amp_i,img_index) = Lmatrix_transpose_line[img_index];
-			//}
-		//}
 	}
 }
+*/
 
 template <typename MathTypes>
 void ImagePixelGrid::PSF_convolution_pixel_vector_wrapper(const bool foreground, const bool verbal, const bool use_fft, const bool use_extended_mask)
@@ -16396,6 +16318,12 @@ void ImagePixelGrid::PSF_convolution_pixel_vector_wrapper(const bool foreground,
 				warn("PSF convolution FFT setup failed");
 				return;	
 			}
+		}
+	} else {
+		if (!foreground) {
+			if (!psf_convolution_is_setup) setup_PSF_convolution(foreground);
+		} else {
+			if (!fg_psf_convolution_is_setup) setup_PSF_convolution(foreground);
 		}
 	}
 
@@ -16725,25 +16653,15 @@ void ImagePixelGrid::PSF_convolution_pixel_vector(const bool foreground, const b
 template <typename VecType>
 VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbvec, const bool foreground, const bool verbal)
 {
-	int npix = sbvec.size();
-#ifdef USE_STAN
-	stan::arena_t<Eigen::VectorXd> out(npix);
-	const auto& sbvec_val = sbvec.val();
-#else
-	Eigen::VectorXd out(npix);
-	const auto& sbvec_val = sbvec;
-#endif
-
+	int npix;
 	int *pixel_map_ii, *pixel_map_jj;
 	if (foreground) {
-		//cout << "using fgmask" << endl;
 		npix = image_npixels_fgmask;
 		pixel_map_ii = fgmask_pixels_i;
 		pixel_map_jj = fgmask_pixels_j;
 	} else {
-		//cout << "NOT using fgmask" << endl;
 		if (!qlens->psf_supersampling) {
-			npix = image_npixels_emask;
+			npix = image_npixels;
 			pixel_map_ii = emask_pixels_i;
 			pixel_map_jj = emask_pixels_j;
 		} else {
@@ -16752,6 +16670,20 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbv
 			pixel_map_jj = emask_subpixels_jj;
 		}
 	}
+
+#ifdef USE_STAN
+	using OutType = std::conditional_t<std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>, stan::arena_t<Eigen::VectorXd>, Eigen::VectorXd>;
+	OutType out(npix);
+	const auto& sbvec_val = [&]() -> const auto& {
+		 if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>)
+			  return sbvec.val();
+		 else
+			  return sbvec;
+	}();
+#else
+	Eigen::VectorXd out(npix);
+	const auto& sbvec_val = sbvec;
+#endif
 
 	bool **selected_mask;
 	if (foreground) {
@@ -16812,6 +16744,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbv
 			single_img_rvec_ptr[l] = sbvec_val[img_index];
 		}
 	}
+#ifdef USE_FFTW
 	fftw_plan& fftplan_ref = (foreground) ? fftplan_fgmask : fftplan;
 	fftw_plan& fftplan_inverse_ref = (foreground) ? fftplan_inverse_fgmask : fftplan_inverse;
 
@@ -16821,6 +16754,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbv
 		img_transform_ptr[i] /= npix_conv;
 	}
 	fftw_execute(fftplan_inverse_ref);
+#endif
 
 	for (img_index=0; img_index < npix; img_index++)
 	{
@@ -16849,6 +16783,8 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbv
 
 	if (qlens->psf_supersampling) average_supersampled_image_surface_brightness();
 
+	return out;
+	/*
 #ifdef USE_STAN
 	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>)
 	{
@@ -16884,6 +16820,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbv
 				}
 			}
 
+#ifdef USE_FFTW
 			fftw_execute(adj_fftplan); // FFT of adjoint image
 
 			for (int k = 0; k < ncomplex; ++k)
@@ -16893,6 +16830,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbv
 			}
 
 			fftw_execute(adj_fftplan_inverse); // inverse FFT -> back to pixel domain
+#endif
 
 			for (int img_index = 0; img_index < npix; ++img_index)
 			{
@@ -16923,6 +16861,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbv
 	} else
 #endif
 	return out;
+	*/
 }
 template Eigen::VectorXd ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT<Eigen::VectorXd>(const Eigen::VectorXd& sbvec, const bool foreground, const bool verbal);
 #ifdef USE_STAN
@@ -17020,8 +16959,6 @@ void ImagePixelGrid::setup_PSF_convolution(const bool foreground)
 				i = k + nx_half - psf_i;
 				if ((i < 0) or (i >= max_nx)) continue;
 				if ((pixel_in_mask != NULL) and (!pixel_in_mask[i][j])) continue;
-				//if ((i == k) and (j == l)) w = 1; // should amount to no convolution at all
-				//else w = 0;
 				w = psf_ptr[psf_i][psf_j];
 				//cout << "PSF weight at (" << psf_i << " " << psf_j << "): " << w << endl;
 
@@ -17045,9 +16982,16 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 	ConvPlan* conv_plan;
 	if (foreground) conv_plan = &this->psfconv_plan_fg;
 	else conv_plan = &this->psfconv_plan;
+
 #ifdef USE_STAN
-	stan::arena_t<Eigen::VectorXd> out(conv_plan->out_size);
-	const auto& sbvec_val = sbvec.val();
+	using OutType = std::conditional_t<std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>, stan::arena_t<Eigen::VectorXd>, Eigen::VectorXd>;
+	OutType out(conv_plan->out_size);
+	const auto& sbvec_val = [&]() -> const auto& {
+		 if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>)
+			  return sbvec.val();
+		 else
+			  return sbvec;
+	}();
 #else
 	Eigen::VectorXd out(conv_plan->out_size);
 	const auto& sbvec_val = sbvec;
@@ -17058,21 +17002,6 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 	}
 
 	// Forward pass
-#ifdef USE_TBB
-	tbb::parallel_for(tbb::blocked_range<int>(0, conv_plan->out_size), [&](const auto& r)
-	{
-		for (int o = r.begin(); o != r.end(); o++) {
-			double sum = 0.0;
-			const int begin = conv_plan->offsets[o];
-			const int end   = conv_plan->offsets[o + 1];
-
-			for (int e = begin; e < end; ++e) {
-				sum += sbvec_val(conv_plan->in_idx[e]) * conv_plan->weight[e];
-			}
-			out[o] = sum;
-		}
-	});
-#else
 	for (int o = 0; o < conv_plan->out_size; o++) {
 		double sum = 0.0;
 		const int begin = conv_plan->offsets[o];
@@ -17086,7 +17015,6 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 		}
 		out[o] = sum;
 	}
-#endif
 
 	if (qlens->show_wtime) {
 		wtime = std::chrono::steady_clock::now() - wtime0;
@@ -17100,37 +17028,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 		return stan::math::make_callback_var(out, [this, foreground, sbvec](const auto& res) mutable {
 			const auto& plan = (foreground) ? this->psfconv_plan_fg : this->psfconv_plan;
 			const auto& out_adj = res.adj();
-			const int a_size = plan.in_size;
 
-#ifdef USE_TBB
-			// thread-local adjoint buffers
-			tbb::enumerable_thread_specific<Eigen::VectorXd> local_adj([&] {
-				return Eigen::VectorXd::Zero(a_size);
-			});
-
-			// parallel reverse pass
-			tbb::parallel_for(tbb::blocked_range<int>(0, plan.out_size), [&](const auto& r)
-			{
-				auto& adj = local_adj.local();
-
-				for (int o = r.begin(); o != r.end(); o++) {
-					const double chain = out_adj[o];
-					const int begin = plan.offsets[o];
-					const int end   = plan.offsets[o + 1];
-
-					for (int e = begin; e < end; ++e) {
-						adj[plan.in_idx[e]] += chain * plan.weight[e];
-					}
-				}
-			});
-
-			// reduction step
-			auto& sb_adj = sbvec.adj();
-
-			for (auto& local : local_adj) {
-				sb_adj += local;
-			}
-#else
 			// serial reverse pass
 			auto& sb_adj = sbvec.adj();
 
@@ -17143,7 +17041,6 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 					sb_adj[plan.in_idx[e]] += chain * plan.weight[e];
 				}
 			}
-#endif
 		});
 	} else
 #endif
@@ -17152,6 +17049,371 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 template Eigen::VectorXd ImagePixelGrid::PSF_convolution_pixel_vector_stan<Eigen::VectorXd>(const Eigen::VectorXd& sbvec, const bool foreground);
 #ifdef USE_STAN
 template stan::math::var_value<Eigen::VectorXd> ImagePixelGrid::PSF_convolution_pixel_vector_stan<stan::math::var_value<Eigen::VectorXd>>(const stan::math::var_value<Eigen::VectorXd>& sbvec, const bool foreground);
+#endif
+
+template <typename MathTypes>
+void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal)
+{
+	using MatType = typename MathTypes::MatType;
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
+	if ((source_and_lens_n_amps > 0) and (psf != NULL)) {
+		if (psf->use_input_psf_matrix) {
+			if (!qlens->psf_supersampling) {
+				if (psf->psf_matrix == NULL) {
+					if (verbal) warn("could not find input PSF matrix");
+					return;
+				}
+			} else {
+				if (psf->supersampled_psf_matrix == NULL) {
+					if (verbal) warn("could not find input supersampled PSF matrix");
+					average_supersampled_image_surface_brightness(); 
+					return;
+				}
+			}
+		} else {
+			if ((psf->psf_params.psf_width_x==0) and (psf->psf_params.psf_width_y==0)) {
+				if (qlens->psf_supersampling) average_supersampled_image_surface_brightness(); // no PSF to convolve
+				return;
+			}
+			else if (psf->generate_PSF_matrix(pixel_xlength,pixel_ylength,qlens->psf_supersampling)==false) {
+				if (verbal) warn("could not generate_PSF matrix");
+				return;
+			}
+			if (qlens->mpi_id==0) cout << "generated PSF matrix" << endl;
+		}
+
+		if (qlens->fft_convolution) {
+			bool fft_is_already_setup = false;
+			if (fft_convolution_is_setup) fft_is_already_setup = true;
+			if (!fft_is_already_setup) {
+				if (!setup_FFT_convolution(qlens->psf_supersampling,false,qlens->include_fgmask_in_inversion,verbal)) {
+					warn("PSF convolution FFT setup failed");
+					return;	
+				}
+			}
+		} else {
+			if (!psf_convolution_is_setup) {
+				setup_PSF_convolution();
+			}
+		}
+
+		if ((qlens->mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
+		MatType *Lptr;
+		if (qlens->psf_supersampling) Lptr = &p.Lmatrix_trans_supersampled;
+		else Lptr = &p.Lmatrix_trans_dense;
+		if (qlens->fft_convolution) {
+			(*Lptr) = PSF_convolution_Lmatrix_dense_stan_FFT((*Lptr),verbal);
+		} else {
+			(*Lptr) = PSF_convolution_Lmatrix_dense_stan((*Lptr)); 
+		}
+		if (qlens->psf_supersampling) average_supersampled_dense_Lmatrix();
+		if (qlens->include_fgmask_in_inversion) {
+			// make sure it doesn't try to fit to the "padded" pixels around the borders of the foreground mask, since those are only there for the PSF convolution
+			int i,j,k,img_index;
+			for (img_index=0; img_index < image_npixels; img_index++) {
+				i = emask_pixels_i[img_index];
+				j = emask_pixels_j[img_index];
+				if (!image_data->foreground_mask_data[i][j]) {
+					for (k=0; k < n_amps; k++) {
+						//Lmatrix_dense0[img_index][k] = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
+						//Lmatrix_dense(img_index,k) = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
+						p.Lmatrix_trans_dense(k,img_index) = 0; // pixels that were only used for padding for PSF convolution should not be used for the fit itself
+					}
+				}
+			}
+		}
+	}
+
+	// Only adding the non-autodiff point image SB because I haven't made that autodiff yet
+	ImgGrid_Params<PlainTypes>& pd = assign_imggrid_param_object<PlainTypes>();
+	if (qlens->include_imgfluxes_in_inversion) {
+		int i,j,k;
+		i=0;
+		int src_amp_i;
+		for (j=0; j < qlens->n_ptsrc; j++) {
+			for (k=0; k < qlens->ptsrc_list[j]->images.size(); k++) {
+				// NOTE: we cannot pass a pointer in directly from Lmatrix_transpose_dense because it is in column-major format (whereas Lmatrix_transpose_ptimg_amps is row-major)
+				generate_point_images(qlens->ptsrc_list[j]->images, pd.point_image_surface_brightness, false, -1, k);
+				src_amp_i = source_and_lens_n_amps + i;
+				for (int img_index=0; img_index < image_npixels; img_index++) {
+					p.Lmatrix_trans_dense(src_amp_i,img_index) = pd.point_image_surface_brightness[img_index];
+				}
+				i++;
+			}
+		}
+	} else if (qlens->include_srcflux_in_inversion) {
+		int j,k;
+		int src_amp_i;
+		for (j=0; j < qlens->n_ptsrc; j++) {
+			generate_point_images(qlens->ptsrc_list[j]->images, pd.point_image_surface_brightness, false, 1.0);
+			src_amp_i = source_and_lens_n_amps + j;
+			for (int img_index=0; img_index < image_npixels; img_index++) {
+				p.Lmatrix_trans_dense(src_amp_i,img_index) = pd.point_image_surface_brightness[img_index];
+			}
+		}
+	}
+}
+template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<PlainTypes>(const bool verbal);
+#ifdef USE_STAN
+template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<VarmatTypes>(const bool verbal);
+#endif
+
+template <typename MatType>
+MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat)
+{
+	ConvPlan* conv_plan = &this->psfconv_plan;
+#ifdef USE_STAN
+	stan::arena_t<Eigen::MatrixXd> Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps, conv_plan->out_size));
+	const Eigen::MatrixXd& Lmat_val = Lmat.val();
+#else
+	Eigen::MatrixXd Lmatrix_trans_convolved = Eigen::MatrixXd::Zero(n_amps,conv_plan->out_size);
+	const auto& Lmat_val = Lmat;
+#endif
+
+	if (qlens->show_wtime) {
+		wtime0 = std::chrono::steady_clock::now();
+	}
+
+	// Forward pass
+	int o, src_idx, psf_idx;
+	const double *lmatptr;
+	double *lmatpsfptr, psfval;
+	for (o = 0; o < conv_plan->out_size; o++) {
+		const int begin = conv_plan->offsets[o];
+		const int end   = conv_plan->offsets[o + 1];
+		for (psf_idx = begin; psf_idx < end; ++psf_idx) {
+			lmatptr = Lmat_val.col(conv_plan->in_idx[psf_idx]).data();
+			lmatpsfptr = Lmatrix_trans_convolved.col(o).data();
+			psfval = conv_plan->weight[psf_idx];
+			for (src_idx=0; src_idx < source_and_lens_n_amps; src_idx++) {
+				(*(lmatpsfptr++)) += psfval*(*(lmatptr++));
+			}
+		}
+	}
+
+	if (qlens->show_wtime) {
+		wtime = std::chrono::steady_clock::now() - wtime0;
+		if (qlens->mpi_id==0) {
+			cout << "Wall time for PSF convolution: "  << wtime.count() << endl;
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>) {
+		return stan::math::make_callback_var(Lmatrix_trans_convolved, [this, Lmat](const auto& res) mutable {
+			const auto& plan = this->psfconv_plan;
+			const auto& Lmatrix_trans_convolved_adj = res.adj();
+
+			// reverse pass
+			auto& Lmat_adj = Lmat.adj();
+
+			int o, src_idx, psf_idx;
+			const double *chain_ptr;
+			double *lmat_adj_ptr, psfval;
+			for (o = 0; o < plan.out_size; o++) {
+				//const double chain = Lmatrix_trans_convolved_adj[o];
+				const int begin = plan.offsets[o];
+				const int end   = plan.offsets[o + 1];
+				for (psf_idx = begin; psf_idx < end; ++psf_idx) {
+					psfval = plan.weight[psf_idx];
+					lmat_adj_ptr = Lmat_adj.col(plan.in_idx[psf_idx]).data();
+					chain_ptr = Lmatrix_trans_convolved_adj.col(o).data();
+					for (src_idx=0; src_idx < source_and_lens_n_amps; src_idx++) {
+						(*(lmat_adj_ptr++)) += (*(chain_ptr++)) * psfval;
+					}
+				}
+			}
+		});
+	} else
+#endif
+	return Lmatrix_trans_convolved;
+}
+template Eigen::MatrixXd ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan<Eigen::MatrixXd>(const Eigen::MatrixXd& Lmat);
+#ifdef USE_STAN
+template stan::math::var_value<Eigen::MatrixXd> ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan<stan::math::var_value<Eigen::MatrixXd>>(const stan::math::var_value<Eigen::MatrixXd>& Lmat);
+#endif
+
+template <typename MatType>
+MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lmat, const bool verbal)
+{
+	int npix;
+	int *pixel_map_ii, *pixel_map_jj;
+	if (!qlens->psf_supersampling) {
+		npix = image_npixels;
+		pixel_map_ii = emask_pixels_i;
+		pixel_map_jj = emask_pixels_j;
+	} else {
+		npix = image_n_subpixels;
+		pixel_map_ii = emask_subpixels_ii;
+		pixel_map_jj = emask_subpixels_jj;
+	}
+#ifdef USE_STAN
+	stan::arena_t<Eigen::MatrixXd> Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps, npix));
+	const Eigen::MatrixXd& Lmat_val = Lmat.val();
+#else
+	Eigen::MatrixXd Lmatrix_trans_convolved = Eigen::MatrixXd::Zero(n_amps,npix);
+	const auto& Lmat_val = Lmat;
+#endif
+
+
+
+	bool **selected_mask;
+	if (pixel_in_mask==NULL) selected_mask = NULL;
+	else selected_mask = pixel_in_mask;
+
+	int i,j,ii,jj,k,l,img_index;
+	bool fft_is_already_setup = false;
+	if (!fft_convolution_is_setup) die("FFT not setup");
+
+	int ncomplex = fft_nj*(fft_ni/2+1);
+
+	if (qlens->show_wtime) {
+		wtime0 = std::chrono::steady_clock::now();
+	}
+	int npix_conv = fft_ni*fft_nj;
+	double *img_rvec;
+	complex<double> *img_cvec;
+	for (int src_index=0; src_index < source_and_lens_n_amps; src_index++) {
+		img_rvec = Lmatrix_imgs_rvec[src_index];
+		img_cvec = Lmatrix_transform[src_index];
+		for (i=0; i < npix_conv; i++) img_rvec[i] = 0;
+		for (img_index=0; img_index < npix; img_index++)
+		{
+			ii = pixel_map_ii[img_index];
+			jj = pixel_map_jj[img_index];
+			if (qlens->psf_supersampling) {
+				i = image_pixel_i_from_subcell_ii[ii];
+				j = image_pixel_j_from_subcell_jj[jj];
+			} else {
+				i = ii;
+				j = jj;
+			}
+			if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
+				ii -= fft_imin;
+				jj -= fft_jmin;
+				l = jj*fft_ni + ii;
+				img_rvec[l] = Lmat_val(src_index,img_index);
+			}
+		}
+
+		fftw_execute(fftplans_Lmatrix[src_index]);
+		for (i=0; i < ncomplex; i++) {
+			img_cvec[i] = img_cvec[i]*psf_transform[i];
+			img_cvec[i] /= npix_conv;
+		}
+		fftw_execute(fftplans_Lmatrix_inverse[src_index]);
+
+		for (img_index=0; img_index < npix; img_index++)
+		{
+			ii = pixel_map_ii[img_index];
+			jj = pixel_map_jj[img_index];
+			if (qlens->psf_supersampling) {
+				i = image_pixel_i_from_subcell_ii[ii];
+				j = image_pixel_j_from_subcell_jj[jj];
+			} else {
+				i = ii;
+				j = jj;
+			}
+			if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
+				ii -= fft_imin;
+				jj -= fft_jmin;
+				l = jj*fft_ni + ii;
+				Lmatrix_trans_convolved(src_index,img_index) = img_rvec[l];
+			}
+		}
+	}
+	if (qlens->show_wtime) {
+		wtime = std::chrono::steady_clock::now() - wtime0;
+		if (qlens->mpi_id==0) {
+			cout << "Wall time for calculating PSF convolution of Lmatrix via FFT: "  << wtime.count() << endl;
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>)
+	{
+		return stan::math::make_callback_var(Lmatrix_trans_convolved, [this,Lmat,npix,npix_conv,ncomplex,pixel_map_ii,pixel_map_jj,selected_mask](const auto& res) mutable {
+			const auto& Lmatrix_trans_convolved_adj = res.adj();
+			auto& Lmat_adj = Lmat.adj();
+
+			double *adj_img_rvec;
+			complex<double> *adj_img_cvec;
+			for (int src_index=0; src_index < source_and_lens_n_amps; src_index++) {
+				adj_img_rvec = adj_Lmatrix_imgs_rvec[src_index];
+				adj_img_cvec = adj_Lmatrix_transform[src_index];
+				std::fill(adj_img_rvec, adj_img_rvec + npix_conv, 0.0);
+				for (int img_index = 0; img_index < npix; ++img_index)
+				{
+					int ii = pixel_map_ii[img_index];
+					int jj = pixel_map_jj[img_index];
+
+					int i, j;
+
+					if (qlens->psf_supersampling) {
+						i = image_pixel_i_from_subcell_ii[ii];
+						j = image_pixel_j_from_subcell_jj[jj];
+					} else {
+						i = ii;
+						j = jj;
+					}
+
+					if ((selected_mask == NULL) || selected_mask[i][j])
+					{
+						int ii0 = ii - fft_imin;
+						int jj0 = jj - fft_jmin;
+
+						int l = jj0 * fft_ni + ii0;
+
+						adj_img_rvec[l] = Lmatrix_trans_convolved_adj(src_index,img_index);
+					}
+				}
+
+#ifdef USE_FFTW
+				fftw_execute(adj_fftplans_Lmatrix[src_index]); // FFT of adjoint image
+
+				for (int k = 0; k < ncomplex; ++k)
+				{
+					adj_img_cvec[k] *= psf_transform_conj[k]; // multiply by complex conjugate of PSF transform
+					adj_img_cvec[k] /= npix_conv;
+				}
+
+				fftw_execute(adj_fftplans_Lmatrix_inverse[src_index]); // inverse FFT -> back to pixel domain
+#endif
+
+				for (int img_index = 0; img_index < npix; ++img_index)
+				{
+					int ii = pixel_map_ii[img_index];
+					int jj = pixel_map_jj[img_index];
+
+					int i, j;
+
+					if (qlens->psf_supersampling) {
+						i = image_pixel_i_from_subcell_ii[ii];
+						j = image_pixel_j_from_subcell_jj[jj];
+					} else {
+						i = ii;
+						j = jj;
+					}
+
+					if ((selected_mask == NULL) || selected_mask[i][j])
+					{
+						int ii0 = ii - fft_imin;
+						int jj0 = jj - fft_jmin;
+
+						int l = jj0 * fft_ni + ii0;
+
+						Lmat_adj(src_index,img_index) += adj_img_rvec[l];
+					}
+				}
+			}
+		});
+	} else
+#endif
+	return Lmatrix_trans_convolved;
+}
+template Eigen::MatrixXd ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT<Eigen::MatrixXd>(const Eigen::MatrixXd& Lmat, const bool verbal);
+#ifdef USE_STAN
+template stan::math::var_value<Eigen::MatrixXd> ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT<stan::math::var_value<Eigen::MatrixXd>>(const stan::math::var_value<Eigen::MatrixXd>& Lmat, const bool verbal);
 #endif
 
 void ImagePixelGrid::average_supersampled_image_surface_brightness()
@@ -17181,8 +17443,8 @@ void ImagePixelGrid::average_supersampled_dense_Lmatrix()
 	for (img_index=0; img_index < image_n_subpixels; img_index++) {
 		i = mask_subpixel_i[img_index];
 		j = mask_subpixel_j[img_index];
-		lmatptr = Lmatrix_trans_dense.col(pixel_index[i][j]).data();
-		lmatsup_ptr = Lmatrix_trans_supersampled.col(img_index).data();
+		lmatptr = p.Lmatrix_trans_dense.col(pixel_index[i][j]).data();
+		lmatsup_ptr = p.Lmatrix_trans_supersampled.col(img_index).data();
 		for (k=0; k < source_and_lens_n_amps; k++) {
 			(*(lmatptr++)) += (*(lmatsup_ptr++))/nsubpix;
 		}
@@ -17325,6 +17587,7 @@ bool ImagePixelGrid::create_regularization_matrix(const bool allow_reg_weighting
 			// If doing a sparse inversion, the determinant of R-matrix will be calculated when doing the inversion; otherwise, must be done here
 			// unless R-matrix is dense (as in the covariance kernel reg.), in which case determinant is found during its construction
 			imggrid->Rmatrix_determinant_EIGEN(false);
+			convert_Rmatrix_to_dense(); // this is only necessary for the autodiff....revisit this!!!!!!!!!!!!!!!!!!!!!!!
 		}
 	}
 
@@ -17940,14 +18203,17 @@ void ImagePixelGrid::generate_Rmatrix_MGE_curvature()
 }
 */
 
-void ImagePixelGrid::get_source_regparam_ptr(const int imggrid_include_i, double* &regparam)
+template <typename QScalar>
+void ImagePixelGrid::get_source_regparam_ptr(const int imggrid_include_i, QScalar* &regparam)
 {
 	if ((qlens->source_fit_mode==Delaunay_Source) or (qlens->source_fit_mode==Cartesian_Source)) {
 		ImagePixelGrid *imggrid = qlens->image_pixel_grids[imggrid_indx_to_include_in_Lmatrix[imggrid_include_i]];
 		if (qlens->source_fit_mode==Delaunay_Source) {
-			regparam = &imggrid->delaunay_srcgrid->delaunay_srcgrid_params.regparam;
+			DelaunaySourceGrid_Params<QScalar>& delaunay_p = imggrid->delaunay_srcgrid->assign_delaunay_srcgrid_param_object<QScalar>();
+			regparam = &delaunay_p.regparam;
 		} else if (qlens->source_fit_mode==Cartesian_Source) {
-			regparam = &imggrid->cartesian_srcgrid->regparam;
+			CartesianSourceGrid_Params<QScalar>& cartesian_p = imggrid->cartesian_srcgrid->assign_cartesian_srcgrid_param_object<QScalar>();
+			regparam = &cartesian_p.regparam;
 		}
 	}
 	else if (qlens->source_fit_mode==Shapelet_Source) {
@@ -17964,6 +18230,10 @@ void ImagePixelGrid::get_source_regparam_ptr(const int imggrid_include_i, double
 	}
 	else die("unknown source pixellation mode");
 }
+template void ImagePixelGrid::get_source_regparam_ptr<double>(const int imggrid_include_i, double* &regparam);
+#ifdef USE_STAN
+template void ImagePixelGrid::get_source_regparam_ptr<stan::math::var>(const int imggrid_include_i, stan::math::var* &regparam);
+#endif
 
 void ImagePixelGrid::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatrix, const bool potential_perturbations, const bool verbal)
 {
@@ -18005,7 +18275,7 @@ void ImagePixelGrid::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatr
 		pix_i = emask_pixels_i[i];
 		pix_j = emask_pixels_j[i];
 		img_index_fgmask = pixel_index_fgmask[pix_i][pix_j];
-		sbcov = p.image_surface_brightness[i] - p.sbprofile_surface_brightness[img_index_fgmask];
+		sbcov = image_surface_brightness_data[i] - p.sbprofile_surface_brightness[img_index_fgmask];
 		if (((!qlens->include_imgfluxes_in_inversion) and (!qlens->include_srcflux_in_inversion)) and (qlens->n_ptsrc > 0)) sbcov -= p.point_image_surface_brightness[i];
 		sbcov *= cov_inverse;
 		for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
@@ -18107,7 +18377,7 @@ void ImagePixelGrid::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatr
 	if (potential_perturbations) optimize_regparam_this_time = false;
 	double *regparam, *regparam_pot;
 	if (qlens->source_fit_mode==Delaunay_Source) regparam = &(delaunay_srcgrid->delaunay_srcgrid_params.regparam);
-	else if (qlens->source_fit_mode==Cartesian_Source) regparam = &(cartesian_srcgrid->regparam);
+	else if (qlens->source_fit_mode==Cartesian_Source) regparam = &(cartesian_srcgrid->cartesian_srcgrid_params.regparam);
 	else die("unknown source pixellation mode");
 	if ((potential_perturbations) and (lensgrid != NULL)) regparam_pot = &(lensgrid->lensgrid_params.regparam);
 	ImagePixelGrid *imggrid;
@@ -18233,12 +18503,12 @@ void ImagePixelGrid::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatr
 			for (int i=0; i < n_src_inv; i++) {
 				get_source_regparam_ptr(i,regparam);
 				imggrid = qlens->image_pixel_grids[imggrid_indx_to_include_in_Lmatrix[i]];
-				if ((!optimize_regparam_this_time) or (i > 0)) imggrid->add_regularization_term_to_dense_Fmatrix(this,regparam,false);
+				if ((!optimize_regparam_this_time) or (i > 0)) imggrid->add_regularization_term_to_dense_Fmatrix<PlainTypes>(this,regparam,false);
 			}
 
 			if ((potential_perturbations) and (lensgrid != NULL)) {
 				regparam_pot = &(lensgrid->lensgrid_params.regparam);
-				add_regularization_term_to_dense_Fmatrix(this,regparam_pot,true);
+				add_regularization_term_to_dense_Fmatrix<PlainTypes>(this,regparam_pot,true);
 			}
 		}
 	}
@@ -18289,9 +18559,14 @@ void ImagePixelGrid::create_lensing_matrices_from_Lmatrix(const bool dense_Fmatr
 	}
 }
 
+template <typename MathTypes>
 void ImagePixelGrid::create_lensing_matrices_from_Lmatrix_dense(const bool potential_perturbations, const bool verbal)
 {
-	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	if (qlens->show_wtime) {
 		wtime0 = std::chrono::steady_clock::now();
 	}
@@ -18305,17 +18580,22 @@ void ImagePixelGrid::create_lensing_matrices_from_Lmatrix_dense(const bool poten
 
 	double cov_inverse; // right now we're using a uniform uncorrelated noise for each pixel; will generalize this later
 	if (!qlens->use_noise_map) {
-		if (qlens->background_pixel_noise==0) cov_inverse = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
+		if (qlens->background_pixel_noise==0) cov_inverse = 1; // if there is no noise, it doesn't matter what the cov_inverse is, since we won't be regularizing
 		else cov_inverse = 1.0/SQR(qlens->background_pixel_noise);
 	}
 
-	int i,j,l,n;
-
-	bool new_entry;
+	int i,j;
 	Dvector = Eigen::VectorXd::Zero(n_amps);
-	Eigen::MatrixXd Lmatrix_trans_scaled(n_amps,image_npixels);
-	Lmatrix_trans_scaled = Lmatrix_trans_dense.array().rowwise() * imgpixel_covinv_vector.cwiseSqrt().transpose().array();
-	Eigen::VectorXd sb_adj(image_npixels);
+	MatType Lmatrix_trans_scaled = Eigen::MatrixXd::Zero(n_amps,image_npixels);
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		Lmatrix_trans_scaled = stan::math::multiply(p.Lmatrix_trans_dense, stan::math::diag_matrix(imgpixel_covinv_vector.cwiseSqrt()));
+	} else 
+#endif
+	{
+		Lmatrix_trans_scaled = p.Lmatrix_trans_dense.array().rowwise() * imgpixel_covinv_vector.cwiseSqrt().transpose().array();
+	}
+	Eigen::VectorXd sb_adj = Eigen::VectorXd::Zero(image_npixels);
 
 	int pix_i, pix_j;
 	int img_index_fgmask;
@@ -18325,11 +18605,24 @@ void ImagePixelGrid::create_lensing_matrices_from_Lmatrix_dense(const bool poten
 		pix_i = emask_pixels_i[j];
 		pix_j = emask_pixels_j[j];
 		img_index_fgmask = pixel_index_fgmask[pix_i][pix_j];
-		sb_adj[j] = p.image_surface_brightness[j] - p.sbprofile_surface_brightness[img_index_fgmask];
-		if (((!qlens->include_imgfluxes_in_inversion) and (!qlens->include_srcflux_in_inversion)) and (qlens->n_ptsrc > 0)) sb_adj[j] -= p.point_image_surface_brightness[j];
-		sb_adj[j] *= covinv;
+		sb_adj(j) = image_surface_brightness_data(j);
+#ifdef USE_STAN
+		if (qlens->n_sb > 0) sb_adj(j) -= stan::math::value_of(p.sbprofile_surface_brightness(img_index_fgmask));
+		if (((!qlens->include_imgfluxes_in_inversion) and (!qlens->include_srcflux_in_inversion)) and (qlens->n_ptsrc > 0)) sb_adj(j) -= stan::math::value_of(p.point_image_surface_brightness(j));
+#else
+		if (qlens->n_sb > 0) sb_adj(j) -= p.sbprofile_surface_brightness(img_index_fgmask);
+		if (((!qlens->include_imgfluxes_in_inversion) and (!qlens->include_srcflux_in_inversion)) and (qlens->n_ptsrc > 0)) sb_adj(j) -= p.point_image_surface_brightness(j);
+#endif
+		sb_adj(j) *= covinv;
 	}
-	Dvector = Lmatrix_trans_dense*sb_adj;
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		Dvector = p.Lmatrix_trans_dense.val()*sb_adj;
+	} else
+#endif
+	{
+		Dvector = p.Lmatrix_trans_dense*sb_adj;
+	}
 
 	Fmatrix_dense = Eigen::MatrixXd::Zero(n_amps,n_amps);
 	if (qlens->show_wtime) {
@@ -18338,28 +18631,31 @@ void ImagePixelGrid::create_lensing_matrices_from_Lmatrix_dense(const bool poten
 		wtime0 = std::chrono::steady_clock::now();
 	}
 
-	Fmatrix_dense.selfadjointView<Eigen::Upper>().rankUpdate(Lmatrix_trans_scaled);
-	//for (i=0; i < n_amps; i++) {
-		//for (j=i+1; j < n_amps; j++) {
-			//Fmatrix_dense(j,i) = Fmatrix_dense(i,j);
-		//}
-	//}
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		Fmatrix_dense.template selfadjointView<Eigen::Upper>().rankUpdate(Lmatrix_trans_scaled.val());
+	} else
+#endif
+	{
+		Fmatrix_dense.template selfadjointView<Eigen::Upper>().rankUpdate(Lmatrix_trans_scaled);
+	}
 
 	ImagePixelGrid* imggrid;
 	if (qlens->regularization_method != None) {
 		if (source_npixels > 0) {
-			double *regparam, *regparam_pot;
+			QScalar *regparam, *regparam_pot;
 			if (qlens->use_covariance_matrix) generate_Gmatrix();
 
 			for (int i=0; i < n_src_inv; i++) {
 				get_source_regparam_ptr(i,regparam);
 				imggrid = qlens->image_pixel_grids[imggrid_indx_to_include_in_Lmatrix[i]];
-				if ((!qlens->optimize_regparam) or (i > 0) or (potential_perturbations)) imggrid->add_regularization_term_to_dense_Fmatrix(this,regparam,false);
+				if ((!qlens->optimize_regparam) or (i > 0) or (potential_perturbations)) imggrid->add_regularization_term_to_dense_Fmatrix<MathTypes>(this,regparam,false);
 			}
 
 			if ((potential_perturbations) and (lensgrid != NULL)) {
-				regparam_pot = &(lensgrid->lensgrid_params.regparam);
-				add_regularization_term_to_dense_Fmatrix(this,regparam_pot,true);
+				LensPixelGrid_Params<QScalar>& lensgrid_p = lensgrid->assign_lensgrid_param_object<QScalar>();
+				regparam_pot = &lensgrid_p.regparam;
+				add_regularization_term_to_dense_Fmatrix<MathTypes>(this,regparam_pot,true);
 			}
 		}
 		if (n_mge_amps > 0) add_MGE_regularization_terms_to_dense_Fmatrix();
@@ -18371,9 +18667,14 @@ void ImagePixelGrid::create_lensing_matrices_from_Lmatrix_dense(const bool poten
 		wtime0 = std::chrono::steady_clock::now();
 	}
 }
+template void ImagePixelGrid::create_lensing_matrices_from_Lmatrix_dense<PlainTypes>(const bool potential_perturbations, const bool verbal);
+#ifdef USE_STAN
+template void ImagePixelGrid::create_lensing_matrices_from_Lmatrix_dense<VarmatTypes>(const bool potential_perturbations, const bool verbal);
+#endif
 
 void ImagePixelGrid::generate_Gmatrix()
 {
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	Dvector_cov = Eigen::VectorXd::Zero(n_amps);
 	Gmatrix.resize(n_amps,n_amps);
 	// NOTE: right now, this doesn't work if image fluxes are included (so n_amps > source_npixels)
@@ -18401,8 +18702,11 @@ void ImagePixelGrid::generate_Gmatrix()
 	}
 }
 
-void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix(ImagePixelGrid *imggrid, double *regparam, const bool potential_perturbations)
+template <typename MathTypes>
+void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix(ImagePixelGrid *imggrid, typename MathTypes::QScalar *regparam, const bool potential_perturbations)
 {
+	using QScalar = typename MathTypes::QScalar;
+	ImgGrid_Params<MathTypes>& p = imggrid->assign_imggrid_param_object<MathTypes>();
 	int npixels, start_indx, end_indx;
 	if (!potential_perturbations) {
 		npixels = source_npixels_inv;
@@ -18416,6 +18720,8 @@ void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix(ImagePixelGrid *im
 		Rmatrix_ptr = &Rmatrix_pot;
 		Rmatrix_index_ptr = &Rmatrix_pot_index;
 	}
+	double regparam_val;
+	regparam_val = value_of((*regparam));
 
 	int row_indx_offset;
 	if (start_indx==0) row_indx_offset = 0;
@@ -18427,13 +18733,13 @@ void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix(ImagePixelGrid *im
 	if (qlens->dense_Rmatrix) {
 		end_indx = start_indx + npixels;
 		if (!qlens->use_covariance_matrix) {
-			imggrid->Fmatrix_dense += (*regparam)*(*Rmatrix_dense_ptr);  // Is this really the most computationally efficient way to do this?
+			Fmatrix_dense = Fmatrix_dense + regparam_val*(*Rmatrix_dense_ptr);  // Is this really the most computationally efficient way to do this?
 		} else {
 			// You'll have to carefully work out how the Gmatrix will work when pot perturbations are included. Leaving this for now
-			imggrid->Gmatrix /= (*regparam);
-			imggrid->Dvector_cov /= (*regparam);
+			Gmatrix = Gmatrix / regparam_val;
+			Dvector_cov = Dvector_cov / regparam_val;
 			for (i=0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
-				imggrid->Gmatrix(i,i) += 1.0;
+				Gmatrix(i,i) += 1.0;
 			}
 		}
 	} else {
@@ -18443,20 +18749,23 @@ void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix(ImagePixelGrid *im
 		//cout << Rmatrix_ptr[0] << endl;
 		//cout << Rmatrix_index_ptr[0] << endl;
 		for (i=0; i < npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
-			//	cout << "row " << i << "... offset=" << row_indx_offset << endl;
-			imggrid->Fmatrix_dense(start_indx+i,start_indx+i) += (*regparam)*(*Rmatrix_ptr)[i];
+			Fmatrix_dense(start_indx+i,start_indx+i) += regparam_val*(*Rmatrix_ptr)[i];
 			for (j=(*Rmatrix_index_ptr)[i]; j < (*Rmatrix_index_ptr)[i+1]; j++) {
-				imggrid->Fmatrix_dense(start_indx+i,start_indx+(*Rmatrix_index_ptr)[j]) += (*regparam)*(*Rmatrix_ptr)[j];
-				//Fmatrix_dense(start_indx+(*Rmatrix_index_ptr)[j],start_indx+i) += (*regparam)*(*Rmatrix_ptr)[j];
+				Fmatrix_dense(start_indx+i,start_indx+(*Rmatrix_index_ptr)[j]) += regparam_val*(*Rmatrix_ptr)[j];
 			}
 			//cout << "setting new offset for row " << i << endl;
 			row_indx_offset += n_amps-start_indx-i;
 		}
 	}
 }
+template void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix<PlainTypes>(ImagePixelGrid *imggrid, double *regparam, const bool potential_perturbations);
+#ifdef USE_STAN
+template void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix<VarmatTypes>(ImagePixelGrid *imggrid, stan::math::var *regparam, const bool potential_perturbations);
+#endif
 
 void ImagePixelGrid::add_MGE_regularization_terms_to_dense_Fmatrix()
 {
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	//int i,j;
 	//int start_indx, row_indx_offset;
 	//int end_indx = start_indx+n_mge_amps;
@@ -18567,7 +18876,7 @@ double ImagePixelGrid::calculate_regularization_prior_term(double *regparam, con
 			Eigen::Map<Eigen::VectorXd> s(p.amplitude_vector.data(), npixels);
 			Es_times_two = s.transpose()*(*Rmatrix_dense_ptr)*s;
 			loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - Rmatrix_log_determinant;
-				//cout << "regparam=" << (*regparam) << " Es_times_two=" << Es_times_two << " Flogdet=" << Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
+				//cout << "regparam=" << (*regparam) << " Es_times_two=" << Es_times_two << " Flogdet=" << p.Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+p.Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
 		}
 	} else {
 		for (i=0; i < npixels; i++) {
@@ -18577,22 +18886,25 @@ double ImagePixelGrid::calculate_regularization_prior_term(double *regparam, con
 			}
 		}
 		loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - Rmatrix_log_determinant;
-		//cout << "regparam=" << (*regparam) << " Es_times_two=" << Es_times_two << " Flogdet=" << Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
+		//cout << "regparam=" << (*regparam) << " Es_times_two=" << Es_times_two << " Flogdet=" << p.Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+p.Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
 	}
 	return loglike_reg;
 }
 
 void ImagePixelGrid::add_regularization_prior_terms_to_logev(double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations, const bool verbal)
 {
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	ImagePixelGrid *imggrid;
 	if (source_npixels > 0) {
 		for (int i=0; i < n_src_inv; i++) {
 			imggrid = qlens->image_pixel_grids[imggrid_indx_to_include_in_Lmatrix[i]];
+			ImgGrid_Params<PlainTypes>& imggrid_params_inv = imggrid->assign_imggrid_param_object<PlainTypes>();
+
 			if ((qlens->source_fit_mode==Delaunay_Source) or (qlens->source_fit_mode==Cartesian_Source)) {
 				if (qlens->source_fit_mode==Delaunay_Source) {
-					regparam_ptr = &imggrid->delaunay_srcgrid->delaunay_srcgrid_params.regparam;
+					imggrid_params_inv.regparam_ptr = &imggrid->delaunay_srcgrid->delaunay_srcgrid_params.regparam;
 				} else if (qlens->source_fit_mode==Cartesian_Source) {
-					regparam_ptr = &imggrid->cartesian_srcgrid->regparam;
+					imggrid_params_inv.regparam_ptr = &imggrid->cartesian_srcgrid->cartesian_srcgrid_params.regparam;
 				}
 			}
 			else if (qlens->source_fit_mode==Shapelet_Source) {
@@ -18604,21 +18916,21 @@ void ImagePixelGrid::add_regularization_prior_terms_to_logev(double& logev_times
 					}
 				}
 
-				if (shapelet_i >= 0) qlens->sb_list[shapelet_i]->get_regularization_param_ptr(regparam_ptr);
+				if (shapelet_i >= 0) qlens->sb_list[shapelet_i]->get_regularization_param_ptr(imggrid_params_inv.regparam_ptr);
 				else die("shapelet not found");
 			}
 			else die("unknown source pixellation mode");
 
-			if ((*regparam_ptr) != 0) {
-				regterms = imggrid->calculate_regularization_prior_term(regparam_ptr);
+			if ((*(imggrid_params_inv.regparam_ptr)) != 0) {
+				regterms = imggrid->calculate_regularization_prior_term(imggrid_params_inv.regparam_ptr);
 				logev_times_two += regterms;
 				loglike_reg += regterms;
 			}
 			if ((qlens->mpi_id==0) and (verbal)) {
 				if ((source_npixels > 0) and (qlens->regularization_method != None)) {
 					if (qlens->n_extended_src_redshifts > 1) cout << "imggrid_i=" << imggrid_indx_to_include_in_Lmatrix[i] << ": ";
-					if (qlens->use_covariance_matrix) cout << "logdet(Gmatrix)=" << Gmatrix_log_determinant;
-					else cout << "logdet(Fmatrix)=" << Fmatrix_log_determinant;
+					if (qlens->use_covariance_matrix) cout << "logdet(Gmatrix)=" << imggrid_params_inv.Gmatrix_log_determinant;
+					else cout << "logdet(Fmatrix)=" << imggrid_params_inv.Fmatrix_log_determinant;
 					cout << " logdet(Rmatrix)=" << Rmatrix_log_determinant;
 					cout << endl;
 				}
@@ -18631,17 +18943,153 @@ void ImagePixelGrid::add_regularization_prior_terms_to_logev(double& logev_times
 		loglike_reg += regterms;
 	}
 	if ((include_potential_perturbations) and (lensgrid != NULL)) {
-		regparam_ptr = &(lensgrid->lensgrid_params.regparam);
-		if ((*regparam_ptr) != 0) {
-			regterms = calculate_regularization_prior_term(regparam_ptr,true);
+		p.regparam_ptr = &(lensgrid->lensgrid_params.regparam);
+		if ((*(p.regparam_ptr)) != 0) {
+			regterms = calculate_regularization_prior_term(p.regparam_ptr,true);
 			logev_times_two += regterms;
 			loglike_reg += regterms;
 		}
 	}
 
-	if ((!qlens->use_covariance_matrix) or (qlens->source_fit_mode != Delaunay_Source)) logev_times_two += Fmatrix_log_determinant;
-	else logev_times_two += Gmatrix_log_determinant;
+	if ((!qlens->use_covariance_matrix) or (qlens->source_fit_mode != Delaunay_Source)) logev_times_two += p.Fmatrix_log_determinant;
+	else logev_times_two += p.Gmatrix_log_determinant;
 }
+
+
+
+template <typename QScalar, typename MathTypes>
+QScalar ImagePixelGrid::calculate_regularization_prior_term_stan(QScalar *regparam, const bool potential_perturbations)
+{
+#ifdef USE_STAN
+	using stan::math::log;
+#endif
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
+	int npixels, start_indx;
+	QScalar *Rmatrix_logdet_ptr;
+	if (!potential_perturbations) {
+		npixels = source_npixels_inv;
+		start_indx = src_npixel_start;
+		Rmatrix_ptr = &Rmatrix_sparse;
+		Rmatrix_index_ptr = &Rmatrix_index;
+		Rmatrix_dense_ptr = &Rmatrix_dense;
+	} else {
+		npixels = lensgrid_npixels;
+		start_indx = source_npixels;
+		Rmatrix_ptr = &Rmatrix_pot;
+		Rmatrix_index_ptr = &Rmatrix_pot_index;
+	}
+
+	int i,j;
+	QScalar loglike_reg,Es_times_two=0;
+	if (qlens->dense_Rmatrix) {
+		//if (qlens->use_covariance_matrix) {
+			//// Need to expand this to work for potential perturbations
+			//VecType b = Eigen::VectorXd::Zero(npixels);
+			//for (int i=0; i < npixels; i++) b[i] = p.amplitude_vector[i];
+			//b = covmatrix_factored.solve(b);
+			//for (i=0; i < npixels; i++) Es_times_two += p.amplitude_vector[i]*b[i];
+			//loglike_reg = (*regparam)*Es_times_two;
+		//} else {
+			////Eigen::Map<Eigen::VectorXd> s(p.amplitude_vector.data(), npixels);
+			//Es_times_two = p.amplitude_vector.transpose()*(*Rmatrix_dense_ptr)*p.amplitude_vector;
+			//loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - Rmatrix_log_determinant;
+				////cout << "regparam=" << (*regparam) << " Es_times_two=" << Es_times_two << " Flogdet=" << p.Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+p.Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
+		//}
+	} else {
+		for (i=0; i < npixels; i++) {
+			Es_times_two += (*Rmatrix_ptr)[i]*SQR(p.amplitude_vector(start_indx+i));
+			for (j=(*Rmatrix_index_ptr)[i]; j < (*Rmatrix_index_ptr)[i+1]; j++) {
+				Es_times_two += 2 * p.amplitude_vector(start_indx+i) * (*Rmatrix_ptr)[j] * p.amplitude_vector(start_indx+(*Rmatrix_index_ptr)[j]); // factor of 2 since matrix is symmetric
+			}
+		}
+		loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - Rmatrix_log_determinant;
+		//cout << "regparam=" << (*regparam) << " Es_times_two=" << Es_times_two << " Flogdet=" << p.Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+p.Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
+	}
+	return loglike_reg;
+}
+template double ImagePixelGrid::calculate_regularization_prior_term_stan<double,PlainTypes>(double *regparam, const bool potential_perturbations);
+#ifdef USE_STAN
+template stan::math::var ImagePixelGrid::calculate_regularization_prior_term_stan<stan::math::var,VarmatTypes>(stan::math::var *regparam, const bool potential_perturbations);
+#endif
+
+template <typename QScalar, typename MathTypes>
+void ImagePixelGrid::add_regularization_prior_terms_to_logev_stan(QScalar& logev_times_two, QScalar& loglike_reg, QScalar& regterms, const bool include_potential_perturbations, const bool verbal)
+{
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
+	ImagePixelGrid *imggrid;
+	if (source_npixels > 0) {
+		for (int i=0; i < n_src_inv; i++) {
+			imggrid = qlens->image_pixel_grids[imggrid_indx_to_include_in_Lmatrix[i]];
+			ImgGrid_Params<MathTypes>& imggrid_params_inv = imggrid->assign_imggrid_param_object<MathTypes>();
+
+			if ((qlens->source_fit_mode==Delaunay_Source) or (qlens->source_fit_mode==Cartesian_Source)) {
+				if (qlens->source_fit_mode==Delaunay_Source) {
+#ifdef USE_STAN
+					if constexpr (stan::is_autodiff_v<QScalar>) {
+						imggrid_params_inv.regparam_ptr = &imggrid->delaunay_srcgrid->delaunay_srcgrid_params_dif.regparam;
+					} else
+#endif
+					{
+						imggrid_params_inv.regparam_ptr = &imggrid->delaunay_srcgrid->delaunay_srcgrid_params.regparam;
+					}
+				//} else if (qlens->source_fit_mode==Cartesian_Source) {
+					//imggrid_params_inv.regparam_ptr = &imggrid->cartesian_srcgrid->cartesian_srcgrid_params.regparam;
+				}
+			}
+			else if (qlens->source_fit_mode==Shapelet_Source) {
+				int shapelet_i = -1;
+				for (int i=0; i < qlens->n_sb; i++) {
+					if ((qlens->sb_list[i]->sbtype==SHAPELET) and (qlens->sbprofile_imggrid_idx[i]==imggrid_index)) {
+						shapelet_i = i;
+						break;
+					}
+				}
+
+				if (shapelet_i >= 0) qlens->sb_list[shapelet_i]->get_regularization_param_ptr(imggrid_params_inv.regparam_ptr);
+				else die("shapelet not found");
+			}
+			else die("unknown source pixellation mode");
+
+			if ((*(imggrid_params_inv.regparam_ptr)) != 0) {
+				regterms = imggrid->calculate_regularization_prior_term_stan<QScalar,MathTypes>(imggrid_params_inv.regparam_ptr);
+				logev_times_two += regterms;
+				loglike_reg += regterms;
+			}
+			if ((qlens->mpi_id==0) and (verbal)) {
+				if ((source_npixels > 0) and (qlens->regularization_method != None)) {
+					if (qlens->n_extended_src_redshifts > 1) cout << "imggrid_i=" << imggrid_indx_to_include_in_Lmatrix[i] << ": ";
+					if (qlens->use_covariance_matrix) cout << "logdet(Gmatrix)=" << imggrid_params_inv.Gmatrix_log_determinant;
+					else cout << "logdet(Fmatrix)=" << imggrid_params_inv.Fmatrix_log_determinant;
+					cout << " logdet(Rmatrix)=" << Rmatrix_log_determinant;
+					cout << endl;
+				}
+			}
+		}
+	}
+	//if (n_mge_amps > 0)  {
+		//regterms = calculate_MGE_regularization_prior_term();
+		//logev_times_two += regterms;
+		//loglike_reg += regterms;
+	//}
+	//if ((include_potential_perturbations) and (lensgrid != NULL)) {
+		//p.regparam_ptr = &(lensgrid->lensgrid_params.regparam);
+		//if ((*(p.regparam_ptr)) != 0) {
+			//regterms = calculate_regularization_prior_term(p.regparam_ptr,true);
+			//logev_times_two += regterms;
+			//loglike_reg += regterms;
+		//}
+	//}
+
+	if ((!qlens->use_covariance_matrix) or (qlens->source_fit_mode != Delaunay_Source)) logev_times_two += p.Fmatrix_log_determinant;
+	else logev_times_two += p.Gmatrix_log_determinant;
+}
+template void ImagePixelGrid::add_regularization_prior_terms_to_logev_stan<double,PlainTypes>(double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations, const bool verbal);
+#ifdef USE_STAN
+template void ImagePixelGrid::add_regularization_prior_terms_to_logev_stan<stan::math::var,VarmatTypes>(stan::math::var& logev_times_two, stan::math::var& loglike_reg, stan::math::var& regterms, const bool include_potential_perturbations, const bool verbal);
+#endif
+
+
+
 
 double ImagePixelGrid::calculate_MGE_regularization_prior_term()
 {
@@ -18696,11 +19144,11 @@ bool ImagePixelGrid::optimize_regularization_parameter(const bool dense_Fmatrix,
 	else chisqreg = &ImagePixelGrid::chisq_regparam;
 	logreg_min = brents_min_method(chisqreg,qlens->optimize_regparam_minlog,qlens->optimize_regparam_maxlog,qlens->optimize_regparam_tol,verbal);
 	//(this->*chisqreg)(log((*regparam_ptr))/ln10); // used for testing purposes
-	(*regparam_ptr) = pow(10,logreg_min);
-	if ((verbal) and (qlens->mpi_id==0)) cout << "regparam after optimizing: " << (*regparam_ptr) << endl;
+	(*p.regparam_ptr) = pow(10,logreg_min);
+	if ((verbal) and (qlens->mpi_id==0)) cout << "regparam after optimizing: " << (*p.regparam_ptr) << endl;
 
-	if (qlens->use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
-	else Fmatrix_log_determinant = regopt_logdet;
+	if (qlens->use_covariance_matrix) p.Gmatrix_log_determinant = regopt_logdet;
+	else p.Fmatrix_log_determinant = regopt_logdet;
 	for (i=0; i < n_amps; i++) p.amplitude_vector[i] = p.amplitude_vector_minchisq[i];
 	if (qlens->show_wtime) {
 		wtime_opt = std::chrono::steady_clock::now() - wtime_opt0;
@@ -18724,10 +19172,10 @@ bool ImagePixelGrid::optimize_regularization_parameter(const bool dense_Fmatrix,
 				wtime_opt0 = std::chrono::steady_clock::now();
 			}
 			logreg_min = brents_min_method(chisqreg,qlens->optimize_regparam_minlog,qlens->optimize_regparam_maxlog,qlens->optimize_regparam_tol,verbal);
-			(*regparam_ptr) = pow(10,logreg_min);
-			if ((verbal) and (qlens->mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << (*regparam_ptr) << endl;
-			if (qlens->use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
-			else Fmatrix_log_determinant = regopt_logdet;
+			(*p.regparam_ptr) = pow(10,logreg_min);
+			if ((verbal) and (qlens->mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << (*p.regparam_ptr) << endl;
+			if (qlens->use_covariance_matrix) p.Gmatrix_log_determinant = regopt_logdet;
+			else p.Fmatrix_log_determinant = regopt_logdet;
 			for (i=0; i < n_amps; i++) p.amplitude_vector[i] = p.amplitude_vector_minchisq[i];
 			if (verbal) if (qlens->mpi_id==0) cout << "loglike=" << regopt_chisqmin << endl;
 		}
@@ -18739,10 +19187,10 @@ bool ImagePixelGrid::optimize_regularization_parameter(const bool dense_Fmatrix,
 			if (qlens->use_covariance_matrix) generate_Gmatrix();
 			regopt_chisqmin = 1e30;
 			logreg_min = brents_min_method(chisqreg,qlens->optimize_regparam_minlog,qlens->optimize_regparam_maxlog,qlens->optimize_regparam_tol,verbal);
-			(*regparam_ptr) = pow(10,logreg_min);
-			if ((verbal) and (qlens->mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << (*regparam_ptr) << endl;
-			if (qlens->use_covariance_matrix) Gmatrix_log_determinant = regopt_logdet;
-			else Fmatrix_log_determinant = regopt_logdet;
+			(*p.regparam_ptr) = pow(10,logreg_min);
+			if ((verbal) and (qlens->mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << (*p.regparam_ptr) << endl;
+			if (qlens->use_covariance_matrix) p.Gmatrix_log_determinant = regopt_logdet;
+			else p.Fmatrix_log_determinant = regopt_logdet;
 			for (i=0; i < n_amps; i++) p.amplitude_vector[i] = p.amplitude_vector_minchisq[i];
 			if (verbal) if (qlens->mpi_id==0) cout << "lumreg_it=" << j << " loglike=" << regopt_chisqmin << endl;
 		}
@@ -18756,7 +19204,7 @@ bool ImagePixelGrid::optimize_regularization_parameter(const bool dense_Fmatrix,
 		}
 	}
 
-	update_source_and_lensgrid_amplitudes(verbal);
+	update_source_and_lensgrid_amplitudes<PlainTypes>(verbal);
 	if ((qlens->use_lum_weighted_srcpixel_clustering) and (pre_srcgrid)) {
 		if (qlens->show_wtime) {
 			wtime_opt0 = std::chrono::steady_clock::now();
@@ -18783,7 +19231,7 @@ bool ImagePixelGrid::optimize_regularization_parameter(const bool dense_Fmatrix,
 void ImagePixelGrid::setup_regparam_optimization(const bool dense_Fmatrix)
 {
 	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
-	get_source_regparam_ptr(0,regparam_ptr);
+	get_source_regparam_ptr(0,p.regparam_ptr);
 	p.img_minus_sbprofile.resize(image_npixels);
 	int i, pix_i, pix_j, img_index_fgmask;
 	image_npixels_data = image_npixels;
@@ -18801,7 +19249,7 @@ void ImagePixelGrid::setup_regparam_optimization(const bool dense_Fmatrix)
 		pix_i = emask_pixels_i[i];
 		pix_j = emask_pixels_j[i];
 		img_index_fgmask = pixel_index_fgmask[pix_i][pix_j];
-		p.img_minus_sbprofile[i] = p.image_surface_brightness[i] - p.sbprofile_surface_brightness[img_index_fgmask];
+		p.img_minus_sbprofile[i] = image_surface_brightness_data[i] - p.sbprofile_surface_brightness[img_index_fgmask];
 		if ((!qlens->include_fgmask_in_inversion) or (image_data->foreground_mask_data[pix_i][pix_j])) {
 			img_index_datapixels[j++] = i;
 		}
@@ -18833,7 +19281,7 @@ void ImagePixelGrid::setup_regparam_optimization(const bool dense_Fmatrix)
 
 void ImagePixelGrid::calculate_subpixel_sbweights(const bool save_sbweights, const bool verbal)
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = assign_imggrid_param_object<PlainTypes>();
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	SB_Profile** sb_list = qlens->sb_list;
 	int npix_in_mask;
 	int *pixptr_i, *pixptr_j;
@@ -18889,7 +19337,7 @@ void ImagePixelGrid::calculate_subpixel_sbweights(const bool save_sbweights, con
 			for (k=0; k < nsubpix; k++) {
 				// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)...did I already accomplish this? (check)
 				sb = 0;
-				if (qlens->source_fit_mode==Delaunay_Source) sb += delaunay_srcgrid->interpolate_surface_brightness(subpixel_center_sourcepts[i][j][k],false,thread);
+				if (qlens->source_fit_mode==Delaunay_Source) sb += delaunay_srcgrid->interpolate_surface_brightness(subpixel_center_sourcepts[i][j][k][0],subpixel_center_sourcepts[i][j][k][1],false,thread);
 				else if (qlens->source_fit_mode==Cartesian_Source) sb += cartesian_srcgrid->find_lensed_surface_brightness_interpolate(subpixel_center_sourcepts[i][j][k],thread);
 				else if (at_least_one_lensed_src) {
 					for (m=0; m < qlens->n_sb; m++) {
@@ -18921,11 +19369,11 @@ void ImagePixelGrid::calculate_subpixel_sbweights(const bool save_sbweights, con
 
 void ImagePixelGrid::calculate_subpixel_distweights()
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = assign_imggrid_param_object<PlainTypes>();
-	DelaunaySourceGrid_Params<double>& p = delaunay_srcgrid->assign_delaunay_srcgrid_param_object<double>();
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
+	DelaunaySourceGrid_Params<double>& srcgrid_params = delaunay_srcgrid->assign_delaunay_srcgrid_param_object<double>();
 	if (psf==NULL) return;
 	double xc, yc, xc_approx, yc_approx, sig, rc;
-	rc = p.distreg_rc;
+	rc = srcgrid_params.distreg_rc;
 	sig = find_approx_source_size(xc_approx,yc_approx);
 	if (qlens->fix_lumreg_sig) sig = qlens->lumreg_sig;
 	if (qlens->auto_lumreg_center) {
@@ -18934,8 +19382,8 @@ void ImagePixelGrid::calculate_subpixel_distweights()
 	} else {
 		if (qlens->lensed_lumreg_center) {
 			lensvector<double> xl;
-			xl[0] = p.distreg_xcenter;
-			xl[1] = p.distreg_ycenter;
+			xl[0] = srcgrid_params.distreg_xcenter;
+			xl[1] = srcgrid_params.distreg_ycenter;
 			if (psf != 0) {
 				xl[0] -= psf->psf_params.psf_offset_x;
 				xl[1] -= psf->psf_params.psf_offset_y;
@@ -18948,8 +19396,8 @@ void ImagePixelGrid::calculate_subpixel_distweights()
 				double xc2, yc2;
 				rc = 0;
 				for (i=0, phi=0; i < phi_nn; i++, phi += phi_step) {
-					xl[0] = p.distreg_xcenter + p.distreg_rc*cos(phi);
-					xl[1] = p.distreg_ycenter + p.distreg_rc*sin(phi);
+					xl[0] = srcgrid_params.distreg_xcenter + srcgrid_params.distreg_rc*cos(phi);
+					xl[1] = srcgrid_params.distreg_ycenter + srcgrid_params.distreg_rc*sin(phi);
 					if (psf != 0) {
 						xl[0] -= psf->psf_params.psf_offset_x;
 						xl[1] -= psf->psf_params.psf_offset_y;
@@ -18963,7 +19411,7 @@ void ImagePixelGrid::calculate_subpixel_distweights()
 			//if ((verbal) and (qlens->mpi_id==0)) cout << "estimated lumreg_rc mapped to source plane: " << rc << endl;
 
 		} else {
-			xc = p.distreg_xcenter; yc = p.distreg_ycenter;
+			xc = srcgrid_params.distreg_xcenter; yc = srcgrid_params.distreg_ycenter;
 		}
 	}
 
@@ -18998,7 +19446,7 @@ void ImagePixelGrid::calculate_subpixel_distweights()
 			srcpts[l++] = &subpixel_center_sourcepts[i][j][k];
 		}
 	}
-	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,n_weights,p.distreg_e1,p.distreg_e2);
+	calculate_srcpixel_scaled_distances(xc,yc,sig,scaled_dists,srcpts,n_weights,srcgrid_params.distreg_e1,srcgrid_params.distreg_e2);
 
 	l=0;
 	double scaled_rcsq = SQR(rc/sig);
@@ -19006,7 +19454,7 @@ void ImagePixelGrid::calculate_subpixel_distweights()
 		i = pixptr_i[n];
 		j = pixptr_j[n];
 		for (k=0; k < nsubpix; k++) {
-			subpixel_weights[i][j][k] = exp(-pow(sqrt(SQR(scaled_dists[l++]) + scaled_rcsq),p.regparam_lum_index));
+			subpixel_weights[i][j][k] = exp(-pow(sqrt(SQR(scaled_dists[l++]) + scaled_rcsq),srcgrid_params.regparam_lum_index));
 			//cout << "WEIGHT " << (l-1) << ": " << subpixel_weights[i][j][k] << " " << scaled_dists[l-1] << " " << (*srcpts[l-1])[0] << " " << (*srcpts[l-1])[1] << " " << xc << " " << yc << " " << sig << endl;
 		}
 	}
@@ -19169,7 +19617,7 @@ void ImagePixelGrid::calculate_mag_srcpixel_weights()
 
 void ImagePixelGrid::find_srcpixel_weights()
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = assign_imggrid_param_object<PlainTypes>();
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	int npix_in_mask;
 	int *pixptr_i, *pixptr_j;
 	if (qlens->include_fgmask_in_inversion) {
@@ -19202,7 +19650,7 @@ void ImagePixelGrid::find_srcpixel_weights()
 			pt = &subpixel_center_sourcepts[i][j][k];
 			// This needs to be generalized so the weights can be created using different source modes (shapelet, sbprofile, etc.)
 			inside_triangle = false;
-			trinum = delaunay_srcgrid->search_grid(0,*pt,inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
+			trinum = delaunay_srcgrid->search_grid(0,(*pt)[0],(*pt)[1],inside_triangle); // maybe you can speed this up later by choosing a better initial triangle
 			indx = delaunay_srcgrid->find_closest_vertex(trinum,*pt);
 			#pragma omp critical
 			{
@@ -19214,7 +19662,7 @@ void ImagePixelGrid::find_srcpixel_weights()
 
 	indx=0;
 	for (i=0; i < nsrcpix; i++) {
-		if (delaunay_srcgrid->active_pixel[i]) imggrid_params.amplitude_vector[indx++] = srcpixel_weights[i] / srcpixel_nimgpts[i];
+		if (delaunay_srcgrid->active_pixel[i]) p.amplitude_vector[indx++] = srcpixel_weights[i] / srcpixel_nimgpts[i];
 	}
 }
 
@@ -19262,7 +19710,7 @@ double ImagePixelGrid::chisq_regparam(const double logreg)
 		else cov_inverse_bg = 1.0/SQR(qlens->background_pixel_noise);
 	}
 
-	(*regparam_ptr) = pow(10,logreg);
+	(*p.regparam_ptr) = pow(10,logreg);
 	int i,j,k,index2;
 
 	for (i=0; i < Fmatrix_nn; i++) {
@@ -19270,11 +19718,11 @@ double ImagePixelGrid::chisq_regparam(const double logreg)
 	}
 
 	for (i=src_npixel_start, index2=0; index2 < source_npixels_inv; i++, index2++) {
-		Fmatrix_copy[i] += (*regparam_ptr)*(*Rmatrix_ptr)[index2];
+		Fmatrix_copy[i] += (*p.regparam_ptr)*(*Rmatrix_ptr)[index2];
 		for (j=(*Rmatrix_index_ptr)[index2]; j < (*Rmatrix_index_ptr)[index2+1]; j++) {
 			for (k=Fmatrix_index[i]; k < Fmatrix_index[i+1]; k++) {
 				if ((*Rmatrix_index_ptr)[j]==Fmatrix_index[k]) {
-					Fmatrix_copy[k] += (*regparam_ptr)*(*Rmatrix_ptr)[j];
+					Fmatrix_copy[k] += (*p.regparam_ptr)*(*Rmatrix_ptr)[j];
 				}
 			}
 		}
@@ -19308,13 +19756,13 @@ double ImagePixelGrid::chisq_regparam(const double logreg)
 			//Es_times_two += 2 * p.amplitude_vector[i] * (*Rmatrix_ptr)[j] * p.amplitude_vector[(*Rmatrix_index_ptr)[j]]; // factor of 2 since matrix is symmetric
 		//}
 	//}
-	//cout << "chisqreg: " << (Ed_times_two + (*regparam_ptr)*Es_times_two + Fmatrix_log_determinant - n_amps*log((*regparam_ptr)) - Rmatrix_log_determinant) << endl;
-	//cout << "reg*Es_times_two=" << ((*regparam_ptr)*Es_times_two) << " n_shapelets*log(regparam)=" << (-n_amps*log((*regparam_ptr))) << " -det(Rmatrix)=" << (-Rmatrix_log_determinant) << " log(Fmatrix_sparse)=" << Fmatrix_logdet << endl;
+	//cout << "chisqreg: " << (Ed_times_two + (*p.regparam_ptr)*Es_times_two + p.Fmatrix_log_determinant - n_amps*log((*p.regparam_ptr)) - Rmatrix_log_determinant) << endl;
+	//cout << "reg*Es_times_two=" << ((*p.regparam_ptr)*Es_times_two) << " n_shapelets*log(regparam)=" << (-n_amps*log((*p.regparam_ptr))) << " -det(Rmatrix)=" << (-Rmatrix_log_determinant) << " log(Fmatrix_sparse)=" << Fmatrix_logdet << endl;
 
-	//chisq = (Ed_times_two + (*regparam_ptr)*Es_times_two + Fmatrix_logdet - source_npixels*log((*regparam_ptr)) - Rmatrix_log_determinant);
+	//chisq = (Ed_times_two + (*p.regparam_ptr)*Es_times_two + Fmatrix_logdet - source_npixels*log((*p.regparam_ptr)) - Rmatrix_log_determinant);
 
-	double loglike_reg = calculate_regularization_prior_term(regparam_ptr,false);
-	//cout << "regparam: " << (*regparam_ptr) << " loglike_reg=" << loglike_reg << " Flogdet=" << Fmatrix_logdet << endl;
+	double loglike_reg = calculate_regularization_prior_term(p.regparam_ptr,false);
+	//cout << "regparam: " << (*p.regparam_ptr) << " loglike_reg=" << loglike_reg << " Flogdet=" << Fmatrix_logdet << endl;
 	chisq = Ed_times_two + loglike_reg;
 	chisq += Fmatrix_logdet;
 
@@ -19333,7 +19781,7 @@ double ImagePixelGrid::chisq_regparam_dense(const double logreg)
 	if (qlens->background_pixel_noise==0) cov_inverse_bg = 1; // if there is no noise it doesn't matter what the cov_inverse is, since we won't be regularizing
 	else cov_inverse_bg = 1.0/SQR(qlens->background_pixel_noise);
 
-	(*regparam_ptr) = pow(10,logreg);
+	(*p.regparam_ptr) = pow(10,logreg);
 	int i,j;
 	int npixels, start_indx, end_indx;
 	npixels = source_npixels_inv;
@@ -19349,13 +19797,13 @@ double ImagePixelGrid::chisq_regparam_dense(const double logreg)
 		end_indx = start_indx + npixels;
 		if (!qlens->use_covariance_matrix) {
 			Fmatrix_dense_copy = Fmatrix_dense;
-			Fmatrix_dense_copy += (*regparam_ptr)*(*Rmatrix_dense_ptr);
+			Fmatrix_dense_copy += (*p.regparam_ptr)*(*Rmatrix_dense_ptr);
 			int n_extra_amps = n_amps - npixels;
 			double *Fptr, *Rptr;
 		} else {
 			Gmatrix_copy = Gmatrix;
-			Gmatrix_copy /= (*regparam_ptr);
-			Dvector_cov_copy = Dvector_cov / (*regparam_ptr);
+			Gmatrix_copy /= (*p.regparam_ptr);
+			Dvector_cov_copy = Dvector_cov / (*p.regparam_ptr);
 			for (i=0; i < npixels; i++) { // additional source amplitudes (beyond npixels) are not regularized
 				Gmatrix_copy(i,i) += 1.0;
 			}
@@ -19364,10 +19812,10 @@ double ImagePixelGrid::chisq_regparam_dense(const double logreg)
 		Fmatrix_dense_copy = Fmatrix_dense;
 		int k;
 		for (i=0; i < npixels; i++) {
-			Fmatrix_dense_copy(start_indx+i,start_indx+i) += (*regparam_ptr)*(*Rmatrix_ptr)[i];
+			Fmatrix_dense_copy(start_indx+i,start_indx+i) += (*p.regparam_ptr)*(*Rmatrix_ptr)[i];
 			for (k=(*Rmatrix_index_ptr)[i]; k < (*Rmatrix_index_ptr)[i+1]; k++) {
-				Fmatrix_dense_copy(start_indx+i,start_indx+(*Rmatrix_index_ptr)[k]) += (*regparam_ptr)*(*Rmatrix_ptr)[k];
-				//Fmatrix_dense_copy(start_indx+(*Rmatrix_index_ptr)[k],start_indx+i) += (*regparam_ptr)*(*Rmatrix_ptr)[k];
+				Fmatrix_dense_copy(start_indx+i,start_indx+(*Rmatrix_index_ptr)[k]) += (*p.regparam_ptr)*(*Rmatrix_ptr)[k];
+				//Fmatrix_dense_copy(start_indx+(*Rmatrix_index_ptr)[k],start_indx+i) += (*p.regparam_ptr)*(*Rmatrix_ptr)[k];
 			}
 			row_indx_offset += n_amps-start_indx-i;
 		}
@@ -19418,7 +19866,7 @@ double ImagePixelGrid::chisq_regparam_dense(const double logreg)
 				//temp_img += (*(Lmatptr++))*(*(tempsrcptr++));
 			//}
 			//temp_img += Lmatrix_dense.row(i).dot(p.amplitude_vector);
-			temp_img += Lmatrix_trans_dense.col(i).dot(p.amplitude_vector);
+			temp_img += p.Lmatrix_trans_dense.col(i).dot(p.amplitude_vector);
 		} else {
 			for (j=image_pixel_location_Lmatrix[i]; j < image_pixel_location_Lmatrix[i+1]; j++) {
 				temp_img += Lmatrix_sparse[j]*p.amplitude_vector[Lmatrix_index[j]];
@@ -19428,8 +19876,8 @@ double ImagePixelGrid::chisq_regparam_dense(const double logreg)
 		Ed_times_two += SQR(temp_img - p.img_minus_sbprofile[i])*cov_inverse;
 	}
 
-	double loglike_reg = calculate_regularization_prior_term(regparam_ptr,false);
-	//cout << "regparam: " << (*regparam_ptr) << " loglike_reg=" << loglike_reg << " Flogdet=" << Fmatrix_logdet << endl;
+	double loglike_reg = calculate_regularization_prior_term(p.regparam_ptr,false);
+	//cout << "regparam: " << (*p.regparam_ptr) << " loglike_reg=" << loglike_reg << " Flogdet=" << Fmatrix_logdet << endl;
 	chisq = Ed_times_two + loglike_reg;
 	logdet = (qlens->use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
 	chisq += logdet;
@@ -19528,6 +19976,22 @@ double ImagePixelGrid::brents_min_method(double (ImagePixelGrid::*func)(const do
 	return x;
 }
 
+void ImagePixelGrid::convert_Rmatrix_to_dense()
+{
+	int i,j;
+	//cout << "DURF0" << endl;
+	Rmatrix_dense = Eigen::MatrixXd::Zero(source_npixels,source_npixels); // need to generalize this so it works for multiple sources with their own src_npixels and different regularizaton matrices
+	for (i=0; i < source_npixels; i++) {
+	//cout << "DURF1 " << i << endl;
+		Rmatrix_dense(i,i) = Rmatrix_sparse[i];
+		for (j=Rmatrix_index[i]; j < Rmatrix_index[i+1]; j++) {
+			Rmatrix_dense(i,Rmatrix_index[j]) += Rmatrix_sparse[j];
+			Rmatrix_dense(Rmatrix_index[j],i) += Rmatrix_sparse[j];
+		}
+	}
+	//cout << "DURF2 " << i << endl;
+}
+
 void ImagePixelGrid::invert_lens_mapping_dense(bool verbal)
 {
 	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
@@ -19560,29 +20024,100 @@ void ImagePixelGrid::invert_lens_mapping_dense(bool verbal)
 			lltmat = Fmatrix_llt.matrixL();
 			p.amplitude_vector = Fmatrix_llt.solve(Dvector);
 		}
-		Fmatrix_log_determinant = 0;
-		for (int i=0; i < n_amps; i++) Fmatrix_log_determinant += log(abs(lltmat(i,i)));
-		Fmatrix_log_determinant *= 2;
+		p.Fmatrix_log_determinant = 0;
+		for (int i=0; i < n_amps; i++) p.Fmatrix_log_determinant += log(abs(lltmat(i,i)));
+		p.Fmatrix_log_determinant *= 2;
 	} else {
 		p.amplitude_vector = Dvector_cov;
 		Eigen::PartialPivLU<Eigen::MatrixXd> lu(Gmatrix);
 		if(lu.determinant()==0.0) warn("Matrix was not invertible");
 		p.amplitude_vector = lu.solve(p.amplitude_vector);
 		const auto& LU = lu.matrixLU();
-		Gmatrix_log_determinant = 0;
+		p.Gmatrix_log_determinant = 0;
 		for (int i=0; i < n_amps; i++) {
-			Gmatrix_log_determinant += log(abs(LU(i,i)));
+			p.Gmatrix_log_determinant += log(abs(LU(i,i)));
 		}
 
-		//cout << "DETERMINANTS: " << Fmatrix_log_determinant << " " << Gmatrix_log_determinant << " " << (Gmatrix_log_determinant+Rmatrix_log_determinant) << endl;
+		//cout << "DETERMINANTS: " << p.Fmatrix_log_determinant << " " << p.Gmatrix_log_determinant << " " << (p.Gmatrix_log_determinant+Rmatrix_log_determinant) << endl;
 	}
 	if (qlens->show_wtime) {
 		wtime = std::chrono::steady_clock::now() - wtime0;
-		if (qlens->mpi_id==0) cout << "Wall time for inverting Fmatrix_sparse: "  << wtime.count() << endl;
+		if (qlens->mpi_id==0) cout << "Wall time for inverting Fmatrix: "  << wtime.count() << endl;
 		wtime0 = std::chrono::steady_clock::now();
 	}
-	update_source_and_lensgrid_amplitudes(verbal);
+	update_source_and_lensgrid_amplitudes<PlainTypes>(verbal);
 }
+
+template <typename MathTypes>
+void ImagePixelGrid::invert_lens_mapping_dense_stan(bool verbal)
+{
+	using VecType = typename MathTypes::VecType;
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
+	if (qlens->show_wtime) {
+		wtime0 = std::chrono::steady_clock::now();
+	}
+	Eigen::MatrixXd lltmat(n_amps,n_amps);
+	Eigen::LLT<Eigen::MatrixXd, Eigen::Upper> Fmatrix_llt(Fmatrix_dense);
+	lltmat = Fmatrix_llt.matrixL();
+
+	Eigen::VectorXd amplitude = Fmatrix_llt.solve(Dvector);
+
+	double logdet_value = 0;
+	for (int i=0; i < n_amps; i++) logdet_value += log(abs(lltmat(i,i)));
+	logdet_value *= 2;
+
+#ifdef USE_STAN
+	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>)
+	{
+		p.amplitude_vector = stan::math::make_callback_var( amplitude, [&, amplitude, chol = Fmatrix_llt](const auto& res) mutable {
+			  const auto& ds = res.adj();
+			// upstream derivative of objective wrt amplitude
+			const Eigen::MatrixXd& L = p.Lmatrix_trans_dense.val();
+
+			Eigen::VectorXd u = chol.solve(ds);
+			Eigen::VectorXd c = imgpixel_covinv_vector.array() * image_surface_brightness_data.array();
+			Eigen::VectorXd a = imgpixel_covinv_vector.array() * (L.transpose() * amplitude).array();
+			Eigen::VectorXd b = imgpixel_covinv_vector.array() * (L.transpose() * u).array();
+			p.Lmatrix_trans_dense.adj() += u * c.transpose() - u * a.transpose() - amplitude * b.transpose();
+		});
+
+		p.Fmatrix_log_determinant = stan::math::make_callback_var(logdet_value, [&, chol = Fmatrix_llt](const auto& res) {
+			double logdet_adj = res.adj();
+
+			// Compute F^{-1} L W without forming F^{-1}
+			Eigen::MatrixXd LW = p.Lmatrix_trans_dense.val();
+			LW.array().rowwise() *= imgpixel_covinv_vector.transpose().array();
+			Eigen::MatrixXd X = chol.solve(LW);
+
+			// d log(det(F))/dL = 2 F^{-1} L W
+
+			p.Lmatrix_trans_dense.adj() += logdet_adj * 2.0 * X;
+
+			// d log(det(F))/d lambda =
+			// trace(F^{-1} R)
+
+			//convert_Rmatrix_to_dense(); // can't do this here, needs to be done while evaluating likelihood...would be better to circumvent this somehow
+			Eigen::MatrixXd Rsolve = chol.solve(Rmatrix_dense); // if using sparse Rmatrix, you need to convert it to dense Rmatrix
+			p.regparam_ptr->adj() += logdet_adj * Rsolve.trace();
+		});
+	} else
+#endif
+	{
+		p.amplitude_vector = amplitude;
+		p.Fmatrix_log_determinant = logdet_value;
+	}
+
+	if (qlens->show_wtime) {
+		wtime = std::chrono::steady_clock::now() - wtime0;
+		if (qlens->mpi_id==0) cout << "Wall time for inverting Fmatrix: "  << wtime.count() << endl;
+		wtime0 = std::chrono::steady_clock::now();
+	}
+	update_source_and_lensgrid_amplitudes<MathTypes>(verbal);
+}
+template void ImagePixelGrid::invert_lens_mapping_dense_stan<PlainTypes>(bool verbal);
+#ifdef USE_STAN
+template void ImagePixelGrid::invert_lens_mapping_dense_stan<VarmatTypes>(bool verbal);
+#endif
 
 void ImagePixelGrid::invert_lens_mapping_CG_method(bool verbal)
 {
@@ -19611,8 +20146,8 @@ void ImagePixelGrid::invert_lens_mapping_CG_method(bool verbal)
 	}
 
 	if ((qlens->regularization_method != None) and (source_npixels > 0)) {
-		cg_method.get_log_determinant(Fmatrix_log_determinant);
-		if ((qlens->mpi_id==0) and (verbal)) cout << "log determinant = " << Fmatrix_log_determinant << endl;
+		cg_method.get_log_determinant(p.Fmatrix_log_determinant);
+		if ((qlens->mpi_id==0) and (verbal)) cout << "log determinant = " << p.Fmatrix_log_determinant << endl;
 
 		Rmatrix_ptr = &Rmatrix_sparse;
 		Rmatrix_index_ptr = &Rmatrix_index;
@@ -19635,7 +20170,7 @@ void ImagePixelGrid::invert_lens_mapping_CG_method(bool verbal)
 	if ((qlens->mpi_id==0) and (verbal)) cout << iterations << " iterations, error=" << error << endl << endl;
 
 	delete[] temp;
-	update_source_and_lensgrid_amplitudes(verbal);
+	update_source_and_lensgrid_amplitudes<PlainTypes>(verbal);
 }
 
 void ImagePixelGrid::invert_lens_mapping_EIGEN_sparse(double& logdet, const bool verbal, const bool use_copy)
@@ -19676,7 +20211,7 @@ void ImagePixelGrid::invert_lens_mapping_EIGEN_sparse(double& logdet, const bool
 	}
 	logdet *= 2;
 
-	update_source_and_lensgrid_amplitudes(verbal);
+	update_source_and_lensgrid_amplitudes<PlainTypes>(verbal);
 }
 
 void ImagePixelGrid::invert_lens_mapping_UMFPACK(double& logdet, const bool verbal, const bool use_copy)
@@ -19845,7 +20380,7 @@ void ImagePixelGrid::invert_lens_mapping_UMFPACK(double& logdet, const bool verb
 	delete[] Fmatrix_unsymmetric_cols;
 	delete[] Fmatrix_unsymmetric_indices;
 	delete[] Fmatrix_unsymmetric;
-	update_source_and_lensgrid_amplitudes(verbal);
+	update_source_and_lensgrid_amplitudes<PlainTypes>(verbal);
 #endif
 }
 
@@ -20008,14 +20543,16 @@ void ImagePixelGrid::invert_lens_mapping_MUMPS(double& logdet, const bool verbal
 	delete[] irn;
 	delete[] jcn;
 	delete[] Fmatrix_elements;
-	update_source_and_lensgrid_amplitudes(imggrid_i,verbal);
+	update_source_and_lensgrid_amplitudes<PlainTypes>(imggrid_i,verbal);
 #endif
 
 }
 
+template <typename MathTypes>
 void ImagePixelGrid::update_source_and_lensgrid_amplitudes(const bool verbal)
 {
-	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
+	using QScalar = typename MathTypes::QScalar;
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	SB_Profile** sb_list = qlens->sb_list;
 	int i,j,index=0;
 
@@ -20026,47 +20563,55 @@ void ImagePixelGrid::update_source_and_lensgrid_amplitudes(const bool verbal)
 	for (i=0; i < n_imggrids; i++) imggrids[i] = qlens->image_pixel_grids[imggrid_indx_to_include_in_Lmatrix[i]];
 
 	if ((qlens->source_fit_mode==Delaunay_Source) and (delaunay_srcgrid != NULL)) {
-		for (i=0; i < n_imggrids; i++) imggrids[i]->delaunay_srcgrid->update_surface_brightness(index);
+		for (i=0; i < n_imggrids; i++) imggrids[i]->delaunay_srcgrid->update_surface_brightness<MathTypes>(index);
 	}
 	else if (qlens->source_fit_mode==Cartesian_Source) {
 		for (i=0; i < n_imggrids; i++) imggrids[i]->cartesian_srcgrid->update_surface_brightness(index);
 	}
 	else if (qlens->source_fit_mode==Shapelet_Source) {
-		double* srcpix = p.amplitude_vector.data();
-		for (i=0; i < qlens->n_sb; i++) {
-			if ((qlens->sb_list[i]->sbtype==SHAPELET) and (qlens->sbprofile_imggrid_idx[i]==imggrid_index)) {
-				qlens->sb_list[i]->update_amplitudes(srcpix);
+		if constexpr (!stan::is_autodiff_v<QScalar>) {
+			double* srcpix = p.amplitude_vector.data();
+			for (i=0; i < qlens->n_sb; i++) {
+				if ((qlens->sb_list[i]->sbtype==SHAPELET) and (qlens->sbprofile_imggrid_idx[i]==imggrid_index)) {
+					qlens->sb_list[i]->update_amplitudes(srcpix);
+				}
 			}
+			index = source_npixels;
 		}
-		index = source_npixels;
 	}
 	if (index != source_npixels) die("WTF? did not go through all the source pixels (index=%i)",index);
 	if ((include_potential_perturbations) and (lensgrid_npixels > 0)) lensgrid->update_potential(index);
-	if (n_mge_amps > 0) {
-		double* srcpix = p.amplitude_vector.data() + source_npixels + lensgrid_npixels;
-		//for (i=0; i < n_mge_amps; i++) cout << srcpix[i] << endl;
-		for (i=0; i < qlens->n_sb; i++) {
-			if ((qlens->sb_list[i]->sbtype==MULTI_GAUSSIAN_EXPANSION) and (qlens->sbprofile_imggrid_idx[i]==imggrid_index)) {
-				qlens->sb_list[i]->update_amplitudes(srcpix);
+	if constexpr (!stan::is_autodiff_v<QScalar>) {
+		if (n_mge_amps > 0) {
+			double* srcpix = p.amplitude_vector.data() + source_npixels + lensgrid_npixels;
+			//for (i=0; i < n_mge_amps; i++) cout << srcpix[i] << endl;
+			for (i=0; i < qlens->n_sb; i++) {
+				if ((qlens->sb_list[i]->sbtype==MULTI_GAUSSIAN_EXPANSION) and (qlens->sbprofile_imggrid_idx[i]==imggrid_index)) {
+					qlens->sb_list[i]->update_amplitudes(srcpix);
+				}
 			}
+			index += n_mge_amps;
 		}
-		index += n_mge_amps;
-	}
-	if (qlens->include_imgfluxes_in_inversion) {
-		for (j=0; j < qlens->n_ptsrc; j++) {
-			for (i=0; i < qlens->ptsrc_list[j]->images.size(); i++) {
-				qlens->ptsrc_list[j]->images[i].flux = p.amplitude_vector[index++];
-				if ((qlens->mpi_id==0) and (verbal)) cout << "srcpt " << j << " (img " << i << "): flux=" << qlens->ptsrc_list[j]->images[i].flux << endl;
+		if (qlens->include_imgfluxes_in_inversion) {
+			for (j=0; j < qlens->n_ptsrc; j++) {
+				for (i=0; i < qlens->ptsrc_list[j]->images.size(); i++) {
+					qlens->ptsrc_list[j]->images[i].flux = p.amplitude_vector[index++];
+					if ((qlens->mpi_id==0) and (verbal)) cout << "srcpt " << j << " (img " << i << "): flux=" << qlens->ptsrc_list[j]->images[i].flux << endl;
+				}
 			}
-		}
-	} else if (qlens->include_srcflux_in_inversion) {
-		for (j=0; j < qlens->n_ptsrc; j++) {
-			qlens->ptsrc_list[j]->get_srcflux() = p.amplitude_vector[index++];
-			if ((qlens->mpi_id==0) and (verbal)) cout << "srcpt " << j << ": srcflux=" << qlens->ptsrc_list[j]->get_srcflux() << endl;
+		} else if (qlens->include_srcflux_in_inversion) {
+			for (j=0; j < qlens->n_ptsrc; j++) {
+				qlens->ptsrc_list[j]->get_srcflux() = p.amplitude_vector[index++];
+				if ((qlens->mpi_id==0) and (verbal)) cout << "srcpt " << j << ": srcflux=" << qlens->ptsrc_list[j]->get_srcflux() << endl;
+			}
 		}
 	}
 	delete[] imggrids;
 }
+template void ImagePixelGrid::update_source_and_lensgrid_amplitudes<PlainTypes>(const bool verbal);
+#ifdef USE_STAN
+template void ImagePixelGrid::update_source_and_lensgrid_amplitudes<VarmatTypes>(const bool verbal);
+#endif
 
 void ImagePixelGrid::Rmatrix_determinant_EIGEN(const bool potential_perturbations)
 {
@@ -20187,7 +20732,7 @@ void ImagePixelGrid::calculate_image_pixel_surface_brightness()
 {
 	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	int img_index_j;
-	int i,j,k;
+	//int i,j,k;
 
 	for (int img_index=0; img_index < image_npixels; img_index++) {
 		p.image_surface_brightness[img_index] = 0;
@@ -20220,10 +20765,12 @@ void ImagePixelGrid::calculate_image_pixel_surface_brightness()
 	*/
 }
 
+template <typename MathTypes>
 void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense()
 {
-	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
-	int i,j;
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
+	//int i,j;
+	/*
 	if (lensgrid_npixels > 0) {
 		for (j=0; j < source_and_lens_n_amps; j++) {
 			//if (j < source_npixels) cout << "SURF " << j << ": " << p.amplitude_vector[j] << endl;
@@ -20232,8 +20779,9 @@ void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense()
 			}
 		}
 	}
+	*/
 
-	p.image_surface_brightness = Lmatrix_trans_dense.transpose()*p.amplitude_vector;
+	p.image_surface_brightness = p.Lmatrix_trans_dense.transpose()*p.amplitude_vector;
 	/*
 	for (i=0; i < image_npixels; i++) {
 		p.image_surface_brightness[i] = Lmatrix_trans_dense.col(i).dot(p.amplitude_vector);
@@ -20261,10 +20809,14 @@ void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense()
 	}
 	*/
 }
+template void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense<PlainTypes>();
+#ifdef USE_STAN
+template void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense<VarmatTypes>();
+#endif
 
 void ImagePixelGrid::calculate_foreground_pixel_surface_brightness(const bool allow_lensed_noninverted_sources)
 {
-	ImgGrid_Params<PlainTypes>& imggrid_params = assign_imggrid_param_object<PlainTypes>();
+	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
 	SB_Profile** sb_list = qlens->sb_list;
 	bool subgridded;
 	int img_index;
@@ -20282,7 +20834,7 @@ void ImagePixelGrid::calculate_foreground_pixel_surface_brightness(const bool al
 	// here, we are adding together SB of foreground sources, but also lensed non-shapelet and non-MGE sources
 	// If none of those conditions are true, then we skip everything.
 	if ((!at_least_one_foreground_noninverted_src) and ((!allow_lensed_noninverted_sources) or (!at_least_one_lensed_src))) {
-		for (img_index=0; img_index < image_npixels_fgmask; img_index++) imggrid_params.sbprofile_surface_brightness[img_index] = 0;
+		for (img_index=0; img_index < image_npixels_fgmask; img_index++) p.sbprofile_surface_brightness[img_index] = 0;
 		return;
 	} else {
 		if (qlens->show_wtime) {
@@ -20308,7 +20860,7 @@ void ImagePixelGrid::calculate_foreground_pixel_surface_brightness(const bool al
 			int subcell_index;
 			#pragma omp for private(img_index,i,j,ii,jj,nsplit,u0,w0,sb,subpixel_xlength,subpixel_ylength,center_pt,center_srcpt,corner1,corner2,corner3,corner4,subcell_index,noise) schedule(dynamic)
 			for (img_index=0; img_index < image_npixels_fgmask; img_index++) {
-				imggrid_params.sbprofile_surface_brightness[img_index] = 0;
+				p.sbprofile_surface_brightness[img_index] = 0;
 
 				i = fgmask_pixels_i[img_index];
 				j = fgmask_pixels_j[img_index];
@@ -20385,7 +20937,7 @@ void ImagePixelGrid::calculate_foreground_pixel_surface_brightness(const bool al
 						subcell_index++;
 					}
 				}
-				imggrid_params.sbprofile_surface_brightness[img_index] += sb / (nsplit*nsplit);
+				p.sbprofile_surface_brightness[img_index] += sb / (nsplit*nsplit);
 			}
 		}
 		if (qlens->show_wtime) {
@@ -20400,18 +20952,20 @@ void ImagePixelGrid::calculate_foreground_pixel_surface_brightness(const bool al
 	PSF_convolution_pixel_vector(true,false,true);
 }
 
+template <typename MathTypes>
 void ImagePixelGrid::store_image_pixel_surface_brightness(const bool use_emask)
 {
-	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
+	using VecType = typename MathTypes::VecType;
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	int i,j;
 	int npix;
-	double *surface_brightness_vector;
+	VecType *surface_brightness_vector;
 	if (!use_emask) {
 		npix = image_npixels;
-		surface_brightness_vector = p.image_surface_brightness.data();
+		surface_brightness_vector = &p.image_surface_brightness;
 	} else {
 		npix = image_npixels_emask;
-		surface_brightness_vector = p.image_surface_brightness_emask.data();
+		surface_brightness_vector = &p.image_surface_brightness_emask;
 	}
 	for (i=0; i < x_N; i++)
 		for (j=0; j < y_N; j++)
@@ -20420,9 +20974,13 @@ void ImagePixelGrid::store_image_pixel_surface_brightness(const bool use_emask)
 	for (int img_index=0; img_index < npix; img_index++) {
 		i = emask_pixels_i[img_index];
 		j = emask_pixels_j[img_index];
-		surface_brightness[i][j] = surface_brightness_vector[img_index];
+		surface_brightness[i][j] = value_of((*surface_brightness_vector)(img_index));
 	}
 }
+template void ImagePixelGrid::store_image_pixel_surface_brightness<PlainTypes>(const bool use_emask);
+#ifdef USE_STAN
+template void ImagePixelGrid::store_image_pixel_surface_brightness<VarmatTypes>(const bool use_emask);
+#endif
 
 void ImagePixelGrid::store_foreground_pixel_surface_brightness() // note, foreground_surface_brightness could also include source objects that aren't shapelets (if in shapelet mode)
 {

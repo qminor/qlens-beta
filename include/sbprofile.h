@@ -460,6 +460,9 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 
 	virtual void update_amplitudes(double*& ampvec); // used by Shapelet subclass
 	virtual void get_regularization_param_ptr(double*& regparam_ptr); // for source objects that are regularized
+#ifdef USE_STAN
+	virtual void get_regularization_param_ptr(stan::math::var*& regparam_ptr); // for source objects that are regularized
+#endif
 	//virtual void get_amplitudes(double *ampvec); // used by Shapelet subclass
 	virtual void update_indxptr(const int newval);
 	virtual double get_scale_parameter();
@@ -1208,6 +1211,9 @@ class Shapelet : public SB_Profile
 	void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
 	void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
 	void get_regularization_param_ptr(double*& regparam_ptr);
+#ifdef USE_STAN
+	void get_regularization_param_ptr(stan::math::var*& regparam_ptr);
+#endif
 	void update_amplitudes(double*& ampvec);
 	//void get_amplitudes(double *ampvec);
 	double get_scale_parameter();
@@ -1309,6 +1315,9 @@ class MGE : public SB_Profile
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
 	void calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements);
 	void get_regularization_param_ptr(double*& regparam_ptr);
+#ifdef USE_STAN
+	void get_regularization_param_ptr(stan::math::var*& regparam_ptr);
+#endif
 	void update_amplitudes(double*& ampvec);
 	//void get_amplitudes(double *ampvec);
 	void update_indxptr(const int newval);

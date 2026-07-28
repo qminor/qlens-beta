@@ -10677,8 +10677,8 @@ void QLens::process_commands(bool read_file)
 					if (make_delaunay_from_sbprofile) {
 						delaunay_grid_scale /= zoomfactor;
 					} else {
-						old_srcgrid_scale = cartesian_srcgrids[src_i]->srcgrid_size_scale;
-						cartesian_srcgrids[src_i]->srcgrid_size_scale = 1.0/zoomfactor;
+						old_srcgrid_scale = cartesian_srcgrids[src_i]->cartesian_srcgrid_params.srcgrid_size_scale;
+						cartesian_srcgrids[src_i]->cartesian_srcgrid_params.srcgrid_size_scale = 1.0/zoomfactor;
 					}
 				}
 				if (nwords==2) {
@@ -10740,7 +10740,7 @@ void QLens::process_commands(bool read_file)
 					}
 				} else Complain("no arguments are allowed for 'sbmap makesrc'");
 				//if (changed_srcgrid) auto_sourcegrid = old_auto_srcgrid;
-				if ((zoom_in) and (!make_delaunay_from_sbprofile)) cartesian_srcgrids[src_i]->srcgrid_size_scale = old_srcgrid_scale;
+				if ((zoom_in) and (!make_delaunay_from_sbprofile)) cartesian_srcgrids[src_i]->cartesian_srcgrid_params.srcgrid_size_scale = old_srcgrid_scale;
 				auto_srcgrid_npixels = old_auto_srcgrid_npixels;
 				if (omit_cc) show_cc = old_cc_setting;
 			}
@@ -11624,8 +11624,8 @@ void QLens::process_commands(bool read_file)
 					if (delaunay) {
 						delaunay_grid_scale /= zoomfactor;
 					} else {
-						old_srcgrid_scale = cartesian_srcgrids[src_i]->srcgrid_size_scale;
-						cartesian_srcgrids[src_i]->srcgrid_size_scale = 1.0/zoomfactor;
+						old_srcgrid_scale = cartesian_srcgrids[src_i]->cartesian_srcgrid_params.srcgrid_size_scale;
+						cartesian_srcgrids[src_i]->cartesian_srcgrid_params.srcgrid_size_scale = 1.0/zoomfactor;
 					}
 				}
 
@@ -11753,7 +11753,7 @@ void QLens::process_commands(bool read_file)
 					}
 				} else Complain("invalid number of arguments to 'sbmap plotsrc'");
 				reset_grid();
-				if ((zoom_in) and (!delaunay)) cartesian_srcgrids[src_i]->srcgrid_size_scale = old_srcgrid_scale;
+				if ((zoom_in) and (!delaunay)) cartesian_srcgrids[src_i]->cartesian_srcgrid_params.srcgrid_size_scale = old_srcgrid_scale;
 				if (omit_caustics) show_cc = old_caustics_setting;
 				if (set_title) plot_title = "";
 			}
@@ -16525,7 +16525,7 @@ void QLens::process_commands(bool read_file)
 						image_pixel_grid->find_surface_brightness(true); // the 'true' means it will only plot the foreground SB profile
 						vectorize_image_pixel_surface_brightness(); // note that in this case, the image pixel vector also contains the foreground
 						PSF_convolution_pixel_vector(image_surface_brightness,false);
-						store_image_pixel_surface_brightness();
+						store_image_pixel_surface_brightness<PlainTypes>();
 						clear_pixel_matrices();
 						if (mpi_id==0) {
 							cout << "Making mock isophotes with q=" << qq << endl;
@@ -16582,7 +16582,7 @@ void QLens::process_commands(bool read_file)
 					image_pixel_grids[0] = new ImagePixelGrid(this,source_fit_mode,(*imgdata_list[0]),true);
 					image_pixel_grids[0]->find_surface_brightness(true); // the 'true' means it will only plot the foreground SB profile
 					image_pixel_grids[0]->PSF_convolution_pixel_vector(0,false);
-					image_pixel_grids[0]->store_image_pixel_surface_brightness();
+					image_pixel_grids[0]->store_image_pixel_surface_brightness<PlainTypes>();
 					image_pixel_grids[0]->clear_pixel_matrices();
 					mockdata_t.set_lens(this);
 					mockdata_t.load_from_image_grid(image_pixel_grids[0]);

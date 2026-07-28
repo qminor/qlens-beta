@@ -768,6 +768,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bool verbal);
 	bool setup_cartesian_sourcegrid(const int imggrid_i, const int src_i, int& n_expected_imgpixels, const bool verbal);
 	bool generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, const int src_i, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
+	template <typename MathTypes>
 	bool generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
 	void add_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, double& logev_times_two, const bool verbal);
 	void set_n_imggrids_to_include_in_inversion();
