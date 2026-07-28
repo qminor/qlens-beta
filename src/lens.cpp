@@ -14525,10 +14525,10 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 	}
 
 	fitmodel->chisq_it++;
-//#ifdef USE_STAN
-	//// if we're not using autodiff, then we should recover any memory for autodiff variables to prevent memory leaks
-	//if (use_autodiff==false) stan::math::recover_memory();
-//#endif
+#ifdef USE_STAN
+	// if we're not using autodiff, then we should recover any memory for autodiff variables to prevent memory leaks
+	if (use_autodiff==false) stan::math::recover_memory();
+#endif
 	return loglike;
 }
 template double QLens::fitmodel_loglike_extended_source<double>(const double* params);
