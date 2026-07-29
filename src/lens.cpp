@@ -14373,7 +14373,7 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 		}
 		//chisq = fitmodel->pixel_log_evidence_times_two(chisq0,false,0);
 
-			/*
+		/*
 #ifdef USE_STAN
 		if constexpr (std::is_same_v<QScalar, stan::math::var>)
 		{
@@ -14468,16 +14468,17 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 			//cout << " numerical d(sb)/dysrc = " << sbyder << endl;
 		}
 #endif
-			*/
-	//} else if (source_fit_mode==Delaunay_Source) {
-//#ifdef USE_STAN
-		//if constexpr (stan::is_autodiff_v<QScalar>) {
-			//chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,VarmatTypes>(chisq0,false,0);
-		//} else
-//#endif
-		//{
-			//chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,PlainTypes>(chisq0,false,0);
-		//}
+		*/
+
+	} else if (source_fit_mode==Delaunay_Source) {
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<QScalar>) {
+			chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,VarmatTypes>(chisq0,false,0);
+		} else
+#endif
+		{
+			chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,PlainTypes>(chisq0,false,0);
+		}
 	} else {
 		double chisq00;
 		double chisq_doub=0;

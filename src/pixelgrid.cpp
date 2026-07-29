@@ -15918,15 +15918,17 @@ void ImagePixelGrid::cleanup_FFT_convolution_arrays()
 	delete[] psf_transform;
 	delete[] psf_transform_conj;
 	delete[] img_transform;
-	delete[] adj_img_transform;
 	delete[] single_img_rvec;
-	delete[] adj_single_img_rvec;
 	psf_transform = NULL;
 	psf_transform_conj = NULL;
 	img_transform = NULL;
-	adj_img_transform = NULL;
 	single_img_rvec = NULL;
+#ifdef USE_STAN
+	delete[] adj_img_transform;
+	delete[] adj_single_img_rvec;
+	adj_img_transform = NULL;
 	adj_single_img_rvec = NULL;
+#endif
 	if (Lmatrix_n_amps > 0) {
 		for (int i=0; i < Lmatrix_n_amps; i++) {
 			delete[] Lmatrix_imgs_rvec[i];
@@ -15971,16 +15973,17 @@ void ImagePixelGrid::cleanup_foreground_FFT_convolution_arrays()
 	delete[] psf_transform_fgmask;
 	delete[] psf_transform_conj_fgmask;
 	delete[] img_transform_fgmask;
-	delete[] adj_img_transform_fgmask;
 	delete[] single_img_rvec_fgmask;
-	delete[] adj_single_img_rvec_fgmask;
 	psf_transform_fgmask = NULL;
 	psf_transform_conj_fgmask = NULL;
 	img_transform_fgmask = NULL;
-	adj_img_transform_fgmask = NULL;
 	single_img_rvec_fgmask = NULL;
+#ifdef USE_STAN
+	delete[] adj_img_transform_fgmask;
+	delete[] adj_single_img_rvec_fgmask;
+	adj_img_transform_fgmask = NULL;
 	adj_single_img_rvec_fgmask = NULL;
-
+#endif
 	fftw_destroy_plan(fftplan_fgmask);
 	fftw_destroy_plan(fftplan_inverse_fgmask);
 #ifdef USE_STAN
@@ -16672,6 +16675,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbv
 	}
 
 #ifdef USE_STAN
+	// The following ensures that if autodiff is not being used, arena_t is not invoked since it is an unnecessary memory allocation
 	using OutType = std::conditional_t<std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>, stan::arena_t<Eigen::VectorXd>, Eigen::VectorXd>;
 	OutType out(npix);
 	const auto& sbvec_val = [&]() -> const auto& {
@@ -16984,6 +16988,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 	else conv_plan = &this->psfconv_plan;
 
 #ifdef USE_STAN
+	// The following ensures that if autodiff is not being used, arena_t is not invoked since it is an unnecessary memory allocation
 	using OutType = std::conditional_t<std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>, stan::arena_t<Eigen::VectorXd>, Eigen::VectorXd>;
 	OutType out(conv_plan->out_size);
 	const auto& sbvec_val = [&]() -> const auto& {
@@ -17162,9 +17167,17 @@ template <typename MatType>
 MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat)
 {
 	ConvPlan* conv_plan = &this->psfconv_plan;
+
 #ifdef USE_STAN
-	stan::arena_t<Eigen::MatrixXd> Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps, conv_plan->out_size));
-	const Eigen::MatrixXd& Lmat_val = Lmat.val();
+	// The following ensures that if autodiff is not being used, arena_t is not invoked since it is an unnecessary memory allocation
+	using OutType = std::conditional_t<std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>, stan::arena_t<Eigen::MatrixXd>, Eigen::MatrixXd>;
+	OutType Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps, conv_plan->out_size));
+	const auto& Lmat_val = [&]() -> const auto& {
+		 if constexpr (std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>)
+			  return Lmat.val();
+		 else
+			  return Lmat;
+	}();
 #else
 	Eigen::MatrixXd Lmatrix_trans_convolved = Eigen::MatrixXd::Zero(n_amps,conv_plan->out_size);
 	const auto& Lmat_val = Lmat;
@@ -17247,15 +17260,21 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 		pixel_map_ii = emask_subpixels_ii;
 		pixel_map_jj = emask_subpixels_jj;
 	}
+
 #ifdef USE_STAN
-	stan::arena_t<Eigen::MatrixXd> Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps, npix));
-	const Eigen::MatrixXd& Lmat_val = Lmat.val();
+	// The following ensures that if autodiff is not being used, arena_t is not invoked since it is an unnecessary memory allocation
+	using OutType = std::conditional_t<std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>, stan::arena_t<Eigen::MatrixXd>, Eigen::MatrixXd>;
+	OutType Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps,npix));
+	const auto& Lmat_val = [&]() -> const auto& {
+		 if constexpr (std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>)
+			  return Lmat.val();
+		 else
+			  return Lmat;
+	}();
 #else
 	Eigen::MatrixXd Lmatrix_trans_convolved = Eigen::MatrixXd::Zero(n_amps,npix);
 	const auto& Lmat_val = Lmat;
 #endif
-
-
 
 	bool **selected_mask;
 	if (pixel_in_mask==NULL) selected_mask = NULL;
@@ -20569,7 +20588,10 @@ void ImagePixelGrid::update_source_and_lensgrid_amplitudes(const bool verbal)
 		for (i=0; i < n_imggrids; i++) imggrids[i]->cartesian_srcgrid->update_surface_brightness(index);
 	}
 	else if (qlens->source_fit_mode==Shapelet_Source) {
-		if constexpr (!stan::is_autodiff_v<QScalar>) {
+#ifdef USE_STAN
+		if constexpr (!stan::is_autodiff_v<QScalar>)
+#endif
+		{
 			double* srcpix = p.amplitude_vector.data();
 			for (i=0; i < qlens->n_sb; i++) {
 				if ((qlens->sb_list[i]->sbtype==SHAPELET) and (qlens->sbprofile_imggrid_idx[i]==imggrid_index)) {
@@ -20581,7 +20603,10 @@ void ImagePixelGrid::update_source_and_lensgrid_amplitudes(const bool verbal)
 	}
 	if (index != source_npixels) die("WTF? did not go through all the source pixels (index=%i)",index);
 	if ((include_potential_perturbations) and (lensgrid_npixels > 0)) lensgrid->update_potential(index);
-	if constexpr (!stan::is_autodiff_v<QScalar>) {
+#ifdef USE_STAN
+	if constexpr (!stan::is_autodiff_v<QScalar>)
+#endif
+	{
 		if (n_mge_amps > 0) {
 			double* srcpix = p.amplitude_vector.data() + source_npixels + lensgrid_npixels;
 			//for (i=0; i < n_mge_amps; i++) cout << srcpix[i] << endl;

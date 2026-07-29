@@ -11,6 +11,9 @@
 #include <vector>
 #include <iostream>
 
+#include <Eigen/Core>
+#include "Eigen/Cholesky"
+
 class ImagePixelGrid;
 class CartesianSourcePixel;
 class CartesianSourceGrid;
