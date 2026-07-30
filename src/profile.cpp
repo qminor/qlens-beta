@@ -850,12 +850,12 @@ void LensProfile::update_fit_parameters(const QScalar* fitparams, int &index, bo
 					*(lensparams->param[i]) = stan::math::value_of(*(p.param[i]));
 				}
 			}
-		} else {
-			for (int i=0; i < n_params; i++) {
-				if (vary_params[i]==true) {
-					*(lensparams_dif->param[i]) = (*(p.param[i]));
-				}
-			}
+		//} else {
+			//for (int i=0; i < n_params; i++) {
+				//if (vary_params[i]==true) {
+					//*(lensparams_dif->param[i]) = (*(p.param[i]));
+				//}
+			//}
 		}
 		update_meta_parameters_autodif();
 #endif
