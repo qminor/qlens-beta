@@ -108,7 +108,11 @@ class LensProfile : public EllipticityGradient
 
 	friend struct LensIntegral<Eigen::VectorXd,double>;
 #ifdef USE_STAN
-	friend struct LensIntegral<stan::math::var_value<Eigen::VectorXd>,stan::math::var>;
+	protected:
+	using AutoDiffVec = stan::math::var_value<Eigen::VectorXd>;
+
+	private:
+	friend struct LensIntegral<AutoDiffVec,stan::math::var>;
 	friend struct LensIntegral<Eigen::VectorXd,stan::math::var>;
 #endif
 	friend class QLens;
@@ -452,8 +456,8 @@ class LensProfile : public EllipticityGradient
 	void (LensProfile::*defptr_vec)(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y);
 	void (LensProfile::*kapavgptr_rsq_spherical_vec)(const Eigen::VectorXd&, Eigen::VectorXd& def_r);
 #ifdef USE_STAN
-	void (LensProfile::*defptr_vec_autodif)(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>& def_x, stan::math::var_value<Eigen::VectorXd>& def_y);
-	void (LensProfile::*kapavgptr_rsq_spherical_vec_autodif)(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>& def_r);
+	void (LensProfile::*defptr_vec_autodif)(const AutoDiffVec&, const AutoDiffVec&, AutoDiffVec& def_x, AutoDiffVec& def_y);
+	void (LensProfile::*kapavgptr_rsq_spherical_vec_autodif)(const AutoDiffVec&, AutoDiffVec& def_r);
 #endif
 
 	bool anchor_center_to_lens(const int &center_anchor_lens_number);
@@ -584,7 +588,7 @@ class LensProfile : public EllipticityGradient
 
 	virtual void kappa_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa) { kappa_rsq_vec_impl<Eigen::VectorXd,double>(rsq,kappa); }
 #ifdef USE_STAN
-	virtual void kappa_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa) { kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,kappa); }
+	virtual void kappa_rsq_vec(const AutoDiffVec& rsq, AutoDiffVec& kappa) { kappa_rsq_vec_impl<AutoDiffVec,stan::math::var>(rsq,kappa); }
 #endif
 
 	template <typename VecType, typename QScalar>
@@ -630,7 +634,7 @@ class LensProfile : public EllipticityGradient
 
 	virtual void deflection_vec(const Eigen::VectorXd& x0, const Eigen::VectorXd& y0, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y) { deflection_vec_impl<Eigen::VectorXd,double>(x0,y0,def_x,def_y); }
 #ifdef USE_STAN
-	virtual void deflection_vec(const stan::math::var_value<Eigen::VectorXd>& x0, const stan::math::var_value<Eigen::VectorXd>& y0, stan::math::var_value<Eigen::VectorXd>& def_x, stan::math::var_value<Eigen::VectorXd>& def_y) { deflection_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(x0,y0,def_x,def_y); }
+	virtual void deflection_vec(const AutoDiffVec& x0, const AutoDiffVec& y0, AutoDiffVec& def_x, AutoDiffVec& def_y) { deflection_vec_impl<AutoDiffVec,stan::math::var>(x0,y0,def_x,def_y); }
 #endif
 
 	template <typename QScalar>
@@ -794,7 +798,7 @@ class SPLE_Lens : public LensProfile
 
 	void kappa_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa) { kappa_rsq_vec_impl<Eigen::VectorXd,double>(rsq,kappa); }
 #ifdef USE_STAN
-	void kappa_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa) { kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,kappa); }
+	void kappa_rsq_vec(const AutoDiffVec& rsq, AutoDiffVec& kappa) { kappa_rsq_vec_impl<AutoDiffVec,stan::math::var>(rsq,kappa); }
 #endif
 
 	template <typename VecType, typename QScalar>
@@ -998,7 +1002,7 @@ class NFW : public LensProfile
 
 	void kappa_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa) { kappa_rsq_vec_impl<Eigen::VectorXd,double>(rsq,kappa); }
 #ifdef USE_STAN
-	void kappa_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa) { kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,kappa); }
+	void kappa_rsq_vec(const AutoDiffVec& rsq, AutoDiffVec& kappa) { kappa_rsq_vec_impl<AutoDiffVec,stan::math::var>(rsq,kappa); }
 #endif
 
 	template <typename VecType, typename QScalar>
@@ -1476,7 +1480,7 @@ class Shear : public LensProfile
 
 	void deflection_vec(const Eigen::VectorXd& x0, const Eigen::VectorXd& y0, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y) { deflection_vec_impl<Eigen::VectorXd,double>(x0,y0,def_x,def_y); }
 #ifdef USE_STAN
-	void deflection_vec(const stan::math::var_value<Eigen::VectorXd>& x0, const stan::math::var_value<Eigen::VectorXd>& y0, stan::math::var_value<Eigen::VectorXd>& def_x, stan::math::var_value<Eigen::VectorXd>& def_y) { deflection_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(x0,y0,def_x,def_y); }
+	void deflection_vec(const AutoDiffVec& x0, const AutoDiffVec& y0, AutoDiffVec& def_x, AutoDiffVec& def_y) { deflection_vec_impl<AutoDiffVec,stan::math::var>(x0,y0,def_x,def_y); }
 #endif
 
 	// here the base class deflection/hessian functions are overloaded because the angle is put in explicitly in the formulas (no rotation of the coordinates is needed)
@@ -1888,7 +1892,7 @@ class SersicLens : public LensProfile
 
 	void kappa_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& kappa) { kappa_rsq_vec_impl<Eigen::VectorXd,double>(rsq,kappa); }
 #ifdef USE_STAN
-	void kappa_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& kappa) { kappa_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,kappa); }
+	void kappa_rsq_vec(const AutoDiffVec& rsq, AutoDiffVec& kappa) { kappa_rsq_vec_impl<AutoDiffVec,stan::math::var>(rsq,kappa); }
 #endif
 
 	template <typename VecType, typename QScalar>

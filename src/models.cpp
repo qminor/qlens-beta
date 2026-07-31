@@ -202,7 +202,7 @@ void SPLE_Lens::set_model_specific_integration_pointers()
 	// Here, we direct the integration pointers to analytic formulas in special cases where analytic solutions are possible
 	kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::kapavg_spherical_rsq<stan::math::var>);
 	potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::potential_spherical_rsq<stan::math::var>);
-	kapavgptr_rsq_spherical_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&SPLE_Lens::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
+	kapavgptr_rsq_spherical_vec_autodif = static_cast<void (LensProfile::*)(const AutoDiffVec&, AutoDiffVec&)> (&SPLE_Lens::kapavg_spherical_rsq_vec<AutoDiffVec,stan::math::var>);
 	if (!ellipticity_gradient) {
 		if (pdif.alpha==1.0) {
 			kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SPLE_Lens::kapavg_spherical_rsq_iso<stan::math::var>);
@@ -221,7 +221,7 @@ void SPLE_Lens::set_model_specific_integration_pointers()
 				def_and_hess_ptr_autodif = static_cast<void (LensProfile::*)(const stan::math::var,const stan::math::var,lensvector<stan::math::var>&,lensmatrix<stan::math::var>&)> (&SPLE_Lens::deflection_and_hessian_elliptical_nocore<stan::math::var>);
 
 			}
-			defptr_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&SPLE_Lens::deflection_elliptical_nocore_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
+			defptr_vec_autodif = static_cast<void (LensProfile::*)(const AutoDiffVec&, const AutoDiffVec&, AutoDiffVec&, AutoDiffVec&)> (&SPLE_Lens::deflection_elliptical_nocore_vec<AutoDiffVec,stan::math::var>);
 		}
 	}
 #endif
@@ -293,7 +293,7 @@ void SPLE_Lens::kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa)
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>();
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		kappa = ((2-p.alpha) * pow(p.b*p.b/(p.s*p.s+rsq), p.alpha/2) / 2);
 	} else
 #endif
@@ -317,7 +317,7 @@ void SPLE_Lens::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
 	//cout << "RUNNING SPHERICAL KAPAVG!" << endl;
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		kapavg = elt_divide(pow(p.b,p.alpha)*(pow(rsq + p.s*p.s,1 - p.alpha/2) - pow(p.s,2 - p.alpha)), rsq);
 	} else
 #endif
@@ -673,7 +673,7 @@ void SPLE_Lens::deflection_elliptical_nocore_vec(const VecType& x, const VecType
 
 	VecType R, phi;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		R = sqrt(elt_multiply(x,x) + elt_divide(elt_multiply(y,y),p.qsq));
 		R = 2*p.bprime*p.q/(1+p.q)*pow(p.bprime*inv(R),p.alpha-1); // Now R is no longer elliptical radius, but rather the norm of deflection
 	} else {
@@ -690,7 +690,7 @@ void SPLE_Lens::deflection_elliptical_nocore_vec(const VecType& x, const VecType
 	deflection_angular_factor_nocomplex_vec<VecType,QScalar>(phi,def_x,def_y);
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		def_x = elt_multiply(R,def_x); // Now R is no longer elliptical radius, but rather the norm of deflection
 		def_y = elt_multiply(R,def_y); // Now R is no longer elliptical radius, but rather the norm of deflection
 	} else
@@ -722,7 +722,7 @@ void SPLE_Lens::deflection_angular_factor_nocomplex_vec(const VecType& phi, VecT
 
 	 VecType omega_x, omega_y;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		omega_x = cos(phi);
 		omega_y = sin(phi);
 	} else
@@ -737,7 +737,7 @@ void SPLE_Lens::deflection_angular_factor_nocomplex_vec(const VecType& phi, VecT
 
 	 VecType c2, s2;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		c2 = cos(2*phi);
 		s2 = sin(2*phi);
 	} else
@@ -755,7 +755,7 @@ void SPLE_Lens::deflection_angular_factor_nocomplex_vec(const VecType& phi, VecT
     {
         QScalar amp = -ff * (beta*i - 1) / (beta*i + 1);
 #ifdef USE_STAN
-			if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+			if constexpr (stan::is_autodiff_v<VecType>) {
 				new_omega_x = amp * (elt_multiply(c2,omega_x) - elt_multiply(s2,omega_y));
 				new_omega_y = amp * (elt_multiply(s2,omega_x) + elt_multiply(c2,omega_y));
 			} else
@@ -773,7 +773,7 @@ void SPLE_Lens::deflection_angular_factor_nocomplex_vec(const VecType& phi, VecT
 
         i++;
 #ifdef USE_STAN
-			if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+			if constexpr (stan::is_autodiff_v<VecType>) {
 				 omega_sum = (omega_x.val().squaredNorm() + omega_y.val().squaredNorm());
 				 fac_sum = (fac_x.val().squaredNorm() + fac_y.val().squaredNorm());
 			} else
@@ -1313,8 +1313,7 @@ void dPIE_Lens::deflection_elliptical_vec(const VecType& x, const VecType& y, Ve
     VecType psi2;
 
 #ifdef USE_STAN
-    if constexpr (
-        std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
         psi = sqrt(p.qsq * (p.ssq_prime + elt_multiply(x, x)) + elt_multiply(y, y));
         psi2 = sqrt(p.qsq * (p.asq + elt_multiply(x, x)) + elt_multiply(y, y));
         def_x = prefac * (atan(elt_divide(u * x, psi + p.sprime)) - atan(elt_divide(u * x, psi2 + p.aprime)));
@@ -1672,7 +1671,7 @@ void NFW::set_model_specific_integration_pointers()
 #ifdef USE_STAN
 	kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&NFW::kapavg_spherical_rsq<stan::math::var>);
 	potptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&NFW::potential_spherical_rsq<stan::math::var>);
-	kapavgptr_rsq_spherical_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&NFW::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
+	kapavgptr_rsq_spherical_vec_autodif = static_cast<void (LensProfile::*)(const AutoDiffVec&, AutoDiffVec&)> (&NFW::kapavg_spherical_rsq_vec<AutoDiffVec,stan::math::var>);
 #endif
 }
 
@@ -1748,7 +1747,7 @@ void NFW::kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa)
 	xsq = rsq/(p.rs*p.rs);
 	lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		kappa = 2*p.ks*elt_divide(1 - lensfunc, (xsq-1));
 		/*
 		// worry about the small x case later
@@ -1866,7 +1865,7 @@ void NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
 #endif
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		lensfunc = elt_divide(atan(sqrt(xsq - 1)),sqrt(xsq - 1));
 		// worry about x=1 case later
 		for (int i=0; i < xsq.size(); ++i) {
@@ -1906,7 +1905,7 @@ void NFW::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
 	xsq = rsq/(p.rs*p.rs);
 	lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		kapavg = 2*p.ks*elt_divide(2*lensfunc + log(xsq/4), xsq);
 		/*
 		// worry about the small x case later
@@ -2329,7 +2328,7 @@ void Truncated_NFW::set_model_specific_integration_pointers()
 	kapavgptr_rsq_spherical_vec = static_cast<void (LensProfile::*)(const Eigen::VectorXd&, Eigen::VectorXd&)> (&Truncated_NFW::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>);
 #ifdef USE_STAN
 	kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&Truncated_NFW::kapavg_spherical_rsq<stan::math::var>);
-	kapavgptr_rsq_spherical_vec_autodif = static_cast<void (LensProfile::*)(const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&)> (&Truncated_NFW::kapavg_spherical_rsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>);
+	kapavgptr_rsq_spherical_vec_autodif = static_cast<void (LensProfile::*)(const AutoDiffVec&, AutoDiffVec&)> (&Truncated_NFW::kapavg_spherical_rsq_vec<AutoDiffVec,stan::math::var>);
 #endif
 }
 
@@ -2451,7 +2450,7 @@ void Truncated_NFW::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg
 	tsq = tau*tau;
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		sqrttx = sqrt(tsq + xsq);
 		lx = log(elt_divide(sqrt(xsq), sqrttx + sqrt(tsq)));
 		lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
@@ -2503,7 +2502,7 @@ void Truncated_NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
 #endif
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		lensfunc = elt_divide(atan(sqrt(xsq - 1)),sqrt(xsq - 1));
 		// will this break autodiff?
 		for (int i=0; i < xsq.size(); ++i) {
@@ -3739,7 +3738,7 @@ void Shear::deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& d
 
 	VecType x,y;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		x = x0 - p.x_center;
 		y = y0 - p.y_center;
 	} else
@@ -3760,7 +3759,7 @@ void Shear::deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& d
 		QScalar yp = y0(indx)-p.y_center;
 		//rotate(xp,yp);
 
-		if constexpr (std::is_same_v<VecType, Eigen::VectorXd>) {
+		if constexpr (stan::is_autodiff_v<VecType>) {
 			//cout << "x: " << x(indx) << " y: " << y(indx) << " xcheck: " << xp << " ycheck: " << yp << endl;
 			if ((abs(def_x(indx)-defcheck[0]) > 1e-6) or (abs(def_y(indx)-defcheck[1]) > 1e-6))
 				cout << "SHEAR DEF: " << def_x(indx) << " " << def_y(indx) << " DEFCHECK: " << defcheck[0] << " " << defcheck[1] << endl;
@@ -5242,7 +5241,7 @@ void SersicLens::set_model_specific_integration_pointers()
 	defptr_vec = &SersicLens::deflection_numerical_vec<Eigen::VectorXd,double>;  // because the spherical version doesn't work at the moment
 #ifdef USE_STAN
 	kapavgptr_rsq_spherical_autodif = static_cast<stan::math::var (LensProfile::*)(const stan::math::var)> (&SersicLens::kapavg_spherical_rsq<stan::math::var>);
-	defptr_vec_autodif = &SersicLens::deflection_numerical_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>; 
+	defptr_vec_autodif = &SersicLens::deflection_numerical_vec<AutoDiffVec,stan::math::var>; 
 #endif
 }
 
@@ -5272,7 +5271,7 @@ void SersicLens::kappa_rsq_vec_impl(const VecType& rsq, VecType& kappa)
 
 	Sersic_Params<QScalar>& p = assign_sersic_param_object<QScalar>();
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		kappa = p.kappa0*exp(-p.b*pow(rsq/(p.re*p.re),0.5/p.n));
 	} else
 #endif
@@ -5330,7 +5329,7 @@ void SersicLens::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
 	xsq = rsq/(p.rs*p.rs);
 	lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		kapavg = 
 	} else
 #endif

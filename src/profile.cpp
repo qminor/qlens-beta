@@ -850,12 +850,12 @@ void LensProfile::update_fit_parameters(const QScalar* fitparams, int &index, bo
 					*(lensparams->param[i]) = stan::math::value_of(*(p.param[i]));
 				}
 			}
-		//} else {
-			//for (int i=0; i < n_params; i++) {
-				//if (vary_params[i]==true) {
-					//*(lensparams_dif->param[i]) = (*(p.param[i]));
-				//}
-			//}
+		} else {
+			for (int i=0; i < n_params; i++) {
+				if (vary_params[i]==true) {
+					*(lensparams_dif->param[i]) = (*(p.param[i]));
+				}
+			}
 		}
 		update_meta_parameters_autodif();
 #endif
@@ -1715,11 +1715,11 @@ void LensProfile::set_integration_pointers() // Note: make sure the axis ratio q
 		potptr_autodif = &LensProfile::potential_spherical_default<stan::math::var>;
 		defptr_autodif = &LensProfile::deflection_spherical_default<stan::math::var>;
 		hessptr_autodif = &LensProfile::hessian_spherical_default<stan::math::var>;
-		defptr_vec_autodif = &LensProfile::deflection_spherical_default_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>;
+		defptr_vec_autodif = &LensProfile::deflection_spherical_default_vec<AutoDiffVec,stan::math::var>;
 	} else {
 		defptr_autodif = &LensProfile::deflection_numerical<stan::math::var>;
 		hessptr_autodif = &LensProfile::hessian_numerical<stan::math::var>;
-		defptr_vec_autodif = &LensProfile::deflection_numerical_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>; 
+		defptr_vec_autodif = &LensProfile::deflection_numerical_vec<AutoDiffVec,stan::math::var>; 
 	}
 	def_and_hess_ptr_autodif = &LensProfile::deflection_and_hessian_together<stan::math::var>;
 #endif
@@ -2383,7 +2383,7 @@ void LensProfile::deflection_vec_impl(const VecType& x0, const VecType& y0, VecT
 	// switch to coordinate system centered on lens profile
 	VecType dx,dy;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		dx = x0 - p.x_center;
 		dy = y0 - p.y_center;
 	} else
@@ -2881,7 +2881,7 @@ void LensProfile::deflection_spherical_default_vec(const VecType& x, const VecTy
 	//cout << "DEF SPHERICAL VEC?" << endl;
 	VecType rsq;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		rsq = stan::math::elt_multiply(x,x) + stan::math::elt_multiply(y,y);
 	} else
 #endif
@@ -2896,7 +2896,7 @@ void LensProfile::deflection_spherical_default_vec(const VecType& x, const VecTy
 	(this->*kapavgptr_rsq_spherical_vec)(rsq,kapavg);
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		def_x = elt_multiply(kapavg,x); 
 		def_y = elt_multiply(kapavg,y);
 	} else
@@ -3316,7 +3316,7 @@ void LensProfile::deflection_numerical_vec(const VecType& x, const VecType& y, V
 		lens_integral.j_integral_vec(1,x,y,def_y,converged);
 		warn_if_not_converged(converged,x(0),y(0));
 #ifdef USE_STAN
-		if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+		if constexpr (stan::is_autodiff_v<VecType>) {
 			def_x = elt_multiply(def_x,x); 
 			def_y = elt_multiply(def_y,y);
 		} else

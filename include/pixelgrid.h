@@ -446,6 +446,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 
 	template <typename QScalar>
 	void assign_surface_brightness_from_analytic_source(const int imggrid_i=-1);
+	template <typename MathTypes>
 	void fill_surface_brightness_vector();
 	template <typename MathTypes>
 	void update_surface_brightness(int& index);

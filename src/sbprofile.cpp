@@ -2133,7 +2133,7 @@ void SB_Profile::surface_brightness_vec_impl(const VecType& x0, const VecType& y
 
 	VecType dx,dy;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		dx = x0 - p.x_center;
 		dy = y0 - p.y_center;
 	} else
@@ -2148,7 +2148,7 @@ void SB_Profile::surface_brightness_vec_impl(const VecType& x0, const VecType& y
 
 	VecType xisq;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		if (ellipticity_mode==0) xisq = stan::math::elt_multiply(x,x) + stan::math::elt_multiply(y,y)/(p.q*p.q);
 		else if (ellipticity_mode==1) xisq = p.q*stan::math::elt_multiply(x,x) + stan::math::elt_multiply(y,y)/p.q;
 	} else

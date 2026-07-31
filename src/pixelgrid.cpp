@@ -4478,16 +4478,28 @@ template void DelaunaySourceGrid::assign_surface_brightness_from_analytic_source
 template void DelaunaySourceGrid::assign_surface_brightness_from_analytic_source<stan::math::var>(const int imggrid_i);
 #endif
 
+template <typename MathTypes>
 void DelaunaySourceGrid::fill_surface_brightness_vector()
 {
+	using QScalar = typename MathTypes::QScalar;
 	if (image_pixel_grid==NULL) warn("delaunay source pixels cannot access image pixel grid; cannot fill surface brightness vector");
-	DelaunaySourceGrid_Params<double>& p = assign_delaunay_srcgrid_param_object<double>();
-	ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
-	int i,j;
-	for (i=0, j=0; i < n_gridpts; i++) {
-		imggrid.amplitude_vector[j++] = p.surface_brightness[i];
+	DelaunaySourceGrid_Params<QScalar>& p = assign_delaunay_srcgrid_param_object<QScalar>();
+	ImgGrid_Params<MathTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
+	Eigen::VectorXd vals(n_gridpts);
+	for (int i = 0; i < n_gridpts; ++i) vals(i) = value_of(p.surface_brightness[i]);
+
+	imggrid.amplitude_vector = vals;
+	/*
+	for (int i=0; i < n_gridpts; i++) {
+		cout << "AMP " << i << ": " << imggrid.amplitude_vector(i) << " " << value_of(imggrid.amplitude_vector(i)) << " " << p.surface_brightness[i] << endl;
+		//cout << "pixel " << i << ": SB=" << p.surface_brightness[i] << endl;
 	}
+	*/
 }
+template void DelaunaySourceGrid::fill_surface_brightness_vector<PlainTypes>();
+#ifdef USE_STAN
+template void DelaunaySourceGrid::fill_surface_brightness_vector<VarmatTypes>();
+#endif
 
 template <typename MathTypes>
 void DelaunaySourceGrid::update_surface_brightness(int& index)
@@ -4629,8 +4641,10 @@ void DelaunaySourceGrid::calculate_Lmatrix_dense_direct(const int img_index, con
 	}
 	//cout << "n_mapped_srcpixels=" << n_mapped_srcpixels << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
 	for (int i=0; i < n_mapped_srcpixels; i++) {
+		//cout << "LMATRIX mapping! " << weight << " " << value_of(p.interpolation_wgts[i]) << endl;
 		maps_to_image_pixel[interpolation_indx[i]] = true;
 		imggrid.Lmatrix_trans_dense(active_index[interpolation_indx[i]],img_index) += weight*p.interpolation_wgts[i];
+		cout << "LMatrix term: " << value_of(imggrid.Lmatrix_trans_dense(active_index[interpolation_indx[i]],img_index)) << endl;
 		//cout << "point: " << interpolation_indx[i] << " active_index=" << active_index[interpolation_indx[i]] << " (imggrid_i=" << image_pixel_grid->src_redshift_index << ")" << endl;
 	}
 }
@@ -15140,6 +15154,7 @@ void ImagePixelGrid::construct_Lmatrix(const bool delaunay, const bool potential
 template <typename MathTypes>
 void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool potential_perturbations, const bool verbal)
 {
+	cout << "CONSTRUCTING LMATRIX" << endl;
 	using QScalar = typename MathTypes::QScalar;
 	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 
@@ -15234,6 +15249,18 @@ void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool pot
 			}
 		}
 	}
+
+	bool Lmatrix_is_zero = true;
+	//int i,j;
+	for (i=0; i < image_npixels; i++) {
+		for (j=0; j < source_npixels; j++) {
+			if (p.Lmatrix_trans_dense(j,i) != 0) {
+				cout << "NONZERO element!" << endl;
+				Lmatrix_is_zero = false;
+			}
+		}
+	}
+	if (Lmatrix_is_zero) cout << "FFUUUUUCK Lmatrix is zero right off the bat" << endl;
 
 	if (qlens->show_wtime) {
 		wtime = std::chrono::steady_clock::now() - wtime0;
@@ -16676,7 +16703,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan_FFT(const VecType& sbv
 
 #ifdef USE_STAN
 	// The following ensures that if autodiff is not being used, arena_t is not invoked since it is an unnecessary memory allocation
-	using OutType = std::conditional_t<std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>, stan::arena_t<Eigen::VectorXd>, Eigen::VectorXd>;
+	using OutType = std::conditional_t<stan::is_autodiff_v<VecType>, stan::arena_t<Eigen::VectorXd>, Eigen::VectorXd>;
 	OutType out(npix);
 	const auto& sbvec_val = [&]() -> const auto& {
 		 if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>)
@@ -16989,7 +17016,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 
 #ifdef USE_STAN
 	// The following ensures that if autodiff is not being used, arena_t is not invoked since it is an unnecessary memory allocation
-	using OutType = std::conditional_t<std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>, stan::arena_t<Eigen::VectorXd>, Eigen::VectorXd>;
+	using OutType = std::conditional_t<stan::is_autodiff_v<VecType>, stan::arena_t<Eigen::VectorXd>, Eigen::VectorXd>;
 	OutType out(conv_plan->out_size);
 	const auto& sbvec_val = [&]() -> const auto& {
 		 if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>)
@@ -17029,7 +17056,7 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 	}
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>) {
+	if constexpr (stan::is_autodiff_v<VecType>) {
 		return stan::math::make_callback_var(out, [this, foreground, sbvec](const auto& res) mutable {
 			const auto& plan = (foreground) ? this->psfconv_plan_fg : this->psfconv_plan;
 			const auto& out_adj = res.adj();
@@ -17170,7 +17197,7 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat)
 
 #ifdef USE_STAN
 	// The following ensures that if autodiff is not being used, arena_t is not invoked since it is an unnecessary memory allocation
-	using OutType = std::conditional_t<std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>, stan::arena_t<Eigen::MatrixXd>, Eigen::MatrixXd>;
+	using OutType = std::conditional_t<stan::is_autodiff_v<MatType>, stan::arena_t<Eigen::MatrixXd>, Eigen::MatrixXd>;
 	OutType Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps, conv_plan->out_size));
 	const auto& Lmat_val = [&]() -> const auto& {
 		 if constexpr (std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>)
@@ -17212,7 +17239,7 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat)
 	}
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>) {
+	if constexpr (stan::is_autodiff_v<MatType>) {
 		return stan::math::make_callback_var(Lmatrix_trans_convolved, [this, Lmat](const auto& res) mutable {
 			const auto& plan = this->psfconv_plan;
 			const auto& Lmatrix_trans_convolved_adj = res.adj();
@@ -17263,7 +17290,7 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 
 #ifdef USE_STAN
 	// The following ensures that if autodiff is not being used, arena_t is not invoked since it is an unnecessary memory allocation
-	using OutType = std::conditional_t<std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>, stan::arena_t<Eigen::MatrixXd>, Eigen::MatrixXd>;
+	using OutType = std::conditional_t<stan::is_autodiff_v<MatType>, stan::arena_t<Eigen::MatrixXd>, Eigen::MatrixXd>;
 	OutType Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps,npix));
 	const auto& Lmat_val = [&]() -> const auto& {
 		 if constexpr (std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>)
@@ -17349,7 +17376,7 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 	}
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>)
+	if constexpr (stan::is_autodiff_v<MatType>) 
 	{
 		return stan::math::make_callback_var(Lmatrix_trans_convolved, [this,Lmat,npix,npix_conv,ncomplex,pixel_map_ii,pixel_map_jj,selected_mask](const auto& res) mutable {
 			const auto& Lmatrix_trans_convolved_adj = res.adj();
@@ -20086,7 +20113,7 @@ void ImagePixelGrid::invert_lens_mapping_dense_stan(bool verbal)
 	logdet_value *= 2;
 
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<VecType, stan::math::var_value<Eigen::VectorXd>>)
+	if constexpr (stan::is_autodiff_v<VecType>) 
 	{
 		p.amplitude_vector = stan::math::make_callback_var( amplitude, [&, amplitude, chol = Fmatrix_llt](const auto& res) mutable {
 			  const auto& ds = res.adj();
@@ -20807,6 +20834,17 @@ void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense()
 	*/
 
 	p.image_surface_brightness = p.Lmatrix_trans_dense.transpose()*p.amplitude_vector;
+	bool Lmatrix_is_zero = true;
+	int i,j;
+	for (i=0; i < image_npixels; i++) {
+		for (j=0; j < source_npixels; j++) {
+			if (p.Lmatrix_trans_dense(j,i) != 0) {
+				cout << "NONZERO element!" << endl;
+				Lmatrix_is_zero = false;
+			}
+		}
+	}
+	if (Lmatrix_is_zero) cout << "FFUUUUUCK Lmatrix is zero" << endl;
 	/*
 	for (i=0; i < image_npixels; i++) {
 		p.image_surface_brightness[i] = Lmatrix_trans_dense.col(i).dot(p.amplitude_vector);

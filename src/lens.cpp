@@ -655,7 +655,6 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 QLens::QLens(QLens *lens_in) : UCMC(), Model() // creates lens object with same settings as input lens; does NOT import the lens/source model configurations, however
 {
 	lens_parent = lens_in;
-	use_autodiff = lens_in->use_autodiff;
 	verbal_mode = lens_in->verbal_mode;
 	random_seed = lens_in->random_seed;
 	n_ranchisq = lens_in->n_ranchisq;
@@ -6548,13 +6547,6 @@ double QLens::get_xi_parameter(const double src_redshift, const int lensnum)
 
 double QLens::get_total_xi_parameter(const double src_redshift)
 {
-	std::chrono::steady_clock::time_point mytime0;
-	std::chrono::duration<double> mytime;
-	if (show_wtime) {
-		mytime0=std::chrono::steady_clock::now();
-	}
-
-
 	double r_ein,zfac,xi_param;
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),src_redshift,reference_source_redshift);
 	einstein_radius_of_primary_lens(zfac,r_ein);
@@ -6601,11 +6593,6 @@ double QLens::get_total_xi_parameter(const double src_redshift)
 	}
 	xifac_avg /= n_theta;
 	delete[] include_lens;
-	if (show_wtime) {
-		mytime = std::chrono::steady_clock::now() - mytime0;
-		if (mpi_id==0) cout << "Wall time for xi param: " << mytime.count() << endl;
-	}
-
 	return (2*r_ein*xifac_avg+2);
 }
 
@@ -6827,7 +6814,6 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 
 
 #ifdef USE_STAN
-	stan::math::start_nested();
 	{
 		//stan::math::var theta_perp_stan = theta_perp_shear;
 		//stan::math::var tt = 0, uu = 0;
@@ -6846,9 +6832,9 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 
 		kappaval_stan = kappa<stan::math::var>(x_phi_stan,y_phi_stan,reference_zfactors,default_zsrc_beta_factors);
 		shear<stan::math::var>(pt_stan,sheartot_stan,shear_angle_stan,0,reference_zfactors,default_zsrc_beta_factors);
-		theta_perp_shear = degrees_to_radians(shear_angle_stan.val()-90);
+		theta_perp_shear = degrees_to_radians(stan::math::value_of(shear_angle_stan)-90);
 
-		kappaval = kappaval_stan.val();
+		kappaval = stan::math::value_of(kappaval_stan);
 		kappaval_stan.grad();
 		//dkappa = tt.adj();
 		double uvec_x = cos(theta_perp_shear);
@@ -6871,7 +6857,6 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 		//dshear = uu.adj();
 		dshear = x_phi_stan.adj()*uvec_x + y_phi_stan.adj()*uvec_y;
 	}
-	stan::math::recover_memory_nested();
 
 /*
 	// the next part is just for checking against the numerical derivative; you can comment these lines out later
@@ -10103,9 +10088,6 @@ bool QLens::fit_set_optimizations()
 	} else {
 		LogLikePtr = static_cast<double (UCMC::*)(const double*)> (&QLens::fitmodel_loglike_extended_source<double>);
 	}
-	if (dparam_list->check_for_autodiff()==true) {
-		use_autodiff = true;
-	}
 	if (nlens==0) {
 		if ((n_sb==0) and (n_ptsrc==0)) {
 			warn("no lens or source models have been defined");
@@ -10217,6 +10199,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 
 #ifdef USE_STAN
 	if (show_diagnostics) {
+
 		Vector<double> stepsizes(param_list->stepsizes,param_list->nparams);
 		for (int i=0; i < param_list->nparams; i++) stepsizes[i] /= 3; // steps for Ridder's method should be smaller than steps used for simplex/powell
 
@@ -10272,7 +10255,6 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 
 		double *fitparams = new double[param_list->nparams];
 		param_list->get_values(fitparams);
-		use_autodiff = true;
 		stan::math::start_nested();
 		{
 			stan::math::var *fitparams_stan = new stan::math::var[param_list->nparams];
@@ -10316,7 +10298,6 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 		}
 		stan::math::recover_memory_nested();
 		delete[] fitparams;
-		use_autodiff = false;
 	}
 #endif
 
@@ -12215,11 +12196,6 @@ bool QLens::add_dparams_to_chain(string file_ext)
 		for (i=0; i < n_fitparams; i++) {
 			datastream >> params[i];
 		}
-		double *transformed_params = new double[param_list->nparams];
-		fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
-		if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
-		delete[] transformed_params;
-
 		fitmodel_calculate_derived_params(params, dparams_new[line]);
 
 		prev_icount = icount;
@@ -14371,8 +14347,6 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 
 	if (source_fit_mode==Parameterized_Source) {
 #ifdef USE_STAN
-	stan::math::start_nested();
-	{
 		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
 			chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,VarmatTypes>(chisq0,false);
 		} else
@@ -14387,14 +14361,18 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 		if constexpr (std::is_same_v<QScalar, stan::math::var>)
 		{
 			ImagePixelGrid* image_pixel_grid = fitmodel->image_pixel_grids[0]; 
+			cout << "HI0" << endl;
 			ImgGrid_Params<stan::math::var_value<Eigen::VectorXd>,stan::math::var_value<Eigen::MatrixXd>,stan::math::var>& imggrid_params = image_pixel_grid->imggrid_params_dif;
+			cout << "HI1" << endl;
 			//ImgGrid_Params<double>& imggrid_doub = image_pixel_grid->imggrid_params;
 
 			int pix_i = 16;
 			int pix_j = 40;
 			int n = image_pixel_grid->pixel_index[pix_i][pix_j];
 
+			cout << "HI2" << endl;
 			stan::math::var sb_stan = imggrid_params.image_surface_brightness(n);
+			//cout << "HI3" << endl;
 			sb_stan.grad();
 			//chisq.grad();
 			int sbpar = 0;
@@ -14404,6 +14382,7 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 			int par_i2 = par_i+1;
 			string sbparname2 = "sigma";
 
+			cout << "HI4" << endl;
 			cout << "sb_stan: " << stan::math::value_of(sb_stan) << endl;
 			cout << sbparname + "=" << stan::math::value_of(*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar])) << endl;
 			cout << "d(sb)/d" << sbparname << " = " << (*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar])).adj() << endl;
@@ -14415,6 +14394,7 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 			cout << "CHECK: " << sbparname2 << "=" << stan::math::value_of(params[par_i2]) << endl;
 			cout << "CHECK: " << "d(sb)/d" << sbparname2 << " = " << (params[par_i2]).adj() << endl;
 
+			cout << "HI5" << endl;
 			double epsilon = 1e-6;
 			double chisqd, chisqp, chisqm;
 			chisqd = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
@@ -14472,8 +14452,6 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 		}
 #endif
 		*/
-	}
-		stan::math::recover_memory_nested();
 
 	} else if (source_fit_mode==Delaunay_Source) {
 #ifdef USE_STAN
@@ -14614,11 +14592,11 @@ double QLens::loglike_point_source(const double* params)
 void QLens::fitmodel_calculate_derived_params(double* params, double* derived_params)
 {
 	if (dparam_list->n_dparams==0) return;
-	////fitmodel->param_list->update_untransformed_values(params);
-	//double *transformed_params = new double[param_list->nparams];
-	//fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
-	//if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
-	//delete[] transformed_params;
+	//fitmodel->param_list->update_untransformed_values(params);
+	double *transformed_params = new double[param_list->nparams];
+	fitmodel->param_list->inverse_transform_parameters(params,transformed_params);
+	if (fitmodel->update_model(transformed_params) != 0.0) warn("derived params for point incurring penalty chi-square may give absurd results");
+	delete[] transformed_params;
 	fitmodel->dparam_list->get_dparams(derived_params);
 	//for (int i=0; i < dparam_list->n_dparams; i++) derived_params[i] = dparam_list->dparams[i]->get_derived_param(fitmodel);
 	clear_raw_chisq();
@@ -17516,7 +17494,7 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 						bool use_weighted_clustering = ((use_dist_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights))) ? true : false;
 
 						create_sourcegrid_from_imggrid_delaunay<MathTypes>(use_weighted_clustering,band_number,zsrc_i,verbal);
-						image_pixel_grids[imggrid_i]->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
+						image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
 						delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
 						if (show_wtime) {
 							srcgrid_wtime = std::chrono::steady_clock::now() - srcgrid_wtime0;
@@ -17524,45 +17502,66 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 							srcgrid_wtime0=std::chrono::steady_clock::now();
 						}
 
-						/*
+						if (n_sb==0) die("need an analytic source for testing Delaunay grid stuff");
+						if (matrix_format!=DENSE) die("matrix format needs to be 'dense' for this test");
 						delaunay_srcgrids[src_i]->assign_surface_brightness_from_analytic_source<QScalar>(zsrc_i);
-						lensvector<QScalar> pt;
-						pt[0] = -0.05;
-						pt[1] = -0.13;
-						QScalar sb = delaunay_srcgrids[src_i]->interpolate_surface_brightness(pt[0],pt[1],false,0);
+						clear_source_objects();
+
+						ImgGrid_Params<MathTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
+						if (image_pixel_grid->assign_pixel_mappings(false,true)==false) {
+							die("FOOK");
+						}
+						if (mpi_id==0) {
+							cout << "Number of active image pixels: " << image_pixel_grid->image_npixels << endl;
+						}
+
+						if (mpi_id==0) cout << "Initializing pixel matrices...\n";
+						image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
+						delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
+						//for (int i=0; i < image_pixel_grid->n_amps; i++) cout << "amp " << i << ": " << value_of(imggrid.amplitude_vector(i)) << endl;
+
+						image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
+
 #ifdef USE_STAN
 						if constexpr (stan::is_autodiff_v<QScalar>) {
-							cout << "Interpolated SB: " << stan::math::value_of(sb) << endl;
-							sb.grad();
+							stan::math::var tot_sb = 0;
+							for (int i=0; i < image_pixel_grid->image_npixels; i++) tot_sb += imggrid.image_surface_brightness(i);
+							cout << "tot_sb: " << stan::math::value_of(tot_sb) << endl;
+							tot_sb.grad();
 							double dsb_db = (*(lens_list[0]->lensparams_dif->param[0])).adj();
-							cout << "d(sb)/db = " << dsb_db << endl;
+							cout << "d(tot_sb)/db = " << dsb_db << endl;
+							image_pixel_grid->clear_pixel_matrices();
 
 							double bval = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[0])));
-							const double increment = 1e-4;
+							const double increment = 1e-3;
 							lens_list[0]->update_specific_parameter(0,bval+increment);
 							double bval2 = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[0])));
 							cout << "bval=" << bval << " bval2=" << bval2 << endl;
-							image_pixel_grids[imggrid_i]->redo_lensing_calculations<MathTypes>(verbal);
-							create_sourcegrid_from_imggrid_delaunay<MathTypes>(use_weighted_clustering,band_number,zsrc_i,verbal);
-							delaunay_srcgrids[src_i]->assign_surface_brightness_from_analytic_source<QScalar>(zsrc_i);
-							QScalar sbp = delaunay_srcgrids[src_i]->interpolate_surface_brightness(pt[0],pt[1],false,0);
-								cout << "Interpolated SB: " << stan::math::value_of(sbp) << endl;
+							image_pixel_grid->redo_lensing_calculations<MathTypes>(true);
+							image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
+							delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
+							image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
+							stan::math::var sbp = 0;
+							for (int i=0; i < image_pixel_grid->image_npixels; i++) sbp += imggrid.image_surface_brightness(i);
+							cout << "Total SB(+): " << stan::math::value_of(sbp) << endl;
 
+							image_pixel_grid->clear_pixel_matrices();
 							lens_list[0]->update_specific_parameter(0,bval-increment);
-							image_pixel_grids[imggrid_i]->redo_lensing_calculations<MathTypes>(verbal);
-							create_sourcegrid_from_imggrid_delaunay<MathTypes>(use_weighted_clustering,band_number,zsrc_i,verbal);
-							delaunay_srcgrids[src_i]->assign_surface_brightness_from_analytic_source<QScalar>(zsrc_i);
-							QScalar sbm = delaunay_srcgrids[src_i]->interpolate_surface_brightness(pt[0],pt[1],false,0);
-							cout << "Interpolated SB: " << stan::math::value_of(sbm) << endl;
+							image_pixel_grid->redo_lensing_calculations<MathTypes>(true);
+							image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
+							delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
+							image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
+							stan::math::var sbm = 0;
+							for (int i=0; i < image_pixel_grid->image_npixels; i++) sbm += imggrid.image_surface_brightness(i);
+							cout << "Total SB(-): " << stan::math::value_of(sbm) << endl;
 
 							double sbder = (stan::math::value_of(sbp)-stan::math::value_of(sbm))/(2*increment);
-							cout << "d(sb)/db from finite diff = " << sbder << endl;
-						} else
-#endif
-						{
-							cout << "Interpolated SB: " << sb << endl;
+							cout << "d(tot_sb)/db from finite diff = " << sbder << endl;
+
+							image_pixel_grid->clear_pixel_matrices();
+
 						}
-						*/
+#endif
 					}
 				}
 			}
@@ -18622,12 +18621,12 @@ double mcsampler_set_lensptr(QLens* lens_in)
 double polychord_loglikelihood (double theta[], int nDims, double phi[], int nDerived)
 {
 #ifdef USE_STAN
-	if (lensptr->use_autodiff) stan::math::start_nested();
+	stan::math::start_nested();
 #endif
 	double logl = -lensptr->LogLikeFunc(theta);
 	lensptr->DerivedParamFunc(theta,phi);
 #ifdef USE_STAN
-	if (lensptr->use_autodiff) stan::math::recover_memory_nested();
+	stan::math::recover_memory_nested();
 #endif
 	return logl;
 }
@@ -18644,19 +18643,16 @@ void polychord_dumper(int ndead,int nlive,int npars,double* live,double* dead,do
 void multinest_loglikelihood(double *Cube, int &ndim, int &npars, double &lnew, void *context)
 {
 #ifdef USE_STAN
-	if (lensptr->use_autodiff) stan::math::start_nested();
+	stan::math::start_nested();
 #endif
-	{
-		double *params = new double[ndim];
-		lensptr->transform_cube(params,Cube);
-		lnew = -lensptr->LogLikeFunc(params);
-		lensptr->DerivedParamFunc(params,Cube+ndim);
-		delete[] params;
-	}
+	double *params = new double[ndim];
+	lensptr->transform_cube(params,Cube);
+	lnew = -lensptr->LogLikeFunc(params);
+	lensptr->DerivedParamFunc(params,Cube+ndim);
+	delete[] params;
 #ifdef USE_STAN
-	if (lensptr->use_autodiff) stan::math::recover_memory_nested();
+	stan::math::recover_memory_nested();
 #endif
-
 }
 
 void dumper_multinest(int &nSamples, int &nlive, int &nPar, double **physLive, double **posterior, double **paramConstr, double &maxLogLike, double &logZ, double &INSlogZ, double &logZerr, void *context)

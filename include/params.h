@@ -89,7 +89,6 @@ struct DerivedParam
 	double funcparam; // if funcparam == -1, then there is no parameter required
 	double funcparam2;
 	bool use_kpc_units;
-	bool uses_autodiff;
 	int int_param;
 	string name, latex_name;
 	DerivedParam(DerivedParamType type_in, double param, int lensnum, double param2 = -1, bool usekpc = false) // if lensnum == -1, then it uses *all* the lenses (if possible)
@@ -99,7 +98,6 @@ struct DerivedParam
 		funcparam2 = param2;
 		int_param = lensnum;
 		use_kpc_units = usekpc;
-		uses_autodiff = false;
 		if (derived_param_type == KappaR) {
 			name = "kappa"; latex_name = "\\kappa"; if (lensnum==-1) { name += "_tot"; latex_name += "_{tot}"; }
 		} else if (derived_param_type == LambdaR) { // here lambda_R = 1 - <kappa>(R)
@@ -122,9 +120,6 @@ struct DerivedParam
 			funcparam = -1e30; // no input parameter for this dparam
 		} else if (derived_param_type == Xi_Phi_Param) {
 			name = "xi_phi"; latex_name = "\\xi_{\\phi,cc}";
-#ifdef USE_STAN
-			uses_autodiff = true;
-#endif
 		} else if (derived_param_type == Kappa_Re) {
 			name = "kappa_re"; latex_name = "\\kappa_{E}";
 		} else if (derived_param_type == LensParam) {
@@ -1267,17 +1262,6 @@ struct DerivedParamList
 		for (int i=0; i < n_dparams; i++) {
 			dparam_vals[i] = dparams[i]->get_derived_param(qlens);
 		}
-	}
-	bool check_for_autodiff()
-	{
-		bool at_least_one_param_that_uses_autodiff = false;
-		for (int i=0; i < n_dparams; i++) {
-			if (dparams[i]->uses_autodiff) {
-				at_least_one_param_that_uses_autodiff = true;
-				break;
-			}
-		}
-		return at_least_one_param_that_uses_autodiff;
 	}
 	void clear_dparams()
 	{

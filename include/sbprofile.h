@@ -68,6 +68,12 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	friend class NFW;
 	friend class ImagePixelGrid;
 	friend struct ImageData;
+
+#ifdef USE_STAN
+	protected:
+	using AutoDiffVec = stan::math::var_value<Eigen::VectorXd>;
+#endif
+
 	private:
 	//Spline<double> sb_spline;
 	double sb_splint(double);
@@ -411,7 +417,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 #endif
 	virtual void sb_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& sb, const int nsp) { sb_rsq_vec_impl<Eigen::VectorXd,double>(rsq,sb,nsp); }
 #ifdef USE_STAN
-	virtual void sb_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& sb, const int nsp) { sb_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,sb,nsp); }
+	virtual void sb_rsq_vec(const AutoDiffVec& rsq, AutoDiffVec& sb, const int nsp) { sb_rsq_vec_impl<AutoDiffVec,stan::math::var>(rsq,sb,nsp); }
 #endif
 
 	template <typename VecType, typename QScalar>
@@ -419,7 +425,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 
 	virtual void surface_brightness_vec(const Eigen::VectorXd& x0, const Eigen::VectorXd& y0, Eigen::VectorXd& sb, const int nsp=1) { surface_brightness_vec_impl<Eigen::VectorXd,double>(x0,y0,sb,nsp); }
 #ifdef USE_STAN
-	virtual void surface_brightness_vec(const stan::math::var_value<Eigen::VectorXd>& x0, const stan::math::var_value<Eigen::VectorXd>& y0, stan::math::var_value<Eigen::VectorXd>& sb, const int nsp=1) { surface_brightness_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(x0,y0,sb,nsp); }
+	virtual void surface_brightness_vec(const AutoDiffVec& x0, const AutoDiffVec& y0, AutoDiffVec& sb, const int nsp=1) { surface_brightness_vec_impl<AutoDiffVec,stan::math::var>(x0,y0,sb,nsp); }
 #endif
 
 	template <typename QScalar>
@@ -542,7 +548,7 @@ class Gaussian : public SB_Profile
 
 	void sb_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& sb, const int nsp) { sb_rsq_vec_impl<Eigen::VectorXd,double>(rsq,sb,nsp); }
 #ifdef USE_STAN
-	void sb_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& sb, const int nsp) { sb_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,sb,nsp); }
+	void sb_rsq_vec(const AutoDiffVec& rsq, AutoDiffVec& sb, const int nsp) { sb_rsq_vec_impl<AutoDiffVec,stan::math::var>(rsq,sb,nsp); }
 #endif
 
 	template <typename VecType, typename QScalar>
@@ -627,7 +633,7 @@ class Sersic : public SB_Profile
 
 	void sb_rsq_vec(const Eigen::VectorXd& rsq, Eigen::VectorXd& sb, const int nsp) { sb_rsq_vec_impl<Eigen::VectorXd,double>(rsq,sb,nsp); }
 #ifdef USE_STAN
-	void sb_rsq_vec(const stan::math::var_value<Eigen::VectorXd>& rsq, stan::math::var_value<Eigen::VectorXd>& sb, const int nsp) { sb_rsq_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(rsq,sb,nsp); }
+	void sb_rsq_vec(const AutoDiffVec& rsq, AutoDiffVec& sb, const int nsp) { sb_rsq_vec_impl<AutoDiffVec,stan::math::var>(rsq,sb,nsp); }
 #endif
 
 	template <typename VecType, typename QScalar>
