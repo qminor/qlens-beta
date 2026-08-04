@@ -6945,6 +6945,231 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	//return (2*r_ein*xifac+2); // full equation 
 }
 
+bool QLens::get_xi_phi_derivs(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals, vector<double>& kapvals, vector<double>& kap_derivs, vector<double>& shear_derivs)
+{
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
+	int cc_num = -1;
+	double r_ein,zfac;
+	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
+	einstein_radius_of_primary_lens(zfac,r_ein);
+	double xc,yc,xcc,ycc;
+	lens_list[primary_lens_number]->get_center_coords(xc,yc);
+
+	// initializiing parameter for first counter 
+	int i;
+
+	double xifac = 0; // average xi
+	double dkappa_cc_tot, kappa_cc_tot, kap, dkap;
+
+	bool* include_lens = new bool[nlens];
+	for (i=0; i < nlens; i++) {
+		include_lens[i] = false;
+		if (i==primary_lens_number) include_lens[i] = true; // includes primary lens
+		else if (lens_list[i]->lenstype==SHEET) include_lens[i] = true;
+		else {
+			if (lens_list[i]->ellipticity_mode != -1) { // this would mean it's an elliptical lens
+				lens_list[i]->get_center_coords(xcc,ycc);
+				if ((xcc==xc) and (ycc==yc)) include_lens[i] = true; // only include co-centered lenses
+			}
+		}
+	}
+
+	// get critical curve points
+	if (find_tangential_critical_curve(cc_num)==false) {
+		delete[] include_lens;
+		return false;
+	}
+
+	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
+	int npts = critical_curve->cc_pts.size();
+
+	// now we'll need to interpolate in the critical curve at angle phi
+	int m;
+	double *rvals, *phivals;
+	double x, y, r_phi, x_phi, y_phi;
+	double kappaval, sheartot, shear_angle, theta_shear, theta_perp_shear;
+	double dkappa, dshear;
+	double x_phi2, y_phi2, r_phi2;
+	double new_kappaval, new_sheartot, new_shear_angle, shear_deriv, kappa_deriv;
+	const double h = 1e-6;
+
+	rvals = new double[npts+1];
+	phivals = new double[npts+1];
+
+	// incrementing through number of critical curve points
+	for (m=0; m < npts; m++) {
+		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
+		y = critical_curve->cc_pts[m][1];
+		//cout << x << " " << y << endl;
+		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
+		phivals[m] = get_angle(x,y);
+	}
+	sort(npts,phivals,rvals);
+	phivals[npts] = phivals[0] + M_2PI;
+	rvals[npts] = rvals[0];
+	//for (int i=0; i < npts; i++) {
+		//cout << phivals[i] << " " << rvals[i] << endl;
+	//}
+	Spline<double> rspline(phivals,rvals,npts+1);
+	double phi;
+	for (int i=0; i < phivals_in.size(); i++) {
+		phi = phivals_in[i];
+		double phi0 = phi;
+		if (phi < phivals[0]) phi0 += M_2PI;
+		if (phi > phivals[npts]) phi0 -= M_2PI;
+		r_phi = rspline.splint(phi0);
+		x_phi = xc+r_phi*cos(phi);
+		y_phi = yc+r_phi*sin(phi);
+
+		//r_phi = r_ein;
+		//x_phi = xc+r_phi*cos(phi);
+		//y_phi = yc+r_phi*sin(phi);
+
+
+#ifdef USE_STAN
+		{
+			//stan::math::var theta_perp_stan = theta_perp_shear;
+			//stan::math::var tt = 0, uu = 0;
+			stan::math::var x_phi_stan, y_phi_stan, kappaval_stan, sheartot_stan, shear_angle_stan;
+			//stan::math::var uu = 0;
+			x_phi_stan = x_phi;
+			y_phi_stan = y_phi;
+			//x_phi_stan = x_phi + tt*cos(theta_perp_stan);
+			//y_phi_stan = y_phi + tt*sin(theta_perp_stan);
+			lensvector<stan::math::var> pt_stan(x_phi_stan,y_phi_stan);
+			//x_phi_stan2 = x_phi;
+			//y_phi_stan2 = y_phi;
+			//x_phi_stan2 = x_phi + uu*cos(theta_perp_stan);
+			//y_phi_stan2 = y_phi + uu*sin(theta_perp_stan);
+			//lensvector<stan::math::var> pt_stan2(x_phi_stan2,y_phi_stan2);
+
+			kappaval_stan = kappa<stan::math::var>(x_phi_stan,y_phi_stan,reference_zfactors,default_zsrc_beta_factors);
+			shear<stan::math::var>(pt_stan,sheartot_stan,shear_angle_stan,0,reference_zfactors,default_zsrc_beta_factors);
+			theta_perp_shear = degrees_to_radians(stan::math::value_of(shear_angle_stan)-90);
+
+			kappaval = stan::math::value_of(kappaval_stan);
+			kappaval_stan.grad();
+			//dkappa = tt.adj();
+			double uvec_x = cos(theta_perp_shear);
+			double uvec_y = sin(theta_perp_shear);
+
+			x_phi2 = x_phi + h*uvec_x;
+			y_phi2 = y_phi + h*uvec_y;
+
+			r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+
+			if (r_phi2 < r_phi) {
+				uvec_x = -uvec_x;
+				uvec_y = -uvec_y;
+			}
+
+			dkappa = x_phi_stan.adj()*uvec_x + y_phi_stan.adj()*uvec_y;
+
+			stan::math::set_zero_all_adjoints();
+			sheartot_stan.grad();
+			//dshear = uu.adj();
+			dshear = x_phi_stan.adj()*uvec_x + y_phi_stan.adj()*uvec_y;
+		}
+
+	/*
+		// the next part is just for checking against the numerical derivative; you can comment these lines out later
+		if (r_phi2 < r_phi) {
+			theta_perp_shear = theta_perp_shear + M_PI;
+			x_phi2 = x_phi + h*cos(theta_perp_shear);
+			y_phi2 = y_phi + h*sin(theta_perp_shear);
+			r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+			//cout << "new r_phi2: " << r_phi2 << endl;
+		}
+		lensvector<double> point2(x_phi2, y_phi2);
+
+		double kappaval2, sheartot2, shear_angle2;
+		kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+		shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+
+		// calculate xi from here, taking numerical derivatives
+		// just take a forward difference for now
+		lensvector<double> point(x_phi,y_phi);
+		double kappaval_check = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+		double sheartot_check;
+		shear<double>(point,sheartot_check,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+		double dkappa_check = (kappaval2 - kappaval_check)/h;
+		double dshear_check = (sheartot2 - sheartot_check)/h;
+
+		cout << "this is dkappa: " << dkappa << " and dkappa_check=" << dkappa_check <<endl;
+		cout << "this is dshear: " << dshear << " and dshear_check=" << dshear_check <<endl;
+		cout << "this is kappaval_stan: " << kappaval << " and kappaval_check=" << kappaval_check <<endl;
+		*/
+#else
+		lensvector<double> point(x_phi,y_phi);
+
+		// get kappa and derivative of kappa for each lens that is included
+		shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+		theta_perp_shear = degrees_to_radians(shear_angle-90);
+
+		x_phi2 = x_phi + h*cos(theta_perp_shear);
+		y_phi2 = y_phi + h*sin(theta_perp_shear);
+
+		r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+
+		//cout << " r_phi: " << r_phi << " r_phi_test: " << r_phi_test << " r_phi2: " << r_phi2 << endl;
+
+		if (r_phi2 < r_phi) {
+			theta_perp_shear = theta_perp_shear + M_PI;
+			x_phi2 = x_phi + h*cos(theta_perp_shear);
+			y_phi2 = y_phi + h*sin(theta_perp_shear);
+			r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+			//cout << "new r_phi2: " << r_phi2 << endl;
+		}
+
+		lensvector<double> point2(x_phi2, y_phi2);
+
+		double kappaval2, sheartot2, shear_angle2;
+		kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+		shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+
+		// calculate xi from here, taking numerical derivatives
+		// just take a forward difference for now
+		dkappa = (kappaval2 - kappaval)/h;
+		dshear = (sheartot2 - sheartot)/h;
+#endif
+
+		//double x0 = 0;
+		//double y0 = 0;
+
+		//double test_x0_2 = x0 + h*cos(theta_perp_shear);
+		//double test_y0_2 = y0 + h*sin(theta_perp_shear);
+
+		//cout << "this is x0_1: " << 
+		//cout << "this is x0_2: " << test_x0_2 << " and this is y0_2: " << test_y0_2 << endl;
+		//cout << "this is kappaval: " << kappaval << " and this is kappaval2: " << kappaval2 << endl;
+		//cout << "this is dkappa: " << dkappa << "and this is dshear: " << dshear << endl;
+		//cout << "this is sheartot: " << sheartot << " and this is sheartot2: " << sheartot2 << endl;
+
+		//if (dkappa > 0) {
+			//cout << "warning: dkappa > 0" << endl;
+			//cout << "this is x1: " << x_phi << " and this is y1: " << y_phi << endl;
+			//cout << "this is x2: " << x_phi2 << "and this is y2: " << y_phi2 << endl;
+		//}
+
+		xvals[i] = x_phi;
+		yvals[i] = y_phi;
+		kapvals[i] = kappaval;
+		kap_derivs[i] = dkappa;
+		shear_derivs[i] = dshear;
+	}
+
+	delete[] include_lens;
+	delete[] rvals;
+	delete[] phivals;
+	return true;
+}
+
+
+
 bool QLens::get_tangential_critical_curve_points(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals)
 {
 #ifdef USE_STAN

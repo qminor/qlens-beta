@@ -1310,6 +1310,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double cc_xi_parameter(int cc_num=-1);
 	bool find_tangential_critical_curve(int &cc_num);
 	double get_xi_phi_parameter(const double phi, int cc_num=-1);
+	bool get_xi_phi_derivs(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals, vector<double>& kapvals, vector<double>& kap_deriv, vector<double>& shear_deriv);
 	bool get_tangential_critical_curve_points(const std::vector<double>& phivals, std::vector<double>& xvals, std::vector<double>& yvals);
 
 	bool *centered;

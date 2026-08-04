@@ -3354,6 +3354,16 @@ PYBIND11_MODULE(qlens, m) {
 			if (current.get_tangential_critical_curve_points(phivals,xvals,yvals)==false) throw std::runtime_error("could not find tangential critical curve");
 			return std::make_tuple(xvals,yvals);
 		})
+		.def("get_xi_phi_derivs", [](QLens_Wrap &current, vector<double>& phivals){ 
+			vector<double> xvals(phivals.size());
+			vector<double> yvals(phivals.size());
+			vector<double> kapvals(phivals.size());
+			vector<double> dkapvals(phivals.size());
+			vector<double> dshearvals(phivals.size());
+			if (current.get_xi_phi_derivs(phivals,xvals,yvals,kapvals,dkapvals,dshearvals)==false) throw std::runtime_error("could not find tangential critical curve");
+			return std::make_tuple(kapvals,dkapvals,dshearvals);
+		})
+
 		.def("kappa", [](QLens_Wrap &current, const double x, const double y){ 
 			double kappa;
 			kappa = current.kappa<double>(x,y,current.reference_zfactors,current.default_zsrc_beta_factors);
