@@ -1310,6 +1310,8 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double cc_xi_parameter(int cc_num=-1);
 	bool find_tangential_critical_curve(int &cc_num);
 	double get_xi_phi_parameter(const double phi, int cc_num=-1);
+	bool get_tangential_critical_curve_points(const std::vector<double>& phivals, std::vector<double>& xvals, std::vector<double>& yvals);
+
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac, double& reav);
 	double einstein_radius_root(const double r);

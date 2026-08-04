@@ -399,6 +399,19 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 	friend class ImagePixelGrid;
 	ImagePixelGrid *image_pixel_grid;
 
+	private:
+	struct ImgPtInfo
+	{
+		int subpixel_idx; 
+		int imgpixel_idx; // the image pixel that the subpixel lies within
+		int trinum;
+		int kmin;
+		int vertex[nmax_pts_interp];
+		double weight;
+		bool skip;
+		bool use_nearest_neighbor;
+	};
+
 	public:
 	double srcgrid_redshift;
 	bool look_for_starting_point;
@@ -464,6 +477,12 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 	void calculate_Lmatrix_dense(const int img_index, PtsWgts<double>* mapped_delaunay_srcpixels, int* n_mapped_srcpixels, int& index, const int& subpixel_indx, const double weight, const int& thread);
 	template <typename MathTypes, typename QScalar>
 	void calculate_Lmatrix_dense_direct(const int img_index, const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, const double weight, const int thread, bool& trouble_with_starting_vertex);
+	template <typename MathTypes>
+	typename MathTypes::MatType calculate_Lmatrix_dense_direct_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int image_npixels, const int nsubpix_per_pixel, const double weight, bool& trouble_with_starting_vertex);
+#ifdef USE_STAN
+	void reverse_construct_Lmatrix(const std::vector<ImgPtInfo>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::MatrixXd& Ladj);
+#endif
+
 
 	int assign_active_indices_and_count_source_pixels(const int source_pixel_i_initial, const bool activate_unmapped_pixels);
 	void output_surface_brightness(Vector<double>& xvals, Vector<double>& yvals, Vector<double>& zvals, const int npix = 600, const bool interpolate = false, const bool plot_magnification = false);
@@ -639,6 +658,7 @@ class ImgGrid_Params
 	VecType img_minus_sbprofile;
 	VecType amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	VecType amplitude_vector;
+	Eigen::VectorX<QScalar> amplitude_varvec;
 
 	VecType sbprofile_surface_brightness;
 	VecType srcpt_x_centers, srcpt_y_centers;

@@ -6736,7 +6736,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	using stan::math::cos;
 	using stan::math::sin;
 #endif
-	double r_ein,zfac,xi_param;
+	double r_ein,zfac;
 	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
 	einstein_radius_of_primary_lens(zfac,r_ein);
@@ -6749,8 +6749,6 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	double xifac = 0; // average xi
 	double dkappa_cc_tot, kappa_cc_tot, kap, dkap;
 
-	// choosing which lenses to include? I'm a little confused what's happening here -- is it only including
-	// additional lenses that are elliptical? 
 	bool* include_lens = new bool[nlens];
 	for (i=0; i < nlens; i++) {
 		include_lens[i] = false;
@@ -6773,7 +6771,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
 	int npts = critical_curve->cc_pts.size();
 
-	// now we'll need to interpolate in the critical curve at angle phi...code this up!!
+	// now we'll need to interpolate in the critical curve at angle phi
 	int m;
 	double *rvals, *phivals;
 	double x, y, r_phi, x_phi, y_phi;
@@ -6945,6 +6943,92 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	delete[] phivals;
 	return xifac;
 	//return (2*r_ein*xifac+2); // full equation 
+}
+
+bool QLens::get_tangential_critical_curve_points(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals)
+{
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
+	int cc_num = -1;
+	double zfac;
+	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
+	double xc,yc,xcc,ycc;
+	lens_list[primary_lens_number]->get_center_coords(xc,yc);
+
+	// initializiing parameter for first counter 
+	int i;
+
+	double xifac = 0; // average xi
+	double dkappa_cc_tot, kappa_cc_tot, kap, dkap;
+
+	bool* include_lens = new bool[nlens];
+	for (i=0; i < nlens; i++) {
+		include_lens[i] = false;
+		if (i==primary_lens_number) include_lens[i] = true; // includes primary lens
+		else if (lens_list[i]->lenstype==SHEET) include_lens[i] = true;
+		else {
+			if (lens_list[i]->ellipticity_mode != -1) { // this would mean it's an elliptical lens
+				lens_list[i]->get_center_coords(xcc,ycc);
+				if ((xcc==xc) and (ycc==yc)) include_lens[i] = true; // only include co-centered lenses
+			}
+		}
+	}
+
+	// get critical curve points
+	if (find_tangential_critical_curve(cc_num)==false) {
+		delete[] include_lens;
+		return false;
+	}
+
+	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
+	int npts = critical_curve->cc_pts.size();
+
+	// now we'll need to interpolate in the critical curve at angle phi
+	int m;
+	double *rvals, *phivals;
+	double x, y, r_phi, x_phi, y_phi;
+	double kappaval, sheartot, shear_angle, theta_shear, theta_perp_shear;
+	double dkappa, dshear;
+	double x_phi2, y_phi2, r_phi2;
+	double new_kappaval, new_sheartot, new_shear_angle, shear_deriv, kappa_deriv;
+	const double h = 1e-6;
+
+	rvals = new double[npts+1];
+	phivals = new double[npts+1];
+
+	// incrementing through number of critical curve points
+	for (m=0; m < npts; m++) {
+		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
+		y = critical_curve->cc_pts[m][1];
+		//cout << x << " " << y << endl;
+		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
+		phivals[m] = get_angle(x,y);
+	}
+	sort(npts,phivals,rvals);
+	phivals[npts] = phivals[0] + M_2PI;
+	rvals[npts] = rvals[0];
+	//for (int i=0; i < npts; i++) {
+		//cout << phivals[i] << " " << rvals[i] << endl;
+	//}
+	Spline<double> rspline(phivals,rvals,npts+1);
+	double phi;
+	for (int i=0; i < phivals_in.size(); i++) {
+		phi = phivals_in[i];
+		double phi0 = phi;
+		if (phi < phivals[0]) phi0 += M_2PI;
+		if (phi > phivals[npts]) phi0 -= M_2PI;
+		r_phi = rspline.splint(phi0);
+		xvals[i] = xc+r_phi*cos(phi);
+		yvals[i] = yc+r_phi*sin(phi);
+	}
+	delete[] include_lens;
+	delete[] rvals;
+	delete[] phivals;
+
+	return true;
 }
 
 double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
@@ -12276,6 +12360,11 @@ bool QLens::adopt_bestfit_point_from_chain()
 
 	string chain_str = fit_output_dir + "/" + fit_output_filename;
 	ifstream chain_file(chain_str.c_str());
+	if (!chain_file.good()) {
+		warn("could not find chain file '"+chain_str+"'");
+		delete[] params;
+		return false;
+	}
 
 	unsigned long nline=0, line_num;
 	double weight, max_weight = -1e30;
@@ -14453,15 +14542,15 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 #endif
 		*/
 
-	} else if (source_fit_mode==Delaunay_Source) {
-#ifdef USE_STAN
-		if constexpr (stan::is_autodiff_v<QScalar>) {
-			chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,VarmatTypes>(chisq0,false,0);
-		} else
-#endif
-		{
-			chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,PlainTypes>(chisq0,false,0);
-		}
+	//} else if (source_fit_mode==Delaunay_Source) {
+//#ifdef USE_STAN
+		//if constexpr (stan::is_autodiff_v<QScalar>) {
+			//chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,VarmatTypes>(chisq0,false,0);
+		//} else
+//#endif
+		//{
+			//chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,PlainTypes>(chisq0,false,0);
+		//}
 	} else {
 		double chisq00;
 		double chisq_doub=0;
@@ -17492,7 +17581,6 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 							srcgrid_wtime0 = std::chrono::steady_clock::now();
 						}
 						bool use_weighted_clustering = ((use_dist_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights))) ? true : false;
-
 						create_sourcegrid_from_imggrid_delaunay<MathTypes>(use_weighted_clustering,band_number,zsrc_i,verbal);
 						image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
 						delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
@@ -17505,8 +17593,8 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 						if (n_sb==0) die("need an analytic source for testing Delaunay grid stuff");
 						if (matrix_format!=DENSE) die("matrix format needs to be 'dense' for this test");
 						delaunay_srcgrids[src_i]->assign_surface_brightness_from_analytic_source<QScalar>(zsrc_i);
-						clear_source_objects();
 
+						/*
 						ImgGrid_Params<MathTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
 						if (image_pixel_grid->assign_pixel_mappings(false,true)==false) {
 							die("FOOK");
@@ -17517,51 +17605,101 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 
 						if (mpi_id==0) cout << "Initializing pixel matrices...\n";
 						image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
+						//std::cout << "Lmatrix dimensions: " << imggrid.Lmatrix_trans_dense.rows() << " x " << imggrid.Lmatrix_trans_dense.cols() << '\n';
+
+						image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
+
 						delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
 						//for (int i=0; i < image_pixel_grid->n_amps; i++) cout << "amp " << i << ": " << value_of(imggrid.amplitude_vector(i)) << endl;
 
-						image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
+						//image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
+						Eigen::VectorX<QScalar> image_sbvec = Eigen::VectorXd::Zero(image_pixel_grid->image_npixels);
+						//image_sbvec = p.Lmatrix_trans_dense.transpose()*p.amplitude_varvec;
+						for (int i=0; i < image_pixel_grid->image_npixels; i++) {
+							for (int j=0; j < image_pixel_grid->n_amps; j++)
+								image_sbvec[i] += (imggrid.Lmatrix_trans_dense.transpose())(i,j)*imggrid.amplitude_varvec[j];
+						}
+
+						cout << setprecision(16);
 
 #ifdef USE_STAN
 						if constexpr (stan::is_autodiff_v<QScalar>) {
 							stan::math::var tot_sb = 0;
-							for (int i=0; i < image_pixel_grid->image_npixels; i++) tot_sb += imggrid.image_surface_brightness(i);
+							//for (int i=0; i < image_pixel_grid->image_npixels; i++) tot_sb += imggrid.image_surface_brightness(i);
+							for (int i=0; i < image_pixel_grid->n_amps; i++) tot_sb += imggrid.amplitude_varvec(i);
 							cout << "tot_sb: " << stan::math::value_of(tot_sb) << endl;
 							tot_sb.grad();
-							double dsb_db = (*(lens_list[0]->lensparams_dif->param[0])).adj();
+							int paramnum = 0;
+							double dsb_db = (*(lens_list[0]->lensparams_dif->param[paramnum])).adj();
 							cout << "d(tot_sb)/db = " << dsb_db << endl;
 							image_pixel_grid->clear_pixel_matrices();
 
-							double bval = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[0])));
-							const double increment = 1e-3;
-							lens_list[0]->update_specific_parameter(0,bval+increment);
-							double bval2 = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[0])));
-							cout << "bval=" << bval << " bval2=" << bval2 << endl;
-							image_pixel_grid->redo_lensing_calculations<MathTypes>(true);
-							image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
-							delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
-							image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
-							stan::math::var sbp = 0;
-							for (int i=0; i < image_pixel_grid->image_npixels; i++) sbp += imggrid.image_surface_brightness(i);
-							cout << "Total SB(+): " << stan::math::value_of(sbp) << endl;
+							double pval = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[paramnum])));
+							double incs[9] = { 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9 };
+							for (i=0; i < 9; i++) {
+								double increment = incs[i];
+								lens_list[0]->update_specific_parameter(paramnum,pval+increment);
+								//double bval2 = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[0])));
+								//cout << "bval=" << bval << " bval2=" << bval2 << endl;
+								image_pixel_grid->redo_lensing_calculations<MathTypes>(true);
 
-							image_pixel_grid->clear_pixel_matrices();
-							lens_list[0]->update_specific_parameter(0,bval-increment);
-							image_pixel_grid->redo_lensing_calculations<MathTypes>(true);
-							image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
-							delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
-							image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
-							stan::math::var sbm = 0;
-							for (int i=0; i < image_pixel_grid->image_npixels; i++) sbm += imggrid.image_surface_brightness(i);
-							cout << "Total SB(-): " << stan::math::value_of(sbm) << endl;
+								create_sourcegrid_from_imggrid_delaunay<MathTypes>(false,0,0,verbal);
+								image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrids[0]);
+								delaunay_srcgrids[0]->set_image_pixel_grid(image_pixel_grid);
+								delaunay_srcgrids[0]->assign_surface_brightness_from_analytic_source<QScalar>(0);
 
-							double sbder = (stan::math::value_of(sbp)-stan::math::value_of(sbm))/(2*increment);
-							cout << "d(tot_sb)/db from finite diff = " << sbder << endl;
+								image_pixel_grid->assign_pixel_mappings(false,true);
+								image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
+								image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
 
-							image_pixel_grid->clear_pixel_matrices();
+								delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
+								//image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
+								for (int i=0; i < image_pixel_grid->image_npixels; i++) {
+									image_sbvec[i] = 0;
+									for (int j=0; j < image_pixel_grid->n_amps; j++)
+										image_sbvec[i] += (imggrid.Lmatrix_trans_dense.transpose())(i,j)*imggrid.amplitude_varvec[j];
+								}
 
+								stan::math::var sbp = 0;
+								//for (int i=0; i < image_pixel_grid->image_npixels; i++) sbp += imggrid.image_surface_brightness(i);
+								for (int i=0; i < image_pixel_grid->n_amps; i++) sbp += imggrid.amplitude_varvec(i);
+
+								cout << "Total SB(+): " << stan::math::value_of(sbp) << endl;
+
+								image_pixel_grid->clear_pixel_matrices();
+								lens_list[0]->update_specific_parameter(paramnum,pval-increment);
+								image_pixel_grid->redo_lensing_calculations<MathTypes>(true);
+
+								create_sourcegrid_from_imggrid_delaunay<MathTypes>(false,0,0,verbal);
+								image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrids[0]);
+								delaunay_srcgrids[0]->set_image_pixel_grid(image_pixel_grid);
+								delaunay_srcgrids[0]->assign_surface_brightness_from_analytic_source<QScalar>(0);
+
+								image_pixel_grid->assign_pixel_mappings(false,true);
+								image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
+								image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
+								delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
+								//image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
+								for (int i=0; i < image_pixel_grid->image_npixels; i++) {
+									image_sbvec[i] = 0;
+									for (int j=0; j < image_pixel_grid->n_amps; j++)
+										image_sbvec[i] += (imggrid.Lmatrix_trans_dense.transpose())(i,j)*imggrid.amplitude_varvec[j];
+								}
+								stan::math::var sbm = 0;
+								//for (int i=0; i < image_pixel_grid->image_npixels; i++) sbm += imggrid.image_surface_brightness(i);
+								for (int i=0; i < image_pixel_grid->n_amps; i++) sbm += imggrid.amplitude_varvec(i);
+
+								cout << "Total SB(-): " << stan::math::value_of(sbm) << endl;
+
+								double sbder = (stan::math::value_of(sbp)-stan::math::value_of(sbm))/(2*increment);
+								cout << "d(tot_sb)/db from finite diff(inc=" << increment << ") = " << sbder << endl;
+								image_pixel_grid->clear_pixel_matrices();
+								cout << endl;
+							}
 						}
 #endif
+						image_pixel_grid->clear_pixel_matrices();
+						*/
 					}
 				}
 			}
@@ -17584,7 +17722,6 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 					if (image_pixel_grid->n_pixsrc_to_include_in_Lmatrix==0) continue; // that means this pixellated source will be included with the inversion handled from another ImagePixelGrid (with a different imggrid_i index)
 
 					if (generate_and_invert_lensing_matrix_delaunay<MathTypes>(imggrid_i,src_i,false,include_potential_perturbations,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
-
 					if (include_potential_perturbations) {
 						image_pixel_grid->clear_sparse_lensing_matrices();
 						image_pixel_grid->clear_pixel_matrices(); 

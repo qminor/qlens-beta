@@ -3348,6 +3348,86 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("cc_splitlevels", &QLens_Wrap::cc_splitlevels)
 		.def_readwrite("zlens", &QLens_Wrap::lens_redshift)
 		.def("lensinfo", &QLens_Wrap::print_lensing_info_at_point)
+		.def("get_cc_pts", [](QLens_Wrap &current, vector<double>& phivals){ 
+			vector<double> xvals(phivals.size());
+			vector<double> yvals(phivals.size());
+			if (current.get_tangential_critical_curve_points(phivals,xvals,yvals)==false) throw std::runtime_error("could not find tangential critical curve");
+			return std::make_tuple(xvals,yvals);
+		})
+		.def("kappa", [](QLens_Wrap &current, const double x, const double y){ 
+			double kappa;
+			kappa = current.kappa<double>(x,y,current.reference_zfactors,current.default_zsrc_beta_factors);
+			return kappa;
+		}, "returns total deflection vector of lenses at a specific point in the image plane, in the form of a list. Arguments are (x,y)")
+		.def("deflection", [](QLens_Wrap &current, const double x, const double y){ 
+			py::list def(2);
+			lensvector<double> def_vec;
+			current.deflection<double>(x,y,def_vec,0,current.reference_zfactors,current.default_zsrc_beta_factors);
+			def[0] = def_vec[0];
+			def[1] = def_vec[1];
+			return def;
+		}, "returns total deflection vector of lenses at a specific point in the image plane, in the form of a list. Arguments are (x,y)")
+		.def("hessian", [](QLens_Wrap &current, const double x, const double y){ 
+			py::list hess(2);
+			py::list hess_row(2);
+			py::list hess_row2(2);
+			lensmatrix<double> hessmat;
+			current.hessian<double>(x,y,hessmat,0,current.reference_zfactors,current.default_zsrc_beta_factors);
+			hess_row[0] = hessmat[0][0];
+			hess_row[1] = hessmat[0][1];
+			hess_row2[0] = hessmat[1][0];
+			hess_row2[1] = hessmat[1][1];
+			hess[0] = hess_row;
+			hess[1] = hess_row2;
+			return hess;
+		}, "returns total Hessian matrix of lenses at a specific point in the image plane, in the form of a list. Arguments are (x,y)")
+		.def("shear", [](QLens_Wrap &current, const double x, const double y){ 
+			py::list shear(2);
+			lensmatrix<double> hessmat;
+			current.hessian<double>(x,y,hessmat,0,current.reference_zfactors,current.default_zsrc_beta_factors);
+			shear[0] = (hessmat[0][0]-hessmat[1][1])/2;
+			shear[1] = hessmat[0][1];
+			return shear;
+		})
+		.def("kappa", [](QLens_Wrap &current, const py::list xvals, const py::list yvals){ 
+			py::list kappavals(xvals.size());
+			double x, y;
+			for (int i=0; i < xvals.size(); i++) {
+				x = py::cast<double>(xvals[i]);
+				y = py::cast<double>(yvals[i]);
+				kappavals[i] = current.kappa<double>(x,y,current.reference_zfactors,current.default_zsrc_beta_factors);
+			}
+			return kappavals;
+		}, "returns total kappa of lenses at specific points in the image plane, in the form of a list. Arguments are (xvals,yvals)")
+		.def("deflection", [](QLens_Wrap &current, const py::list xvals, const py::list yvals){ 
+			py::list def_xvals(xvals.size());
+			py::list def_yvals(xvals.size());
+			double x, y;
+			for (int i=0; i < xvals.size(); i++) {
+				x = py::cast<double>(xvals[i]);
+				y = py::cast<double>(yvals[i]);
+				lensvector<double> def_vec;
+				current.deflection<double>(x,y,def_vec,0,current.reference_zfactors,current.default_zsrc_beta_factors);
+				def_xvals[i] = def_vec[0];
+				def_yvals[i] = def_vec[1];
+			}
+			return std::make_tuple(def_xvals,def_yvals);
+		}, "returns deflection components of lenses at specific points in the image plane, in the form of a list. Arguments are (xvals,yvals)")
+		.def("shear", [](QLens_Wrap &current, const py::list xvals, const py::list yvals){ 
+			py::list shear_xvals(xvals.size());
+			py::list shear_yvals(xvals.size());
+			double x, y;
+			for (int i=0; i < xvals.size(); i++) {
+				x = py::cast<double>(xvals[i]);
+				y = py::cast<double>(yvals[i]);
+				lensmatrix<double> hessmat;
+				current.hessian<double>(x,y,hessmat,0,current.reference_zfactors,current.default_zsrc_beta_factors);
+				shear_xvals[i] = (hessmat[0][0]-hessmat[1][1])/2;
+				shear_yvals[i] = hessmat[0][1];
+			}
+			return std::make_tuple(shear_xvals,shear_yvals);
+		}, "returns shear components of lenses at specific points in the image plane, in the form of a list. Arguments are (xvals,yvals)")
+
 		.def_readwrite("imgplane_chisq", &QLens_Wrap::imgplane_chisq)
 		.def_readwrite("nrepeat", &QLens_Wrap::n_repeats)
 		.def_readwrite("flux_chisq", &QLens_Wrap::include_flux_chisq)
