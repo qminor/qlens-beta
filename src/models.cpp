@@ -6191,6 +6191,31 @@ template void MassSheet::potential_derivatives_impl<double>(double x, double y, 
 template void MassSheet::potential_derivatives_impl<stan::math::var>(stan::math::var x, stan::math::var y, lensvector<stan::math::var>& def, lensmatrix<stan::math::var>& hess);
 #endif
 
+template <typename VecType, typename QScalar>
+void MassSheet::deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& def_x, VecType& def_y)
+{
+	MassSheet_Params<QScalar>& p = assign_sheet_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
+
+	VecType x,y;
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		x = x0 - p.x_center;
+		y = y0 - p.y_center;
+	} else
+#endif
+	{
+		x = (x0.array() - p.x_center).matrix();
+		y = (y0.array() - p.y_center).matrix();
+	}
+
+	def_x = p.kext*x;
+	def_y = p.kext*y;
+}
+template void MassSheet::deflection_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, Eigen::VectorXd&);
+#ifdef USE_STAN
+template void MassSheet::deflection_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&);
+#endif
+
 /***************** External deflection (only relevant if multiple source redshifts) *****************/
 
 Deflection::Deflection(const double zlens_in, const double zsrc_in, const double &defx_in, const double &defy_in, Cosmology* cosmo_in)

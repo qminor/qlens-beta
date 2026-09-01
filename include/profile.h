@@ -2134,6 +2134,11 @@ class MassSheet : public LensProfile
 	stan::math::var kappa_rsq_deriv(const stan::math::var rsq) { return kappa_rsq_deriv_impl(rsq); }
 #endif
 
+	void deflection_vec(const Eigen::VectorXd& x0, const Eigen::VectorXd& y0, Eigen::VectorXd& def_x, Eigen::VectorXd& def_y) { deflection_vec_impl<Eigen::VectorXd,double>(x0,y0,def_x,def_y); }
+#ifdef USE_STAN
+	void deflection_vec(const AutoDiffVec& x0, const AutoDiffVec& y0, AutoDiffVec& def_x, AutoDiffVec& def_y) { deflection_vec_impl<AutoDiffVec,stan::math::var>(x0,y0,def_x,def_y); }
+#endif
+
 	template <typename QScalar>
 	QScalar kappa_impl(QScalar, QScalar);
 	template <typename QScalar>
@@ -2145,6 +2150,11 @@ class MassSheet : public LensProfile
 	QScalar kapavg_spherical_rsq(const QScalar rsq);
 	template <typename QScalar>
 	QScalar potential_spherical_rsq(const QScalar rsq);
+
+	template <typename VecType, typename QScalar>
+	void deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& def_x, VecType& def_y);
+
+
 	void setup_lens_properties(const int parameter_mode = 0, const int subclass = 0);
 	void set_model_specific_integration_pointers();
 

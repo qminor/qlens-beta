@@ -25,11 +25,13 @@ class Sort
 	template <typename QScalar>
 	void sort(const int n, QScalar arr[], int brr[], int crr[]);
 	template <typename QScalar>
-	void sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[]); // This is why you should use templates. Ugh
+	void sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[]);
 	template <typename QScalar>
-	void sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[], int drr[]); // This is why you should use templates. Ugh
+	void sort_mixedtype(const int n, double arr[], QScalar brr[], QScalar crr[]);
 	template <typename QScalar>
-	void sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[], QScalar drr[], QScalar err[]); // This is why you should use templates. Ugh
+	void sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[], int drr[]);
+	template <typename QScalar>
+	void sort(const int n, QScalar arr[], QScalar brr[], QScalar crr[], QScalar drr[], QScalar err[]);
 };
 
 #endif // SORT_H

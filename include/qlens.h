@@ -57,6 +57,7 @@ struct EigenTypes {
 	using QScalar = Scalar;
 	using VecType = Eigen::VectorX<Scalar>;
 	using MatType = Eigen::MatrixX<Scalar>;
+	using SparseMatType = Eigen::SparseMatrix<Scalar, Eigen::ColMajor>;
 };
 
 using PlainTypes = EigenTypes<double>;
@@ -66,6 +67,7 @@ struct VarmatTypes {
 	using QScalar = stan::math::var;
 	using VecType = stan::math::var_value<Eigen::VectorXd>;
 	using MatType = stan::math::var_value<Eigen::MatrixXd>;
+ using SparseMatType = stan::math::var_value<Eigen::SparseMatrix<double, Eigen::ColMajor>>;
 };
 #endif
 
@@ -86,6 +88,7 @@ enum Transform { NONE, LOG_TRANSFORM, GAUSS_TRANSFORM, LINEAR_TRANSFORM, RATIO }
 enum RegularizationMethod { None, Norm, Gradient, SmoothGradient, Curvature, SmoothCurvature, Matern_Kernel, Exponential_Kernel, Squared_Exponential_Kernel };
 enum MatrixFormat { DENSE, DENSE_FMATRIX, SPARSE }; // DENSE_FMATRIX means Lmatrix is stored as sparse even after PSF convolution, but Fmatrix is stored as dense
 enum SparseSolver { CG_Method, MUMPS, UMFPACK, EIGEN_SPARSE, NO_SPARSE };
+enum KernelType { MATERN_KERNEL, EXP_KERNEL, SQUARED_EXP_KERNEL, NO_KERNEL };
 
 enum DerivedParamType {
 	KappaR,
@@ -482,6 +485,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	bool use_noise_map;
 	bool dense_Rmatrix;
+	bool covariance_kernel_regularization;
 	bool find_covmatrix_inverse; // set by user (default=false); if true, finds Rmatrix explicitly (usually more computationally intensive)
 	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false
 	double covmatrix_epsilon; // fudge factor in covariance matrix diagonal to aid inversion
@@ -764,13 +768,17 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	QScalar pixel_log_evidence_times_two_sbprofile(QScalar &chisq0, const bool verbal);
 	template <typename QScalar, typename MathTypes>
 	QScalar pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool verbal, const int ranchisq_i);
+	template <typename QScalar, typename MathTypes>
+	QScalar pixel_log_evidence_times_two_delaunay_test(QScalar &chisq0, const bool verbal, const int ranchisq_i);
 
+	template <typename MathTypes>
 	void setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bool verbal);
 	bool setup_cartesian_sourcegrid(const int imggrid_i, const int src_i, int& n_expected_imgpixels, const bool verbal);
 	bool generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, const int src_i, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
 	template <typename MathTypes>
 	bool generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
-	void add_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, double& logev_times_two, const bool verbal);
+	template <typename MathTypes>
+	typename MathTypes::QScalar find_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, const bool verbal);
 	void set_n_imggrids_to_include_in_inversion();
 
 	bool load_pixel_grid_from_data(const int band_number);
@@ -782,6 +790,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	int get_shapelet_nn(const int imggrid_i=-1);
 
 	void find_optimal_sourcegrid_for_analytic_source();
+	template <typename MathTypes>
 	bool create_sourcegrid_cartesian(const int band_number, const int zsrc_i, const bool verbal, const bool use_mask, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
 	bool create_sourcegrid_delaunay(const int src_i, const bool use_mask, const bool verbal);
 	template <typename MathTypes>
@@ -1275,7 +1284,8 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	bool spline_critical_curves(bool verbal = true);
 	bool plot_critical_curves(string filename = "");
-	bool find_caustic_minmax(double& min, double& max, double& max_minor_axis, int cc_num = -1);
+	bool find_caustic_minmax(double& min, double& max, double& max_minor_axis, double& theta_rmin, double& theta_rmax, int cc_num = -1);
+
 	bool plotcrit_exclude_subhalo(string filename, int exclude_lensnum)
 	{
 		bool worked = false;

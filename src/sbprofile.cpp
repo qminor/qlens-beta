@@ -2645,12 +2645,12 @@ void SB_Profile::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, 
 }
 */
 
-void SB_Profile::calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index)
+void SB_Profile::calculate_gradient_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
 
-void SB_Profile::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index)
+void SB_Profile::calculate_curvature_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix)
 {
 	return; // this is only used in the derived class Shapelet (but may be used by more profiles later)
 }
@@ -4378,6 +4378,7 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_e
 	delete[] hermvals_y;
 }
 
+/*
 void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index)
 {
 	Shapelet_Params<double>& p = assign_shapelet_param_object<double>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
@@ -4390,19 +4391,17 @@ void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix, int* Rmatrix
 			Rmatrix[n] = norm*((2*i+1) + (2*j+1));
 			Rmatrix_index[n] = indx;
 
-			/*
 			// off-diagonal elements here are lower triangular, but we need upper triangular. FIX THIS!
-			if (i > 1) {
-				Rmatrix_index[indx] = n - 2*n_shapelets;
-				Rmatrix[indx] = -norm*sqrt(i*(i-1));
-				indx++;
-			}
-			if (j > 1) {
-				Rmatrix_index[indx] = n - 2;
-				Rmatrix[indx] = -norm*sqrt(j*(j-1));
-				indx++;
-			}
-			*/
+			//if (i > 1) {
+				//Rmatrix_index[indx] = n - 2*n_shapelets;
+				//Rmatrix[indx] = -norm*sqrt(i*(i-1));
+				//indx++;
+			//}
+			//if (j > 1) {
+				//Rmatrix_index[indx] = n - 2;
+				//Rmatrix[indx] = -norm*sqrt(j*(j-1));
+				//indx++;
+			//}
 			n++;
 		}
 	}
@@ -4426,6 +4425,55 @@ void Shapelet::calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatri
 		}
 	}
 	Rmatrix_index[n] = indx;
+}
+*/
+
+
+void Shapelet::calculate_gradient_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix)
+{
+	Shapelet_Params<double>& p = assign_shapelet_param_object<double>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
+	if (p.sig == 0) die("sigma cannot be zero!!");
+
+	int i, j, n = 0;
+	double norm = 1.0/(2*p.sig*p.sig);
+
+	for (i = 0; i < n_shapelets; i++) {
+		for (j = 0; j < n_shapelets; j++) {
+			Rmatrix.insert(n, n) = norm*((2*i+1) + (2*j+1));
+
+			/*
+			// off-diagonal elements here are lower triangular, but we need upper triangular. FIX THIS!
+			if (i > 1) {
+				Rmatrix.insert(n - 2*n_shapelets, n) = -norm*sqrt(i*(i-1));
+			}
+			if (j > 1) {
+				Rmatrix.insert(n - 2, n) = -norm*sqrt(j*(j-1));
+			}
+			*/
+
+			n++;
+		}
+	}
+}
+
+void Shapelet::calculate_curvature_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix)
+{
+	Shapelet_Params<double>& p = assign_shapelet_param_object<double>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
+	if (p.sig == 0) die("sigma cannot be zero!!");
+
+	int i, j, n = 0;
+	double ip, jp;
+
+	for (i = 0; i < n_shapelets; i++) {
+		for (j = 0; j < n_shapelets; j++) {
+			ip = sqrt(i*(i+1));
+			jp = sqrt(j*(j+1));
+
+			Rmatrix.insert(n, n) = (4*(i*i+j*j) + 3*(i+j) + 6 + 2*i*j + 2*ip*jp + 2*(i+j)*(ip + jp))/(4*SQR(p.sig*p.sig));
+
+			n++;
+		}
+	}
 }
 
 void Shapelet::get_regularization_param_ptr(double*& regparam_ptr)
@@ -4678,17 +4726,6 @@ void MGE::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elemen
 
 void MGE::calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements)
 {
-	//int i,j;
-	//for (i=0; i < n_gaussians; i++) {
-		//for (j=i; j < n_gaussians; j++) {
-			//if ((i==0) and (j==0)) *(Rmatrix_elements) = 1;
-			//else if (j==i) *(Rmatrix_elements) = 2;
-			//else if (j==i+1) *(Rmatrix_elements) = -1;
-			//else (*Rmatrix_elements) = 0;
-			//Rmatrix_elements++;
-		//}
-	//}
-
 	MGE_Params<double>& p = assign_mge_param_object<double>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
 	int i,j,k,l;
 	double sigi5inv, sigj5inv, sigsqil, sigsqlj, sigl10inv;

@@ -3363,7 +3363,6 @@ PYBIND11_MODULE(qlens, m) {
 			if (current.get_xi_phi_derivs(phivals,xvals,yvals,kapvals,dkapvals,dshearvals)==false) throw std::runtime_error("could not find tangential critical curve");
 			return std::make_tuple(kapvals,dkapvals,dshearvals);
 		})
-
 		.def("kappa", [](QLens_Wrap &current, const double x, const double y){ 
 			double kappa;
 			kappa = current.kappa<double>(x,y,current.reference_zfactors,current.default_zsrc_beta_factors);
@@ -3460,9 +3459,9 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def_readwrite_static("ansi_output", &QLens_Wrap::use_ansi_output_during_fit)
 		.def("caustic_minmax", [](QLens_Wrap &current){ 
-			double rmin,rmax,rmax_minor_axis;
-			if (!current.find_caustic_minmax(rmin,rmax,rmax_minor_axis)) throw std::runtime_error("critical curves have not been found");
-			return std::make_tuple(rmin,rmax,rmax_minor_axis);
+			double rmin,rmax,rmax_minor_axis,theta_rmin,theta_rmax;
+			if (!current.find_caustic_minmax(rmin,rmax,rmax_minor_axis,theta_rmin,theta_rmax)) throw std::runtime_error("critical curves have not been found");
+			return std::make_tuple(rmin,rmax,rmax_minor_axis,theta_rmin,theta_rmax);
 		})
 		;
 

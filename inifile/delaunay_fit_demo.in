@@ -12,7 +12,7 @@ psf_threshold 1e-3             # This truncates the PSF when it falls below thre
 sbmap loadpsf hst_psf.fits
 sbmap loadmask mask.fits     # Loads a pixel mask
 
-fit regularization curvature    # the generic options are "norm", "gradient", "curvature", "exp_kernel", "matern_kernel"
+fit regularization scurvature    # the generic options are "norm", "gradient", "curvature", "exp_kernel", "matern_kernel"
 split_imgpixels off
 #imgpixel_nsplit 5     # if supersampling, gives splitting factor
 inversion_method dense

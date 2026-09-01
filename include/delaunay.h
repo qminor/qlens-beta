@@ -22,11 +22,11 @@ struct Triangle // the final triangulation will be stored in an array of triangl
 	lensvector<QScalar> vertex[3];
 	lensvector<QScalar> circumcenter;
 	double circumcircle_radsq;
-	double area; // this will be a signed quantity since it's given by the cross product of the side vectors
+	QScalar area; // this will be a signed quantity since it's given by the cross product of the side vectors
 	int vertex_index[3];
 	int neighbor_index[3];
 	Triangle() {}
-	void copy_triangle(Triangle<double>* tri_in) {
+	void copy_triangle_doubles(Triangle<double>* tri_in) {
 		for (int i=0; i < 3; i++) {
 			//std::cout << "INDEX " << i << "..." << std::endl;
 			tri_in->vertex_index[i] = vertex_index[i];
@@ -46,14 +46,15 @@ struct Triangle // the final triangulation will be stored in an array of triangl
 		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
 			tri_in->circumcenter[0] = circumcenter[0].val();
 			tri_in->circumcenter[1] = circumcenter[1].val();
+			tri_in->area = area.val();
 		} else
 #endif
 		{
 			tri_in->circumcenter[0] = circumcenter[0];
 			tri_in->circumcenter[1] = circumcenter[1];
+			tri_in->area = area;
 		}
 		tri_in->circumcircle_radsq = circumcircle_radsq;
-		tri_in->area = area;
 	}
 };
 
@@ -537,14 +538,7 @@ class Delaunay
 					} else triangle->neighbor_index[2] = -1;
 					side1 = triangle->vertex[1] - triangle->vertex[0];
 					side2 = triangle->vertex[2] - triangle->vertex[1];
-#ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-					triangle->area = (side1 ^ side2).val();
-				} else
-#endif
-				{
-					triangle->area = side1 ^ side2;
-				}
+					triangle->area = (side1 ^ side2);
 
 					a0 = x[botPtr->tri->vertices[0]]-x[botPtr->tri->vertices[1]];
 					a1 = y[botPtr->tri->vertices[0]]-y[botPtr->tri->vertices[1]];

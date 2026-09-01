@@ -11,13 +11,13 @@ using namespace std;
 
 TriRectangleOverlap::TriRectangleOverlap()
 {
-	r01 = new lensvector<double>;
-	r02 = new lensvector<double>;
+	r01 = new lensvector<QScalar>;
+	r02 = new lensvector<QScalar>;
 	n_overlap_pts = 0;
 	for (int i=0; i < 7; i++) { overlap_pts[i][0] = 0; overlap_pts[i][1] = 0; }
 }
 
-double TriRectangleOverlap::find_overlap_area(lensvector<double>& a, lensvector<double>& b, lensvector<double>& c, double xmin, double xmax, double ymin, double ymax)
+QScalar TriRectangleOverlap::find_overlap_area(lensvector<QScalar>& a, lensvector<QScalar>& b, lensvector<QScalar>& c, double xmin, double xmax, double ymin, double ymax)
 {
 	// The assignment of the rectangle corner and side indices will be as follows:
 	// 3-2-2
@@ -27,16 +27,12 @@ double TriRectangleOverlap::find_overlap_area(lensvector<double>& a, lensvector<
 	// this is a bit ugly, but seg faults occur if the rectangle shares any x/y values with the square and this is a quick fix
 	if (a[0]==xmin) xmin -= 1e-10;
 	if (b[0]==xmin) xmin -= 1e-10;
-	if (b[0]==xmin) xmin -= 1e-10;
 	if (a[0]==xmax) xmax += 1e-10;
-	if (b[0]==xmax) xmax += 1e-10;
 	if (b[0]==xmax) xmax += 1e-10;
 
 	if (a[1]==ymin) ymin -= 1e-10;
 	if (b[1]==ymin) ymin -= 1e-10;
-	if (b[1]==ymin) ymin -= 1e-10;
 	if (a[1]==ymax) ymax += 1e-10;
-	if (b[1]==ymax) ymax += 1e-10;
 	if (b[1]==ymax) ymax += 1e-10;
 
 	vertex[0] = &a; vertex[1] = &b; vertex[2] = &c;

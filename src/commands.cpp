@@ -10692,10 +10692,10 @@ void QLens::process_commands(bool read_file)
 						create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
 						if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
 					} else {
-						create_sourcegrid_cartesian(band_i,zsrc_i,verbal_mode,use_mask);
-						cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source(imggrid_i);
+						create_sourcegrid_cartesian<PlainTypes>(band_i,zsrc_i,verbal_mode,use_mask);
+						cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source<double>(imggrid_i);
 						if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids[src_i] != NULL)) {
-							cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid(delaunay_srcgrids[src_i],true);
+							cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid<double>(delaunay_srcgrids[src_i],true);
 						}
 					}
 					if (plot_source) {
@@ -13042,11 +13042,11 @@ void QLens::process_commands(bool read_file)
 		else if (words[0]=="caustic_minmax")
 		{
 			int cc_num=-1;
-			double rmin,rmax,rmax_minor_axis;
+			double rmin,rmax,rmax_minor_axis,theta_rmin,theta_rmax;
 			if (nwords==2) {
 				if (!(ws[1] >> cc_num)) Complain("invalid c.c. number (must be positive integer)");
 			}
-			if (!find_caustic_minmax(rmin,rmax,rmax_minor_axis,cc_num)) Complain("critical curves have not been found");
+			if (!find_caustic_minmax(rmin,rmax,rmax_minor_axis,theta_rmin,theta_rmax,cc_num)) Complain("critical curves have not been found");
 			if (mpi_id==0) cout << "Caustic rmin=" << rmin << " rmax=" << rmax << " rmax_minor_axis=" << rmax_minor_axis << endl;
 		}
 		else if (words[0]=="cc_xi_parameter")
@@ -15278,6 +15278,15 @@ void QLens::process_commands(bool read_file)
 				else if (setword=="sparse") matrix_format = SPARSE;
 				else Complain("invalid argument to 'matrix_format' command; must specify valid matrix format");
 			} else Complain("invalid number of arguments; can only enter matrix format");
+		}
+		else if (words[0]=="dense_Rmatrix")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "use Rmatrix in dense format: " << display_switch(dense_Rmatrix) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'dense_Rmatrix' command; must specify 'on' or 'off'");
+				set_switch(dense_Rmatrix,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="sparse_solver") {
 			if (nwords==1) {

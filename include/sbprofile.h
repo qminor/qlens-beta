@@ -14,6 +14,8 @@
 #include <vector>
 #include <map>
 
+#include <Eigen/Core>
+
 #ifdef USE_STAN
 #include <stan/math.hpp>
 #endif
@@ -460,9 +462,13 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 
 	//virtual double calculate_Lmatrix_element(const double x, const double y, const int amp_index); // used by Shapelet subclass
 	virtual void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight); // used by Shapelet subclass
-	virtual void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
-	virtual void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
+	//virtual void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
+	//virtual void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
 	virtual void calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements);
+
+	virtual void calculate_gradient_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix);
+	virtual void calculate_curvature_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix);
+
 
 	virtual void update_amplitudes(double*& ampvec); // used by Shapelet subclass
 	virtual void get_regularization_param_ptr(double*& regparam_ptr); // for source objects that are regularized
@@ -1214,8 +1220,8 @@ class Shapelet : public SB_Profile
 	void set_auto_ranges();
 	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
-	void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
-	void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
+	void calculate_gradient_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix);
+	void calculate_curvature_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix);
 	void get_regularization_param_ptr(double*& regparam_ptr);
 #ifdef USE_STAN
 	void get_regularization_param_ptr(stan::math::var*& regparam_ptr);
