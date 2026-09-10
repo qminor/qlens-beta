@@ -2377,7 +2377,6 @@ template void LensProfile::deflection_and_hessian_together<stan::math::var>(cons
 template <typename VecType, typename QScalar>
 void LensProfile::deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& def_x, VecType& def_y)
 {
-	//cout << "WUGGA" << endl;
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 
 	// switch to coordinate system centered on lens profile
@@ -2398,7 +2397,6 @@ void LensProfile::deflection_vec_impl(const VecType& x0, const VecType& y0, VecT
 
 #ifdef USE_STAN
 	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
-		//cout << "ABOUT TO DO VEC AUTODIF?" << endl;
 		(this->*defptr_vec_autodif)(x,y,def_x,def_y);
 	} else
 #endif
@@ -2431,7 +2429,6 @@ void LensProfile::deflection_vec_impl(const VecType& x0, const VecType& y0, VecT
 	//if (n_fourier_modes > 0) {
 		//add_deflection_from_fourier_modes(x,y,def); // this adds the deflection from Fourier modes
 	//}
-	//cout << "END WUGGA" << endl;
 }
 template void LensProfile::deflection_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, Eigen::VectorXd&);
 #ifdef USE_STAN

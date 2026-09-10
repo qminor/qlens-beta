@@ -4,6 +4,10 @@
 #include <cmath>
 #include "errors.h"
 
+#ifdef USE_STAN
+#include <stan/math.hpp>
+#endif
+
 template <typename QScalar>
 class lensvector
 {
@@ -79,10 +83,24 @@ public:
 	}
 	QScalar operator * (const lensvector<QScalar>& b) { return (v[0]*b[0] + v[1]*b[1]); }
 	QScalar operator ^ (const lensvector<QScalar>& b) { return (v[0]*b[1] - v[1]*b[0]); }
-	QScalar norm(void) { return sqrt(v[0]*v[0]+v[1]*v[1]); }
+	QScalar norm(void) {
+#ifdef USE_STAN
+		using stan::math::sqrt;
+#endif
+		return sqrt(v[0]*v[0]+v[1]*v[1]);
+	}
 	QScalar sqrnorm(void) { return (v[0]*v[0]+v[1]*v[1]); }
-	QScalar angle(void) { return atan(v[1]/v[0]); }
+	QScalar angle(void) {
+#ifdef USE_STAN
+		using stan::math::atan;
+#endif
+		return atan(v[1]/v[0]);
+	}
 	void rotate(const QScalar theta) {
+#ifdef USE_STAN
+		using stan::math::cos;
+		using stan::math::sin;
+#endif
 		QScalar cs=cos(theta), ss=sin(theta);
 		QScalar x_prime = v[0]*cs + v[1]*ss;
 		v[1] = -v[0]*ss + v[1]*cs;

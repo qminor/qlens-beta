@@ -74,7 +74,7 @@ CL   := $(CCOMP) $(OPTS) $(UMFOPTS)
 core_objects = $(OBJ_DIR)/cosmo.o $(OBJ_DIR)/simplex.o $(OBJ_DIR)/profile.o $(OBJ_DIR)/sbprofile.o $(OBJ_DIR)/egrad.o $(OBJ_DIR)/models.o \
 					$(OBJ_DIR)/params.o $(OBJ_DIR)/modelparams.o $(OBJ_DIR)/lenscalc.o $(OBJ_DIR)/lens.o $(OBJ_DIR)/imgsrch.o $(OBJ_DIR)/pixelgrid.o \
 					$(OBJ_DIR)/cg.o $(OBJ_DIR)/mcmchdr.o $(OBJ_DIR)/errors.o $(OBJ_DIR)/brent.o $(OBJ_DIR)/sort.o \
-					$(OBJ_DIR)/trirectangle.o $(OBJ_DIR)/powell.o $(OBJ_DIR)/mcmceval.o
+					$(OBJ_DIR)/powell.o $(OBJ_DIR)/mcmceval.o
 
 wrapper_objects = $(OBJ_DIR)/qlens_export.o $(OBJ_DIR)/qlens_wrapper.o $(core_objects)
 
@@ -161,9 +161,6 @@ $(OBJ_DIR)/powell.o: $(INCLUDE_DIR)/powell.h $(SRC_DIR)/powell.cpp
 
 $(OBJ_DIR)/sort.o: $(INCLUDE_DIR)/sort.h $(SRC_DIR)/sort.cpp
 	$(CC) -c $(SRC_DIR)/sort.cpp -o $(OBJ_DIR)/sort.o
-
-$(OBJ_DIR)/trirectangle.o: $(SRC_DIR)/trirectangle.cpp $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/trirectangle.h
-	$(CC) -c $(SRC_DIR)/trirectangle.cpp -o $(OBJ_DIR)/trirectangle.o
 
 $(OBJ_DIR)/egrad.o: $(INCLUDE_DIR)/egrad.h $(SRC_DIR)/egrad.cpp $(INCLUDE_DIR)/lensvec.h $(INCLUDE_DIR)/qlens.h 
 	$(CC) -c $(SRC_DIR)/egrad.cpp -o $(OBJ_DIR)/egrad.o

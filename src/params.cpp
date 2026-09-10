@@ -262,12 +262,16 @@ bool DerivedParamList::add_dparam(const string param_type, const double param, c
 		derived_param_type = Einstein;
 	} else if (param_type=="mass_re") {
 		derived_param_type = Einstein_Mass;
-	} else if (param_type=="xi") {
-		derived_param_type = Xi_Param;
+	} else if (param_type=="sph_xi") {
+		derived_param_type = Sph_Xi_Param;
+	} else if (param_type=="circ_xi") {
+		derived_param_type = Circ_Xi_Param;
 	} else if (param_type=="cc_xi") {
 		derived_param_type = CC_Xi_Param;
 	} else if (param_type=="xi_phi") {
 		derived_param_type = Xi_Phi_Param;
+	} else if (param_type=="scaled_xi_phi") {
+		derived_param_type = Scaled_Xi_Phi_Param;
 	} else if (param_type=="kappa_re") {
 		derived_param_type = Kappa_Re;
 	} else if (param_type=="lensparam") {

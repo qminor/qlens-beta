@@ -1092,9 +1092,11 @@ void QLens::process_commands(bool read_file)
 							"mass2d_r -- The projected mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"mass3d_r -- The 3d mass enclosed within elliptical radius <r> (in arcsec) for a specific lens [lens#]\n"
 							"re_zsrc -- The (spherically averaged) Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
-							"xi -- The xi parameter (from Kochanek 2020) for a source redshift <zsrc> (optional lens# can be specified)\n"
+							"sph_xi -- The xi parameter (from Kochanek 2020) for primary + co-centered lenses, ignoring ellipticity\n"
+							"circ_xi -- The circularly averaged xi parameter (from Kochanek 2020) for a source redshift <zsrc>\n"
 							"cc_xi -- The xi parameter along the critical curves (from Kochanek 2020) for the default source redshift\n"
 							"xi_phi -- The xi parameter on the critical curve (from Kochanek 2020) at angle <phi>\n"
+							"scaled_xi_phi -- The scaled xi parameter on the critical curve (from Kochanek 2020) at angle <phi>\n"
 							"mass_re -- The projected mass enclosed within Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"kappa_re -- kappa(R_ein) of primary lens (+lenses that are co-centered with primary), averaged over all angles\n"
 							"logslope -- The average log-slope of kappa between <r1> and <r2> (in arcsec) for a specific lens [lens#]\n"
@@ -8624,7 +8626,9 @@ void QLens::process_commands(bool read_file)
 					bool show_lensinfo = false;
 					bool temp_show_wtime = false;
 					bool show_total_wtime = false;
-					bool init_fitmodel = true; // if set to false, will skip creating a separate "fitmodel" object and just use current qlens object as fitmodel
+					bool find_gradient = false;
+					bool test_gradient = false;
+					bool init_fitmodel = false; // if set to false, will skip creating a separate "fitmodel" object and just use current qlens object as fitmodel
 					vector<string> args;
 					if (extract_word_starts_with('-',2,nwords-1,args)==true)
 					{
@@ -8633,8 +8637,13 @@ void QLens::process_commands(bool read_file)
 							if ((args[i]=="-wtime") or (args[i]=="-w")) temp_show_wtime = true;
 							else if (args[i]=="-T") show_total_wtime = true;
 							else if (args[i]=="-diag") showdiag = true;
+							else if (args[i]=="-testgrad") {
+								find_gradient = true;
+								test_gradient = true;
+							}
+							else if (args[i]=="-grad") find_gradient = true;
 							else if (args[i]=="-info") show_lensinfo = true;
-							else if ((args[i]=="-skipfm") or (args[i]=="-s")) init_fitmodel = false;
+							else if ((args[i]=="-fm") or (args[i]=="-f")) init_fitmodel = true;
 							else Complain("argument '" << args[i] << "' not recognized");
 						}
 					}
@@ -8642,7 +8651,7 @@ void QLens::process_commands(bool read_file)
 					if (nwords > 2) Complain("no arguments to 'fit chisq' allowed (except for flags using '-....')");
 					int np;
 					get_n_fit_parameters(np);
-					chisq_single_evaluation(init_fitmodel,show_total_wtime,temp_show_wtime,showdiag,true,show_lensinfo);
+					chisq_single_evaluation(init_fitmodel,show_total_wtime,temp_show_wtime,showdiag,true,show_lensinfo,find_gradient,test_gradient);
 					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
 				}
 				else if (words[1]=="output_img_chivals") {
@@ -9085,26 +9094,32 @@ void QLens::process_commands(bool read_file)
 								if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
 								if (lensnum >= nlens) Complain("specified lens number does not exist");
 								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
-							} else if (words[3]=="xi") {
-								if ((nwords != 4) and (nwords != 5) and (nwords != 6)) Complain("derived parameter xi requires zero, one or two arguments (optional zsrc and lens number)");
+							} else if (words[3]=="sph_xi") {
+								if ((nwords != 4) and (nwords != 5)) Complain("derived parameter xi requires zero, one or two arguments (optional zsrc)");
 								if (nwords==4) {
 									dparam_arg = source_redshift;
 									lensnum = -1;
 								} else {
 									if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
-									if (nwords==6) {
-										if (!(ws[5] >> lensnum)) Complain("invalid lens number argument");
-									} else {
-										lensnum = -1;
-									}
 								}
-								if (lensnum >= nlens) Complain("specified lens number does not exist");
+								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
+							} else if (words[3]=="circ_xi") {
+								if ((nwords != 4) and (nwords != 5)) Complain("derived parameter xi requires zero, one or two arguments (optional zsrc)");
+								if (nwords==4) {
+									dparam_arg = source_redshift;
+									lensnum = -1;
+								} else {
+									if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								}
 								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="cc_xi") {
 								if (nwords != 4) Complain("derived parameter cc_xi requires zero arguments");
 								dparam_list->add_dparam(words[3],-1e30,-1,-1,use_kpc);
 							} else if (words[3]=="xi_phi") {
 								if (nwords != 5) Complain("derived parameter xi_phi requires one argument (angle phi)");
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+							} else if (words[3]=="scaled_xi_phi") {
+								if (nwords != 5) Complain("derived parameter scaled_xi_phi requires one argument (angle phi)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								dparam_list->add_dparam(words[3],dparam_arg,-1,-1,use_kpc);
 							} else if (words[3]=="kappa_re") {
@@ -13709,6 +13724,16 @@ void QLens::process_commands(bool read_file)
 				set_switch(show_mumps_info,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
+		else if (words[0]=="n_hutch_probes")
+		{
+			int nhutch;
+			if (nwords == 2) {
+				if (!(ws[1] >> nhutch)) Complain("invalid number of Hutchinson probes");
+				n_hutchinson_probes = nhutch;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "number of Hutchinson probes = " << n_hutchinson_probes << endl;
+			} else Complain("must specify either zero or one argument for n_hutch_probes");
+		}
 		else if (words[0]=="srcpixel_mag_threshold")
 		{
 			double threshold, threshold_ul, threshold_ll;
@@ -14822,6 +14847,16 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "threshold pixel magnification for calculating n_images of source pixels = " << srcpixel_nimg_mag_threshold << endl;
 			} else Complain("must specify either zero or one argument for nimg_mag_threshold");
 		}
+		else if (words[0]=="nimg_expfac")
+		{
+			double nimg_expfac;
+			if (nwords == 2) {
+				if (!(ws[1] >> nimg_expfac)) Complain("invalid exponent for n_image_prior penalty function");
+				n_image_prior_expfac = nimg_expfac;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "exponent for n_image_prior penalty function = " << n_image_prior_expfac << endl;
+			} else Complain("must specify either zero or one argument for nimg_expfac");
+		}
 		else if (words[0]=="outside_sb_prior")
 		{
 			if (nwords==1) {
@@ -15286,6 +15321,15 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'dense_Rmatrix' command; must specify 'on' or 'off'");
 				set_switch(dense_Rmatrix,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="exact_logdet_grad")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "find logdet(F) gradient exactly (instead of Hutch++): " << display_switch(exact_logdet_grad) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'exact_logdet_grad' command; must specify 'on' or 'off'");
+				set_switch(exact_logdet_grad,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="sparse_solver") {

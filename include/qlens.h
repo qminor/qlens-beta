@@ -98,9 +98,11 @@ enum DerivedParamType {
 	Mass3dR,
 	Einstein,
 	Einstein_Mass,
-	Xi_Param,
+	Circ_Xi_Param,
+	Sph_Xi_Param,
 	CC_Xi_Param,
 	Xi_Phi_Param,
+	Scaled_Xi_Phi_Param,
 	Kappa_Re,
 	LensParam,
 	AvgLogSlope,
@@ -364,7 +366,9 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	int fgmask_padding;
 	bool n_image_prior;
 	int auxiliary_srcgrid_npixels;
+	int n_hutchinson_probes;
 	double n_image_threshold;
+	double n_image_prior_expfac;
 	double srcpixel_nimg_mag_threshold;
 	bool outside_sb_prior;
 	double outside_sb_prior_noise_frac, n_image_prior_sb_frac;
@@ -485,6 +489,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	bool use_noise_map;
 	bool dense_Rmatrix;
+	bool exact_logdet_grad;
 	bool covariance_kernel_regularization;
 	bool find_covmatrix_inverse; // set by user (default=false); if true, finds Rmatrix explicitly (usually more computationally intensive)
 	bool use_covariance_matrix; // internal bool; set to true if using covariance kernel reg. and if find_covmatrix_inverse is false
@@ -1219,7 +1224,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
-	double chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime, const bool showdiag, const bool show_status, const bool show_lensinfo = false);
+	double chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime, const bool showdiag, const bool show_status, const bool show_lensinfo = false, const bool find_gradient = false, const bool test_gradient = false);
 	//bool setup_fit_parameters(const bool ignore_limits = false);
 	//bool setup_limits();
 	void get_n_fit_parameters(int &nparams);
@@ -1316,10 +1321,14 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double total_dlogkappa(const double r, const int lensnum, const bool use_kpc);
 	double einstein_radius_single_lens(const double src_redshift, const int lensnum);
 	double get_xi_parameter(const double src_redshift, const int lensnum);
-	double get_total_xi_parameter(const double src_redshift);
+	double get_sph_xi_parameter(const double src_redshift);
+	double get_circ_xi_parameter(const double src_redshift);
+
 	double cc_xi_parameter(int cc_num=-1);
 	bool find_tangential_critical_curve(int &cc_num);
 	double get_xi_phi_parameter(const double phi, int cc_num=-1);
+	double get_scaled_xi_phi_parameter(const double phi, int cc_num=-1);
+
 	bool get_xi_phi_derivs(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals, vector<double>& kapvals, vector<double>& kap_deriv, vector<double>& shear_deriv);
 	bool get_tangential_critical_curve_points(const std::vector<double>& phivals, std::vector<double>& xvals, std::vector<double>& yvals);
 

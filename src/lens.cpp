@@ -391,9 +391,11 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	ignore_foreground_in_chisq = false;
 	ptimg_nsplit = 5; // for subpixel evaluation of point source PSF
 	fft_convolution = false;
+	n_hutchinson_probes = 16; // for hutchinson stochastic trace estimator (used for autodiff with source pixel inversions)
 	fgmask_padding = 2; // padding the foreground mask to allow for convolution with neighboring pixels even if they're not included directly in the likelihood function
 	n_image_prior = false;
 	n_image_threshold = 1.5; // ************THIS SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
+	n_image_prior_expfac = 60;
 	srcpixel_nimg_mag_threshold = 0.1; // this is the minimum magnification an image pixel must have to be counted when calculating source pixel n_images
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	auxiliary_srcgrid_npixels = 60; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
@@ -560,6 +562,7 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	auto_srcgrid_set_pixel_size = false; // this feature is not working at the moment, so keep it off
 	use_noise_map = false;
 	dense_Rmatrix = true;
+	exact_logdet_grad = true;
 	covariance_kernel_regularization = false;
 	find_covmatrix_inverse = true;
 	use_covariance_matrix = false;
@@ -756,9 +759,13 @@ QLens::QLens(QLens *lens_in) : UCMC(), Model() // creates lens object with same 
 	ignore_foreground_in_chisq = lens_in->ignore_foreground_in_chisq;
 	ptimg_nsplit = lens_in->ptimg_nsplit;
 	fft_convolution = lens_in->fft_convolution;
+	n_hutchinson_probes = lens_in->n_hutchinson_probes;
+
 	fgmask_padding = lens_in->fgmask_padding; // padding the foreground mask to allow for convolution with neighboring pixels even if they're not included directly in the likelihood function
 	n_image_prior = lens_in->n_image_prior;
 	n_image_threshold = lens_in->n_image_threshold;
+	n_image_prior_expfac = lens_in->n_image_prior_expfac;
+
 	srcpixel_nimg_mag_threshold = lens_in->srcpixel_nimg_mag_threshold; // this is the minimum magnification an image pixel must have to be counted when calculating source pixel n_images
 	n_image_prior_sb_frac = lens_in->n_image_prior_sb_frac;
 	auxiliary_srcgrid_npixels = lens_in->auxiliary_srcgrid_npixels;
@@ -922,6 +929,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), Model() // creates lens object with same 
 
 	use_noise_map = lens_in->use_noise_map;
 	dense_Rmatrix = lens_in->dense_Rmatrix;
+	exact_logdet_grad = lens_in->exact_logdet_grad;
 	covariance_kernel_regularization = false;
 	find_covmatrix_inverse = lens_in->find_covmatrix_inverse;
 	use_covariance_matrix = lens_in->use_covariance_matrix;
@@ -6550,7 +6558,51 @@ double QLens::get_xi_parameter(const double src_redshift, const int lensnum)
 	return xi_param;
 }
 
-double QLens::get_total_xi_parameter(const double src_redshift)
+double QLens::get_sph_xi_parameter(const double src_redshift)
+{
+	double r_ein,zfac,xi_param;
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),src_redshift,reference_source_redshift);
+	einstein_radius_of_primary_lens(zfac,r_ein);
+	//cout << “RE=” << r_ein << endl;
+	double xc,yc,xcc,ycc;
+	lens_list[primary_lens_number]->get_center_coords(xc,yc);
+
+	int i,j;
+	const int n_theta = 100;
+	double theta, theta_step = M_2PI/n_theta;
+
+	double re_sq;
+	double dkappa_e_tot, kappa_e_tot, kap, dkap;
+
+	bool* include_lens = new bool[nlens];
+	for (i=0; i < nlens; i++) {
+		include_lens[i] = false;
+		if (i==primary_lens_number) include_lens[i] = true;
+		else if (lens_list[i]->lenstype==SHEET) include_lens[i] = true;
+		else {
+			if (lens_list[i]->ellipticity_mode != -1) { // this would mean it’s an elliptical lens
+				lens_list[i]->get_center_coords(xcc,ycc);
+				if ((xcc==xc) and (ycc==yc)) include_lens[i] = true; // only include co-centered lenses
+			}
+		}
+	}
+
+	re_sq = r_ein*r_ein;
+
+	kappa_e_tot = 0;
+	dkappa_e_tot = 0;
+	for (j=0; j < nlens; j++) {
+		if (include_lens[j]) {
+			kappa_e_tot += zfac*lens_list[j]->kappa_rsq(re_sq);
+			dkappa_e_tot += 2*r_ein*zfac*lens_list[j]->kappa_rsq_deriv(re_sq);
+		}
+	}
+
+	delete[] include_lens;
+	return (2*r_ein*dkappa_e_tot/(1-kappa_e_tot)+2);
+}
+
+double QLens::get_circ_xi_parameter(const double src_redshift)
 {
 	double r_ein,zfac,xi_param;
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),src_redshift,reference_source_redshift);
@@ -6702,7 +6754,7 @@ double QLens::cc_xi_parameter(int cc_num)
 	// get critical curve points
 	if (find_tangential_critical_curve(cc_num)==false) {
 		delete[] include_lens;
-		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
+		return get_sph_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
 	}
 
 	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
@@ -6770,7 +6822,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	// get critical curve points
 	if (find_tangential_critical_curve(cc_num)==false) {
 		delete[] include_lens;
-		return get_total_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
+		return get_sph_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
 	}
 
 	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
@@ -6949,6 +7001,222 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	return xifac;
 	//return (2*r_ein*xifac+2); // full equation 
 }
+
+double QLens::get_scaled_xi_phi_parameter(const double phi, int cc_num)
+{
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
+	double zfac;
+	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
+	double xc,yc,xcc,ycc;
+	lens_list[primary_lens_number]->get_center_coords(xc,yc);
+
+	// initializiing parameter for first counter 
+	int i;
+
+	double xifac = 0; // average xi
+	double dkappa_cc_tot, kappa_cc_tot, kap, dkap;
+
+	bool* include_lens = new bool[nlens];
+	for (i=0; i < nlens; i++) {
+		include_lens[i] = false;
+		if (i==primary_lens_number) include_lens[i] = true; // includes primary lens
+		else if (lens_list[i]->lenstype==SHEET) include_lens[i] = true;
+		else {
+			if (lens_list[i]->ellipticity_mode != -1) { // this would mean it's an elliptical lens
+				lens_list[i]->get_center_coords(xcc,ycc);
+				if ((xcc==xc) and (ycc==yc)) include_lens[i] = true; // only include co-centered lenses
+			}
+		}
+	}
+
+	// get critical curve points
+	if (find_tangential_critical_curve(cc_num)==false) {
+		delete[] include_lens;
+		return get_sph_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
+	}
+
+	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
+	int npts = critical_curve->cc_pts.size();
+
+	// now we'll need to interpolate in the critical curve at angle phi
+	int m;
+	double *rvals, *phivals;
+	double x, y, r_phi, x_phi, y_phi;
+	double kappaval, sheartot, shear_angle, theta_shear, theta_perp_shear;
+	double dkappa, dshear;
+	double x_phi2, y_phi2, r_phi2;
+	double new_kappaval, new_sheartot, new_shear_angle, shear_deriv, kappa_deriv;
+	const double h = 1e-6;
+
+	rvals = new double[npts+1];
+	phivals = new double[npts+1];
+
+	// incrementing through number of critical curve points
+	for (m=0; m < npts; m++) {
+		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
+		y = critical_curve->cc_pts[m][1];
+		//cout << x << " " << y << endl;
+		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
+		phivals[m] = get_angle(x,y);
+	}
+	sort(npts,phivals,rvals);
+	phivals[npts] = phivals[0] + M_2PI;
+	rvals[npts] = rvals[0];
+	//for (int i=0; i < npts; i++) {
+		//cout << phivals[i] << " " << rvals[i] << endl;
+	//}
+	Spline<double> rspline(phivals,rvals,npts+1);
+	double phi0 = phi;
+	if (phi < phivals[0]) phi0 += M_2PI;
+	if (phi > phivals[npts]) phi0 -= M_2PI;
+	r_phi = rspline.splint(phi0);
+	x_phi = xc+r_phi*cos(phi);
+	y_phi = yc+r_phi*sin(phi);
+
+	//r_phi = r_ein;
+	//x_phi = xc+r_phi*cos(phi);
+	//y_phi = yc+r_phi*sin(phi);
+
+
+#ifdef USE_STAN
+	{
+		//stan::math::var theta_perp_stan = theta_perp_shear;
+		//stan::math::var tt = 0, uu = 0;
+		stan::math::var x_phi_stan, y_phi_stan, kappaval_stan, sheartot_stan, shear_angle_stan;
+		//stan::math::var uu = 0;
+		x_phi_stan = x_phi;
+		y_phi_stan = y_phi;
+		//x_phi_stan = x_phi + tt*cos(theta_perp_stan);
+		//y_phi_stan = y_phi + tt*sin(theta_perp_stan);
+		lensvector<stan::math::var> pt_stan(x_phi_stan,y_phi_stan);
+		//x_phi_stan2 = x_phi;
+		//y_phi_stan2 = y_phi;
+		//x_phi_stan2 = x_phi + uu*cos(theta_perp_stan);
+		//y_phi_stan2 = y_phi + uu*sin(theta_perp_stan);
+		//lensvector<stan::math::var> pt_stan2(x_phi_stan2,y_phi_stan2);
+
+		kappaval_stan = kappa<stan::math::var>(x_phi_stan,y_phi_stan,reference_zfactors,default_zsrc_beta_factors);
+		shear<stan::math::var>(pt_stan,sheartot_stan,shear_angle_stan,0,reference_zfactors,default_zsrc_beta_factors);
+		theta_perp_shear = degrees_to_radians(stan::math::value_of(shear_angle_stan)-90);
+
+		kappaval = stan::math::value_of(kappaval_stan);
+		kappaval_stan.grad();
+		//dkappa = tt.adj();
+		double uvec_x = cos(theta_perp_shear);
+		double uvec_y = sin(theta_perp_shear);
+
+		x_phi2 = x_phi + h*uvec_x;
+		y_phi2 = y_phi + h*uvec_y;
+
+		r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+
+		if (r_phi2 < r_phi) {
+			uvec_x = -uvec_x;
+			uvec_y = -uvec_y;
+		}
+
+		dkappa = x_phi_stan.adj()*uvec_x + y_phi_stan.adj()*uvec_y;
+
+		stan::math::set_zero_all_adjoints();
+		sheartot_stan.grad();
+		//dshear = uu.adj();
+		dshear = x_phi_stan.adj()*uvec_x + y_phi_stan.adj()*uvec_y;
+	}
+
+/*
+	// the next part is just for checking against the numerical derivative; you can comment these lines out later
+	if (r_phi2 < r_phi) {
+		theta_perp_shear = theta_perp_shear + M_PI;
+		x_phi2 = x_phi + h*cos(theta_perp_shear);
+		y_phi2 = y_phi + h*sin(theta_perp_shear);
+		r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+		//cout << "new r_phi2: " << r_phi2 << endl;
+	}
+	lensvector<double> point2(x_phi2, y_phi2);
+
+	double kappaval2, sheartot2, shear_angle2;
+	kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+	shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+
+	// calculate xi from here, taking numerical derivatives
+	// just take a forward difference for now
+	lensvector<double> point(x_phi,y_phi);
+	double kappaval_check = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+	double sheartot_check;
+	shear<double>(point,sheartot_check,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+	double dkappa_check = (kappaval2 - kappaval_check)/h;
+	double dshear_check = (sheartot2 - sheartot_check)/h;
+
+	cout << "this is dkappa: " << dkappa << " and dkappa_check=" << dkappa_check <<endl;
+	cout << "this is dshear: " << dshear << " and dshear_check=" << dshear_check <<endl;
+	cout << "this is kappaval_stan: " << kappaval << " and kappaval_check=" << kappaval_check <<endl;
+	*/
+#else
+	lensvector<double> point(x_phi,y_phi);
+
+	// get kappa and derivative of kappa for each lens that is included
+	shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+	theta_perp_shear = degrees_to_radians(shear_angle-90);
+
+	x_phi2 = x_phi + h*cos(theta_perp_shear);
+	y_phi2 = y_phi + h*sin(theta_perp_shear);
+
+	r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+
+	//cout << " r_phi: " << r_phi << " r_phi_test: " << r_phi_test << " r_phi2: " << r_phi2 << endl;
+
+	if (r_phi2 < r_phi) {
+		theta_perp_shear = theta_perp_shear + M_PI;
+		x_phi2 = x_phi + h*cos(theta_perp_shear);
+		y_phi2 = y_phi + h*sin(theta_perp_shear);
+		r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+		//cout << "new r_phi2: " << r_phi2 << endl;
+	}
+
+	lensvector<double> point2(x_phi2, y_phi2);
+
+	double kappaval2, sheartot2, shear_angle2;
+	kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+	shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+
+	// calculate xi from here, taking numerical derivatives
+	// just take a forward difference for now
+	dkappa = (kappaval2 - kappaval)/h;
+	dshear = (sheartot2 - sheartot)/h;
+#endif
+
+	//double x0 = 0;
+	//double y0 = 0;
+
+	//double test_x0_2 = x0 + h*cos(theta_perp_shear);
+	//double test_y0_2 = y0 + h*sin(theta_perp_shear);
+
+	//cout << "this is x0_1: " << 
+	//cout << "this is x0_2: " << test_x0_2 << " and this is y0_2: " << test_y0_2 << endl;
+	//cout << "this is kappaval: " << kappaval << " and this is kappaval2: " << kappaval2 << endl;
+	//cout << "this is dkappa: " << dkappa << "and this is dshear: " << dshear << endl;
+	//cout << "this is sheartot: " << sheartot << " and this is sheartot2: " << sheartot2 << endl;
+
+	//if (dkappa > 0) {
+		//cout << "warning: dkappa > 0" << endl;
+		//cout << "this is x1: " << x_phi << " and this is y1: " << y_phi << endl;
+		//cout << "this is x2: " << x_phi2 << "and this is y2: " << y_phi2 << endl;
+	//}
+
+	xifac = r_phi * (dkappa - dshear)/(1-kappaval);
+
+	delete[] include_lens;
+	delete[] rvals;
+	delete[] phivals;
+	return xifac;
+	//return (2*r_ein*xifac+2); // full equation 
+}
+
+
 
 bool QLens::get_xi_phi_derivs(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals, vector<double>& kapvals, vector<double>& kap_derivs, vector<double>& shear_derivs)
 {
@@ -10449,7 +10717,7 @@ void QLens::fit_restore_defaults()
 	clear_raw_chisq(); // in case chi-square is being used as a derived parameter
 }
 
-double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime_temp, const bool show_diagnostics, const bool show_status, const bool show_lensinfo)
+double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime_temp, const bool show_diagnostics, const bool show_status, const bool show_lensinfo, const bool find_gradient, const bool test_gradient)
 {
 	if (fit_set_optimizations()==false) return -1e30;
 	if (fit_output_dir != ".") create_output_directory();
@@ -10501,7 +10769,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 
 	display_chisq_status = true;
 	fitmodel->chisq_it = 0;
-	//if (show_diagnostics) chisq_diagnostic = true;
+	if (show_diagnostics) chisq_diagnostic = true;
 	bool default_display_status = display_chisq_status;
 	if (!show_status) display_chisq_status = false;
 
@@ -10511,8 +10779,9 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 		chisq_wtime0 = std::chrono::steady_clock::now();
 	}
 
+	double chisqval;
 #ifdef USE_STAN
-	if (show_diagnostics) {
+	if (find_gradient) {
 		Vector<double> stepsizes(param_list->stepsizes,param_list->nparams);
 		for (int i=0; i < param_list->nparams; i++) stepsizes[i] /= 9; // steps for Ridder's method should be smaller than steps used for simplex/powell
 
@@ -10610,65 +10879,71 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 			for (int i=0; i < param_list->nparams; i++) cout << stan::math::value_of(fitparams_stan[i]) << " " << fitparams_stan[i].adj() << endl;
 			cout << endl << endl;
 
-			double epsilon = 1e-10;
-			bool old_setting = display_chisq_status;
-			display_chisq_status = false;
-			double logl = (this->*LogLikePtr)(fitparams);
-			double logl2, logl1, dlogl;
-			//double *fitparams2 = new double[param_list->nparams];
-			double *derivs = new double[param_list->nparams];
+			if (test_gradient) {
+				double epsilon = 1e-10;
+				bool old_setting = display_chisq_status;
+				display_chisq_status = false;
+				bool old_show_wtime = show_wtime;
+				show_wtime = false;
+				double logl = (this->*LogLikePtr)(fitparams);
+				chisqval = 2 * logl;
+				double logl2, logl1, dlogl;
+				//double *fitparams2 = new double[param_list->nparams];
+				double *derivs = new double[param_list->nparams];
 
-			//cout << "Params and GRADIENT comps from Finite differencing (1e-4): " << endl;
-			//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-2);
-			//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
-			//cout << endl;
-
-
-			//cout << "Params and GRADIENT comps from Finite differencing (1e-4): " << endl;
-			//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-3);
-			//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
-			//cout << endl;
+				//cout << "Params and GRADIENT comps from Finite differencing (1e-4): " << endl;
+				//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-2);
+				//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
+				//cout << endl;
 
 
-			//cout << "Params and GRADIENT comps from Finite differencing (1e-4): " << endl;
-			//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-4);
-			//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
-			//cout << endl;
+				//cout << "Params and GRADIENT comps from Finite differencing (1e-4): " << endl;
+				//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-3);
+				//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
+				//cout << endl;
 
-			//cout << "Params and GRADIENT comps from Finite differencing (1e-5): " << endl;
-			//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-5);
-			//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
-			//cout << endl;
 
-			//cout << "Params and GRADIENT comps from Finite differencing (1e-6): " << endl;
-			//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-6);
-			//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
-			//cout << endl;
+				//cout << "Params and GRADIENT comps from Finite differencing (1e-4): " << endl;
+				//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-4);
+				//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
+				//cout << endl;
 
-			cout << "Params and GRADIENT comps from Finite differencing (1e-7): " << endl;
-			get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-7);
-			for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
-			//cout << endl;
+				//cout << "Params and GRADIENT comps from Finite differencing (1e-5): " << endl;
+				//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-5);
+				//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
+				//cout << endl;
 
-			//cout << "Params and GRADIENT comps from Finite differencing (1e-8): " << endl;
-			//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-7);
-			//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
-			//cout << endl;
+				//cout << "Params and GRADIENT comps from Finite differencing (1e-6): " << endl;
+				//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-6);
+				//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
+				//cout << endl;
 
-			//cout << "Params and GRADIENT comps from Ridders' method: " << endl;
-			//get_grad_ridders(fitparams,derivs,stepsizes,param_list->nparams);
-			//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
-			cout << endl << endl;
-			display_chisq_status = old_setting;
-			delete[] derivs;
+				cout << "Params and GRADIENT comps from Finite differencing (1e-7): " << endl;
+				get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-7);
+				for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
+				//cout << endl;
+
+				//cout << "Params and GRADIENT comps from Finite differencing (1e-8): " << endl;
+				//get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-7);
+				//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
+				//cout << endl;
+
+				//cout << "Params and GRADIENT comps from Ridders' method: " << endl;
+				//get_grad_ridders(fitparams,derivs,stepsizes,param_list->nparams);
+				//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
+				cout << endl << endl;
+				show_wtime = old_show_wtime;
+				display_chisq_status = old_setting;
+				delete[] derivs;
+			}
+
 			delete[] fitparams_stan;
 		}
 		stan::math::recover_memory_nested();
 		delete[] fitparams;
-	}
+	} else
 #endif
-
-	double chisqval = 2 * (this->*LogLikePtr)(param_list->values);
+	chisqval = 2 * (this->*LogLikePtr)(param_list->values);
 	if (einstein_radius_prior) fitmodel->get_einstein_radius_prior(true); // just to show what the Re prior is returning
 	if (!show_status) display_chisq_status = default_display_status;
 	if ((chisqval >= 1e30) and (mpi_id==0)) warn(warnings,"Your parameter values are returning a large \"penalty\" chi-square--this likely means one or\nmore parameters have unphysical values or are out of the bounds specified by 'fit plimits'");
@@ -10677,7 +10952,7 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 		if ((mpi_id==0) and (show_status)) cout << "Wall time for likelihood evaluation: " << chisq_wtime.count() << endl;
 	}
 	display_chisq_status = false;
-	//if (show_diagnostics) chisq_diagnostic = false;
+	if (show_diagnostics) chisq_diagnostic = false;
 
 	if ((mpi_id==0) and (show_lensinfo)) {
 		cout << "lensing info:" << endl;
@@ -11025,11 +11300,30 @@ class LogLikeGrad_Func
 	}
 	void set_doublefunc(double (QLens::*func_in)(const double*)) { doublefunc = func_in; }
 	double operator()(const Eigen::VectorXd& params, Eigen::VectorXd& grad) {
+
+		auto get_grad_finite_diff = [this](const Eigen::VectorXd& params, double* grad, const int n, const double h) {
+			double *x = new double[n];
+			double f,fp,fm;
+			for (int k=0; k < n; k++) x[k] = params[k];
+			for (int k=0; k < n; k++) {
+				x[k] = params[k]+h*steps[k];
+				fp = (qptr->*doublefunc)(x);
+				///cout << "param " << k << ": xp=" << x[k] << ", fp 2*loglike = " << (2*value_of(fp)) << endl;
+				x[k] = params[k] - h*steps[k];
+				fm = (qptr->*doublefunc)(x);
+				///cout << "param " << k << ": xm=" << x[k] << ", fm 2*loglike = " << (2*value_of(fm)) << endl;
+				grad[k] = (fp-fm)/(2*h*steps[k]);
+				x[k] = params[k];
+			}
+			delete[] x;
+		};
+
+
 		std::chrono::steady_clock::time_point tot_wtime0;
 		std::chrono::duration<double> tot_wtime;
 		double logl0;
-			//logl0 = (qptr->*doublefunc)(params.data());
-			//ridders_method(params,grad);
+		//logl0 = (qptr->*doublefunc)(params.data());
+		//ridders_method(params,grad);
 #ifdef USE_STAN
 		if constexpr (stan::is_autodiff_v<QScalar>) {
 			stan::math::start_nested();
@@ -11048,11 +11342,34 @@ class LogLikeGrad_Func
 					if (qptr->mpi_id==0) cout << "Total wall time for loglike+grad: " << tot_wtime.count() << endl;
 				}
 				//double arg;
+				//double *derivs = new double[n];
+				//get_grad_finite_diff(params,derivs,n,1e-7);
+
+				/*
+				double *x = new double[n];
+				double fp,fm;
+				const double h = 1e-7;
+				for (int k=0; k < n; k++) x[k] = params[k];
+				for (int k=0; k < n; k++) {
+					x[k] = params[k]+h*steps[k];
+					fp = (qptr->*doublefunc)(x);
+					x[k] = params[k] - h*steps[k];
+					fm = (qptr->*doublefunc)(x);
+					derivs[k] = (fp-fm)/(2*h*steps[k]);
+					x[k] = params[k];
+				}
+				delete[] x;
+				*/
+
+				//double ff = (qptr->*doublefunc)(params.data());
+				//cout <<  "ff = " << ff << endl;
+
 				for (int i=0; i < n; i++) {
 					//arg = params_stan[i].adj();
 					grad(i) = params_stan[i].adj();
-					//cout << "GRAD(" << i << "): " << arg << " " << grad(i) << endl;
+					//cout << "GRAD(" << i << "): " << grad(i) << " numerical: " << derivs[i] << endl;
 				}
+				//delete[] derivs;
 				delete[] params_stan;
 			}
 			stan::math::recover_memory_nested();
@@ -11160,6 +11477,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 	LogLikeGrad_Func<stan::math::var> loglikegrad_func(n_fitparams,this);
 	loglikegrad_func.set_function(loglikeptr_stan);
 	loglikegrad_func.set_doublefunc(loglikeptr);
+	loglikegrad_func.input_stepsizes(stepsizes.array());
 #else
 	LogLikeGrad_Func<double> loglikegrad_func(n_fitparams,this);
 	loglikegrad_func.set_function(loglikeptr);
@@ -17688,7 +18006,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 						pixel_avg_n_images = image_pixel_grids[imggrid_i]->cartesian_srcgrid->find_avg_n_images<double>(n_image_prior_sb_frac);
 						if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
 						if (pixel_avg_n_images < n_image_threshold) {
-							chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,60) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
+							chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,n_image_prior_expfac) - 1.0; // constructed so that penalty = 0 and d(penalty)d(n_imgs) = 0 if the average n_image = n_image_threshold
 							logev_times_two_band += chisq_penalty;
 							if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_images << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 						}
@@ -18135,8 +18453,14 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 				if ((n_image_prior) and (source_fit_mode != Parameterized_Source)) {
 					QScalar chisq_penalty;
 					if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
+//#ifdef USE_STAN
+					//if constexpr (stan::is_autodiff_v<QScalar>) {
+						//cout << "Average number of images: " << pixel_avg_n_images << endl << endl << endl << endl;
+					//}
+//#endif
+
 					if (pixel_avg_n_images < n_image_threshold) {
-						chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,60) - 1.0; // constructed so that penalty = 0 if the average n_image = n_image_threshold
+						chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,n_image_prior_expfac) - 1.0; // constructed so that penalty = 0 and d(penalty)d(n_imgs) = 0 if the average n_image = n_image_threshold
 						logev_times_two_band += chisq_penalty;
 						if ((mpi_id==0) and (verbal)) cout << "*NOTE: average number of images is below the prior threshold (" << pixel_avg_n_images << " vs. " << n_image_threshold << "), resulting in penalty prior (chisq_penalty=" << chisq_penalty << ")" << endl;
 					}

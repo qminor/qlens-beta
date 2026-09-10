@@ -113,13 +113,17 @@ struct DerivedParam
 		} else if (derived_param_type == Einstein_Mass) {
 			name = "mass_re"; latex_name = "M_{Re}";
 			if (int_param < 0) int_param = 0;
-		} else if (derived_param_type == Xi_Param) {
-			name = "xi"; latex_name = "\\xi";
+		} else if (derived_param_type == Sph_Xi_Param) {
+			name = "sph_xi"; latex_name = "\\xi_{sph}";
+		} else if (derived_param_type == Circ_Xi_Param) {
+			name = "circ_xi"; latex_name = "\\xi_{circ}";
 		} else if (derived_param_type == CC_Xi_Param) {
 			name = "cc_xi"; latex_name = "\\xi_{cc}";
 			funcparam = -1e30; // no input parameter for this dparam
 		} else if (derived_param_type == Xi_Phi_Param) {
 			name = "xi_phi"; latex_name = "\\xi_{\\phi,cc}";
+		} else if (derived_param_type == Scaled_Xi_Phi_Param) {
+			name = "scaled_xi_phi"; latex_name = "\\xi_{\\phi,scaled}";
 		} else if (derived_param_type == Kappa_Re) {
 			name = "kappa_re"; latex_name = "\\kappa_{E}";
 		} else if (derived_param_type == LensParam) {
@@ -196,15 +200,20 @@ struct DerivedParam
 		else if (derived_param_type == Mass2dR) return lens_in->mass2d_r(funcparam,int_param,use_kpc_units);
 		else if (derived_param_type == Mass3dR) return lens_in->mass3d_r(funcparam,int_param,use_kpc_units);
 		else if (derived_param_type == Einstein) return lens_in->einstein_radius_single_lens(funcparam,int_param);
-		else if (derived_param_type == Xi_Param) {
-			if (int_param >= 0) return lens_in->get_xi_parameter(funcparam,int_param);
-			else return lens_in->get_total_xi_parameter(funcparam);
+		else if (derived_param_type == Sph_Xi_Param) {
+			return lens_in->get_sph_xi_parameter(funcparam);
+		}
+		else if (derived_param_type == Circ_Xi_Param) {
+			return lens_in->get_circ_xi_parameter(funcparam);
 		}
 		else if (derived_param_type == CC_Xi_Param) {
 			return lens_in->cc_xi_parameter();
 		}
 		else if (derived_param_type == Xi_Phi_Param) {
 			return lens_in->get_xi_phi_parameter(funcparam);
+		}
+		else if (derived_param_type == Scaled_Xi_Phi_Param) {
+			return lens_in->get_scaled_xi_phi_parameter(funcparam);
 		}
 		else if (derived_param_type == AvgLogSlope) return lens_in->calculate_average_log_slope(int_param,funcparam,funcparam2,use_kpc_units);
 		else if (derived_param_type == Einstein_Mass) {
@@ -344,16 +353,16 @@ struct DerivedParam
 			outstring = "Einstein radius of lens " + mkstring_int(int_param) + " for source redshift zsrc = " + mkstring_doub(funcparam) + "\n";
 		} else if (derived_param_type == Einstein_Mass) {
 			outstring = "Projected mass within Einstein radius of lens " + mkstring_int(int_param) + " for source redshift zsrc = " + mkstring_doub(funcparam) + "\n";
-		} else if (derived_param_type == Xi_Param) {
-			if (int_param >= 0) {
-				outstring = "xi parameter of lens " + mkstring_int(int_param) + "\n";
-			} else {
-				outstring = "xi parameter of primary and co-centered lenses \n";
-			}
+		} else if (derived_param_type == Sph_Xi_Param) {
+			outstring = "xi parameter of primary + cocentered lenses, ignoring ellipticity\n";
+		} else if (derived_param_type == Circ_Xi_Param) {
+			outstring = "circuklar averaged xi parameter of primary and co-centered lenses\n";
 		} else if (derived_param_type == CC_Xi_Param) {
 			outstring = "xi parameter of lens along critical curve \n";
 		} else if (derived_param_type == Xi_Phi_Param) {
 			outstring = "xi parameter of lens on critical curve at angle phi = " + mkstring_doub(funcparam) + "\n";
+		} else if (derived_param_type == Scaled_Xi_Phi_Param) {
+			outstring = "scaled xi parameter of lens on critical curve at angle phi = " + mkstring_doub(funcparam) + "\n";
 		} else if (derived_param_type == Kappa_Re) {
 			outstring = "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles\n";
 		} else if (derived_param_type == LensParam) {

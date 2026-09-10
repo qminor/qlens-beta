@@ -52,8 +52,6 @@ class CartesianSourcePixel_Params
 	lensvector<QScalar> corner_pt[4];
 	QScalar surface_brightness;
 	static TriRectangleOverlap<QScalar> *trirec;
-	//vector<QScalar> overlaps;
-	//vector<QScalar> weighted_overlaps;
 	QScalar total_magnification, n_images, avg_image_pixels_mapped;
 };
 
@@ -98,17 +96,11 @@ class CartesianSourcePixel
 	int u_N, w_N;
 	int level;
 	double cell_area;
-	//lensvector<double> center_pt;
-	//lensvector<double> corner_pt[4];
-	//double surface_brightness;
 	int index, active_index;
 	bool maps_to_image_pixel;
 	bool maps_to_image_window;
 	bool active_pixel;
-	//vector<double> overlaps;
-	//vector<double> weighted_overlaps;
 	vector<int> overlap_pixel_n;
-	//double total_magnification, n_images, avg_image_pixels_mapped;
 
 	static int max_levels;
 	static int nthreads;
@@ -138,23 +130,17 @@ class CartesianSourcePixel
 	static void deallocate_multithreaded_variables();
 	inline bool check_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread);
 	inline bool check_if_in_neighborhood(lensvector<double> **input_corner_pts, bool &inside, const int& thread);
-	inline double find_rectangle_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread, const int&, const int&);
 	inline bool check_triangle1_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread);
 	inline bool check_triangle2_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread);
-	inline double find_triangle1_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread);
-	inline double find_triangle2_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread);
+	//inline double find_triangle1_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread);
+	//inline double find_triangle2_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread);
 	template <typename QScalar>
 	QScalar find_triangle1_overlap(QScalar *input_corner_pts_x, QScalar *input_corner_pts_y, QScalar *twist_pt_x, QScalar *twist_pt_y, int& twist_status, const int& thread);
 	template <typename QScalar>
 	QScalar find_triangle2_overlap(QScalar *input_corner_pts_x, QScalar *input_corner_pts_y, QScalar *twist_pt_x, QScalar *twist_pt_y, int& twist_status, const int& thread);
 
-
-
 	void generate_gmatrices();
 	void generate_hmatrices();
-
-	void subcell_assign_source_mapping_flags_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, vector<CartesianSourcePixel*>& mapped_cartesian_srcpixels, const int& thread, bool& image_pixel_maps_to_source_grid);
-	void find_lensed_surface_brightness_subcell_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread, double& overlap, double& total_overlap, double& total_weighted_surface_brightness);
 
 	bool subcell_assign_source_mapping_flags_interpolate(lensvector<double> &input_center_pt, vector<CartesianSourcePixel*>& mapped_cartesian_srcpixels, const int& thread);
 	void calculate_Lmatrix_interpolate(const int img_index, vector<CartesianSourcePixel*>& mapped_cartesian_srcpixels, int& Lmatrix_index, lensvector<double> &input_center_pts, const int& ii, const double weight, const int& thread);
@@ -172,13 +158,9 @@ class CartesianSourcePixel
 	void assign_surface_brightness_from_delaunay_grid(DelaunaySourceGrid* delaunay_grid, const bool add_sb = false);
 	template <typename QScalar>
 	void update_surface_brightness(int& index);
-	//void fill_surface_brightness_vector();
-	//void fill_surface_brightness_vector_recursive(int& column_j);
 	void fill_n_image_vector();
 
 	void fill_n_image_vector_recursive(int& column_j);
-	//void plot_surface_brightness(string root);
-	//void output_fits_file(string fits_filename);
 	void get_grid_dimensions(double &xmin, double &xmax, double &ymin, double &ymax);
 	void output_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y, Vector<double>& sbvals, Vector<double>& maglogvals, Vector<double>& nimgvals, int& indx);
 	void plot_cell_surface_brightness(int line_number, int pixels_per_cell_x, int pixels_per_cell_y, std::ofstream& sb_outfile, std::ofstream& mag_outfile, std::ofstream& nimg_outfile);
@@ -260,7 +242,6 @@ class CartesianSourceGrid : public CartesianSourcePixel, public Model
 	template <typename QScalar>
 	void create_pixel_grid(QLens* lens_in, const QScalar x_min, const QScalar x_max, const QScalar y_min, const QScalar y_max, const int usplit0, const int wsplit0);
 	void create_pixel_grid(QLens* lens_in, string pixel_data_fileroot, const double minarea_in);
-	//void copy_source_pixel_grid(CartesianSourceGrid* input_pixel_grid);
 	void setup_parameters(const bool initial_setup);
 	template <typename QScalar>
 	void setup_param_pointers();
@@ -273,10 +254,6 @@ class CartesianSourceGrid : public CartesianSourcePixel, public Model
 	void adaptive_subgrid();
 	double get_lowest_mag_sourcept(double &xsrc, double &ysrc);
 	void get_highest_mag_sourcept(double &xsrc, double &ysrc);
-
-	bool assign_source_mapping_flags_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, vector<CartesianSourcePixel*>& mapped_cartesian_srcpixels, const int& thread);
-	void calculate_Lmatrix_overlap(const int &img_index, const int image_pixel_i, const int image_pixel_j, int& Lmatrix_index, lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread);
-	double find_lensed_surface_brightness_overlap(lensvector<double> **input_corner_pts, lensvector<double> *twist_pt, int& twist_status, const int& thread);
 
 	bool bisection_search_overlap(lensvector<double> **input_corner_pts, const int& thread);
 	bool bisection_search_overlap(lensvector<double> &a, lensvector<double> &b, lensvector<double> &c, const int& thread);
@@ -291,23 +268,212 @@ class CartesianSourceGrid : public CartesianSourcePixel, public Model
 	QScalar find_avg_n_images(const double sb_threshold_frac);
 
 	void output_surface_brightness(Vector<double>& xvals, Vector<double>& yvals, Vector<double>& sbvals, Vector<double>& maglogvals, Vector<double>& nimgvals);
-	//void plot_surface_brightness(string root);
-	//void output_fits_file(string fits_filename);
 	void get_grid_dimensions(double &xmin, double &xmax, double &ymin, double &ymax);
 	void store_surface_brightness_grid_data(string root);
 
 	void set_image_pixel_grid(ImagePixelGrid* image_pixel_ptr) { image_pixel_grid = image_pixel_ptr; }
 	~CartesianSourceGrid();
 
-	//static ofstream bad_interps;
-
 	// for plotting the grid to a file:
 	std::ifstream sb_infile;
 	std::ofstream xgrid;
-	//std::ofstream pixel_surface_brightness_file;
-	//std::ofstream pixel_magnification_file;
-	//std::ofstream pixel_n_image_file;
 };
+
+
+
+struct AD2
+{
+	double val;
+	double dx;
+	double dy;
+
+	AD2() : val(0.0), dx(0.0), dy(0.0) {}
+	AD2(double v) : val(v), dx(0.0), dy(0.0) {}
+	AD2(double v, double dx_, double dy_) : val(v), dx(dx_), dy(dy_) {}
+
+	AD2& operator=(double v)
+	{
+		val = v;
+		dx = 0.0;
+		dy = 0.0;
+		return *this;
+	}
+
+	AD2 operator+() const
+	{
+		return *this;
+	}
+
+	AD2 operator-() const
+	{
+		return AD2(-val, -dx, -dy);
+	}
+
+	AD2& operator+=(const AD2& b)
+	{
+		val += b.val;
+		dx += b.dx;
+		dy += b.dy;
+		return *this;
+	}
+
+	AD2& operator-=(const AD2& b)
+	{
+		val -= b.val;
+		dx -= b.dx;
+		dy -= b.dy;
+		return *this;
+	}
+
+	AD2& operator*=(const AD2& b)
+	{
+		const double new_dx = dx * b.val + val * b.dx;
+		const double new_dy = dy * b.val + val * b.dy;
+		val *= b.val;
+		dx = new_dx;
+		dy = new_dy;
+		return *this;
+	}
+
+	AD2& operator/=(const AD2& b)
+	{
+		const double inv = 1.0 / b.val;
+		const double new_dx = (dx * b.val - val * b.dx) * inv * inv;
+		const double new_dy = (dy * b.val - val * b.dy) * inv * inv;
+		val *= inv;
+		dx = new_dx;
+		dy = new_dy;
+		return *this;
+	}
+
+	AD2& operator+=(double b)
+	{
+		val += b;
+		return *this;
+	}
+
+	AD2& operator-=(double b)
+	{
+		val -= b;
+		return *this;
+	}
+
+	AD2& operator*=(double b)
+	{
+		val *= b;
+		dx *= b;
+		dy *= b;
+		return *this;
+	}
+
+	AD2& operator/=(double b)
+	{
+		const double inv = 1.0 / b;
+		val *= inv;
+		dx *= inv;
+		dy *= inv;
+		return *this;
+	}
+};
+
+inline AD2 operator+(AD2 a, const AD2& b)
+{
+	a += b;
+	return a;
+}
+
+inline AD2 operator-(AD2 a, const AD2& b)
+{
+	a -= b;
+	return a;
+}
+
+inline AD2 operator*(AD2 a, const AD2& b)
+{
+	a *= b;
+	return a;
+}
+
+inline AD2 operator/(AD2 a, const AD2& b)
+{
+	a /= b;
+	return a;
+}
+
+inline AD2 operator+(AD2 a, double b)
+{
+	a += b;
+	return a;
+}
+
+inline AD2 operator+(double a, AD2 b)
+{
+	b += a;
+	return b;
+}
+
+inline AD2 operator-(AD2 a, double b)
+{
+	a -= b;
+	return a;
+}
+
+inline AD2 operator-(double a, const AD2& b)
+{
+	return AD2(a - b.val, -b.dx, -b.dy);
+}
+
+inline AD2 operator*(AD2 a, double b)
+{
+	a *= b;
+	return a;
+}
+
+inline AD2 operator*(double a, AD2 b)
+{
+	b *= a;
+	return b;
+}
+
+inline AD2 operator/(AD2 a, double b)
+{
+	a /= b;
+	return a;
+}
+
+inline AD2 operator/(double a, const AD2& b)
+{
+	const double inv = 1.0 / b.val;
+	return AD2(a * inv, -a * b.dx * inv * inv, -a * b.dy * inv * inv);
+}
+
+inline AD2 ad2_abs(const AD2& a)
+{
+	if (a.val > 0.0) return a;
+	if (a.val < 0.0) return -a;
+	return AD2(0.0, 0.0, 0.0);
+}
+
+inline AD2 ad2_sqr(const AD2& a)
+{
+	return a * a;
+}
+
+struct AD2Point
+{
+	AD2 x;
+	AD2 y;
+
+	AD2Point() = default;
+	AD2Point(double x_, double y_) : x(x_), y(y_) {}
+	AD2Point(const AD2& x_, const AD2& y_) : x(x_), y(y_) {}
+};
+
+inline AD2 cross_term(const AD2Point& a, const AD2Point& b)
+{
+	return a.x * b.y - b.x * a.y;
+}
+
 
 static const int nmax_pts_interp = 120; // I had to take this out of DelaunayGrid so it could be seen by DelaunayGrid_Params
 
@@ -356,27 +522,18 @@ class DelaunayGrid : private Sort
 #endif
 
 	protected:
-	//lensvector<double> *interpolation_pts[nmax_pts_interp];
-	//double interpolation_wgts[nmax_pts_interp];
 	int interpolation_indx[nmax_pts_interp];
 	int triangles_in_envelope[nmax_pts_interp];
-	//lensvector<double> *polygon_vertices[nmax_pts_interp+2]; // the polygon referred to here is the part of the Voronoi cell contained in the Bower-Watson envelope for each vertex in the envelope.
-	//lensvector<double> new_circumcenter[nmax_pts_interp];
 
 	public:
 	static bool zero_outside_border;
 	int n_gridpts;
 	int n_triangles;
-	//lensvector<double> *gridpts;
-	//Triangle<double> *triangle;
 	int *adj_triangles[4];
 
 	protected:
 	int** shared_triangles;
 	int* n_shared_triangles;
-	// Used for calculating areas and finding whether points are inside a given cell
-	//lensvector<double> dt1, dt2, dt3;
-	//double prod1, prod2, prod3;
 
 	public:
 	DelaunayGrid();
@@ -403,12 +560,10 @@ class DelaunayGrid : private Sort
 	void find_interpolation_weights_3pt(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread);
 	template <typename QScalar>
 	void find_interpolation_weights_nn(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread); // natural neighbor interpolation
-	//void plot_voronoi_grid(string root);
+	void find_interpolation_weights_3pt_ad2(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, AD2* interpolation_wgts);
+	void find_interpolation_weights_nn_ad2(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, AD2* interpolation_wgts, const int thread);
 
-	//void get_grid_points(vector<double>& xvals, vector<double>& yvals, vector<double>& sb_vals);
-	//void generate_gmatrices(const bool interpolate);
-	//void generate_hmatrices(const bool interpolate);
-	//void generate_covariance_matrix_packed(double *cov_matrix_packed, const int kernel_type, const double epsilon, double *wgtfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
+
 	void generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, const KernelType kernel_type, const double epsilon, double *wgtfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
 #ifdef USE_STAN
 	void scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_adj, const KernelType kernel_type, double *wgtfac, const double amplitude);
@@ -503,7 +658,6 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 	bool look_for_starting_point;
 	int img_ni, img_nj;
 	int n_active_pixels;
-	//double *surface_brightness;	
 	double *inv_magnification;
 	bool *maps_to_image_pixel;
 	bool *active_pixel;
@@ -511,7 +665,6 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 	int **img_index_ij;
 	int *imggrid_ivals;
 	int *imggrid_jvals;
-	//double srcpixel_xmin, srcpixel_xmax, srcpixel_ymin, srcpixel_ymax;
 	double srcgrid_xmin, srcgrid_xmax, srcgrid_ymin, srcgrid_ymax; // for plotting
 	int img_imin, img_imax, img_jmin, img_jmax;
 
@@ -545,8 +698,6 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 
 	template <typename QScalar>
 	void assign_surface_brightness_from_analytic_source(const int imggrid_i=-1);
-	//template <typename MathTypes>
-	//void fill_surface_brightness_vector();
 	template <typename MathTypes>
 	void update_surface_brightness(int& index);
 
@@ -1091,7 +1242,6 @@ class ImagePixelGrid : private Sort
 
 	template <typename QScalar>
 	void get_source_regparam_ptr(const int imggrid_include_i, QScalar* &regparam);
-	void generate_Gmatrix();
 	template <typename MathTypes>
 	void add_regularization_term_to_dense_Fmatrix(ImagePixelGrid* imggrid, typename MathTypes::QScalar *regparam, const bool potential_perturbations=false);
 	void add_MGE_regularization_terms_to_dense_Fmatrix();
