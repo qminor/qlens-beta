@@ -12,6 +12,8 @@
 #include <iostream>
 
 #include <Eigen/Core>
+#include <Eigen/Sparse>
+#include <Eigen/Dense>
 #include "Eigen/Cholesky"
 
 class ImagePixelGrid;
@@ -1307,6 +1309,11 @@ class ImagePixelGrid : private Sort
 	void generate_Rmatrix_from_hmatrices_sparse(const bool potential_perturbations);
 	template <typename MathTypes>
 	void generate_Rmatrix_from_gmatrices_sparse(const bool potential_perturbations);
+
+#ifdef USE_STAN
+	template <typename VecVarValue, typename SparseVarValue>
+	stan::math::var sparse_quadratic_form(const VecVarValue& s, const SparseVarValue& R);
+#endif
 
 	template <typename MathTypes>
 	void generate_Rmatrix_from_hmatrices_dense(const bool potential_perturbations = false);

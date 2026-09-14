@@ -15,6 +15,7 @@
 #include <map>
 
 #include <Eigen/Core>
+#include <Eigen/Sparse>
 
 #ifdef USE_STAN
 #include <stan/math.hpp>

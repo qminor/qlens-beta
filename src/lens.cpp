@@ -872,6 +872,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), Model() // creates lens object with same 
 	sourcegrid_limit_ymin = lens_in->sourcegrid_limit_ymin;
 	sourcegrid_limit_ymax = lens_in->sourcegrid_limit_ymax;
 	redo_lensing_calculations_before_inversion = lens_in->redo_lensing_calculations_before_inversion;
+	use_saved_sbweights = false;
 	save_sbweights_during_inversion = false;
 	auto_sourcegrid = lens_in->auto_sourcegrid;
 	auto_shapelet_scaling = lens_in->auto_shapelet_scaling;

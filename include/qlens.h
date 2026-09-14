@@ -31,6 +31,7 @@
 #define USE_COMM_WORLD -987654
 
 #include <Eigen/Core>
+#include <Eigen/Sparse>
 
 #ifdef USE_FFTW
 #ifdef USE_MKL
@@ -67,7 +68,7 @@ struct VarmatTypes {
 	using QScalar = stan::math::var;
 	using VecType = stan::math::var_value<Eigen::VectorXd>;
 	using MatType = stan::math::var_value<Eigen::MatrixXd>;
- using SparseMatType = stan::math::var_value<Eigen::SparseMatrix<double, Eigen::ColMajor>>;
+	using SparseMatType = stan::math::var_value<Eigen::SparseMatrix<double, Eigen::ColMajor>>;
 };
 #endif
 

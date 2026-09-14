@@ -18,9 +18,9 @@
 #endif
 
 #include <Eigen/Core>
-#include "Eigen/Cholesky"
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
+#include <Eigen/Cholesky>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
 #ifdef USE_EIGEN_INV_NNLS
 #include "unsupported/Eigen/NNLS"
 #endif
@@ -4239,6 +4239,15 @@ void DelaunayGrid::scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_a
 template <typename QScalar>
 QScalar DelaunayGrid::modified_bessel_function(const QScalar x, const QScalar nu)
 {
+#ifdef USE_STAN
+	using stan::math::abs;
+	using stan::math::sin;
+	using stan::math::cos;
+	using stan::math::sinh;
+	using stan::math::cosh;
+	using stan::math::exp;
+	using stan::math::log;
+#endif
     const int MAXIT = 10000;
     const double EPS = 1e-12;
     const double FPMIN = 1e-30;
@@ -4258,7 +4267,7 @@ QScalar DelaunayGrid::modified_bessel_function(const QScalar x, const QScalar nu
 
     // nl is used only for integer loop bounds / recurrence order.
     // Use the value of nu, not the autodiff variable itself.
-    nl = static_cast<int>(stan::math::value_of(nu) + 0.5);
+    nl = static_cast<int>(value_of(nu) + 0.5);
 
     xmu = nu - QScalar(nl);
     xmu2 = xmu * xmu;
@@ -4281,7 +4290,7 @@ QScalar DelaunayGrid::modified_bessel_function(const QScalar x, const QScalar nu
         del = c * d;
         h = del * h;
 
-        if (stan::math::abs(del - QScalar(1.0)) <= QScalar(EPS))
+        if (abs(del - QScalar(1.0)) <= QScalar(EPS))
             break;
     }
 
@@ -4297,14 +4306,14 @@ QScalar DelaunayGrid::modified_bessel_function(const QScalar x, const QScalar nu
     if (x < QScalar(XMIN)) {
         x2 = QScalar(0.5) * x;
         pimu = QScalar(M_PI) * xmu;
-        fact = (stan::math::abs(pimu) < QScalar(EPS)) ? QScalar(1.0) : pimu / stan::math::sin(pimu);
+        fact = (abs(pimu) < QScalar(EPS)) ? QScalar(1.0) : pimu / sin(pimu);
 
-        d = -stan::math::log(x2);
+        d = -log(x2);
         e = xmu * d;
 
-        fact2 = (stan::math::abs(e) < QScalar(EPS)) ? QScalar(1.0) : stan::math::sinh(e) / e;
+        fact2 = (abs(e) < QScalar(EPS)) ? QScalar(1.0) : sinh(e) / e;
 
-        if (stan::math::abs(xmu) > QScalar(1e-8)) {
+        if (abs(xmu) > QScalar(1e-8)) {
             gampl = QScalar(1.0) / Gamma(QScalar(1.0) + xmu);
             gammi = QScalar(1.0) / Gamma(QScalar(1.0) - xmu);
             gam2 = (gammi + gampl) * QScalar(0.5);
@@ -4313,11 +4322,11 @@ QScalar DelaunayGrid::modified_bessel_function(const QScalar x, const QScalar nu
             beschb(xmu, gam1, gam2, gampl, gammi);
         }
 
-        ff = fact * (gam1 * stan::math::cosh(e) + gam2 * fact2 * d);
+        ff = fact * (gam1 * cosh(e) + gam2 * fact2 * d);
 
         sum = ff;
 
-        e = stan::math::exp(e);
+        e = exp(e);
 
         p = QScalar(0.5) * e / gampl;
         q = QScalar(0.5) / (e * gammi);
@@ -4338,7 +4347,7 @@ QScalar DelaunayGrid::modified_bessel_function(const QScalar x, const QScalar nu
             del1 = c * (p - QScalar(i) * ff);
             sum1 += del1;
 
-            if (stan::math::abs(del) < stan::math::abs(sum) * QScalar(EPS))
+            if (abs(del) < abs(sum) * QScalar(EPS))
                 break;
         }
 
@@ -4371,13 +4380,13 @@ QScalar DelaunayGrid::modified_bessel_function(const QScalar x, const QScalar nu
             dels = q * delh;
             s += dels;
 
-            if (stan::math::abs(dels / s) <= QScalar(EPS))
+            if (abs(dels / s) <= QScalar(EPS))
                 break;
         }
 
         if (i >= MAXIT) die("Bessel failed to converge in cf2");
         h = a1 * h;
-        rkmu = stan::math::sqrt(QScalar(M_PI) / (QScalar(2.0) * x)) * stan::math::exp(-x) / s;
+        rkmu = sqrt(QScalar(M_PI) / (QScalar(2.0) * x)) * exp(-x) / s;
         rk1 = rkmu * (xmu + x + QScalar(0.5) - h) * xi;
     }
 
@@ -19876,6 +19885,66 @@ static std::shared_ptr<Eigen::MatrixXd> compute_selected_inverse_takahashi(const
 	return S;
 }
 
+#ifdef USE_STAN
+template <typename VecVarValue, typename SparseVarValue>
+stan::math::var ImagePixelGrid::sparse_quadratic_form(const VecVarValue& s, const SparseVarValue& R)
+{
+	using SparseMat = std::decay_t<decltype(R.val())>;
+
+	auto s_arena = stan::math::to_arena(s);
+	auto R_arena = stan::math::to_arena(R);
+
+	const auto& s_value = s_arena.val();
+	const auto& R_value = R_arena.val();
+
+	double value = 0.0;
+
+	for (Eigen::Index i = 0; i < R_value.outerSize(); ++i) {
+		const double si = s_value(i);
+
+		for (typename SparseMat::InnerIterator it(R_value, i); it; ++it) {
+			const Eigen::Index j = it.row();
+			value += si * it.value() * s_value(j);
+		}
+	}
+
+	return stan::math::make_callback_var(value, [s_arena, R_arena](const auto& res) mutable {
+		const double adj = res.adj();
+
+		auto& s_adj = s_arena.adj();
+		const auto& s_value = s_arena.val();
+		const auto& R_value = R_arena.val();
+
+		// d(s^T R s) / ds = (R + R^T)s.
+		//
+		// R is symmetric, so this is 2 R s.
+		for (Eigen::Index i = 0; i < R_value.outerSize(); ++i) {
+			const double si = s_value(i);
+
+			for (typename SparseMat::InnerIterator it(R_value, i); it; ++it) {
+				const Eigen::Index j = it.row();
+				s_adj(i) += adj * it.value() * s_value(j);
+				s_adj(j) += adj * it.value() * si;
+			}
+		}
+
+		// d(s^T R s) / dR_ij = s_i s_j.
+		//
+		// R.adj() has the same sparsity pattern as R.val(), so we only
+		// need to visit the existing nonzero entries.
+		auto& R_adj = R_arena.adj();
+
+		for (Eigen::Index i = 0; i < R_value.outerSize(); ++i) {
+			const double si = s_value(i);
+
+			for (typename SparseMat::InnerIterator it(R_value, i); it; ++it) {
+				const Eigen::Index j = it.row();
+				R_adj.coeffRef(i, j) += adj * si * s_value(j);
+			}
+		}
+	});
+}
+#endif
 
 template <typename MathTypes>
 void ImagePixelGrid::generate_Rmatrix_from_gmatrices_sparse(const bool potential_perturbations)
@@ -21188,18 +21257,20 @@ QScalar ImagePixelGrid::calculate_regularization_prior_term_stan(QScalar *regpar
 				//cout << "regparam=" << (*regparam) << " Es_times_two=" << value_of(Es_times_two) << " Flogdet=" << value_of(p.Fmatrix_log_determinant) << " logreg0=" << value_of(loglike_reg) << " loglike_reg=" << (value_of(loglike_reg)+value_of(p.Fmatrix_log_determinant)) << " Rlogdet=" << value_of(p.Rmatrix_log_determinant) << endl;
 		}
 	} else {
-		const auto& R = potential_perturbations ? p.Rmatrix_pot_sparse : p.Rmatrix_sparse;
+		const typename MathTypes::SparseMatType& R = potential_perturbations ? p.Rmatrix_pot_sparse : p.Rmatrix_sparse;
 
 #ifdef USE_STAN
-		if constexpr (stan::is_autodiff_v<MatType>) {
-			const auto& R_value = R.val();
-			for (int i = 0; i < npixels; ++i) {
-				const QScalar si = p.amplitude_vector(start_indx + i);
-				for (typename std::decay_t<decltype(R_value)>::InnerIterator it(R_value, i); it; ++it) {
-					const int j = it.row();
-					Es_times_two += si * static_cast<QScalar>(it.value()) * p.amplitude_vector(start_indx + j);
-				}
-			}
+		if constexpr (stan::is_autodiff_v<QScalar>) {
+			Es_times_two = sparse_quadratic_form(p.amplitude_vector.segment(start_indx, npixels), R);
+
+			//const auto& R_value = R.val();
+			//for (int i = 0; i < npixels; ++i) {
+				//const QScalar si = p.amplitude_vector(start_indx + i);
+				//for (typename std::decay_t<decltype(R_value)>::InnerIterator it(R_value, i); it; ++it) {
+					//const int j = it.row();
+					//Es_times_two += si * static_cast<QScalar>(it.value()) * p.amplitude_vector(start_indx + j);
+				//}
+			//}
 		} else
 #endif
 		{
