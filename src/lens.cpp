@@ -15045,106 +15045,15 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 			chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,EigenTypes<QScalar>>(chisq0,false);
 		}
 		//chisq = fitmodel->pixel_log_evidence_times_two(chisq0,false,0);
-
-		/*
-#ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>)
-		{
-			ImagePixelGrid* image_pixel_grid = fitmodel->image_pixel_grids[0]; 
-			ImgGrid_Params<stan::math::var_value<Eigen::VectorXd>,stan::math::var_value<Eigen::MatrixXd>,stan::math::var>& imggrid_params = image_pixel_grid->imggrid_params_dif;
-			//ImgGrid_Params<double>& imggrid_doub = image_pixel_grid->imggrid_params;
-
-			int pix_i = 16;
-			int pix_j = 40;
-			int n = image_pixel_grid->pixel_index[pix_i][pix_j];
-
-			stan::math::var sb_stan = imggrid_params.image_surface_brightness(n);
-			sb_stan.grad();
-			//chisq.grad();
-			int sbpar = 0;
-			int par_i = 8+sbpar;
-			string sbparname = "sbmax";
-			int sbpar2 = sbpar+1;
-			int par_i2 = par_i+1;
-			string sbparname2 = "sigma";
-
-			cout << "sb_stan: " << stan::math::value_of(sb_stan) << endl;
-			cout << sbparname + "=" << stan::math::value_of(*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar])) << endl;
-			cout << "d(sb)/d" << sbparname << " = " << (*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar])).adj() << endl;
-			cout << sbparname2 + "=" << stan::math::value_of(*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar2])) << endl;
-			cout << "d(sb)/d" << sbparname2 << " = " << (*(fitmodel->sb_list[0]->sbparams_dif->param[sbpar2])).adj() << endl;
-
-			cout << "CHECK: " << sbparname << "=" << stan::math::value_of(params[par_i]) << endl;
-			cout << "CHECK: " << "d(sb)/d" << sbparname << " = " << (params[par_i]).adj() << endl;
-			cout << "CHECK: " << sbparname2 << "=" << stan::math::value_of(params[par_i2]) << endl;
-			cout << "CHECK: " << "d(sb)/d" << sbparname2 << " = " << (params[par_i2]).adj() << endl;
-
-			double epsilon = 1e-6;
-			double chisqd, chisqp, chisqm;
-			chisqd = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
-			//double sb = image_pixel_grid->surface_brightness[pix_i][pix_j];
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname,stan::math::value_of(params[par_i])+epsilon);
-			//image_pixel_grid->find_surface_brightness_vec<double>(false,true);
-			chisqp = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
-			//double sbp = image_pixel_grid->surface_brightness[pix_i][pix_j];
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname,stan::math::value_of(params[par_i])-epsilon);
-			chisqm = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
-			//image_pixel_grid->find_surface_brightness_vec<double>(false,true);
-			//double sbm = image_pixel_grid->surface_brightness[pix_i][pix_j];
-			double chisq_xder = (chisqp-chisqm)/(2*epsilon);
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname,stan::math::value_of(params[par_i]));
-
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname2,stan::math::value_of(params[par_i2])+epsilon);
-			chisqp = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
-			//image_pixel_grid->find_surface_brightness_vec<double>(false,true);
-			//sbp = image_pixel_grid->surface_brightness[pix_i][pix_j];
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname2,stan::math::value_of(params[par_i2])-epsilon);
-			chisqm = fitmodel->pixel_log_evidence_times_two_sbprofile<Eigen::VectorXd,Eigen::MatrixXd,double>(chisqd,false);
-			//image_pixel_grid->find_surface_brightness_vec<double>(false,true);
-			//sbm = image_pixel_grid->surface_brightness[pix_i][pix_j];
-			double chisq_yder = (chisqp-chisqm)/(2*epsilon);
-			fitmodel->sb_list[0]->update_specific_parameter(sbparname2,stan::math::value_of(params[par_i2]));
-
-			cout << "LOGL: " << chisq << endl;
-			cout << " numerical d(logl)/d" + sbparname + " = " << chisq_xder << endl;
-			cout << " numerical d(logl)/d" + sbparname2 + " = " << chisq_yder << endl;
-
-
-			//cout << "xsrc=" << stan::math::value_of(xs) << endl;
-			//cout << "d(sb)/dxsrc = " << xs.adj() << endl;
-			//cout << "ysrc=" << stan::math::value_of(ys) << endl;
-			//cout << "d(sb)/dysrc = " << ys.adj() << endl;
-
-			//double sb = sb_list[0]->surface_brightness(xd,yd);
-			//const double epsilon = 1e-6;
-			//xd += epsilon;
-			//double sbp = sb_list[0]->surface_brightness(xd,yd);
-			//xd -= 2*epsilon;
-			//double sbm = sb_list[0]->surface_brightness(xd,yd);
-			//double sbxder = (sbp-sbm)/(2*epsilon);
-			//xd += epsilon;
-			//yd += epsilon;
-			//sbp = sb_list[0]->surface_brightness(xd,yd);
-			//yd -= 2*epsilon;
-			//sbm = sb_list[0]->surface_brightness(xd,yd);
-			//double sbyder = (sbp-sbm)/(2*epsilon);
-			//yd += epsilon;
-
-			//cout << "SB: " << sb << endl;
-			//cout << " numerical d(sb)/dxsrc = " << sbxder << endl;
-			//cout << " numerical d(sb)/dysrc = " << sbyder << endl;
-		}
-#endif
-		*/
-	} else if (source_fit_mode==Delaunay_Source) {
-#ifdef USE_STAN
-		if constexpr (stan::is_autodiff_v<QScalar>) {
-			chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,VarmatTypes>(chisq0,false,0);
-		} else
-#endif
-		{
-			chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,PlainTypes>(chisq0,false,0);
-		}
+	//} else if (source_fit_mode==Delaunay_Source) {
+//#ifdef USE_STAN
+		//if constexpr (stan::is_autodiff_v<QScalar>) {
+			//chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,VarmatTypes>(chisq0,false,0);
+		//} else
+//#endif
+		//{
+			//chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,PlainTypes>(chisq0,false,0);
+		//}
 	} else {
 		double chisq00;
 		double chisq_doub=0;

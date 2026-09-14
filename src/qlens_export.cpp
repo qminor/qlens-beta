@@ -531,20 +531,20 @@ PYBIND11_MODULE(qlens, m) {
 			}
 		})
 		.def("update", [](LensList &current, py::dict dict){
-			bool status = true;
+			bool at_least_one_updated = false;
 			for (int i=0; i < current.nlens; i++) {
 				for (auto item : dict) {
-					if (!current.lenslistptr[i]->update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second))) status = false;
+					if (current.lenslistptr[i]->update_specific_parameter(py::cast<string>(item.first), py::cast<double>(item.second))) at_least_one_updated = true;
 				}
 			}
-			return status;
+			return at_least_one_updated;
 		})
 		.def("update", [](LensList &current, const string name, const double value){
-			bool status = true;
+			bool at_least_one_updated = false;
 			for (int i=0; i < current.nlens; i++) {
-				if (!current.lenslistptr[i]->update_specific_parameter(name, value)) status = false;
+				if (current.lenslistptr[i]->update_specific_parameter(name, value)) at_least_one_updated = true;
 			}
-			return status;
+			return at_least_one_updated;
 		})
 		.def("einstein_radius", [](LensList &current, const int lens_number){
 			double re_major_axis;
@@ -1460,6 +1460,7 @@ PYBIND11_MODULE(qlens, m) {
 			if (mask_i > 0) {
 				if (!current.qlens->assign_mask(band,znum,mask_i)) throw std::runtime_error("could not assign mask");
 			}
+			return current[current.n_pixsrc-1];
 		})
 		.def("vary_none", [](PixSrcList &current){ 
 			int npar,i,j;
