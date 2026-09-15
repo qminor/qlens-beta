@@ -561,7 +561,7 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	auto_srcgrid_npixels = true;
 	auto_srcgrid_set_pixel_size = false; // this feature is not working at the moment, so keep it off
 	use_noise_map = false;
-	dense_Rmatrix = true;
+	dense_Rmatrix = false;
 	exact_logdet_grad = true;
 	covariance_kernel_regularization = false;
 	find_covmatrix_inverse = true;
@@ -15045,16 +15045,16 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 		{
 			chisq = fitmodel->pixel_log_evidence_times_two_sbprofile<QScalar,EigenTypes<QScalar>>(chisq0,false);
 		}
-		//chisq = fitmodel->pixel_log_evidence_times_two(chisq0,false,0);
-	//} else if (source_fit_mode==Delaunay_Source) {
-//#ifdef USE_STAN
-		//if constexpr (stan::is_autodiff_v<QScalar>) {
-			//chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,VarmatTypes>(chisq0,false,0);
-		//} else
-//#endif
-		//{
+	} else if (source_fit_mode==Delaunay_Source) {
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<QScalar>) {
+			chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,VarmatTypes>(chisq0,false,0);
+		} else
+#endif
+		{
 			//chisq = fitmodel->pixel_log_evidence_times_two_delaunay<QScalar,PlainTypes>(chisq0,false,0);
-		//}
+			chisq = fitmodel->pixel_log_evidence_times_two(chisq0,false,0); // original version for now, just to be safe
+		}
 	} else {
 		double chisq00;
 		double chisq_doub=0;
@@ -17601,7 +17601,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 						tot_wtime = std::chrono::steady_clock::now() - tot_wtime0;
 						if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime.count() << endl;
 					}
-					image_pixel_grid->clear_sparse_lensing_matrices();
+					//image_pixel_grid->clear_sparse_lensing_matrices();
 					image_pixel_grid->clear_pixel_matrices();
 				}
 			}
@@ -17662,11 +17662,11 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 
 					if (generate_and_invert_lensing_matrix_delaunay<PlainTypes>(imggrid_i,src_i,false,include_potential_perturbations,tot_wtime,tot_wtime0,verbal)==false) { delete[] src_i_list; return 2e30; }
 					if (include_potential_perturbations) {
-						image_pixel_grid->clear_sparse_lensing_matrices();
+						//image_pixel_grid->clear_sparse_lensing_matrices();
 						image_pixel_grid->clear_pixel_matrices(); 
 						for (int it=0; it < potential_correction_iterations; it++) {
 							if (generate_and_invert_lensing_matrix_delaunay<PlainTypes>(imggrid_i,src_i,true,true,tot_wtime,tot_wtime0,verbal)==false) { delete[] src_i_list; return 2e30; }
-							image_pixel_grid->clear_sparse_lensing_matrices();
+							//image_pixel_grid->clear_sparse_lensing_matrices();
 							image_pixel_grid->clear_pixel_matrices(); 
 						}
 						if (generate_and_invert_lensing_matrix_delaunay<PlainTypes>(imggrid_i,src_i,true,adopt_final_sbgrad,tot_wtime,tot_wtime0,verbal)==false) { delete[] src_i_list; return 2e30; } // choose false for 4th arg if you want to reproduce the same first-order SB corrections (meaning it uses SB_grad from previous iteration in first order term)
@@ -17686,7 +17686,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 						tot_wtime = std::chrono::steady_clock::now() - tot_wtime0;
 						if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime.count() << endl;
 					}
-					image_pixel_grid->clear_sparse_lensing_matrices();
+					//image_pixel_grid->clear_sparse_lensing_matrices();
 					image_pixel_grid->clear_pixel_matrices();
 				}
 				if ((include_potential_perturbations) and (!first_order_sb_correction) and (lensgrids != NULL) and (imggrid_i==0)) {
@@ -17977,6 +17977,8 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 #ifdef USE_STAN
 	using stan::math::pow;
 #endif
+
+
 	if (n_data_bands==0) { warn("No image data have been loaded"); return -1e30; }
 	if (n_model_bands < n_data_bands) { warn("Numebr of model bands is not large enough to accommodate number of data bands"); }
 
@@ -18003,6 +18005,8 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 		warn("no parameterized sources have been defined; cannot evaluate chi-square");
 		chisq0=-1e30; return -1e30;
 	}
+
+
 	int *src_i_list = new int[n_image_pixel_grids];
 	for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
 		src_i_list[imggrid_i] = -1;
@@ -18106,117 +18110,6 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 							if (mpi_id==0) cout << "wall time for Delaunay grid creation: " << srcgrid_wtime.count() << endl;
 							srcgrid_wtime0=std::chrono::steady_clock::now();
 						}
-
-						/*
-						if (n_sb==0) die("need an analytic source for testing Delaunay grid stuff");
-						if (matrix_format!=DENSE) die("matrix format needs to be 'dense' for this test");
-						delaunay_srcgrids[src_i]->assign_surface_brightness_from_analytic_source<QScalar>(zsrc_i);
-
-						ImgGrid_Params<MathTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
-						if (image_pixel_grid->assign_pixel_mappings(false,true)==false) {
-							die("FOOK");
-						}
-						if (mpi_id==0) {
-							cout << "Number of active image pixels: " << image_pixel_grid->image_npixels << endl;
-						}
-
-						if (mpi_id==0) cout << "Initializing pixel matrices...\n";
-						image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
-						//std::cout << "Lmatrix dimensions: " << imggrid.Lmatrix_trans_dense.rows() << " x " << imggrid.Lmatrix_trans_dense.cols() << '\n';
-
-						image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
-
-						delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
-						//for (int i=0; i < image_pixel_grid->n_amps; i++) cout << "amp " << i << ": " << value_of(imggrid.amplitude_vector(i)) << endl;
-
-						//image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
-						Eigen::VectorX<QScalar> image_sbvec = Eigen::VectorXd::Zero(image_pixel_grid->image_npixels);
-						//image_sbvec = p.Lmatrix_trans_dense.transpose()*p.amplitude_varvec;
-						for (int i=0; i < image_pixel_grid->image_npixels; i++) {
-							for (int j=0; j < image_pixel_grid->n_amps; j++)
-								image_sbvec[i] += (imggrid.Lmatrix_trans_dense.transpose())(i,j)*imggrid.amplitude_varvec[j];
-						}
-
-						cout << setprecision(16);
-
-#ifdef USE_STAN
-						if constexpr (stan::is_autodiff_v<QScalar>) {
-							stan::math::var tot_sb = 0;
-							//for (int i=0; i < image_pixel_grid->image_npixels; i++) tot_sb += imggrid.image_surface_brightness(i);
-							for (int i=0; i < image_pixel_grid->n_amps; i++) tot_sb += imggrid.amplitude_varvec(i);
-							cout << "tot_sb: " << stan::math::value_of(tot_sb) << endl;
-							tot_sb.grad();
-							int paramnum = 0;
-							double dsb_db = (*(lens_list[0]->lensparams_dif->param[paramnum])).adj();
-							cout << "d(tot_sb)/db = " << dsb_db << endl;
-							image_pixel_grid->clear_pixel_matrices();
-
-							double pval = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[paramnum])));
-							double incs[9] = { 1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9 };
-							for (i=0; i < 9; i++) {
-								double increment = incs[i];
-								lens_list[0]->update_specific_parameter(paramnum,pval+increment);
-								//double bval2 = stan::math::value_of((*(lens_list[0]->lensparams_dif->param[0])));
-								//cout << "bval=" << bval << " bval2=" << bval2 << endl;
-								image_pixel_grid->redo_lensing_calculations<MathTypes>(true);
-
-								create_sourcegrid_from_imggrid_delaunay<MathTypes>(false,0,0,verbal);
-								image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrids[0]);
-								delaunay_srcgrids[0]->set_image_pixel_grid(image_pixel_grid);
-								delaunay_srcgrids[0]->assign_surface_brightness_from_analytic_source<QScalar>(0);
-
-								image_pixel_grid->assign_pixel_mappings(false,true);
-								image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
-								image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
-
-								delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
-								//image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
-								for (int i=0; i < image_pixel_grid->image_npixels; i++) {
-									image_sbvec[i] = 0;
-									for (int j=0; j < image_pixel_grid->n_amps; j++)
-										image_sbvec[i] += (imggrid.Lmatrix_trans_dense.transpose())(i,j)*imggrid.amplitude_varvec[j];
-								}
-
-								stan::math::var sbp = 0;
-								//for (int i=0; i < image_pixel_grid->image_npixels; i++) sbp += imggrid.image_surface_brightness(i);
-								for (int i=0; i < image_pixel_grid->n_amps; i++) sbp += imggrid.amplitude_varvec(i);
-
-								cout << "Total SB(+): " << stan::math::value_of(sbp) << endl;
-
-								image_pixel_grid->clear_pixel_matrices();
-								lens_list[0]->update_specific_parameter(paramnum,pval-increment);
-								image_pixel_grid->redo_lensing_calculations<MathTypes>(true);
-
-								create_sourcegrid_from_imggrid_delaunay<MathTypes>(false,0,0,verbal);
-								image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrids[0]);
-								delaunay_srcgrids[0]->set_image_pixel_grid(image_pixel_grid);
-								delaunay_srcgrids[0]->assign_surface_brightness_from_analytic_source<QScalar>(0);
-
-								image_pixel_grid->assign_pixel_mappings(false,true);
-								image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,true);
-								image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
-								delaunay_srcgrids[src_i]->fill_surface_brightness_vector<MathTypes>();
-								//image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>();
-								for (int i=0; i < image_pixel_grid->image_npixels; i++) {
-									image_sbvec[i] = 0;
-									for (int j=0; j < image_pixel_grid->n_amps; j++)
-										image_sbvec[i] += (imggrid.Lmatrix_trans_dense.transpose())(i,j)*imggrid.amplitude_varvec[j];
-								}
-								stan::math::var sbm = 0;
-								//for (int i=0; i < image_pixel_grid->image_npixels; i++) sbm += imggrid.image_surface_brightness(i);
-								for (int i=0; i < image_pixel_grid->n_amps; i++) sbm += imggrid.amplitude_varvec(i);
-
-								cout << "Total SB(-): " << stan::math::value_of(sbm) << endl;
-
-								double sbder = (stan::math::value_of(sbp)-stan::math::value_of(sbm))/(2*increment);
-								cout << "d(tot_sb)/db from finite diff(inc=" << increment << ") = " << sbder << endl;
-								image_pixel_grid->clear_pixel_matrices();
-								cout << endl;
-							}
-						}
-#endif
-						image_pixel_grid->clear_pixel_matrices();
-						*/
 					}
 				}
 			}
@@ -18240,11 +18133,11 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 
 					if (generate_and_invert_lensing_matrix_delaunay<MathTypes>(imggrid_i,src_i,false,include_potential_perturbations,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
 					if (include_potential_perturbations) {
-						image_pixel_grid->clear_sparse_lensing_matrices();
+						//image_pixel_grid->clear_sparse_lensing_matrices();
 						image_pixel_grid->clear_pixel_matrices(); 
 						for (int it=0; it < potential_correction_iterations; it++) {
 							if (generate_and_invert_lensing_matrix_delaunay<MathTypes>(imggrid_i,src_i,true,true,tot_wtime,tot_wtime0,verbal)==false) return 2e30;
-							image_pixel_grid->clear_sparse_lensing_matrices();
+							//image_pixel_grid->clear_sparse_lensing_matrices();
 							image_pixel_grid->clear_pixel_matrices(); 
 						}
 						if (generate_and_invert_lensing_matrix_delaunay<MathTypes>(imggrid_i,src_i,true,adopt_final_sbgrad,tot_wtime,tot_wtime0,verbal)==false) return 2e30; // choose false for 4th arg if you want to reproduce the same first-order SB corrections (meaning it uses SB_grad from previous iteration in first order term)
@@ -18264,7 +18157,7 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 						tot_wtime = std::chrono::steady_clock::now() - tot_wtime0;
 						if (mpi_id==0) cout << "Total wall time for F-matrix construction + inversion: " << tot_wtime.count() << endl;
 					}
-					image_pixel_grid->clear_sparse_lensing_matrices();
+					//image_pixel_grid->clear_sparse_lensing_matrices();
 					image_pixel_grid->clear_pixel_matrices();
 				}
 				if ((include_potential_perturbations) and (!first_order_sb_correction) and (lensgrids != NULL) and (imggrid_i==0)) {
@@ -18363,12 +18256,6 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool
 				if ((n_image_prior) and (source_fit_mode != Parameterized_Source)) {
 					QScalar chisq_penalty;
 					if ((mpi_id==0) and (verbal)) cout << "Average number of images: " << pixel_avg_n_images << endl;
-//#ifdef USE_STAN
-					//if constexpr (stan::is_autodiff_v<QScalar>) {
-						//cout << "Average number of images: " << pixel_avg_n_images << endl << endl << endl << endl;
-					//}
-//#endif
-
 					if (pixel_avg_n_images < n_image_threshold) {
 						chisq_penalty = pow(1+n_image_threshold-pixel_avg_n_images,n_image_prior_expfac) - 1.0; // constructed so that penalty = 0 and d(penalty)d(n_imgs) = 0 if the average n_image = n_image_threshold
 						logev_times_two_band += chisq_penalty;
@@ -18691,7 +18578,7 @@ QScalar QLens::pixel_log_evidence_times_two_delaunay_test(QScalar &chisq0, const
 					image_pixel_grid->initialize_pixel_matrices<MathTypes>(false,verbal);
 
 					if ((regularization_method != None) and (image_pixel_grid->delaunay_srcgrid != NULL)) {
-						if (image_pixel_grid->create_regularization_matrix<MathTypes>(false,false,false,verbal)==false) { image_pixel_grid->clear_pixel_matrices(); image_pixel_grid->clear_sparse_lensing_matrices(); return -1e30; } // in this case, covariance matrix was not positive definite 
+						if (image_pixel_grid->create_regularization_matrix<MathTypes>(false,false,false,verbal)==false) { image_pixel_grid->clear_pixel_matrices(); return -1e30; } // in this case, covariance matrix was not positive definite 
 					}
 
 					//if ((mpi_id==0) and (verbal)) {
@@ -19386,8 +19273,8 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 
 	bool include_lum_weighting = ((use_lum_weighted_regularization) and (get_lumreg_from_sbweights)) ? true : false;
 	if ((regularization_method != None) and (image_pixel_grid->delaunay_srcgrid != NULL)) {
-		if (image_pixel_grid->create_regularization_matrix<MathTypes>(include_lum_weighting,get_lumreg_from_sbweights,false,verbal)==false) { image_pixel_grid->clear_pixel_matrices(); image_pixel_grid->clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
-		if ((potential_perturbations) and (image_pixel_grid->create_regularization_matrix<MathTypes>(include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { image_pixel_grid->clear_pixel_matrices(); image_pixel_grid->clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
+		if (image_pixel_grid->create_regularization_matrix<MathTypes>(include_lum_weighting,get_lumreg_from_sbweights,false,verbal)==false) { image_pixel_grid->clear_pixel_matrices(); return false; } // in this case, covariance matrix was not positive definite 
+		if ((potential_perturbations) and (image_pixel_grid->create_regularization_matrix<MathTypes>(include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { image_pixel_grid->clear_pixel_matrices();  return false; } // in this case, covariance matrix was not positive definite 
 	}
 
 	if ((mpi_id==0) and (verbal)) {
@@ -19417,6 +19304,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 	bool dense_Fmatrix = ((matrix_format==DENSE) or (matrix_format==DENSE_FMATRIX)) ? true : false;
 	if (matrix_format==DENSE) image_pixel_grid->create_lensing_matrices_from_Lmatrix_dense<MathTypes>(potential_perturbations,false,verbal);
 	else image_pixel_grid->create_lensing_matrices_from_Lmatrix(dense_Fmatrix,potential_perturbations,verbal);
+
 	if (show_wtime) {
 		tot_wtime = std::chrono::steady_clock::now() - tot_wtime0;
 		if (mpi_id==0) cout << "Total wall time before F-matrix inversion: " << tot_wtime.count() << endl;
@@ -19425,7 +19313,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 	//if ((optimize_regparam) and (regularization_method != None) and (image_pixel_grids[imggrid_i]->delaunay_srcgrid != NULL)) 
 	if ((optimize_regparam) and (regularization_method != None) and (!potential_perturbations) and (image_pixel_grid->delaunay_srcgrid != NULL)) {
 		bool pre_srcgrid = ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) ? true : false;
-		if (image_pixel_grid->optimize_regularization_parameter<MathTypes>(dense_Fmatrix,verbal,pre_srcgrid)==false) { image_pixel_grid->clear_pixel_matrices(); image_pixel_grid->clear_sparse_lensing_matrices(); return false; }
+		if (image_pixel_grid->optimize_regularization_parameter<MathTypes>(dense_Fmatrix,verbal,pre_srcgrid)==false) { image_pixel_grid->clear_pixel_matrices();  return false; }
 	}
 	if ((use_lum_weighted_srcpixel_clustering) and (!use_saved_sbweights)) {
 		std::chrono::steady_clock::time_point srcgrid_wtime0;
@@ -19441,13 +19329,13 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		}
 		image_pixel_grid->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
 		delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grid);
-		image_pixel_grid->clear_sparse_lensing_matrices();
+		//image_pixel_grid->clear_sparse_lensing_matrices();
 		image_pixel_grid->clear_pixel_matrices();
 
 		if ((mpi_id==0) and (verbal)) cout << "Assigning pixel mappings (with lum weighting)...\n";
 		if (image_pixel_grid->assign_pixel_mappings(potential_perturbations,verbal)==false) {
 			image_pixel_grid->clear_pixel_matrices();
-			image_pixel_grid->clear_sparse_lensing_matrices();
+			//image_pixel_grid->clear_sparse_lensing_matrices();
 			return false;
 		}
 		if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings (with lum weighting)... (MAYBE REMOVE THIS FROM CHISQ AND DO AHEAD OF TIME?)\n";
@@ -19460,8 +19348,8 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		if ((mpi_id==0) and (verbal)) cout << "Initializing pixel matrices (with lum weighting)...\n";
 		image_pixel_grid->initialize_pixel_matrices<MathTypes>(verbal);
 		if (regularization_method != None) {
-			if (image_pixel_grid->create_regularization_matrix<MathTypes>(include_lum_weighting,get_lumreg_from_sbweights,false,verbal)==false) { image_pixel_grid->clear_pixel_matrices(); image_pixel_grid->clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
-			if ((potential_perturbations) and (image_pixel_grid->create_regularization_matrix<MathTypes>(include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { image_pixel_grid->clear_pixel_matrices(); image_pixel_grid->clear_sparse_lensing_matrices(); return false; } // in this case, covariance matrix was not positive definite 
+			if (image_pixel_grid->create_regularization_matrix<MathTypes>(include_lum_weighting,get_lumreg_from_sbweights,false,verbal)==false) { image_pixel_grid->clear_pixel_matrices(); return false; } // in this case, covariance matrix was not positive definite 
+			if ((potential_perturbations) and (image_pixel_grid->create_regularization_matrix<MathTypes>(include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { image_pixel_grid->clear_pixel_matrices();  return false; } // in this case, covariance matrix was not positive definite 
 		}
 		if (matrix_format==DENSE) {
 			image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
@@ -19490,7 +19378,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 		}
 		if ((mpi_id==0) and (verbal)) cout << "Inverting lens mapping...\n" << flush;
 		if ((optimize_regparam) and (regularization_method != None) and (!potential_perturbations) and (image_pixel_grid->delaunay_srcgrid != NULL)) {
-			if (image_pixel_grid->optimize_regularization_parameter<MathTypes>(dense_Fmatrix,verbal)==false) { image_pixel_grid->clear_pixel_matrices(); image_pixel_grid->clear_sparse_lensing_matrices(); return false; }
+			if (image_pixel_grid->optimize_regularization_parameter<MathTypes>(dense_Fmatrix,verbal)==false) { image_pixel_grid->clear_pixel_matrices();  return false; }
 		}
 	}
 	if ((!optimize_regparam) or (using_autodiff) or (potential_perturbations)) {

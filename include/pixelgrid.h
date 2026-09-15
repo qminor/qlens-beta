@@ -743,6 +743,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 	void generate_gmatrices_sparse();
 	void generate_hmatrices_dense();
 	void generate_gmatrices_dense();
+
 #ifdef USE_STAN
 	void scatter_hmatrix_adjoints(const Eigen::MatrixXd* hmatrix_adj);
 	void scatter_gmatrix_adjoints(const Eigen::MatrixXd* gmatrix_adj);
@@ -1256,7 +1257,41 @@ class ImagePixelGrid : private Sort
 	template <typename QScalar, typename MathTypes>
 	void add_regularization_prior_terms_to_logev_stan(QScalar& logev_times_two, QScalar& loglike_reg, QScalar& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
 
+#ifdef USE_STAN
+	Eigen::MatrixXd gmatrix_adj_accum[4];
+	Eigen::SparseMatrix<double, Eigen::ColMajor> gmatrix_adj_accum_sparse[4];
 
+	//void scatter_gmatrix_adjoints_accum() {
+		//if (gmatrix_adj_accum[0].size() != 0) {
+			//delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj_accum);
+		//}
+	//}
+	//void scatter_gmatrix_adjoints_accum_sparse() {
+		//if (gmatrix_adj_accum_sparse[0].rows() != 0) {
+			//delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj_accum_sparse);
+		//}
+	//}
+
+	void scatter_gmatrix_adjoints_accum() {
+		for (int i = 0; i < 4; i++) {
+			if (gmatrix_adj_accum_sparse[i].size() != 0) {
+				if (gmatrix_adj_accum[i].size() == 0) {
+					gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(gmatrix_adj_accum_sparse[i].rows(), gmatrix_adj_accum_sparse[i].cols());
+				}
+
+				for (int col = 0; col < gmatrix_adj_accum_sparse[i].outerSize(); ++col) {
+					for (Eigen::SparseMatrix<double>::InnerIterator it(gmatrix_adj_accum_sparse[i], col); it; ++it) {
+						gmatrix_adj_accum[i](it.row(), it.col()) += it.value();
+					}
+				}
+			}
+		}
+
+		if (gmatrix_adj_accum[0].size() != 0) {
+			delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj_accum);
+		}
+	}
+#endif
 
 	template <typename MathTypes>
 	void setup_regparam_optimization(const bool dense_Fmatrix=false);

@@ -5479,6 +5479,7 @@ typename MathTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_v
 				callback_wtime0 = std::chrono::steady_clock::now();
 			}
 			reverse_construct_Lmatrix(cache, input_pts_x, input_pts_y, res.adj());
+
 			if (qlens->show_wtime) {
 				callback_wtime = std::chrono::steady_clock::now()-callback_wtime0;
 				if (qlens->mpi_id==0) cout << "Wall time for Lmatrix_dense callback: " << callback_wtime.count() << endl;
@@ -6747,7 +6748,7 @@ void DelaunaySourceGrid::generate_gmatrices_sparse()
 }
 
 #ifdef USE_STAN
-void DelaunaySourceGrid::scatter_gmatrix_adjoints(const Eigen::SparseMatrix<double, Eigen::ColMajor>* gmatrix_adj)
+void DelaunaySourceGrid::scatter_gmatrix_adjoints(const Eigen::SparseMatrix<double,Eigen::ColMajor>* gmatrix_adj)
 {
 	std::chrono::steady_clock::time_point adj_wtime0;
 	std::chrono::duration<double> adj_wtime;
@@ -6765,7 +6766,7 @@ void DelaunaySourceGrid::scatter_gmatrix_adjoints(const Eigen::SparseMatrix<doub
 
 	for (int g = 0; g < n_gridpts; g++) {
 		Lvals[g] = p.voronoi_length[g].val();
-		local_gridpts[g].input( p.gridpts[g][0].val(), p.gridpts[g][1].val());
+		local_gridpts[g].input(p.gridpts[g][0].val(), p.gridpts[g][1].val());
 	}
 
 	// Save original pointers
@@ -6785,16 +6786,16 @@ void DelaunaySourceGrid::scatter_gmatrix_adjoints(const Eigen::SparseMatrix<doub
 
 		switch (info.direction) {
 			case 0:
-				interp_pt.input( local_gridpts[info.gridpt][0] + Lvals[info.gridpt], local_gridpts[info.gridpt][1]);
+				interp_pt.input(local_gridpts[info.gridpt][0] + Lvals[info.gridpt], local_gridpts[info.gridpt][1]);
 				break;
 			case 1:
-				interp_pt.input( local_gridpts[info.gridpt][0] - Lvals[info.gridpt], local_gridpts[info.gridpt][1]);
+				interp_pt.input(local_gridpts[info.gridpt][0] - Lvals[info.gridpt], local_gridpts[info.gridpt][1]);
 				break;
 			case 2:
-				interp_pt.input( local_gridpts[info.gridpt][0], local_gridpts[info.gridpt][1] + Lvals[info.gridpt]);
+				interp_pt.input(local_gridpts[info.gridpt][0], local_gridpts[info.gridpt][1] + Lvals[info.gridpt]);
 				break;
 			default:
-				interp_pt.input( local_gridpts[info.gridpt][0], local_gridpts[info.gridpt][1] - Lvals[info.gridpt]);
+				interp_pt.input(local_gridpts[info.gridpt][0], local_gridpts[info.gridpt][1] - Lvals[info.gridpt]);
 				break;
 		}
 
@@ -6810,10 +6811,10 @@ void DelaunaySourceGrid::scatter_gmatrix_adjoints(const Eigen::SparseMatrix<doub
 		}
 		else {
 			if (qlens->natural_neighbor_interpolation) {
-				find_interpolation_weights_nn( interp_pt[0], interp_pt[1], info.trinum, npts, 0);
+				find_interpolation_weights_nn(interp_pt[0], interp_pt[1], info.trinum, npts, 0);
 			}
 			else {
-				find_interpolation_weights_3pt( interp_pt[0], interp_pt[1], info.trinum, npts, 0);
+				find_interpolation_weights_3pt(interp_pt[0], interp_pt[1], info.trinum, npts, 0);
 			}
 		}
 
@@ -6851,8 +6852,6 @@ void DelaunaySourceGrid::scatter_gmatrix_adjoints(const Eigen::SparseMatrix<doub
 	}
 }
 #endif
-
-
 
 void DelaunaySourceGrid::generate_hmatrices_dense()
 {
@@ -7064,9 +7063,9 @@ void DelaunaySourceGrid::generate_gmatrices_dense()
 			}
 			if (!info.use_nearest_neighbor) {
 				if (qlens->natural_neighbor_interpolation) {
-					find_interpolation_weights_nn(interp_pt[l][0],interp_pt[l][1], trinum, npts, 0);
+					find_interpolation_weights_nn(interp_pt[l][0], interp_pt[l][1], trinum, npts, 0);
 				} else {
-					find_interpolation_weights_3pt(interp_pt[l][0],interp_pt[l][1], trinum, npts, 0);
+					find_interpolation_weights_3pt(interp_pt[l][0], interp_pt[l][1], trinum, npts, 0);
 				}
 			}
 			for (k=0; k < npts; k++) {
@@ -7157,7 +7156,6 @@ void DelaunaySourceGrid::scatter_gmatrix_adjoints(const Eigen::MatrixXd* gmatrix
 		adj_wtime = std::chrono::steady_clock::now() - adj_wtime0;
 		if (qlens->mpi_id==0) cout << "Wall time for scattering gmatrix adjoints: " << adj_wtime.count() << endl;
 	}
-
 }
 #endif
 
@@ -16920,6 +16918,17 @@ void ImagePixelGrid::initialize_pixel_matrices(const bool potential_perturbation
 		//Lmatrix_transpose_ptimg_amps.resize(qlens->n_ptsrc,image_npixels);
 	//}
 
+
+#ifdef USE_STAN
+	if (qlens->regularization_method==SmoothGradient) {
+		if constexpr (stan::is_autodiff_v<typename MathTypes::QScalar>) {
+			stan::math::reverse_pass_callback([this]() {
+				scatter_gmatrix_adjoints_accum();
+			});
+		}
+	}
+#endif
+
 	if ((qlens->mpi_id==0) and (verbal)) cout << "Creating Lmatrix...\n";
 	if (!qlens->psf_supersampling) {
 		if (qlens->matrix_format==DENSE) construct_Lmatrix_dense<MathTypes>(delaunay,potential_perturbations,verbal);
@@ -19366,12 +19375,12 @@ bool ImagePixelGrid::create_regularization_matrix(const bool allow_reg_weighting
 		}
 		if (!successful_Rmatrix) return false;
 		if ((qlens->covariance_kernel_regularization) and (qlens->matrix_format!=DENSE) and (qlens->matrix_format!=DENSE_FMATRIX)) die("inversion method must be set to 'dense' or 'fdense' if a covariance kernel regularization matrix is used");
-		if (!qlens->dense_Rmatrix) {
+		//if (!qlens->dense_Rmatrix) {
 			// If doing a sparse inversion, the determinant of R-matrix will be calculated when doing the inversion; otherwise, must be done here
 			// unless R-matrix is dense (as in the covariance kernel reg.), in which case determinant is found during its construction
 			//imggrid->Rmatrix_determinant_sparse(false);
-			convert_Rmatrix_to_dense<MathTypes>(); // this is only necessary for the autodiff....revisit this!!!!!!!!!!!!!!!!!!!!!!!
-		}
+			//convert_Rmatrix_to_dense<MathTypes>(); // this is only necessary for the autodiff....revisit this!!!!!!!!!!!!!!!!!!!!!!!
+		//}
 	}
 
 	//cout << "Printing Rmatrix..." << endl;
@@ -20006,6 +20015,12 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_sparse(const bool potential
 	// Store R matrix with autodiff callback.
 	//------------------------------------------------------------------
 
+	// Set gmatrix adjoints to zero
+	for (int i=0; i < 4; i++) {
+		gmatrix_adj_accum[i].resize(0,0);
+		gmatrix_adj_accum_sparse[i].resize(0,0);
+	}
+
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<MatType>) {
 		p.Rmatrix_sparse = stan::math::make_callback_var(Rmatrix_sparse_value, [this](const auto& res) mutable {
@@ -20024,12 +20039,14 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_sparse(const bool potential
 			// dR/dG_i = 2 G_i R_adj.
 			//------------------------------------------------------------------
 
-			for (int i = 0; i < 4; ++i) {
-				gmatrix_adj[i] = SparseMatValue( gmatrix_sparse[i] * Rmatrix_adj);
-				gmatrix_adj[i] *= 2.0;
-			}
 
-			delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj);
+
+			for (int i=0; i < 4; i++) {
+				Eigen::SparseMatrix<double,Eigen::ColMajor> contribution = SparseMatValue(gmatrix_sparse[i] * Rmatrix_adj);
+				contribution *= 2.0;
+				if (gmatrix_adj_accum_sparse[i].rows() == 0) gmatrix_adj_accum_sparse[i].resize(contribution.rows(),contribution.cols());
+				gmatrix_adj_accum[i] += contribution;
+			}
 
 			if (qlens->show_wtime) {
 				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
@@ -20182,13 +20199,17 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_sparse(const bool potential
 						}
 					}
 				}
-				gmatrix_adj[dir].resize( npixels, npixels);
-				gmatrix_adj[dir].setFromTriplets(triplets.begin(), triplets.end());
-				gmatrix_adj[dir].makeCompressed();
+				Eigen::SparseMatrix<double,Eigen::ColMajor> contribution(npixels,npixels);
+				contribution.setFromTriplets(triplets.begin(), triplets.end());
+				contribution.makeCompressed();
+
+				 if (gmatrix_adj_accum_sparse[dir].rows() == 0) {
+					  gmatrix_adj_accum_sparse[dir] = contribution;
+				 } else {
+					  gmatrix_adj_accum_sparse[dir] += contribution;
+				 }
 			}
 
-			// Scatter the G adjoints back to the source-grid variables.
-			delaunay_srcgrid->scatter_gmatrix_adjoints( gmatrix_adj);
 			if (qlens->show_wtime) {
 				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
 				if (qlens->mpi_id == 0) {
@@ -20241,6 +20262,13 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_dense(const bool potential_
 	imggrid_params.Rmatrix_dense = Eigen::MatrixXd::Zero(npixels,npixels);
 	for (int i=0; i < 4; i++) imggrid_params.Rmatrix_dense += gmatrix_dense[i].transpose()*gmatrix_dense[i];
 
+	// Set gmatrix adjoints to zero
+	for (int i=0; i < 4; i++) {
+		gmatrix_adj_accum[i].resize(0,0);
+		// reset sparse adjoints just so it doesn't accidentally include the sparse adjoints that might have been previously stored
+		gmatrix_adj_accum_sparse[i].resize(0,0);
+	}
+
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<MatType>) {
 		p.Rmatrix_dense = stan::math::make_callback_var(imggrid_params.Rmatrix_dense, [this] (const auto& res) mutable {
@@ -20251,17 +20279,17 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_dense(const bool potential_
 			}
 
 			auto& Rmatrix_adj = res.adj();
-			Eigen::MatrixXd gmatrix_adj[4];
+
 			for (int i=0; i < 4; i++) {
-				gmatrix_adj[i] = 2*gmatrix_dense[i]*Rmatrix_adj;
+				Eigen::MatrixXd contribution = 2*gmatrix_dense[i]*Rmatrix_adj;
+				if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+				gmatrix_adj_accum[i] += contribution;
 			}
-			delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj);
 
 			if (qlens->show_wtime) {
 				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
 				if (qlens->mpi_id==0) cout << "Wall time for Rmatrix_dense callback: " << callback_wtime.count() << endl;
 			}
-
 		});
 	} 
 #endif
@@ -20288,17 +20316,17 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_dense(const bool potential_
 				callback_wtime0 = std::chrono::steady_clock::now();
 			}
 
-			Eigen::MatrixXd gmatrix_adj[4];
 			for (int i=0; i < 4; i++) {
 				Eigen::MatrixXd hsolve = Rmatrix_factored.solve(gmatrix_dense[i].transpose());
-				gmatrix_adj[i] = 2*res.adj()*hsolve.transpose();
+				Eigen::MatrixXd contribution = 2*res.adj()*hsolve.transpose();
+				if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+				gmatrix_adj_accum[i] += contribution;
 			}
-			delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj);
+
 			if (qlens->show_wtime) {
 				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
 				if (qlens->mpi_id==0) cout << "Wall time for Rmatrix_log_determinant callback: " << callback_wtime.count() << endl;
 			}
-
 		});
 	} else
 #endif
@@ -22523,12 +22551,12 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 						}
 						delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
 					} else if (qlens->regularization_method==SmoothGradient) {
-						Eigen::MatrixXd gmatrix_adj[4];
-						Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 						for (int i=0; i < 4; i++) {
-							gmatrix_adj[i] = gmatrix_dense[i] * (G + G.transpose());
+							Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
+							Eigen::MatrixXd contribution = gmatrix_dense[i] * (G + G.transpose());
+							if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+							gmatrix_adj_accum[i] += contribution;
 						}
-						delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj);
 					}
 				}
 			} else {
@@ -22547,9 +22575,10 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 					Eigen::MatrixXd S = G + G.transpose();
 					for (int i=0; i < 4; i++) {
 						const auto& Gmat = gmatrix_sparse[i];
-						gmatrix_adj[i] = Gmat * S;
+						Eigen::MatrixXd contribution = Gmat * S;
+						if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+						gmatrix_adj_accum[i] += contribution;
 					}
-					delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj);
 				}
 			}
 
@@ -22637,7 +22666,9 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 					for (int i=0; i < 4; i++) {
 						if (qlens->dense_Rmatrix) {
 							Eigen::MatrixXd gsolve = chol->solve(gmatrix_dense[i].transpose());
-							gmatrix_adj[i] = 2.0 * logdet_adj * p.regparam_ptr->val() * gsolve.transpose();
+							Eigen::MatrixXd contribution = 2.0 * logdet_adj * p.regparam_ptr->val() * gsolve.transpose();
+							if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+							gmatrix_adj_accum[i] += contribution;
 						} else {
 							const auto& G = gmatrix_sparse[i];
 							Eigen::MatrixXd Gt = Eigen::MatrixXd::Zero(n_amps,n_amps);
@@ -22645,10 +22676,11 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 								for (typename std::decay_t<decltype(G)>::InnerIterator it(G,row); it; ++it) Gt(it.col(),row) = it.value();
 							}
 							Eigen::MatrixXd gsolve = chol->solve(Gt);
-							gmatrix_adj[i] = 2.0 * logdet_adj * p.regparam_ptr->val() * gsolve.transpose();
+							Eigen::MatrixXd contribution = 2.0 * logdet_adj * p.regparam_ptr->val() * gsolve.transpose();
+							if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+							gmatrix_adj_accum[i] += contribution;
 						}
 					}
-					delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj);
 				}
 			}
 
@@ -22677,940 +22709,6 @@ template void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix<VarmatTypes>(boo
 #endif
 */
 
-/*
-template <typename MathTypes>
-void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
-{
-	using VecType = typename MathTypes::VecType;
-	using MatType = typename MathTypes::MatType;
-	using SparseMatType = typename MathTypes::SparseMatType;
-
-	ImgGrid_Params<MathTypes>& p =
-		assign_imggrid_param_object<MathTypes>();
-
-	if (qlens->show_wtime) {
-		wtime0 = std::chrono::steady_clock::now();
-	}
-
-	// ================================================================
-	// Exact Cholesky factorization
-	// ================================================================
-
-	auto t_chol0 = std::chrono::steady_clock::now();
-
-	Eigen::LLT<Eigen::MatrixXd, Eigen::Upper>
-		Fmatrix_llt(Fmatrix_dense);
-
-	auto t_chol1 = std::chrono::steady_clock::now();
-
-	Eigen::MatrixXd lltmat = Fmatrix_llt.matrixL();
-
-	auto t_amp0 = std::chrono::steady_clock::now();
-
-	Eigen::VectorXd amplitude =
-		Fmatrix_llt.solve(Dvector);
-
-	auto t_amp1 = std::chrono::steady_clock::now();
-
-	double logdet_value = 0.0;
-
-	for (int i = 0; i < n_amps; i++)
-		logdet_value +=
-			std::log(std::abs(lltmat(i,i)));
-
-	logdet_value *= 2.0;
-
-
-#ifdef USE_STAN
-
-	if constexpr (stan::is_autodiff_v<VecType>) {
-
-		// ================================================================
-		// AMPLITUDE CALLBACK
-		// ================================================================
-
-		p.amplitude_vector =
-			stan::math::make_callback_var(
-				amplitude,
-				[this,
-				 amplitude,
-				 chol =
-					std::make_shared<
-						Eigen::LLT<
-							Eigen::MatrixXd,
-							Eigen::Upper>
-					>(Fmatrix_llt)]
-				(const auto& res) mutable {
-
-					std::chrono::steady_clock::time_point
-						callback_wtime0;
-
-					if (qlens->show_wtime) {
-						callback_wtime0 =
-							std::chrono::steady_clock::now();
-					}
-
-					auto& p =
-						assign_imggrid_param_object<MathTypes>();
-
-					const auto& s_adj =
-						res.adj();
-
-					const Eigen::MatrixXd& L =
-						p.Lmatrix_trans_dense.val();
-
-					// ------------------------------------------------
-					// Solve F u = s_adj
-					// ------------------------------------------------
-
-					auto t0 =
-						std::chrono::steady_clock::now();
-
-					Eigen::VectorXd u =
-						chol->solve(s_adj);
-
-					auto t1 =
-						std::chrono::steady_clock::now();
-
-
-					Eigen::VectorXd c =
-						imgpixel_covinv_vector.array()
-						* image_surface_brightness_data.array();
-
-					Eigen::VectorXd a =
-						imgpixel_covinv_vector.array()
-						* (L.transpose() * amplitude).array();
-
-					Eigen::VectorXd b =
-						imgpixel_covinv_vector.array()
-						* (L.transpose() * u).array();
-
-					p.Lmatrix_trans_dense.adj()
-						+=
-						u * c.transpose()
-						- u * a.transpose()
-						- amplitude * b.transpose();
-
-
-					if (qlens->dense_Rmatrix) {
-
-						if (qlens->covariance_kernel_regularization) {
-
-							Eigen::MatrixXd Rmatrix =
-								stan::math::value_of(
-									p.Rmatrix_dense);
-
-							p.regparam_ptr->adj()
-								-= u.dot(Rmatrix * amplitude);
-
-							p.Rmatrix_dense.adj()
-								-=
-								p.regparam_ptr->val()
-								* u
-								* amplitude.transpose();
-
-						} else {
-
-							if (qlens->regularization_method
-								== SmoothCurvature) {
-
-								Eigen::MatrixXd hmatrix_adj[2];
-
-								Eigen::MatrixXd G =
-									-p.regparam_ptr->val()
-									* u
-									* amplitude.transpose();
-
-								for (int i = 0; i < 2; i++) {
-									hmatrix_adj[i] =
-										hmatrix_dense[i]
-										* (G + G.transpose());
-								}
-
-								delaunay_srcgrid
-									->scatter_hmatrix_adjoints(
-										hmatrix_adj);
-
-							} else if (
-								qlens->regularization_method
-								== SmoothGradient) {
-
-								Eigen::MatrixXd gmatrix_adj[4];
-
-								Eigen::MatrixXd G =
-									-p.regparam_ptr->val()
-									* u
-									* amplitude.transpose();
-
-								for (int i = 0; i < 4; i++) {
-									gmatrix_adj[i] =
-										gmatrix_dense[i]
-										* (G + G.transpose());
-								}
-
-								delaunay_srcgrid
-									->scatter_gmatrix_adjoints(
-										gmatrix_adj);
-							}
-						}
-
-					} else {
-
-						if (qlens->regularization_method
-							== SmoothCurvature) {
-
-							Eigen::MatrixXd hmatrix_adj[2];
-
-							Eigen::MatrixXd G =
-								-p.regparam_ptr->val()
-								* u
-								* amplitude.transpose();
-
-							Eigen::MatrixXd S =
-								G + G.transpose();
-
-							for (int i = 0; i < 2; i++) {
-
-								const auto& H =
-									hmatrix_sparse[i];
-
-								hmatrix_adj[i] =
-									H * S;
-							}
-
-							delaunay_srcgrid
-								->scatter_hmatrix_adjoints(
-									hmatrix_adj);
-
-						} else if (
-							qlens->regularization_method
-							== SmoothGradient) {
-
-							Eigen::MatrixXd gmatrix_adj[4];
-
-							Eigen::MatrixXd G =
-								-p.regparam_ptr->val()
-								* u
-								* amplitude.transpose();
-
-							Eigen::MatrixXd S =
-								G + G.transpose();
-
-							for (int i = 0; i < 4; i++) {
-
-								const auto& Gmat =
-									gmatrix_sparse[i];
-
-								gmatrix_adj[i] =
-									Gmat * S;
-							}
-
-							delaunay_srcgrid
-								->scatter_gmatrix_adjoints(
-									gmatrix_adj);
-						}
-					}
-
-
-					if (qlens->show_wtime and
-						qlens->mpi_id == 0) {
-
-						auto dt =
-							std::chrono::duration<double>(
-								t1 - t0);
-
-						cout
-							<< "  amplitude callback: F^-1 solve = "
-							<< dt.count()
-							<< " s"
-							<< endl;
-
-						auto total =
-							std::chrono::duration<double>(
-								std::chrono::steady_clock::now()
-								- callback_wtime0);
-
-						cout
-							<< "  amplitude callback total = "
-							<< total.count()
-							<< " s"
-							<< endl;
-					}
-				});
-
-
-		// ================================================================
-		// LOG-DETERMINANT CALLBACK
-		// ================================================================
-
-		p.Fmatrix_log_determinant =
-			stan::math::make_callback_var(
-				logdet_value,
-				[this,
-				 chol =
-					std::make_shared<
-						Eigen::LLT<
-							Eigen::MatrixXd,
-							Eigen::Upper>
-					>(Fmatrix_llt)]
-				(const auto& res) {
-
-					auto callback_start =
-						std::chrono::steady_clock::now();
-
-					const double logdet_adj =
-						res.adj();
-
-					auto& p =
-						assign_imggrid_param_object<MathTypes>();
-
-
-					// ====================================================
-					// Timing accumulators
-					// ====================================================
-
-					double time_LW =
-						0.0;
-
-					double time_random =
-						0.0;
-
-					double time_solve =
-						0.0;
-
-					double time_Lgradient =
-						0.0;
-
-					double time_LT_Z =
-						0.0;
-
-					double time_lambda =
-						0.0;
-
-					double time_R =
-						0.0;
-
-
-					// ====================================================
-					// COVARIANCE KERNEL REGULARIZATION
-					// ====================================================
-
-					if (qlens->covariance_kernel_regularization) {
-
-						const int Lprobes =
-							qlens->n_hutchinson_probes;
-
-						if (Lprobes <= 0) {
-							die("HUTCHPP_L_PROBES must be > 0");
-						}
-
-
-						// =================================================
-						// Construct LW
-						//
-						// LW = L W
-						// =================================================
-
-						auto t0 =
-							std::chrono::steady_clock::now();
-
-						Eigen::MatrixXd LW =
-							p.Lmatrix_trans_dense.val();
-
-						LW.array().rowwise() *=
-							imgpixel_covinv_vector
-							.transpose()
-							.array();
-
-						auto t1 =
-							std::chrono::steady_clock::now();
-
-						time_LW +=
-							std::chrono::duration<double>(
-								t1 - t0).count();
-
-
-						const int npix =
-							LW.cols();
-
-
-						// =================================================
-						// Generate Rademacher probes
-						// =================================================
-
-						t0 =
-							std::chrono::steady_clock::now();
-
-						std::mt19937_64 rng(
-							123456789ULL);
-
-						Eigen::MatrixXd Omega =
-							Eigen::MatrixXd::Zero(
-								npix,
-								Lprobes);
-
-						for (int j = 0;
-							 j < Lprobes;
-							 ++j) {
-
-							for (int i = 0;
-								 i < npix;
-								 ++i) {
-
-								Omega(i,j) =
-									(rng() & 1ULL)
-									? 1.0
-									: -1.0;
-							}
-						}
-
-						t1 =
-							std::chrono::steady_clock::now();
-
-						time_random +=
-							std::chrono::duration<double>(
-								t1 - t0).count();
-
-
-						// =================================================
-						// Y = LW * Omega
-						//
-						// THIS IS ONE OF THE IMPORTANT OPERATIONS TO
-						// MEASURE.
-						// =================================================
-
-						t0 =
-							std::chrono::steady_clock::now();
-
-						Eigen::MatrixXd Y =
-							LW * Omega;
-
-						t1 =
-							std::chrono::steady_clock::now();
-
-						time_LW +=
-							std::chrono::duration<double>(
-								t1 - t0).count();
-
-
-						// =================================================
-						// Z = F^-1 Y
-						//
-						// THIS IS THE RANDOMIZED LINEAR SOLVE.
-						// =================================================
-
-						t0 =
-							std::chrono::steady_clock::now();
-
-						Eigen::MatrixXd Z =
-							chol->solve(Y);
-
-						t1 =
-							std::chrono::steady_clock::now();
-
-						time_solve +=
-							std::chrono::duration<double>(
-								t1 - t0).count();
-
-
-						// =================================================
-						// Xhat = Z Omega^T
-						//
-						// This forms the complete randomized estimate
-						// of F^-1 L W.
-						//
-						// THIS IS THE OTHER VERY IMPORTANT OPERATION
-						// TO MEASURE.
-						// =================================================
-
-						t0 =
-							std::chrono::steady_clock::now();
-
-						Eigen::MatrixXd Xhat =
-							(Z * Omega.transpose())
-							/
-							static_cast<double>(Lprobes);
-
-						t1 =
-							std::chrono::steady_clock::now();
-
-						time_Lgradient +=
-							std::chrono::duration<double>(
-								t1 - t0).count();
-
-
-						// =================================================
-						// Add L gradient
-						// =================================================
-
-						t0 =
-							std::chrono::steady_clock::now();
-
-						p.Lmatrix_trans_dense.adj()
-							+=
-							2.0
-							* logdet_adj
-							* Xhat;
-
-						t1 =
-							std::chrono::steady_clock::now();
-
-						time_Lgradient +=
-							std::chrono::duration<double>(
-								t1 - t0).count();
-
-
-						// =================================================
-						// Lambda gradient
-						//
-						// We retain the current improved estimator:
-						//
-						// trace(F^-1 R)
-						// =
-						// [n_amps -
-						//  trace(F^-1 L W L^T)]
-						// / lambda
-						//
-						// We explicitly time L^T Z.
-						// =================================================
-
-						if (!qlens->use_covariance_matrix) {
-
-							const Eigen::MatrixXd& L =
-								p.Lmatrix_trans_dense.val();
-
-
-							// ------------------------------------------------
-							// L^T Z
-							//
-							// THIS IS AN IMPORTANT OPERATION TO TIME.
-							// ------------------------------------------------
-
-							t0 =
-								std::chrono::steady_clock::now();
-
-							Eigen::MatrixXd LTZ =
-								L.transpose() * Z;
-
-							t1 =
-								std::chrono::steady_clock::now();
-
-							time_LT_Z +=
-								std::chrono::duration<double>(
-									t1 - t0).count();
-
-
-							// ------------------------------------------------
-							// Trace estimate
-							// ------------------------------------------------
-
-							t0 =
-								std::chrono::steady_clock::now();
-
-							double trace_Finv_LWLt =
-								(Omega.array()
-								 * LTZ.array()).sum()
-								/
-								static_cast<double>(
-									Lprobes);
-
-
-							const double lambda =
-								p.regparam_ptr->val();
-
-							double trace_Finv_R =
-								0.0;
-
-							if (std::abs(lambda) > 0.0) {
-
-								trace_Finv_R =
-									(
-										static_cast<double>(
-											n_amps)
-										-
-										trace_Finv_LWLt
-									)
-									/
-									lambda;
-
-								p.regparam_ptr->adj()
-									+=
-									logdet_adj
-									* trace_Finv_R;
-
-							} else {
-
-								// Should only occur at lambda == 0.
-								// Fall back to exact trace.
-
-								Eigen::MatrixXd Rmatrix =
-									stan::math::value_of(
-										p.Rmatrix_dense);
-
-								Eigen::MatrixXd Rsolve =
-									chol->solve(Rmatrix);
-
-								trace_Finv_R =
-									Rsolve.trace();
-
-								p.regparam_ptr->adj()
-									+=
-									logdet_adj
-									* trace_Finv_R;
-							}
-
-							t1 =
-								std::chrono::steady_clock::now();
-
-							time_lambda +=
-								std::chrono::duration<double>(
-									t1 - t0).count();
-
-
-							// ------------------------------------------------
-							// Diagnostic values
-							// ------------------------------------------------
-
-							if (qlens->show_wtime and
-								qlens->mpi_id == 0) {
-
-								cout
-									<< "  trace(F^-1 L W L^T) = "
-									<< trace_Finv_LWLt
-									<< endl;
-
-								cout
-									<< "  trace(F^-1 R) = "
-									<< trace_Finv_R
-									<< endl;
-							}
-
-
-							// ------------------------------------------------
-							// Covariance matrix gradient
-							//
-							// This is still exact.
-							// ------------------------------------------------
-
-							t0 =
-								std::chrono::steady_clock::now();
-
-							Eigen::MatrixXd Rmatrix =
-								stan::math::value_of(
-									p.Rmatrix_dense);
-
-							Eigen::MatrixXd Rsolve =
-								chol->solve(Rmatrix);
-
-							t1 = std::chrono::steady_clock::now();
-
-							Eigen::MatrixXd covmatrix_adj =
-								-logdet_adj
-								* p.regparam_ptr->val()
-								* Rmatrix
-								* Rsolve;
-								
-							auto t2 = std::chrono::steady_clock::now();
-
-							delaunay_srcgrid
-								->scatter_covmatrix_adjoints(
-									covmatrix_adj,
-									kernel_type,
-									NULL,
-									1.0);
-
-							auto t3 = std::chrono::steady_clock::now();
-
-cout << "R solve: "
-     << std::chrono::duration<double>(t1-t0).count()
-     << endl;
-
-cout << "R * Rsolve: "
-     << std::chrono::duration<double>(t2-t1).count()
-     << endl;
-
-cout << "scatter covariance adjoints: "
-     << std::chrono::duration<double>(t3-t2).count()
-     << endl;
-
-							time_R +=
-								std::chrono::duration<double>(
-									t3 - t0).count();
-						}
-					}
-
-
-					// ====================================================
-					// Other regularization
-					//
-					// Keep the existing code here.
-					// ====================================================
-
-					else {
-
-						Eigen::MatrixXd LW =
-							p.Lmatrix_trans_dense.val();
-
-						LW.array().rowwise() *=
-							imgpixel_covinv_vector
-							.transpose()
-							.array();
-
-						Eigen::MatrixXd X =
-							chol->solve(LW);
-
-						p.Lmatrix_trans_dense.adj()
-							+=
-							logdet_adj
-							* 2.0
-							* X;
-
-						if (qlens->dense_Rmatrix) {
-
-							Eigen::MatrixXd Rsolve =
-								chol->solve(
-									stan::math::value_of(
-										p.Rmatrix_dense));
-
-							p.regparam_ptr->adj()
-								+=
-								logdet_adj
-								* Rsolve.trace();
-
-						} else {
-
-							const auto& R =
-								stan::math::value_of(
-									p.Rmatrix_sparse);
-
-							std::vector<int>
-								active_cols;
-
-							std::vector<int>
-								column_map(
-									n_amps,
-									-1);
-
-							for (int row = 0;
-								 row < R.outerSize();
-								 ++row) {
-
-								for (
-									typename std::decay_t<
-										decltype(R)
-									>::InnerIterator it(R,row);
-									it;
-									++it) {
-
-									int col =
-										it.col();
-
-									if (column_map[col] < 0) {
-
-										column_map[col] =
-											static_cast<int>(
-												active_cols.size());
-
-										active_cols.push_back(
-											col);
-									}
-								}
-							}
-
-							double trace_Finv_R =
-								0.0;
-
-							if (!active_cols.empty()) {
-
-								Eigen::MatrixXd R_rhs =
-									Eigen::MatrixXd::Zero(
-										n_amps,
-										active_cols.size());
-
-								for (
-									int row = 0;
-									row < R.outerSize();
-									++row) {
-
-									for (
-										typename std::decay_t<
-											decltype(R)
-										>::InnerIterator it(R,row);
-										it;
-										++it) {
-
-										int col =
-											it.col();
-
-										R_rhs(
-											row,
-											column_map[col])
-											+= it.value();
-									}
-								}
-
-								Eigen::MatrixXd Rsolve =
-									chol->solve(R_rhs);
-
-								for (int col :
-									 active_cols) {
-
-									trace_Finv_R +=
-										Rsolve(
-											col,
-											column_map[col]);
-								}
-							}
-
-							p.regparam_ptr->adj()
-								+=
-								logdet_adj
-								* trace_Finv_R;
-						}
-					}
-
-
-					// ====================================================
-					// FINAL TIMING REPORT
-					// ====================================================
-
-					if (qlens->show_wtime and
-						qlens->mpi_id == 0) {
-
-						double total =
-							std::chrono::duration<double>(
-								std::chrono::steady_clock::now()
-								- callback_start).count();
-
-
-						cout << endl;
-						cout
-							<< "================================================"
-							<< endl;
-
-						cout
-							<< "Fmatrix_log_determinant callback timing"
-							<< endl;
-
-						cout
-							<< "================================================"
-							<< endl;
-
-						cout
-							<< "  LW construction:        "
-							<< time_LW
-							<< " s"
-							<< endl;
-
-						cout
-							<< "  random generation:      "
-							<< time_random
-							<< " s"
-							<< endl;
-
-						cout
-							<< "  randomized F^-1 solve:  "
-							<< time_solve
-							<< " s"
-							<< endl;
-
-						cout
-							<< "  Z * Omega^T + L adj:    "
-							<< time_Lgradient
-							<< " s"
-							<< endl;
-
-						cout
-							<< "  L^T * Z:                "
-							<< time_LT_Z
-							<< " s"
-							<< endl;
-
-						cout
-							<< "  lambda calculation:     "
-							<< time_lambda
-							<< " s"
-							<< endl;
-
-						cout
-							<< "  R/covariance gradient:  "
-							<< time_R
-							<< " s"
-							<< endl;
-
-						cout
-							<< "  ----------------------------------------------"
-							<< endl;
-
-						cout
-							<< "  TOTAL CALLBACK:         "
-							<< total
-							<< " s"
-							<< endl;
-
-						cout
-							<< "================================================"
-							<< endl;
-					}
-				});
-
-	} else
-
-#endif
-	{
-		p.amplitude_vector = amplitude;
-		p.Fmatrix_log_determinant = logdet_value;
-	}
-
-
-	if (qlens->show_wtime) {
-
-		wtime =
-			std::chrono::steady_clock::now()
-			- wtime0;
-
-		if (qlens->mpi_id == 0) {
-
-			cout
-				<< "Wall time for inverting Fmatrix: "
-				<< wtime.count()
-				<< endl;
-
-			cout
-				<< "  Cholesky factorization: "
-				<< std::chrono::duration<double>(
-					t_chol1 - t_chol0).count()
-				<< " s"
-				<< endl;
-
-			cout
-				<< "  Initial amplitude solve: "
-				<< std::chrono::duration<double>(
-					t_amp1 - t_amp0).count()
-				<< " s"
-				<< endl;
-		}
-
-		wtime0 =
-			std::chrono::steady_clock::now();
-	}
-
-
-	update_source_and_lensgrid_amplitudes<MathTypes>(verbal);
-}
-template
-void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix<PlainTypes>(
-	bool verbal);
-
-#ifdef USE_STAN
-
-template
-void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix<VarmatTypes>(
-	bool verbal);
-
-#endif
-*/
-
 
 template <typename MathTypes>
 void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
@@ -23626,15 +22724,12 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 		wtime0 = std::chrono::steady_clock::now();
 	}
 
-	// =====================================================================
 	// Exact Cholesky factorization of F.
-	//
 	// We retain the exact factorization because:
 	//
 	//   1. n_amps ~ 1000 is small enough that Cholesky is still practical.
 	//   2. The MAP amplitudes should remain exact.
 	//   3. All randomized estimates below use this exact factorization.
-	// =====================================================================
 
 	Eigen::LLT<Eigen::MatrixXd, Eigen::Upper> Fmatrix_llt(Fmatrix_dense);
 
@@ -23648,112 +22743,92 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 
 	Eigen::VectorXd amplitude = Fmatrix_llt.solve(Dvector);
 
-	// =====================================================================
 	// Exact value of log(det F)
-	//
-	// We do NOT approximate the objective value.
-	// Only its derivatives are randomized.
-	// =====================================================================
-
 	double logdet_value = 0.0;
 
 	for (int i = 0; i < n_amps; i++) {
 		logdet_value += std::log(std::abs(lltmat(i,i)));
 	}
-
 	logdet_value *= 2.0;
 
-
 #ifdef USE_STAN
-
 	if constexpr (stan::is_autodiff_v<VecType>) {
-
-		// =================================================================
 		// Exact amplitude callback
-		// =================================================================
-
 		p.amplitude_vector = stan::math::make_callback_var(amplitude, [this, amplitude, chol = std::make_shared<Eigen::LLT< Eigen::MatrixXd, Eigen::Upper>>(Fmatrix_llt)](const auto& res) mutable {
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
 
-					std::chrono::steady_clock::time_point callback_wtime0;
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
 
-					std::chrono::duration<double> callback_wtime;
+			auto& p = assign_imggrid_param_object<MathTypes>();
 
-					if (qlens->show_wtime) {
-						callback_wtime0 = std::chrono::steady_clock::now();
+			const auto& s_adj = res.adj();
+			const Eigen::MatrixXd& L = p.Lmatrix_trans_dense.val();
+
+			// u = F^{-1} s_adj
+			Eigen::VectorXd u = chol->solve(s_adj);
+			Eigen::VectorXd c = imgpixel_covinv_vector.array() * image_surface_brightness_data.array();
+			Eigen::VectorXd a = imgpixel_covinv_vector.array() * (L.transpose() * amplitude).array();
+			Eigen::VectorXd b = imgpixel_covinv_vector.array() * (L.transpose() * u).array();
+
+			// Exact amplitude/MAP contribution to L gradient
+			p.Lmatrix_trans_dense.adj() += u * c.transpose() - u * a.transpose() - amplitude * b.transpose();
+
+			// Regularization contribution from MAP amplitudes (this remains exact).
+			if (qlens->covariance_kernel_regularization) {
+				Eigen::MatrixXd Rmatrix = stan::math::value_of(p.Rmatrix_dense);
+				p.regparam_ptr->adj() -= u.dot(Rmatrix * amplitude);
+				p.Rmatrix_dense.adj() -= p.regparam_ptr->val() * u * amplitude.transpose();
+			}
+			else if (qlens->dense_Rmatrix) {
+				if (qlens->regularization_method == SmoothCurvature) {
+					Eigen::MatrixXd hmatrix_adj[2];
+					Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
+					for (int i = 0; i < 2; i++) {
+						hmatrix_adj[i] = hmatrix_dense[i] * (G + G.transpose());
 					}
-
-
-					auto& p = assign_imggrid_param_object<MathTypes>();
-
-					const auto& s_adj = res.adj();
-
-					const Eigen::MatrixXd& L = p.Lmatrix_trans_dense.val();
-
-					// u = F^{-1} s_adj
-					Eigen::VectorXd u = chol->solve(s_adj);
-					Eigen::VectorXd c = imgpixel_covinv_vector.array() * image_surface_brightness_data.array();
-					Eigen::VectorXd a = imgpixel_covinv_vector.array() * (L.transpose() * amplitude).array();
-					Eigen::VectorXd b = imgpixel_covinv_vector.array() * (L.transpose() * u).array();
-
-					// Exact amplitude/MAP contribution to L gradient
-					p.Lmatrix_trans_dense.adj() += u * c.transpose() - u * a.transpose() - amplitude * b.transpose();
-
-					// Regularization contribution from MAP amplitudes (this remains exact).
-					if (qlens->covariance_kernel_regularization) {
-						if (qlens->dense_Rmatrix) {
-							Eigen::MatrixXd Rmatrix = stan::math::value_of(p.Rmatrix_dense);
-							p.regparam_ptr->adj() -= u.dot(Rmatrix * amplitude);
-							p.Rmatrix_dense.adj() -= p.regparam_ptr->val() * u * amplitude.transpose();
-						}
+					delaunay_srcgrid ->scatter_hmatrix_adjoints( hmatrix_adj);
+				} else if (
+					qlens->regularization_method == SmoothGradient) {
+					for (int i=0; i < 4; i++) {
+						Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
+						Eigen::MatrixXd contribution = gmatrix_dense[i] * (G + G.transpose());
+						if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+						gmatrix_adj_accum[i] += contribution;
 					}
-					else if (qlens->dense_Rmatrix) {
-						if (qlens->regularization_method == SmoothCurvature) {
-							Eigen::MatrixXd hmatrix_adj[2];
-							Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
-							for (int i = 0; i < 2; i++) {
-								hmatrix_adj[i] = hmatrix_dense[i] * (G + G.transpose());
-							}
-							delaunay_srcgrid ->scatter_hmatrix_adjoints( hmatrix_adj);
-						} else if (
-							qlens->regularization_method == SmoothGradient) {
-							Eigen::MatrixXd gmatrix_adj[4];
-							Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
-							for (int i = 0; i < 4; i++) {
-								gmatrix_adj[i] = gmatrix_dense[i] * (G + G.transpose());
-							}
-
-							delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj);
-						}
-					} else {
-						if (qlens->regularization_method==SmoothCurvature) {
-							Eigen::MatrixXd hmatrix_adj[2];
-							Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
-							Eigen::MatrixXd S = G + G.transpose();
-							for (int i=0; i < 2; i++) {
-								const auto& H = hmatrix_sparse[i];
-								hmatrix_adj[i] = H * S;
-							}
-							delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
-						} else if (qlens->regularization_method==SmoothGradient) {
-							Eigen::MatrixXd gmatrix_adj[4];
-							Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
-							Eigen::MatrixXd S = G + G.transpose();
-							for (int i=0; i < 4; i++) {
-								const auto& Gmat = gmatrix_sparse[i];
-								gmatrix_adj[i] = Gmat * S;
-							}
-							delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj);
-						}
+				}
+			} else {
+				if (qlens->regularization_method==SmoothCurvature) {
+					Eigen::MatrixXd hmatrix_adj[2];
+					Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
+					Eigen::MatrixXd S = G + G.transpose();
+					for (int i=0; i < 2; i++) {
+						const auto& H = hmatrix_sparse[i];
+						hmatrix_adj[i] = H * S;
 					}
+					delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
+				} else if (qlens->regularization_method==SmoothGradient) {
 
-					if (qlens->show_wtime) {
-						callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
-						if (qlens->mpi_id == 0) {
-							cout << "Wall time for amplitude callback: " << callback_wtime.count() << endl;
-						}
+					Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
+					Eigen::MatrixXd S = G + G.transpose();
+					for (int i=0; i < 4; i++) {
+						const auto& Gmat = gmatrix_sparse[i];
+						Eigen::MatrixXd contribution = Gmat * S;
+						if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+						gmatrix_adj_accum[i] += contribution;
 					}
-				});
+				}
+			}
 
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+				if (qlens->mpi_id == 0) {
+					cout << "Wall time for amplitude callback: " << callback_wtime.count() << endl;
+				}
+			}
+		});
 
 		// LOG-DETERMINANT CALLBACK
 		p.Fmatrix_log_determinant = stan::math::make_callback_var(logdet_value, [this, chol = std::make_shared<Eigen::LLT<Eigen::MatrixXd, Eigen::Upper>>(Fmatrix_llt)](const auto& res) {
@@ -23922,32 +22997,39 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 					const auto& R = stan::math::value_of(p.Rmatrix_sparse);
 					std::vector<int> active_cols;
 					std::vector<int> column_map(n_amps,-1);
-					for (int row=0; row < R.outerSize(); ++row) {
-						for (typename std::decay_t<decltype(R)>::InnerIterator it(R,row); it; ++it) {
-							int col = it.col();
+
+					for (int col=0; col < R.outerSize(); ++col) {
+						for (typename std::decay_t<decltype(R)>::InnerIterator it(R,col); it; ++it) {
 							if (column_map[col] < 0) {
 								column_map[col] = static_cast<int>(active_cols.size());
 								active_cols.push_back(col);
 							}
 						}
 					}
+
 					double trace_Finv_R = 0.0;
+
 					if (!active_cols.empty()) {
 						Eigen::MatrixXd R_rhs = Eigen::MatrixXd::Zero(n_amps,active_cols.size());
-						for (int row=0; row < R.outerSize(); ++row) {
-							for (typename std::decay_t<decltype(R)>::InnerIterator it(R,row); it; ++it) {
-								int col = it.col();
+						for (int col=0; col < R.outerSize(); ++col) {
+							if (column_map[col] < 0) continue;
+							for (typename std::decay_t<decltype(R)>::InnerIterator it(R,col); it; ++it) {
+								const int row = it.row();
 								R_rhs(row,column_map[col]) += it.value();
 							}
 						}
+
 						Eigen::MatrixXd Rsolve = chol->solve(R_rhs);
-						for (int col : active_cols) trace_Finv_R += Rsolve(col,column_map[col]);
+						for (int col : active_cols) {
+							trace_Finv_R += Rsolve(col,column_map[col]);
+						}
 					}
 					p.regparam_ptr->adj() += logdet_adj * trace_Finv_R;
 				}
 
 				if (qlens->regularization_method==SmoothCurvature) {
 					Eigen::MatrixXd hmatrix_adj[2];
+
 					for (int i=0; i < 2; i++) {
 						if (qlens->dense_Rmatrix) {
 							Eigen::MatrixXd hsolve = chol->solve(hmatrix_dense[i].transpose());
@@ -23955,9 +23037,14 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 						} else {
 							const auto& H = hmatrix_sparse[i];
 							Eigen::MatrixXd Ht = Eigen::MatrixXd::Zero(n_amps,n_amps);
-							for (int row=0; row < H.outerSize(); ++row) {
-								for (typename std::decay_t<decltype(H)>::InnerIterator it(H,row); it; ++it) Ht(it.col(),row) = it.value();
+
+							for (int col=0; col < H.outerSize(); ++col) {
+								for (typename std::decay_t<decltype(H)>::InnerIterator it(H,col); it; ++it) {
+									const int row = it.row();
+									Ht(col,row) = it.value();
+								}
 							}
+
 							Eigen::MatrixXd hsolve = chol->solve(Ht);
 							hmatrix_adj[i] = 2.0 * logdet_adj * p.regparam_ptr->val() * hsolve.transpose();
 						}
@@ -23968,32 +23055,32 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 					for (int i=0; i < 4; i++) {
 						if (qlens->dense_Rmatrix) {
 							Eigen::MatrixXd gsolve = chol->solve(gmatrix_dense[i].transpose());
-							gmatrix_adj[i] = 2.0 * logdet_adj * p.regparam_ptr->val() * gsolve.transpose();
+							Eigen::MatrixXd contribution = 2.0 * logdet_adj * p.regparam_ptr->val() * gsolve.transpose();
+							if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+							gmatrix_adj_accum[i] += contribution;
 						} else {
 							const auto& G = gmatrix_sparse[i];
 							Eigen::MatrixXd Gt = Eigen::MatrixXd::Zero(n_amps,n_amps);
-							for (int row=0; row < G.outerSize(); ++row) {
-								for (typename std::decay_t<decltype(G)>::InnerIterator it(G,row); it; ++it) Gt(it.col(),row) = it.value();
+							for (int col=0; col < G.outerSize(); ++col) {
+								for (typename std::decay_t<decltype(G)>::InnerIterator it(G,col); it; ++it) {
+									const int row = it.row();
+									Gt(col,row) = it.value();
+								}
 							}
 							Eigen::MatrixXd gsolve = chol->solve(Gt);
-							gmatrix_adj[i] = 2.0 * logdet_adj * p.regparam_ptr->val() * gsolve.transpose();
+
+							Eigen::MatrixXd contribution = 2.0 * logdet_adj * p.regparam_ptr->val() * gsolve.transpose();
+							if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+							gmatrix_adj_accum[i] += contribution;
 						}
 					}
-					delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj);
 				}
 			}
 
 			if (qlens->show_wtime) {
-
-				callback_wtime =
-					std::chrono::steady_clock::now()
-					- callback_wtime0;
-
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
 				if (qlens->mpi_id == 0) {
-					cout
-						<< "Wall time for Fmatrix_log_determinant callback: "
-						<< callback_wtime.count()
-						<< endl;
+					cout << "Wall time for Fmatrix_log_determinant callback: " << callback_wtime.count() << endl;
 				}
 			}
 		});
@@ -24011,7 +23098,6 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 		}
 		wtime0 = std::chrono::steady_clock::now();
 	}
-
 	update_source_and_lensgrid_amplitudes<MathTypes>(verbal);
 }
 template void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix<PlainTypes>(bool verbal);
@@ -24049,33 +23135,21 @@ void ImagePixelGrid::invert_lens_mapping_Gmatrix(bool verbal)
 	// ===============================================================
 
 	Eigen::LLT<Eigen::MatrixXd, Eigen::Upper> Gmatrix_llt(Gmatrix);
-
 	Eigen::MatrixXd lltmat = Gmatrix_llt.matrixL();
-
-	Eigen::VectorXd y_amplitude =
-		Gmatrix_llt.solve(Dvector);
-
-	Eigen::VectorXd amplitude =
-		Bmatrix.triangularView<Eigen::Lower>() * y_amplitude;
+	Eigen::VectorXd y_amplitude = Gmatrix_llt.solve(Dvector);
+	Eigen::VectorXd amplitude = Bmatrix.triangularView<Eigen::Lower>() * y_amplitude;
 
 	double logdet_value = 0.0;
-	for (int i = 0; i < n_amps; i++)
+	for (int i = 0; i < n_amps; i++) {
 		logdet_value += std::log(std::abs(lltmat(i,i)));
+	}
 
 	logdet_value *= 2.0;
 
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<VecType>) {
-
-		// -----------------------------------------------------------
-		// B is needed by callbacks after this function has returned,
-		// so capture a copy by value.
-		// -----------------------------------------------------------
-
 		const Eigen::MatrixXd B = Bmatrix;
 
-
-		// ===========================================================
 		// Helper: apply
 		//
 		//   K = L^T W L
@@ -24083,7 +23157,6 @@ void ImagePixelGrid::invert_lens_mapping_Gmatrix(bool verbal)
 		// without explicitly constructing K.
 		//
 		// p.Lmatrix_trans_dense = L^T.
-		// ===========================================================
 
 		auto apply_K = [&, B](const Eigen::VectorXd& x) -> Eigen::VectorXd
 		{
@@ -24100,7 +23173,6 @@ void ImagePixelGrid::invert_lens_mapping_Gmatrix(bool verbal)
 		};
 
 
-		// ===========================================================
 		// Helper: convert an adjoint with respect to B into an
 		// adjoint with respect to C_s = B B^T.
 		//
@@ -24109,7 +23181,6 @@ void ImagePixelGrid::invert_lens_mapping_Gmatrix(bool verbal)
 		// We retain the same convention as the original code:
 		// the upper triangle contains the derivative corresponding
 		// to a symmetric covariance parameter.
-		// ===========================================================
 
 		auto scatter_B_adjoint = [&, B](const Eigen::MatrixXd& B_adj)
 		{
@@ -24220,7 +23291,6 @@ void ImagePixelGrid::invert_lens_mapping_Gmatrix(bool verbal)
 		});
 
 
-		// ===========================================================
 		// G log-determinant callback
 		//
 		//   f = log det G
@@ -24243,104 +23313,6 @@ void ImagePixelGrid::invert_lens_mapping_Gmatrix(bool verbal)
 		// This lets us construct the covariance adjoint directly,
 		// without first constructing B_adj and reverse-differentiating
 		// the Cholesky factor B.
-		// ===========================================================
-
-		/*
-		p.Gmatrix_log_determinant = stan::math::make_callback_var(logdet_value, [&, B, chol = std::make_shared<Eigen::LLT<Eigen::MatrixXd, Eigen::Upper>>(Gmatrix_llt)](const auto& res)
-		{
-			std::chrono::steady_clock::time_point callback_wtime0;
-			std::chrono::duration<double> callback_wtime;
-
-			if (qlens->show_wtime) {
-				callback_wtime0 = std::chrono::steady_clock::now();
-			}
-
-			const double logdet_adj = res.adj();
-			const Eigen::MatrixXd& LT = p.Lmatrix_trans_dense.val();
-			const double lambda = p.regparam_ptr->val();
-
-			// -------------------------------------------------------
-			// 1. L^T / lensing matrix derivative
-			//
-			// d log det G / d L^T = 2 B G^{-1} B^T L^T W.
-			//
-			// First construct B^T L^T W, then solve
-			//
-			// G X = B^T L^T W.
-			// -------------------------------------------------------
-
-			Eigen::MatrixXd X = B.transpose().triangularView<Eigen::Upper>() * LT;
-			X.array().rowwise() *= imgpixel_covinv_vector.transpose().array();
-			chol->solveInPlace(X);
-
-			// X = B G^{-1} B^T L^T W.
-			X = (B.triangularView<Eigen::Lower>() * X).eval();
-
-			p.Lmatrix_trans_dense.adj().noalias() += (2.0 * logdet_adj) * X;
-
-			// -------------------------------------------------------
-			// 2. Covariance derivative
-			//
-			// C_adj = B^{-T}(I - lambda G^{-1})B^{-1}.
-			//
-			// Instead of explicitly constructing G^{-1}, calculate
-			//
-			// Binv = B^{-1}
-			// Y = G^{-1} Binv
-			//
-			// and then
-			//
-			// C_adj = B^{-T}(Binv - lambda Y).
-			// -------------------------------------------------------
-
-			Eigen::MatrixXd Binv = Eigen::MatrixXd::Identity(n_amps, n_amps);
-			B.triangularView<Eigen::Lower>().solveInPlace(Binv);
-
-			Eigen::MatrixXd Y = Binv;
-			chol->solveInPlace(Y);
-
-			Eigen::MatrixXd covmatrix_adj = Binv;
-			covmatrix_adj.noalias() -= lambda * Y;
-
-			B.transpose().triangularView<Eigen::Upper>().solveInPlace(covmatrix_adj);
-
-			covmatrix_adj *= logdet_adj;
-
-			// -------------------------------------------------------
-			// 3. lambda derivative
-			//
-			// d log det G / d lambda = tr(G^{-1}).
-			//
-			// For G = U^T U,
-			//
-			// G^{-1} = U^{-1} U^{-T}
-			//
-			// and therefore
-			//
-			// tr(G^{-1}) = ||U^{-1}||_F^2.
-			// -------------------------------------------------------
-
-			Eigen::MatrixXd Uinv = Eigen::MatrixXd::Identity(n_amps, n_amps);
-			chol->matrixU().solveInPlace(Uinv);
-
-			const double trace_Ginv = Uinv.squaredNorm();
-
-			p.regparam_ptr->adj() += logdet_adj * trace_Ginv;
-
-			// -------------------------------------------------------
-			// 4. Convert the full matrix derivative to the same
-			// symmetric covariance convention used elsewhere.
-			// -------------------------------------------------------
-
-			delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj, kernel_type, NULL, 1.0);
-
-			if ((qlens->show_wtime) and (qlens->mpi_id == 0)) {
-				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
-				cout << "Wall time for Gmatrix_log_determinant callback: " << callback_wtime.count() << endl;
-			}
-		});
-		*/
-
 
 		p.Gmatrix_log_determinant = stan::math::make_callback_var(logdet_value, [&, B, chol = std::make_shared< Eigen::LLT<Eigen::MatrixXd, Eigen::Upper>>(Gmatrix_llt)](const auto& res)
 		{
@@ -24464,11 +23436,9 @@ void ImagePixelGrid::invert_lens_mapping_Gmatrix(bool verbal)
 
 	update_source_and_lensgrid_amplitudes<MathTypes>(verbal);
 }
-template void ImagePixelGrid::invert_lens_mapping_Gmatrix<PlainTypes>(
-	bool verbal);
+template void ImagePixelGrid::invert_lens_mapping_Gmatrix<PlainTypes>(bool verbal);
 #ifdef USE_STAN
-template void ImagePixelGrid::invert_lens_mapping_Gmatrix<VarmatTypes>(
-	bool verbal);
+template void ImagePixelGrid::invert_lens_mapping_Gmatrix<VarmatTypes>(bool verbal);
 #endif
 
 template <typename MathTypes>
@@ -25155,6 +24125,7 @@ void ImagePixelGrid::indexx(int* arr, int* indx, int nn)
 
 void ImagePixelGrid::clear_sparse_lensing_matrices()
 {
+	// This shouldn't be needed anymore!
 	imggrid_params.Rmatrix_sparse = Eigen::SparseMatrix<double, Eigen::ColMajor>();
 	imggrid_params.Rmatrix_pot_sparse = Eigen::SparseMatrix<double, Eigen::ColMajor>();
 #ifdef USE_STAN
@@ -25473,7 +24444,7 @@ void ImagePixelGrid::vectorize_image_pixel_surface_brightness(const bool use_ema
 
 ImagePixelGrid::~ImagePixelGrid()
 {
-	clear_sparse_lensing_matrices();
+	//clear_sparse_lensing_matrices();
 	clear_pixel_matrices();
 	for (int i=0; i <= x_N; i++) {
 		delete[] corner_pts[i];
