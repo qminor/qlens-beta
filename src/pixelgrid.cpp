@@ -2933,7 +2933,10 @@ void DelaunayGrid::create_pixel_grid(QScalar* gridpts_x, QScalar* gridpts_y, con
 {
 #ifdef USE_STAN
 	using stan::math::sqrt;
+	if (stan::is_autodiff_v<QScalar>) using_autodiff = true;
+	else
 #endif
+	using_autodiff = false;
 
 	DelaunayGrid_Params<QScalar>& p = assign_delaunay_param_object<QScalar>();
 	if (p.gridpts != NULL) delete_grid_arrays();
@@ -3995,12 +3998,13 @@ void DelaunayGrid::find_containing_triangle(const double input_pt_x, const doubl
 	}
 }
 
-void DelaunayGrid::generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, const KernelType kernel_type, const double epsilon, double *wgtfac, const bool add_to_covmatrix, const double amplitude)
+void DelaunayGrid::generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, Eigen::MatrixXd& cov_deriv_matrix, const KernelType kernel_type, const double epsilon, double *wgtfac, const bool add_to_covmatrix, const double amplitude) // note: cov_deriv_matrix is only used for matern kernel if autodiff is being used
 {
 	DelaunayGrid_Params<double>& p = assign_delaunay_param_object<double>();
+	double knu, knu_deriv; // the and derivative of the modified bessel function--this should be stored in a matrix if using autodiff with Matern kernel
 	bool extra_weighting = (wgtfac==NULL) ? false : true;
 	int i,j;
-	double sqrdist,x,matern_fac;
+	double sqrdist,u,matern_fac;
 	if (kernel_type==MATERN_KERNEL) {
 		if (p.matern_index <= 0) die("Matern kernel index nu must be greater than zero");
 		matern_fac = pow(2,1-p.matern_index)/Gamma(p.matern_index);
@@ -4008,7 +4012,7 @@ void DelaunayGrid::generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, const
 
 	//double lumreg_rc = qlens->lumreg_rc;
 	double wi, wj, fac;
-	//#pragma omp parallel for private(i,j,sqrdist,x,fac,wi,wj) schedule(dynamic)
+	//#pragma omp parallel for private(i,j,sqrdist,u,fac,wi,wj) schedule(dynamic)
 	for (i=0; i < n_gridpts; i++) {
 		if (extra_weighting) {
 			//wi = exp(-wgtfac[i]);
@@ -4023,7 +4027,6 @@ void DelaunayGrid::generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, const
 		for (j=i+1; j < n_gridpts; j++) {
 			if (!add_to_covmatrix) cov_matrix(i,j) = 0;
 			sqrdist = SQR(p.gridpts[i][0]-p.gridpts[j][0]) + SQR(p.gridpts[i][1]-p.gridpts[j][1]);
-			double xsig = 0.5;
 			if (extra_weighting) {
 				wj = wgtfac[j];
 				fac = wi*wj;
@@ -4034,14 +4037,20 @@ void DelaunayGrid::generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, const
 			}
 			if (amplitude >= 0) fac *= amplitude;
 			if (kernel_type==MATERN_KERNEL) {
-				x = sqrt(2*p.matern_index*sqrdist)/p.kernel_correlation_length;
-				if (x==0) {
-					cout << "Got zero distance: x=0... sqrdist=" << sqrdist << " matern_index=" << p.matern_index << " kernel_correlation_length=" << p.kernel_correlation_length << endl;
+				u = sqrt(2*p.matern_index*sqrdist)/p.kernel_correlation_length;
+				if (u==0) {
+					cout << "Got zero distance: u=0... sqrdist=" << sqrdist << " matern_index=" << p.matern_index << " kernel_correlation_length=" << p.kernel_correlation_length << endl;
 					cout << "i: " << i << " si_x=" << p.gridpts[i][0] << " si_y=" << p.gridpts[i][1] << endl;
 					cout << "j: " << j << " sj_x=" << p.gridpts[j][0] << " sj_y=" << p.gridpts[j][1] << endl;
 					die();
 				}
-				cov_matrix(i,j) += fac*matern_fac*pow(x,p.matern_index)*modified_bessel_function<double>(x,p.matern_index); // Matern kernel
+				double nufac = pow(u,p.matern_index);
+				double knu = modified_bessel_function_K(u,p.matern_index,knu_deriv); // Matern kernel
+				cov_matrix(i,j) += fac*matern_fac*nufac*knu; // Matern kernel
+				if (using_autodiff) {
+					cov_deriv_matrix(i,j) = fac*matern_fac*(nufac*knu_deriv + (p.matern_index*nufac/u)*knu);
+					cov_deriv_matrix(j,i) = cov_deriv_matrix(i,j);
+				}
 			} else if (kernel_type==EXP_KERNEL) {
 				cov_matrix(i,j) += fac*exp(-sqrt(sqrdist)/p.kernel_correlation_length); // exponential kernel (equal to Matern kernel with matern_index = 0.5)
 			} else if (kernel_type==SQUARED_EXP_KERNEL) {
@@ -4053,7 +4062,6 @@ void DelaunayGrid::generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, const
 		}
 	}
 }
-
 
 /*
 #ifdef USE_STAN
@@ -4121,7 +4129,7 @@ void DelaunayGrid::scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_a
 					die();
 				}
 
-				stan::math::var kernel_value = matern_fac * stan::math::pow( x, local_matern_index) * modified_bessel_function<stan::math::var>(x, local_matern_index);
+				stan::math::var kernel_value = matern_fac * stan::math::pow( x, local_matern_index) * modified_bessel_function_K<stan::math::var>(x, local_matern_index);
 				objective += adj * fac * kernel_value;
 			} else if (kernel_type == EXP_KERNEL) {
 				stan::math::var kernel_value = stan::math::exp(-stan::math::sqrt(sqrdist) / local_kernel_correlation_length);
@@ -4158,22 +4166,37 @@ void DelaunayGrid::scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_a
 
 
 #ifdef USE_STAN
-void DelaunayGrid::scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_adj, const KernelType kernel_type, double *wgtfac, const double amplitude)
+void DelaunayGrid::scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_adj, const Eigen::MatrixXd& covmatrix, const Eigen::MatrixXd& cov_deriv_matrix, const KernelType kernel_type, double *wgtfac, const double amplitude, const bool show_wtime)
 {
-	auto& p = assign_delaunay_param_object<stan::math::var>();
+	std::chrono::steady_clock::time_point adj_wtime0;
+	std::chrono::duration<double> adj_wtime;
 
-	if (kernel_type != EXP_KERNEL) {
-		die("scatter_covmatrix_adjoints: analytic implementation currently only supports EXP_KERNEL");
+	if (show_wtime) {
+		adj_wtime0 = std::chrono::steady_clock::now();
 	}
 
+	auto& p = assign_delaunay_param_object<stan::math::var>();
+
 	const double ell = p.kernel_correlation_length.val();
+	const double nu = p.matern_index.val();
+	double ell_squared = ell*ell;
+	double matern_fac, digamma_term;
+	if (kernel_type==MATERN_KERNEL) {
+		if (nu <= 0) die("Matern kernel index nu must be greater than zero");
+		matern_fac = pow(2,1-nu)/Gamma(nu);
+		digamma_term = DiGamma(nu) + M_ln2;
+	}
 
 	if (ell <= 0.0) {
 		die("scatter_covmatrix_adjoints: kernel correlation length <= 0");
 	}
 
+
 	// Accumulate kernel correlation-length gradient locally.
 	double ell_adj = 0.0;
+	double nu_adj = 0.0;
+	//double nu_adj_check = 0.0;
+	//double nu_adj_check2 = 0.0;
 
 	for (int i = 0; i < n_gridpts; ++i) {
 		const double xi = p.gridpts[i][0].val();
@@ -4194,10 +4217,10 @@ void DelaunayGrid::scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_a
 			const double dx = xi - xj;
 			const double dy = yi - yj;
 			const double sqrdist = dx*dx + dy*dy;
-			const double r = std::sqrt(sqrdist);
+			const double r = sqrt(sqrdist);
 
 			if (r == 0.0) {
-				cout << "Got zero distance in EXP_KERNEL: " << "i=" << i << " j=" << j << endl;
+				cout << "Got zero distance in covariance kernel: " << "i=" << i << " j=" << j << endl;
 				die();
 			}
 
@@ -4207,21 +4230,43 @@ void DelaunayGrid::scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_a
 			fac *= wj;
 			if (amplitude >= 0.0) fac *= amplitude;
 
-			// Exponential covariance kernel:
-			const double kernel_value = std::exp(-r / ell);
-			const double weighted_adj = adj * fac;
+			double kernel_value, weighted_adj, kernel_ell_deriv, kernel_r_deriv_over_r;
+			weighted_adj = adj * fac;
+
+			if (kernel_type==MATERN_KERNEL) {
+				double u,uder,matterm,dmatterm,dmatterm2;
+				uder = cov_deriv_matrix(i,j);
+				u = sqrt(2*nu*sqrdist)/ell;
+				kernel_ell_deriv = -uder * u/ell;
+				kernel_r_deriv_over_r = uder * u/sqrdist;
+				matterm = (log(u) - digamma_term)*covmatrix(i,j);
+				dmatterm = fac*matern_fac*pow(u,nu)*dK_dnu(nu,u);
+				dmatterm2 = uder*u/(2*nu);
+				nu_adj += weighted_adj*(matterm + dmatterm + dmatterm2);
+			} else if (kernel_type==EXP_KERNEL) {
+				kernel_value = exp(-r / ell);
+				kernel_ell_deriv = kernel_value * r / ell_squared;
+				kernel_r_deriv_over_r = -kernel_value / (r*ell);
+			} else if (kernel_type==SQUARED_EXP_KERNEL) {
+				kernel_value = exp(-sqrdist / (2.0 * ell_squared));
+				kernel_ell_deriv = kernel_value * sqrdist / (ell*ell_squared);
+				kernel_r_deriv_over_r = -kernel_value / ell_squared;
+			} else {
+				die("unknown kernel type");
+			}
 
 			// Derivative with respect to correlation length
-			ell_adj += weighted_adj * kernel_value * r / (ell * ell);
+			ell_adj += weighted_adj * kernel_ell_deriv;
 
 			// Derivatives with respect to coordinates:
-			// dK/dxi = -K * dx / (ell*r)
-			// dK/dyi = -K * dy / (ell*r)
+			// dK/dxi = dK/dr * dx/r
+			// dK/dyi = dK/dr * dy/r
 			// The derivatives for j have the opposite sign.
 
-			const double common = -weighted_adj * kernel_value / (ell * r);
-			const double dK_dxi = common * dx;
-			const double dK_dyi = common * dy;
+			//double common = -weighted_adj * kernel_value / (ell * r);
+			double common = weighted_adj * kernel_r_deriv_over_r; 
+			double dK_dxi = common * dx;
+			double dK_dyi = common * dy;
 
 			p.gridpts[i][0].adj() += dK_dxi;
 			p.gridpts[i][1].adj() += dK_dyi;
@@ -4230,252 +4275,26 @@ void DelaunayGrid::scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_a
 			p.gridpts[j][1].adj() -= dK_dyi;
 		}
 	}
+	//cout << "matern nu_adj: " << nu_adj << " " << nu_adj_check << " " << nu_adj_check2 << endl;
 
 	// Scatter correlation-length derivative.
 	p.kernel_correlation_length.adj() += ell_adj;
+	//cout << "ell_adj=" << ell_adj << endl;
+	if (kernel_type==MATERN_KERNEL) {
+		// Scatter Matern index derivative.
+		p.matern_index.adj() += nu_adj;
+		//cout << "nu_adj=" << nu_adj << endl;
+	}
+
+	if (show_wtime) {
+		adj_wtime = std::chrono::steady_clock::now() - adj_wtime0;
+		cout << "Wall time for scattering covmatrix adjoints: " << adj_wtime.count() << endl;
+	}
+
 }
 #endif
 
-template <typename QScalar>
-QScalar DelaunayGrid::modified_bessel_function(const QScalar x, const QScalar nu)
-{
-#ifdef USE_STAN
-	using stan::math::abs;
-	using stan::math::sin;
-	using stan::math::cos;
-	using stan::math::sinh;
-	using stan::math::cosh;
-	using stan::math::exp;
-	using stan::math::log;
-#endif
-    const int MAXIT = 10000;
-    const double EPS = 1e-12;
-    const double FPMIN = 1e-30;
-    const double XMIN = 2.0;
-
-    QScalar a, a1, b, c, d, del, del1, delh, dels;
-    QScalar e, f, fact, fact2, ff, gam1, gam2, gammi, gampl;
-    QScalar h, p, pimu, q, q1, q2, qnew;
-    QScalar rkmup, rktemp, rk1, rkmu;
-    QScalar s, sum, sum1, x2, xi, xi2, xmu, xmu2;
-
-    int i, l, nl;
-
-    if ((x <= QScalar(0.0)) or (nu < QScalar(0.0))) {
-        die("cannot have x <=0 or nu < 0 for modified Bessel function");
-    }
-
-    // nl is used only for integer loop bounds / recurrence order.
-    // Use the value of nu, not the autodiff variable itself.
-    nl = static_cast<int>(value_of(nu) + 0.5);
-
-    xmu = nu - QScalar(nl);
-    xmu2 = xmu * xmu;
-
-    xi = QScalar(1.0) / x;
-    xi2 = QScalar(2.0) * xi;
-
-    h = nu * xi;
-
-    if (h < QScalar(FPMIN)) h = QScalar(FPMIN);
-
-    b = xi2 * nu;
-    d = QScalar(0.0);
-    c = h;
-
-    for (i = 0; i < MAXIT; i++) {
-        b += xi2;
-        d = QScalar(1.0) / (b + d);
-        c = b + QScalar(1.0) / c;
-        del = c * d;
-        h = del * h;
-
-        if (abs(del - QScalar(1.0)) <= QScalar(EPS))
-            break;
-    }
-
-    if (i >= MAXIT)
-        die("x too large for Modified bessel function; try asymptotic expansion");
-
-    fact = nu * xi;
-
-    for (l = nl - 1; l >= 0; l--) {
-        fact -= xi;
-    }
-
-    if (x < QScalar(XMIN)) {
-        x2 = QScalar(0.5) * x;
-        pimu = QScalar(M_PI) * xmu;
-        fact = (abs(pimu) < QScalar(EPS)) ? QScalar(1.0) : pimu / sin(pimu);
-
-        d = -log(x2);
-        e = xmu * d;
-
-        fact2 = (abs(e) < QScalar(EPS)) ? QScalar(1.0) : sinh(e) / e;
-
-        if (abs(xmu) > QScalar(1e-8)) {
-            gampl = QScalar(1.0) / Gamma(QScalar(1.0) + xmu);
-            gammi = QScalar(1.0) / Gamma(QScalar(1.0) - xmu);
-            gam2 = (gammi + gampl) * QScalar(0.5);
-            gam1 = (gammi - gampl) / (QScalar(2.0) * xmu);
-        } else {
-            beschb(xmu, gam1, gam2, gampl, gammi);
-        }
-
-        ff = fact * (gam1 * cosh(e) + gam2 * fact2 * d);
-
-        sum = ff;
-
-        e = exp(e);
-
-        p = QScalar(0.5) * e / gampl;
-        q = QScalar(0.5) / (e * gammi);
-
-        c = QScalar(1.0);
-        d = x2 * x2;
-
-        sum1 = p;
-
-        for (i = 1; i < MAXIT; i++) {
-            ff = (QScalar(i) * ff + p + q) / (QScalar(i * i) - xmu2);
-            c *= d / QScalar(i);
-            p /= QScalar(i) - xmu;
-            q /= QScalar(i) + xmu;
-
-            del = c * ff;
-            sum += del;
-            del1 = c * (p - QScalar(i) * ff);
-            sum1 += del1;
-
-            if (abs(del) < abs(sum) * QScalar(EPS))
-                break;
-        }
-
-        if (i > MAXIT) die("Modified Bessel series failed to converge");
-
-        rkmu = sum;
-        rk1 = sum1 * xi2;
-    } else {
-        b = QScalar(2.0) * (QScalar(1.0) + x);
-        d = QScalar(1.0) / b;
-        h = delh = d;
-        q1 = QScalar(0.0);
-        q2 = QScalar(1.0);
-        a1 = QScalar(0.25) - xmu2;
-        q = c = a1;
-        a = -a1;
-        s = QScalar(1.0) + q * delh;
-
-        for (i = 1; i < MAXIT; i++) {
-            a -= QScalar(2 * i);
-            c = -a * c / QScalar(i + 1);
-            qnew = (q1 - b * q2) / a;
-            q1 = q2;
-            q2 = qnew;
-            q += c * qnew;
-            b += QScalar(2.0);
-            d = QScalar(1.0) / (b + a * d);
-            delh = (b * d - QScalar(1.0)) * delh;
-            h += delh;
-            dels = q * delh;
-            s += dels;
-
-            if (abs(dels / s) <= QScalar(EPS))
-                break;
-        }
-
-        if (i >= MAXIT) die("Bessel failed to converge in cf2");
-        h = a1 * h;
-        rkmu = sqrt(QScalar(M_PI) / (QScalar(2.0) * x)) * exp(-x) / s;
-        rk1 = rkmu * (xmu + x + QScalar(0.5) - h) * xi;
-    }
-
-    for (i = 1; i <= nl; i++) {
-        rktemp = (xmu + QScalar(i)) * xi2 * rk1 + rkmu;
-        rkmu = rk1;
-        rk1 = rktemp;
-    }
-    return rkmu;
-}
-template double DelaunayGrid::modified_bessel_function<double>(const double x, const double nu);
-#ifdef USE_STAN
-template stan::math::var DelaunayGrid::modified_bessel_function<stan::math::var>(const stan::math::var x, const stan::math::var nu);
-#endif
-
-template <typename QScalar>
-void DelaunayGrid::beschb(const QScalar x, QScalar& gam1, QScalar& gam2, QScalar& gampl, QScalar& gammi)
-{
-    const int NUSE1 = 7;
-    const int NUSE2 = 8;
-
-    static const double c1[7] = {
-        -1.142022680371168e0,
-         6.5165112670737e-3,
-         3.087090173086e-4,
-        -3.4706269649e-6,
-        -6.9437664e-9,
-         3.67795e-11,
-        -1.356e-13
-    };
-
-    static const double c2[8] = {
-         1.843740587300905e0,
-        -7.68528408447867e-2,
-         1.2719271366546e-3,
-        -4.9717367042e-6,
-        -3.31261198e-8,
-         2.423096e-10,
-        -1.702e-13,
-        -1.49e-15
-    };
-
-    QScalar xx =
-        QScalar(8.0) * x * x - QScalar(1.0);
-
-    gam1 = chebev( QScalar(-1.0), QScalar(1.0), c1, NUSE1, xx);
-
-    gam2 = chebev( QScalar(-1.0), QScalar(1.0), c2, NUSE2, xx);
-
-    gampl = gam2 - x * gam1;
-    gammi = gam2 + x * gam1;
-}
-template void DelaunayGrid::beschb<double>(const double x, double& gam1, double& gam2, double& gampl, double& gammi);
-#ifdef USE_STAN
-template void DelaunayGrid::beschb<stan::math::var>(const stan::math::var x, stan::math::var& gam1, stan::math::var& gam2, stan::math::var& gampl, stan::math::var& gammi);
-#endif
-
-template <typename QScalar>
-QScalar DelaunayGrid::chebev(const QScalar a, const QScalar b, const double* c, const int m, const QScalar x)
-{
-    QScalar d = QScalar(0.0);
-    QScalar dd = QScalar(0.0);
-    QScalar sv, y, y2;
-
-    if ((x - a) * (x - b) > QScalar(0.0))
-        die("x not in range in function chebev");
-
-    y = (QScalar(2.0) * x - a - b) / (b - a);
-
-    y2 = QScalar(2.0) * y;
-
-    for (int j = m - 1; j > 0; j--) {
-
-        sv = d;
-
-        d = y2 * d - dd + QScalar(c[j]);
-
-        dd = sv;
-    }
-
-    return y * d - dd + QScalar(0.5) * QScalar(c[0]);
-}
-template double DelaunayGrid::chebev<double>(const double a, const double b, const double* c, const int m, const double x);
-#ifdef USE_STAN
-template stan::math::var DelaunayGrid::chebev<stan::math::var>(const stan::math::var a, const stan::math::var b, const double* c, const int m, const stan::math::var x);
-#endif
-
-/*
-double DelaunayGrid::modified_bessel_function(const double x, const double nu)
+double DelaunayGrid::modified_bessel_function_K(const double x, const double nu, double& rk_deriv)
 {
 	const int MAXIT=10000;
 	const double EPS=1e-12;
@@ -4521,7 +4340,7 @@ double DelaunayGrid::modified_bessel_function(const double x, const double nu)
 			gam2 = (gammi+gampl)/2;
 			gam1 = (gammi-gampl)/(2*xmu);
 		} else {
-			beschb(xmu,gam1,gam2,gampl,gammi); // this is faster but not as accurate as the above four lines...unless xmu is close to zero, in which case it's MORE accurate
+			get_bessel_gam12(xmu,gam1,gam2,gampl,gammi); // this is faster but not as accurate as the above four lines...unless xmu is close to zero, in which case it's MORE accurate
 		}
 		ff=fact*(gam1*cosh(e)+gam2*fact2*d);
 		sum=ff;
@@ -4581,42 +4400,301 @@ double DelaunayGrid::modified_bessel_function(const double x, const double nu)
 		rkmu=rk1;
 		rk1=rktemp;
 	}
+	rk_deriv = nu*xi*rkmu-rk1;
 	return rkmu;
 }
 
-void DelaunayGrid::beschb(const double x, double& gam1, double& gam2, double& gampl, double& gammi)
+double DelaunayGrid::dK_dnu(const double nu, const double x)
 {
-	const int NUSE1=7, NUSE2=8;
-	static double c1[7] = {
+	double nearest_int = round(nu);
+	
+	// Switch to integer series if within floating-point tolerance of an integer
+	if (fabs(nu - nearest_int) < 1e-3) {
+		return dK_dnu_integer((int)nearest_int, x);
+	} else {
+		if (nu < 2.1) {
+			return dK_dnu_noninteger(nu, x);
+		} else {
+			// resort to finite differences in this regime because the analytic formula suffers from catastrophic cancellation as nu gets higher.
+			static const double hh = 1e-6;
+			return (modified_bessel_function_K(x,nu+hh) - modified_bessel_function_K(x,nu-hh))/(2*hh); 
+		}
+	}
+}
+
+double DelaunayGrid::dK_dnu_noninteger(const double nu, const double x)
+{
+	const double tol = 1e-12;
+
+	const double half_x = x * 0.5;
+	const double half_x_sq = half_x * half_x;
+	const double log_half_x = log(half_x);
+
+	// Initial terms at k = 0
+	double term_p = pow(half_x, nu) / Gamma(nu + 1.0);
+	double term_m = pow(half_x, -nu) / Gamma(-nu + 1.0);
+
+	double I_nu = 0.0;
+	double I_neg_nu = 0.0;
+	double dI_nu = 0.0;
+	double dI_neg_nu = 0.0;
+
+	// Seed digamma recurrence at k = 0 (z = 1 +/- nu)
+	double psi_p = DiGamma(1.0 + nu);
+	double psi_m = DiGamma(1.0 - nu);
+
+	bool conv_pos = false;
+	bool conv_neg = false;
+
+	const int max_iter = 200;
+
+	for (int k = 0; k < max_iter; k++) {
+		if (conv_pos and conv_neg) {
+			break;
+		}
+
+		const double k_plus_1 = (double)(k + 1);
+
+		// --- Process +nu series ---
+		if (!conv_pos) {
+			I_nu += term_p;
+			const double cur_dI_p = term_p * (log_half_x - psi_p);
+			dI_nu += cur_dI_p;
+
+			if (k > 5 && fabs(term_p) < tol * fabs(I_nu) && fabs(cur_dI_p) < tol * fabs(dI_nu)) {
+				conv_pos = true;
+			} else {
+				term_p *= half_x_sq / (k_plus_1 * (k_plus_1 + nu));
+				psi_p += 1.0 / (k_plus_1 + nu); // O(1) Digamma recurrence!
+			}
+		}
+
+		// --- Process -nu series ---
+		if (!conv_neg) {
+			I_neg_nu += term_m;
+			const double cur_dI_m = term_m * (-log_half_x + psi_m);
+			dI_neg_nu += cur_dI_m;
+
+			if (k > 5 && fabs(term_m) < tol * fabs(I_neg_nu) && fabs(cur_dI_m) < tol * fabs(dI_neg_nu)) {
+				conv_neg = true;
+			} else {
+				term_m *= half_x_sq / (k_plus_1 * (k_plus_1 - nu));
+				psi_m += 1.0 / (k_plus_1 - nu); // O(1) Digamma recurrence!
+			}
+		}
+	}
+
+	// Precomputed trigonometric constants
+	const double sin_p = sin(M_PI * nu);
+	const double cos_p = cos(M_PI * nu);
+	const double csc_p = 1.0 / sin_p;
+	
+	const double factor1 = 0.5 * M_PI * csc_p;
+	const double factor2 = M_PI * cos_p * csc_p;
+
+	const double diff_dI = dI_neg_nu - dI_nu;
+	const double K_nu = factor1 * (I_neg_nu - I_nu);
+
+	return factor1 * diff_dI - factor2 * K_nu;
+}
+
+double DelaunayGrid::dK_dnu_integer(int n, double x)
+{
+    if (x <= 0.0) {
+        return NAN;
+    }
+
+    // Handle negative integers via the odd symmetry of the derivative
+    if (n < 0) {
+        return -dK_dnu_integer(-n, x);
+    }
+
+    // Base case: K_nu is an even function around nu=0, so its first derivative is 0
+    if (n == 0) {
+        return 0.0;
+    }
+
+    double half_x = x / 2.0;
+    double sum = 0.0;
+    
+    // Track factorial_k = k! incrementally inside the loop
+    double factorial_k = 1.0; 
+
+    // Dynamically allocate or use a local array for K_k evaluations up to n-1
+    // to benefit from the stable forward recurrence relation.
+    double *K_array = new double[n];
+    if (K_array == NULL) {
+        return NAN; // Memory allocation safety check
+    }
+
+    // Populate K_k(x) values stably using forward recurrence
+    K_array[0] = modified_bessel_function_K(x, 0);
+    if (n > 1) {
+        K_array[1] = modified_bessel_function_K(x, 1);
+        for (int k = 1; k < n - 1; k++) {
+            K_array[k + 1] = K_array[k - 1] + (2.0 * k / x) * K_array[k];
+        }
+    }
+
+    // Evaluate the finite summation from k = 0 to n - 1
+    for (int k = 0; k < n; k++) {
+        if (k > 0) {
+            factorial_k *= k; // k!
+        }
+
+        double num = pow(half_x, k) * K_array[k];
+        double den = factorial_k * (n - k);
+        
+        sum += num / den;
+    }
+
+    // Clean up allocated memory
+    delete[] K_array;
+
+    // Compute front coefficient: (n! / 2) * (x / 2)^(-n)
+    double n_factorial = 1.0;
+    for (int i = 1; i <= n; i++) {
+        n_factorial *= i;
+    }
+    
+    double leading_coefficient = (n_factorial / 2.0) * pow(half_x, -n);
+
+    return leading_coefficient * sum;
+}
+
+/*
+// this may be much faster. try it out!
+
+// -----------------------------------------------------------------------------
+// Chebyshev Interpolator Class for dK / dnu
+// -----------------------------------------------------------------------------
+class ChebyshevdKdNu
+{
+private:
+	double nu;
+	double x_min;
+	double x_max;
+	int degree;
+	double* coeffs; // Dynamically allocated array for polynomial coefficients
+
+public:
+	// Constructor: Allocates memory and builds the coefficient table
+	ChebyshevdKdNu(double nu_, double x_min_, double x_max_, int degree_, double tol = 1e-15)
+		: nu(nu_), x_min(x_min_), x_max(x_max_), degree(degree_), coeffs(nullptr) 
+	{
+		int num_nodes = degree + 1;
+
+		// Allocate dynamic arrays using standard C++ 'new'
+		coeffs = new double[num_nodes];
+		double* node_values = new double[num_nodes];
+
+		// 1. Evaluate exact derivative series at Chebyshev Gauss-Lobatto/Gauss nodes
+		for (int k = 0; k < num_nodes; ++k) {
+			// Map [-1, 1] Chebyshev nodes to [x_min, x_max] domain
+			double node_std = cos(M_PI * (k + 0.5) / num_nodes);
+			double x_node = 0.5 * (x_min + x_max) + 0.5 * (x_max - x_min) * node_std;
+
+			// Compute exact series derivative at this node
+			node_values[k] = dK_dnu(nu, x_node, tol);
+		}
+
+		// 2. Compute Chebyshev coefficients (DCT-I / Discrete Cosine Transform)
+		chebyshev_compute_coeffs(node_values, degree, coeffs);
+
+		// Deallocate temporary buffer using 'delete[]'
+		delete[] node_values;
+	}
+
+	// Destructor: Clean up dynamically allocated array
+	~ChebyshevdKdNu() {
+		delete[] coeffs;
+	}
+
+	// Disable copy constructor and copy assignment to prevent double-free errors
+	ChebyshevdKdNu(const ChebyshevdKdNu&) = delete;
+	ChebyshevdKdNu& operator=(const ChebyshevdKdNu&) = delete;
+
+	// Fast O(1) evaluation via Clenshaw's recurrence
+	double evaluate(double x, double tol = 1e-15) const {
+		if (x >= x_min and x <= x_max) {
+			return chebyshev_evaluate(x_min, x_max, coeffs, degree, x);
+		}
+
+		// Fallback to exact series calculation if x is out-of-bounds
+		return dK_dnu(nu, x, tol);
+	}
+
+	// Accessors
+	double get_nu() const { return nu; }
+	double get_xmin() const { return x_min; }
+	double get_xmax() const { return x_max; }
+};
+*/
+
+//int main() {
+	//double nu = 1.5;
+	//double min_distance = 1e-4;
+	//double max_distance = 20.0;
+	//int degree = 14;
+//
+	//// Constructing the object automatically allocates and populates the table
+	//ChebyshevdKdNu dK_table(nu, min_distance, max_distance, degree, 1e-15);
+//
+	//std::vector<double> spatial_distances = {0.5, 1.2, 3.4, 8.0, 15.2};
+	//std::vector<double> cov_derivatives(spatial_distances.size());
+//
+	//// Evaluate over spatial distance points
+	//for (size_t i = 0; i < spatial_distances.size(); ++i) {
+		//cov_derivatives[i] = dK_table.evaluate(spatial_distances[i]);
+	//}
+//
+	//// Memory is automatically released via destructor (~ChebyshevdKdNu) when scope ends
+	//return 0;
+//}
+
+void DelaunayGrid::get_bessel_gam12(const double x, double& gam1, double& gam2, double& gampl, double& gammi)
+{
+	double c1[7] = {
 		-1.142022680371168e0, 6.5165112670737e-3, 3.087090173086e-4, -3.4706269649e-6, -6.9437664e-9, 3.67795e-11, -1.356e-13 };
-	static double c2[8] = {
+	double c2[8] = {
 		1.843740587300905e0, -7.68528408447867e-2, 1.2719271366546e-3, -4.9717367042e-6, -3.31261198e-8, 2.423096e-10, -1.702e-13, -1.49e-15 };
 	double xx = 8*x*x-1.0;
-	static double *c1p, *c2p;
+	double *c1p, *c2p;
 	c1p = c1;
 	c2p = c2;
-	gam1=chebev(-1.0,1.0,c1p,NUSE1,xx);
-	gam2=chebev(-1.0,1.0,c2p,NUSE2,xx);
+	gam1=chebyshev_evaluate(-1.0,1.0,c1p,7,xx);
+	gam2=chebyshev_evaluate(-1.0,1.0,c2p,8,xx);
 	gampl = gam2 - x*gam1;
 	gammi = gam2 + x*gam1;
 }
 
-double DelaunayGrid::chebev(const double a, const double b, double* c, const int m, const double x)
+void DelaunayGrid::chebyshev_compute_coeffs(const double* f_at_nodes, const int n, double* coeffs)
+{
+	int k,j;
+	double fac,sum;
+	fac = 2.0/n;
+	for (j=0; j < n; j++) {
+		sum = 0.0;
+		for (k=0; k < n; k++) {
+			sum += f_at_nodes[k]*cos(M_PI*j*(k+0.5)/n);
+			coeffs[j] = fac*sum;
+		}
+	}
+}
+
+double DelaunayGrid::chebyshev_evaluate(const double a, const double b, const double* coeffs, const int m, const double x)
 {
 	double d=0.0,dd=0.0,sv,y,y2;
 	int j;
-	if ((x-a)*(x-b) > 0.0) die("x not in range in function chebev");
+	if ((x-a)*(x-b) > 0.0) die("x not in range in function chebyshev_evaluate");
 	y2 = 2.0*(y=(2.0*x-a-b)/(b-a));
 	for (j=m-1; j > 0; j--) {
 		sv=d;
-		d=y2*d-dd+c[j];
+		d=y2*d-dd+coeffs[j];
 		dd=sv;
 	}
-	return y*d-dd+0.5*c[0];
+	return y*d-dd+0.5*coeffs[0];
 }
-*/
-
-
 
 void DelaunayGrid::delete_grid_arrays()
 {
@@ -16920,10 +16998,18 @@ void ImagePixelGrid::initialize_pixel_matrices(const bool potential_perturbation
 
 
 #ifdef USE_STAN
-	if (qlens->regularization_method==SmoothGradient) {
-		if constexpr (stan::is_autodiff_v<typename MathTypes::QScalar>) {
+	if constexpr (stan::is_autodiff_v<typename MathTypes::QScalar>) {
+		if ((qlens->regularization_method==Matern_Kernel) or (qlens->regularization_method==Exponential_Kernel) or (qlens->regularization_method==Squared_Exponential_Kernel)) {
+			stan::math::reverse_pass_callback([this]() {
+				scatter_covmatrix_adjoints_accum();
+			});
+		} else if (qlens->regularization_method==SmoothGradient) {
 			stan::math::reverse_pass_callback([this]() {
 				scatter_gmatrix_adjoints_accum();
+			});
+		} else if (qlens->regularization_method==SmoothCurvature) {
+			stan::math::reverse_pass_callback([this]() {
+				scatter_hmatrix_adjoints_accum();
 			});
 		}
 	}
@@ -19569,242 +19655,6 @@ template void ImagePixelGrid::generate_Rmatrix_norm_dense<PlainTypes>(const bool
 template void ImagePixelGrid::generate_Rmatrix_norm_dense<VarmatTypes>(const bool potential_perturbations);
 #endif
 
-template <typename MathTypes>
-void ImagePixelGrid::generate_Rmatrix_from_hmatrices_sparse(const bool potential_perturbations)
-{
-	using MatType = typename MathTypes::MatType;
-	using SparseMatValue = Eigen::SparseMatrix<double, Eigen::ColMajor>;
-	using SparseMatValueColMajor = Eigen::SparseMatrix<double, Eigen::ColMajor>;
-	using DenseMatValue = Eigen::MatrixXd;
-
-	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
-
-	if (qlens->show_wtime) {
-		wtime0 = std::chrono::steady_clock::now();
-	}
-
-	if (!potential_perturbations) {
-		if (qlens->source_fit_mode==Delaunay_Source) {
-			delaunay_srcgrid->generate_hmatrices_sparse();
-		}
-		else if (qlens->source_fit_mode==Cartesian_Source) {
-			die("cannot generate sparse hmatrix for Cartesian source (not implemented)");
-			//cartesian_srcgrid->generate_hmatrices_sparse();
-		}
-		else die("hmatrix not supported for sources other than Delaunay or Cartesian");
-	} else {
-		die("cannot generate sparse hmatrix for potential perturbations (not implemented)");
-		//lensgrid->generate_hmatrices_sparse(interpolate);
-	}
-
-	SparseMatValue H0tH0 = SparseMatValue(hmatrix_sparse[0].transpose()*hmatrix_sparse[0]);
-	SparseMatValue H1tH1 = SparseMatValue(hmatrix_sparse[1].transpose()*hmatrix_sparse[1]);
-	SparseMatValue Rmatrix_value = SparseMatValue(H0tH0+H1tH1);
-	Rmatrix_value.makeCompressed();
-
-#ifdef USE_STAN
-	if constexpr (stan::is_autodiff_v<MatType>) {
-		p.Rmatrix_sparse = stan::math::make_callback_var(Rmatrix_value, [this] (const auto& res) mutable {
-			std::chrono::steady_clock::time_point callback_wtime0;
-			std::chrono::duration<double> callback_wtime;
-
-			if (qlens->show_wtime) {
-				callback_wtime0 = std::chrono::steady_clock::now();
-			}
-
-			const auto& Rmatrix_adj = res.adj();
-			SparseMatValue hmatrix_adj[2];
-
-			for (int i=0; i<2; i++) {
-				hmatrix_adj[i] = SparseMatValue(2.0*hmatrix_sparse[i]*Rmatrix_adj);
-				hmatrix_adj[i].makeCompressed();
-			}
-
-			delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
-
-			if (qlens->show_wtime) {
-				callback_wtime = std::chrono::steady_clock::now()-callback_wtime0;
-				if (qlens->mpi_id==0) cout << "Wall time for Rmatrix_sparse callback: " << callback_wtime.count() << endl;
-			}
-		});
-	} else
-#endif
-	{
-		p.Rmatrix_sparse = Rmatrix_value;
-	}
-
-	if (qlens->show_wtime) {
-		wtime = std::chrono::steady_clock::now()-wtime0;
-		if (qlens->mpi_id==0) cout << "Wall time for calculating Rmatrix_sparse: " << wtime.count() << endl;
-	}
-	SparseMatValueColMajor Rmatrix_factor_input = SparseMatValueColMajor(Rmatrix_value);
-	Rmatrix_factor_input.makeCompressed();
-
-	using SparseLLT = Eigen::SimplicialLLT<SparseMatValueColMajor, Eigen::Lower>;
-	auto Rmatrix_factored = std::make_shared<SparseLLT>();
-	Rmatrix_factored->compute(Rmatrix_factor_input);
-
-	if (Rmatrix_factored->info()!=Eigen::Success) {
-		warn("Sparse Cholesky decomposition of Rmatrix was not successful; Rmatrix is not positive definite");
-	}
-
-	SparseMatValueColMajor Lmatrix = SparseMatValueColMajor(Rmatrix_factored->matrixL());
-	double Rmatrix_logdet = 0.0;
-
-	for (Eigen::Index i=0; i<Lmatrix.rows(); i++) {
-		Rmatrix_logdet += std::log(Lmatrix.coeff(i,i));
-	}
-
-	Rmatrix_logdet *= 2.0;
-
-#ifdef USE_STAN
-	if constexpr (stan::is_autodiff_v<MatType>) {
-		p.Rmatrix_log_determinant = stan::math::make_callback_var(Rmatrix_logdet, [this, Rmatrix_factored] (const auto& res) mutable {
-			std::chrono::steady_clock::time_point callback_wtime0;
-			std::chrono::duration<double> callback_wtime;
-
-			if (qlens->show_wtime) {
-				callback_wtime0 = std::chrono::steady_clock::now();
-			}
-
-			SparseMatValue hmatrix_adj[2];
-
-			for (int i=0; i<2; i++) {
-				DenseMatValue hmatrix_transpose_dense = DenseMatValue(hmatrix_sparse[i].transpose());
-				DenseMatValue hsolve = Rmatrix_factored->solve(hmatrix_transpose_dense);
-
-				hmatrix_adj[i].resize(hmatrix_sparse[i].rows(), hmatrix_sparse[i].cols());
-				hmatrix_adj[i].reserve(hmatrix_sparse[i].nonZeros());
-
-				for (int row=0; row<hmatrix_sparse[i].rows(); row++) {
-					for (typename std::decay_t<decltype(hmatrix_sparse[i])>::InnerIterator it(hmatrix_sparse[i], row); it; ++it) {
-						hmatrix_adj[i].insert(row, it.col()) = 2.0*res.adj()*hsolve(it.col(), row);
-					}
-				}
-
-				hmatrix_adj[i].makeCompressed();
-			}
-
-			delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
-
-			if (qlens->show_wtime) {
-				callback_wtime = std::chrono::steady_clock::now()-callback_wtime0;
-				if (qlens->mpi_id==0) cout << "Wall time for Rmatrix_log_determinant sparse callback: " << callback_wtime.count() << endl;
-			}
-		});
-	} else
-#endif
-	{
-		p.Rmatrix_log_determinant = Rmatrix_logdet;
-	}
-}
-template void ImagePixelGrid::generate_Rmatrix_from_hmatrices_sparse<PlainTypes>(const bool potential_perturbations);
-#ifdef USE_STAN
-template void ImagePixelGrid::generate_Rmatrix_from_hmatrices_sparse<VarmatTypes>(const bool potential_perturbations);
-#endif
-
-template <typename MathTypes>
-void ImagePixelGrid::generate_Rmatrix_from_hmatrices_dense(const bool potential_perturbations)
-{
-	using MatType = typename MathTypes::MatType;
-	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
-	if (qlens->show_wtime) {
-		wtime0 = std::chrono::steady_clock::now();
-	}
-	int npixels;
-	if (!potential_perturbations) {
-		npixels = source_npixels_inv;
-	} else {
-		npixels = lensgrid_npixels;
-	}
-
-	if (!potential_perturbations) {
-		if (qlens->source_fit_mode==Delaunay_Source) {
-			delaunay_srcgrid->generate_hmatrices_dense();
-		}
-		else if (qlens->source_fit_mode==Cartesian_Source) {
-			die("cannot generate dense hmatrix for Cartesian source (not implemented)");
-			//cartesian_srcgrid->generate_hmatrices();
-		}
-		else die("hmatrix not supported for sources other than Delaunay or Cartesian");
-	} else {
-		die("cannot generate dense hmatrix for potential perturbations (not implemented)");
-		//lensgrid->generate_hmatrices(interpolate); // in LensPixelGrid, the same function handles a Cartesian versus Delaunay grid
-	}
-
-	imggrid_params.Rmatrix_dense = Eigen::MatrixXd::Zero(npixels,npixels);
-	imggrid_params.Rmatrix_dense += hmatrix_dense[0].transpose()*hmatrix_dense[0];
-	imggrid_params.Rmatrix_dense += hmatrix_dense[1].transpose()*hmatrix_dense[1];
-
-#ifdef USE_STAN
-	if constexpr (stan::is_autodiff_v<MatType>) {
-		p.Rmatrix_dense = stan::math::make_callback_var(imggrid_params.Rmatrix_dense, [this] (const auto& res) mutable {
-			std::chrono::steady_clock::time_point callback_wtime0;
-			std::chrono::duration<double> callback_wtime;
-			if (qlens->show_wtime) {
-				callback_wtime0 = std::chrono::steady_clock::now();
-			}
-
-			auto& Rmatrix_adj = res.adj();
-			Eigen::MatrixXd hmatrix_adj[2];
-			for (int i=0; i < 2; i++) {
-				hmatrix_adj[i] = 2*hmatrix_dense[i]*Rmatrix_adj;
-			}
-			delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
-
-			if (qlens->show_wtime) {
-				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
-				if (qlens->mpi_id==0) cout << "Wall time for Rmatrix_dense callback: " << callback_wtime.count() << endl;
-			}
-
-		});
-	} 
-#endif
-
-	if (qlens->show_wtime) {
-		wtime = std::chrono::steady_clock::now() - wtime0;
-		if (qlens->mpi_id==0) cout << "Wall time for calculating Rmatrix: "  << wtime.count() << endl;
-	}
-
-	Eigen::LLT<Eigen::MatrixXd, Eigen::Upper> Rmatrix_factored;
-	Rmatrix_factored.compute(imggrid_params.Rmatrix_dense);
-	if(Rmatrix_factored.info() != Eigen::Success) {
-		warn("Cholesky decomposition of Rmatrix was not successful; Rmatrix is not positive definite");
-	}
-	const auto& LU  = Rmatrix_factored.matrixLLT();
-	double Rmatrix_logdet = 2.0*LU.diagonal().array().log().sum();
-
-#ifdef USE_STAN
-	if constexpr (stan::is_autodiff_v<MatType>) {
-		p.Rmatrix_log_determinant = stan::math::make_callback_var(Rmatrix_logdet, [this, Rmatrix_factored] (const auto& res) mutable {
-			std::chrono::steady_clock::time_point callback_wtime0;
-			std::chrono::duration<double> callback_wtime;
-			if (qlens->show_wtime) {
-				callback_wtime0 = std::chrono::steady_clock::now();
-			}
-			Eigen::MatrixXd hmatrix_adj[2];
-			for (int i=0; i < 2; i++) {
-				Eigen::MatrixXd hsolve = Rmatrix_factored.solve(hmatrix_dense[i].transpose());
-				hmatrix_adj[i] = 2*res.adj()*hsolve.transpose();
-			}
-			delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
-			if (qlens->show_wtime) {
-				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
-				if (qlens->mpi_id==0) cout << "Wall time for Rmatrix_log_determinant callback: " << callback_wtime.count() << endl;
-			}
-
-		});
-	} else
-#endif
-	{
-		p.Rmatrix_log_determinant = Rmatrix_logdet;
-	}
-}
-template void ImagePixelGrid::generate_Rmatrix_from_hmatrices_dense<PlainTypes>(const bool potential_perturbations);
-#ifdef USE_STAN
-template void ImagePixelGrid::generate_Rmatrix_from_hmatrices_dense<VarmatTypes>(const bool potential_perturbations);
-#endif
-
 
 /*
  * Compute the selected inverse of A from a sparse LL^T
@@ -19893,6 +19743,392 @@ static std::shared_ptr<Eigen::MatrixXd> compute_selected_inverse_takahashi(const
 
 	return S;
 }
+
+template <typename MathTypes>
+void ImagePixelGrid::generate_Rmatrix_from_hmatrices_sparse(const bool potential_perturbations)
+{
+	using MatType = typename MathTypes::MatType;
+	using SparseMatValue = Eigen::SparseMatrix<double, Eigen::ColMajor>;
+	using SparseMatColMajor = Eigen::SparseMatrix<double, Eigen::ColMajor>;
+
+	using CholType = Eigen::SimplicialLLT<SparseMatColMajor, Eigen::Lower, Eigen::AMDOrdering<int>>;
+
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
+
+	if (qlens->dense_Rmatrix) {
+		generate_Rmatrix_from_hmatrices_dense<MathTypes>(potential_perturbations);
+		return;
+	}
+
+	if (qlens->show_wtime) {
+		wtime0 = std::chrono::steady_clock::now();
+	}
+
+	int npixels;
+
+	if (!potential_perturbations) {
+		npixels = source_npixels_inv;
+	} else {
+		npixels = lensgrid_npixels;
+	}
+
+	if (!potential_perturbations) {
+		if (qlens->source_fit_mode == Delaunay_Source) {
+			delaunay_srcgrid->generate_hmatrices_sparse();
+		}
+		else if (qlens->source_fit_mode == Cartesian_Source) {
+			die("cannot generate sparse hmatrix for Cartesian source (not implemented)");
+		}
+		else {
+			die("hmatrix not supported for sources other than Delaunay or Cartesian");
+		}
+	}
+	else {
+		die("cannot generate sparse hmatrix for potential perturbations (not implemented)");
+	}
+
+	// Construct R = sum_i H_i^T H_i
+	SparseMatColMajor Rmatrix_sparse_value(npixels, npixels);
+	Rmatrix_sparse_value.setZero();
+
+	for (int i = 0; i < 2; ++i) {
+		Rmatrix_sparse_value += hmatrix_sparse[i].transpose() * hmatrix_sparse[i];
+	}
+
+	Rmatrix_sparse_value.makeCompressed();
+
+	// Set hmatrix adjoints to zero
+	for (int i = 0; i < 2; ++i) {
+		hmatrix_adj_accum[i].resize(0,0);
+		hmatrix_adj_accum_sparse[i].resize(0,0);
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<MatType>) {
+		p.Rmatrix_sparse = stan::math::make_callback_var(Rmatrix_sparse_value, [this](const auto& res) mutable {
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			const auto& Rmatrix_adj = res.adj();
+
+			//------------------------------------------------------------------
+			// dR/dH_i = 2 H_i R_adj.
+			//------------------------------------------------------------------
+
+			for (int i = 0; i < 2; ++i) {
+				Eigen::SparseMatrix<double,Eigen::ColMajor> contribution = SparseMatValue(hmatrix_sparse[i] * Rmatrix_adj);
+				contribution *= 2.0;
+				contribution.makeCompressed();
+
+				if (hmatrix_adj_accum_sparse[i].rows() == 0) {
+					hmatrix_adj_accum_sparse[i] = contribution;
+				} else {
+					hmatrix_adj_accum_sparse[i] += contribution;
+				}
+			}
+
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+				if (qlens->mpi_id == 0) {
+					cout << "Wall time for Rmatrix_sparse callback: " << callback_wtime.count() << endl;
+				}
+			}
+		});
+	}
+	else
+#endif
+	{
+		p.Rmatrix_sparse = Rmatrix_sparse_value;
+	}
+
+	if (qlens->show_wtime) {
+		wtime = std::chrono::steady_clock::now() - wtime0;
+		if (qlens->mpi_id == 0) {
+			cout << "Wall time for calculating sparse Rmatrix: " << wtime.count() << endl;
+		}
+	}
+
+	// Sparse Cholesky factorization
+	//------------------------------------------------------------------
+
+	auto Rmatrix_factored = std::make_shared<CholType>();
+
+	Rmatrix_factored->compute(Rmatrix_sparse_value);
+
+	if (Rmatrix_factored->info() != Eigen::Success) {
+		warn("Sparse Cholesky decomposition of Rmatrix was not successful; Rmatrix is not positive definite");
+	}
+
+	double Rmatrix_logdet = 0.0;
+
+	if (Rmatrix_factored->info() == Eigen::Success) {
+		const SparseMatColMajor Lmatrix = Rmatrix_factored->matrixL();
+
+		for (Eigen::Index i = 0; i < Lmatrix.rows(); ++i) {
+			const double diag = Lmatrix.coeff(i, i);
+
+			if (diag <= 0.0) {
+				warn("non-positive diagonal encountered in sparse Cholesky factor while calculating log(det(R))");
+				Rmatrix_logdet = std::numeric_limits<double>::quiet_NaN();
+				break;
+			}
+
+			Rmatrix_logdet += std::log(diag);
+		}
+
+		Rmatrix_logdet *= 2.0;
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<MatType>) {
+		// Compute only the inverse entries required by the Cholesky
+		// sparsity pattern using the Takahashi selected-inverse algorithm.
+
+		auto Rmatrix_selected_inverse = std::shared_ptr<Eigen::MatrixXd>();
+
+		if (Rmatrix_factored->info() == Eigen::Success) {
+			if (qlens->show_wtime) {
+				wtime0 = std::chrono::steady_clock::now();
+			}
+
+			Rmatrix_selected_inverse = compute_selected_inverse_takahashi(*Rmatrix_factored);
+
+			if (qlens->show_wtime) {
+				wtime = std::chrono::steady_clock::now() - wtime0;
+
+				if (qlens->mpi_id == 0) {
+					cout << "Wall time for sparse selected inverse: " << wtime.count() << endl;
+				}
+			}
+		}
+
+		// Build row-wise representations of H.
+		// For d log(det R) / dH_ij, we need
+		//
+		// 2 * sum_k H_ik * R^{-1}_{kj}.
+		//
+		// Since H is sparse, only the existing H entries need to be
+		// evaluated.
+
+		using HRowEntry = std::pair<Eigen::Index, double>;
+		using HRow = std::vector<HRowEntry>;
+
+		auto H_rows = std::make_shared<std::array<std::vector<HRow>, 2>>();
+
+		for (int dir = 0; dir < 2; ++dir) {
+			(*H_rows)[dir].resize(npixels);
+
+			for (Eigen::Index col = 0; col < hmatrix_sparse[dir].outerSize(); ++col) {
+				for (SparseMatColMajor::InnerIterator it(hmatrix_sparse[dir], col); it; ++it) {
+					const Eigen::Index row = it.row();
+					(*H_rows)[dir][row].emplace_back(col, it.value());
+				}
+			}
+		}
+
+		p.Rmatrix_log_determinant = stan::math::make_callback_var(Rmatrix_logdet, [this, Rmatrix_factored, Rmatrix_selected_inverse, npixels, H_rows](const auto& res) mutable {
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			if (!Rmatrix_selected_inverse || Rmatrix_factored->info() != Eigen::Success) {
+				return;
+			}
+
+			const double logdet_adj = res.adj();
+			const double scale = 2.0 * logdet_adj;
+
+			// Eigen's sparse Cholesky factorization uses a symmetric permutation:
+			//
+			// P R P^T = L L^T.
+			//
+			// Therefore:
+			//
+			// R^-1 = P^T S P,
+			// where S = (L L^T)^-1.
+
+			const auto& P = Rmatrix_factored->permutationP();
+			const auto& Pindices = P.indices();
+
+			// Calculate grad(H_i) = 2 H_i R^-1 directly at the
+			// nonzero locations of H_i.
+
+			for (int dir = 0; dir < 2; ++dir) {
+				std::vector<Eigen::Triplet<double>> triplets;
+				triplets.reserve(hmatrix_sparse[dir].nonZeros());
+
+				for (Eigen::Index row = 0; row < npixels; ++row) {
+					const HRow& entries = (*H_rows)[dir][row];
+
+					for (const auto& entry_j : entries) {
+						const Eigen::Index j = entry_j.first;
+						double gradient = 0.0;
+
+						for (const auto& entry_k : entries) {
+							const Eigen::Index k = entry_k.first;
+							const double Hik = entry_k.second;
+
+							const Eigen::Index pk = Pindices[k];
+							const Eigen::Index pj = Pindices[j];
+
+							gradient += Hik * (*Rmatrix_selected_inverse)(pk, pj);
+						}
+
+						gradient *= scale;
+
+						if (gradient != 0.0) {
+							triplets.emplace_back(row, j, gradient);
+						}
+					}
+				}
+
+				Eigen::SparseMatrix<double,Eigen::ColMajor> contribution(npixels,npixels);
+				contribution.setFromTriplets(triplets.begin(), triplets.end());
+				contribution.makeCompressed();
+
+				if (hmatrix_adj_accum_sparse[dir].rows() == 0) {
+					hmatrix_adj_accum_sparse[dir] = contribution;
+				} else {
+					hmatrix_adj_accum_sparse[dir] += contribution;
+				}
+			}
+
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+
+				if (qlens->mpi_id == 0) {
+					cout << "Wall time for Rmatrix_log_determinant selected-inverse callback: " << callback_wtime.count() << endl;
+				}
+			}
+		});
+	}
+	else
+#endif
+	{
+		p.Rmatrix_log_determinant = Rmatrix_logdet;
+	}
+}
+template void ImagePixelGrid::generate_Rmatrix_from_hmatrices_sparse<PlainTypes>(const bool potential_perturbations);
+#ifdef USE_STAN
+template void ImagePixelGrid::generate_Rmatrix_from_hmatrices_sparse<VarmatTypes>(const bool potential_perturbations);
+#endif
+
+template <typename MathTypes>
+void ImagePixelGrid::generate_Rmatrix_from_hmatrices_dense(const bool potential_perturbations)
+{
+	using MatType = typename MathTypes::MatType;
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
+	if (qlens->show_wtime) {
+		wtime0 = std::chrono::steady_clock::now();
+	}
+	int npixels;
+	if (!potential_perturbations) {
+		npixels = source_npixels_inv;
+	} else {
+		npixels = lensgrid_npixels;
+	}
+
+	if (!potential_perturbations) {
+		if (qlens->source_fit_mode==Delaunay_Source) {
+			delaunay_srcgrid->generate_hmatrices_dense();
+		}
+		else if (qlens->source_fit_mode==Cartesian_Source) {
+			die("cannot generate dense hmatrix for Cartesian source (not implemented)");
+			//cartesian_srcgrid->generate_hmatrices();
+		}
+		else die("hmatrix not supported for sources other than Delaunay or Cartesian");
+	} else {
+		die("cannot generate dense hmatrix for potential perturbations (not implemented)");
+		//lensgrid->generate_hmatrices(interpolate); // in LensPixelGrid, the same function handles a Cartesian versus Delaunay grid
+	}
+
+	imggrid_params.Rmatrix_dense = Eigen::MatrixXd::Zero(npixels,npixels);
+	imggrid_params.Rmatrix_dense += hmatrix_dense[0].transpose()*hmatrix_dense[0];
+	imggrid_params.Rmatrix_dense += hmatrix_dense[1].transpose()*hmatrix_dense[1];
+
+
+	// Set hmatrix adjoints to zero
+	for (int i=0; i < 2; i++) {
+		hmatrix_adj_accum[i].resize(0,0);
+		hmatrix_adj_accum_sparse[i].resize(0,0);
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<MatType>) {
+		p.Rmatrix_dense = stan::math::make_callback_var(imggrid_params.Rmatrix_dense, [this] (const auto& res) mutable {
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			auto& Rmatrix_adj = res.adj();
+			for (int i=0; i < 2; i++) {
+				Eigen::MatrixXd contribution = 2*hmatrix_dense[i]*Rmatrix_adj;
+				if (hmatrix_adj_accum[i].size() == 0) hmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+				hmatrix_adj_accum[i] += contribution;
+			}
+
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+				if (qlens->mpi_id==0) cout << "Wall time for Rmatrix_dense callback: " << callback_wtime.count() << endl;
+			}
+
+		});
+	} 
+#endif
+
+	if (qlens->show_wtime) {
+		wtime = std::chrono::steady_clock::now() - wtime0;
+		if (qlens->mpi_id==0) cout << "Wall time for calculating Rmatrix: "  << wtime.count() << endl;
+	}
+
+	Eigen::LLT<Eigen::MatrixXd, Eigen::Upper> Rmatrix_factored;
+	Rmatrix_factored.compute(imggrid_params.Rmatrix_dense);
+	if(Rmatrix_factored.info() != Eigen::Success) {
+		warn("Cholesky decomposition of Rmatrix was not successful; Rmatrix is not positive definite");
+	}
+	const auto& LU  = Rmatrix_factored.matrixLLT();
+	double Rmatrix_logdet = 2.0*LU.diagonal().array().log().sum();
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<MatType>) {
+		p.Rmatrix_log_determinant = stan::math::make_callback_var(Rmatrix_logdet, [this, Rmatrix_factored] (const auto& res) mutable {
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			for (int i=0; i < 2; i++) {
+				Eigen::MatrixXd hsolve = Rmatrix_factored.solve(hmatrix_dense[i].transpose());
+				Eigen::MatrixXd contribution = 2*res.adj()*hsolve.transpose();
+				if (hmatrix_adj_accum[i].size() == 0) hmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+				hmatrix_adj_accum[i] += contribution;
+			}
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+				if (qlens->mpi_id==0) cout << "Wall time for Rmatrix_log_determinant callback: " << callback_wtime.count() << endl;
+			}
+		});
+	} else
+#endif
+	{
+		p.Rmatrix_log_determinant = Rmatrix_logdet;
+	}
+}
+template void ImagePixelGrid::generate_Rmatrix_from_hmatrices_dense<PlainTypes>(const bool potential_perturbations);
+#ifdef USE_STAN
+template void ImagePixelGrid::generate_Rmatrix_from_hmatrices_dense<VarmatTypes>(const bool potential_perturbations);
+#endif
+
 
 #ifdef USE_STAN
 template <typename VecVarValue, typename SparseVarValue>
@@ -20039,12 +20275,11 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_sparse(const bool potential
 			// dR/dG_i = 2 G_i R_adj.
 			//------------------------------------------------------------------
 
-
-
 			for (int i=0; i < 4; i++) {
 				Eigen::SparseMatrix<double,Eigen::ColMajor> contribution = SparseMatValue(gmatrix_sparse[i] * Rmatrix_adj);
 				contribution *= 2.0;
 				if (gmatrix_adj_accum_sparse[i].rows() == 0) gmatrix_adj_accum_sparse[i].resize(contribution.rows(),contribution.cols());
+				//contribution.makeCompressed(); // does this help?
 				gmatrix_adj_accum[i] += contribution;
 			}
 
@@ -20426,10 +20661,15 @@ bool ImagePixelGrid::generate_Rmatrix_from_covariance_kernel(const bool allow_re
 
 	double xc_approx, yc_approx, sig;
 	covmatrix_dense.resize(npixels,npixels);
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<typename MathTypes::QScalar>) {
+		if (kernel_type==MATERN_KERNEL) covmatrix_deriv_sup.resize(npixels,npixels);
+	}
+#endif
 
 	if (qlens->source_fit_mode==Delaunay_Source) {
 		double *wgtfac = NULL;
-		delaunay_srcgrid->generate_covariance_matrix(covmatrix_dense,kernel_type,qlens->covmatrix_epsilon,wgtfac);
+		delaunay_srcgrid->generate_covariance_matrix(covmatrix_dense,covmatrix_deriv_sup,kernel_type,qlens->covmatrix_epsilon,wgtfac);
 	}
 	else die("covariance kernel regularization requires source mode to be 'delaunay'");
 
@@ -20447,6 +20687,8 @@ bool ImagePixelGrid::generate_Rmatrix_from_covariance_kernel(const bool allow_re
 	Bmatrix = covmatrix_factored.matrixL();
 	double Rmatrix_logdet = -2.0*Bmatrix.diagonal().array().log().sum();
 
+	covmatrix_adj_accum.resize(0,0);
+
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<MatType>)
 	{
@@ -20460,11 +20702,13 @@ bool ImagePixelGrid::generate_Rmatrix_from_covariance_kernel(const bool allow_re
 				}
 
 				auto& Rmatrix_adj = res.adj();
-				Eigen::MatrixXd covmatrix_adj = -Rmatrix.transpose()*Rmatrix_adj*Rmatrix.transpose();
-				//for (int i=0; i<n_amps; i++) {
-					//for (int j=i+1; j<n_amps; j++) covmatrix_adj(i,j) += covmatrix_adj(j,i);
-				//}
-				delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,kernel_type,NULL,1.0);
+
+				Eigen::MatrixXd contribution = -Rmatrix.transpose()*Rmatrix_adj*Rmatrix.transpose();
+				if (covmatrix_adj_accum.size() == 0) covmatrix_adj_accum = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+				covmatrix_adj_accum += contribution;
+
+				//Eigen::MatrixXd covmatrix_adj = -Rmatrix.transpose()*Rmatrix_adj*Rmatrix.transpose();
+				//delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,covmatrix_dense,covmatrix_deriv_sup,kernel_type,NULL,1.0,qlens->show_wtime);
 
 				if (qlens->show_wtime) {
 					callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
@@ -20479,12 +20723,13 @@ bool ImagePixelGrid::generate_Rmatrix_from_covariance_kernel(const bool allow_re
 					callback_wtime0 = std::chrono::steady_clock::now();
 				}
 
+				Eigen::MatrixXd contribution = -res.adj()*Rmatrix.transpose();
+				if (covmatrix_adj_accum.size() == 0) covmatrix_adj_accum = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+				covmatrix_adj_accum += contribution;
+
 				//Eigen::MatrixXd Rmatrix = covmatrix_factored.solve(Eigen::MatrixXd::Identity(covmatrix_factored.rows(),covmatrix_factored.cols()));
-				Eigen::MatrixXd covmatrix_adj = -res.adj()*Rmatrix.transpose();
-				//for (int i=0; i<n_amps; i++) {
-					//for (int j=i+1; j<n_amps; j++) covmatrix_adj(i,j) += covmatrix_adj(j,i);
-				//}
-				delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,kernel_type,NULL,1.0);
+				//Eigen::MatrixXd covmatrix_adj = -res.adj()*Rmatrix.transpose();
+				//delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,covmatrix_dense,covmatrix_deriv_sup,kernel_type,NULL,1.0,qlens->show_wtime);
 
 				if (qlens->show_wtime) {
 					callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
@@ -22541,18 +22786,18 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 					////for (int i=0; i<n_amps; i++) {
 						////for (int j=i+1; j<n_amps; j++) covmatrix_adj(i,j) += covmatrix_adj(j,i);
 					////}
-					//delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,kernel_type,NULL,1.0);
+					//delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,covmatrix_dense,covmatrix_deriv_sup,kernel_type,NULL,1.0);
 				} else {
 					if (qlens->regularization_method==SmoothCurvature) {
-						Eigen::MatrixXd hmatrix_adj[2];
 						Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 						for (int i=0; i < 2; i++) {
-							hmatrix_adj[i] = hmatrix_dense[i] * (G + G.transpose());
+							Eigen::MatrixXd contribution = hmatrix_dense[i] * (G + G.transpose());
+							if (hmatrix_adj_accum[i].size() == 0) hmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+							hmatrix_adj_accum[i] += contribution;
 						}
-						delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
 					} else if (qlens->regularization_method==SmoothGradient) {
+						Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 						for (int i=0; i < 4; i++) {
-							Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 							Eigen::MatrixXd contribution = gmatrix_dense[i] * (G + G.transpose());
 							if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
 							gmatrix_adj_accum[i] += contribution;
@@ -22561,14 +22806,14 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 				}
 			} else {
 				if (qlens->regularization_method==SmoothCurvature) {
-					Eigen::MatrixXd hmatrix_adj[2];
 					Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 					Eigen::MatrixXd S = G + G.transpose();
 					for (int i=0; i < 2; i++) {
 						const auto& H = hmatrix_sparse[i];
-						hmatrix_adj[i] = H * S;
+						Eigen::MatrixXd contribution = H * S;
+						if (hmatrix_adj_accum[i].size() == 0) hmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+						hmatrix_adj_accum[i] += contribution;
 					}
-					delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
 				} else if (qlens->regularization_method==SmoothGradient) {
 					Eigen::MatrixXd gmatrix_adj[4];
 					Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
@@ -22638,11 +22883,13 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 			if (qlens->covariance_kernel_regularization) {
 				Eigen::MatrixXd Rmatrix = stan::math::value_of(p.Rmatrix_dense);
 				Eigen::MatrixXd Rsolve = chol->solve(Rmatrix);
-				Eigen::MatrixXd covmatrix_adj = -logdet_adj * p.regparam_ptr->val() * Rmatrix * Rsolve;
-				//for (int i=0; i<n_amps; i++) {
-					//for (int j=i+1; j<n_amps; j++) covmatrix_adj(i,j) += covmatrix_adj(j,i);
-				//}
-				delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,kernel_type,NULL,1.0);
+
+				Eigen::MatrixXd contribution = -logdet_adj * p.regparam_ptr->val() * Rmatrix * Rsolve;
+				if (covmatrix_adj_accum.size() == 0) covmatrix_adj_accum = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+				covmatrix_adj_accum += contribution;
+
+				//Eigen::MatrixXd covmatrix_adj = -logdet_adj * p.regparam_ptr->val() * Rmatrix * Rsolve;
+				//delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,covmatrix_dense,covmatrix_deriv_sup,kernel_type,NULL,1.0,qlens->show_wtime);
 			} else {
 				if (qlens->regularization_method==SmoothCurvature) {
 					Eigen::MatrixXd hmatrix_adj[2];
@@ -22784,16 +23031,15 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 			}
 			else if (qlens->dense_Rmatrix) {
 				if (qlens->regularization_method == SmoothCurvature) {
-					Eigen::MatrixXd hmatrix_adj[2];
 					Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 					for (int i = 0; i < 2; i++) {
-						hmatrix_adj[i] = hmatrix_dense[i] * (G + G.transpose());
+						Eigen::MatrixXd contribution = hmatrix_dense[i] * (G + G.transpose());
+						if (hmatrix_adj_accum[i].size() == 0) hmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+						hmatrix_adj_accum[i] += contribution;
 					}
-					delaunay_srcgrid ->scatter_hmatrix_adjoints( hmatrix_adj);
-				} else if (
-					qlens->regularization_method == SmoothGradient) {
+				} else if (qlens->regularization_method == SmoothGradient) {
+					Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 					for (int i=0; i < 4; i++) {
-						Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 						Eigen::MatrixXd contribution = gmatrix_dense[i] * (G + G.transpose());
 						if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
 						gmatrix_adj_accum[i] += contribution;
@@ -22801,16 +23047,15 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 				}
 			} else {
 				if (qlens->regularization_method==SmoothCurvature) {
-					Eigen::MatrixXd hmatrix_adj[2];
 					Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 					Eigen::MatrixXd S = G + G.transpose();
 					for (int i=0; i < 2; i++) {
 						const auto& H = hmatrix_sparse[i];
-						hmatrix_adj[i] = H * S;
+						Eigen::MatrixXd contribution = H * S;
+						if (hmatrix_adj_accum[i].size() == 0) hmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+						hmatrix_adj_accum[i] += contribution;
 					}
-					delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
 				} else if (qlens->regularization_method==SmoothGradient) {
-
 					Eigen::MatrixXd G = -p.regparam_ptr->val() * u * amplitude.transpose();
 					Eigen::MatrixXd S = G + G.transpose();
 					for (int i=0; i < 4; i++) {
@@ -22851,8 +23096,11 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 					Eigen::MatrixXd Rsolve = chol->solve(stan::math::value_of(p.Rmatrix_dense));
 					p.regparam_ptr->adj() += logdet_adj * Rsolve.trace();
 					if (!qlens->use_covariance_matrix) {
-						Eigen::MatrixXd covmatrix_adj = -logdet_adj * p.regparam_ptr->val() * stan::math::value_of(p.Rmatrix_dense) * Rsolve;
-						delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj, kernel_type, NULL, 1.0);
+						Eigen::MatrixXd contribution = -logdet_adj * p.regparam_ptr->val() * stan::math::value_of(p.Rmatrix_dense) * Rsolve;
+						if (covmatrix_adj_accum.size() == 0) covmatrix_adj_accum = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+						covmatrix_adj_accum += contribution;
+						//Eigen::MatrixXd covmatrix_adj = -logdet_adj * p.regparam_ptr->val() * stan::math::value_of(p.Rmatrix_dense) * Rsolve;
+						//delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,covmatrix_dense,covmatrix_deriv_sup,kernel_type, NULL, 1.0,qlens->show_wtime);
 					}
 				} else {
 					// try something like
@@ -22965,23 +23213,25 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 					Eigen::MatrixXd Y = LW * Omega;
 
 					// Z = F^{-1} Y
-
 					Eigen::MatrixXd Z = apply_Finv(Y);
 
 					// Estimate F^{-1} LW: Xhat = Z Omega^T / Lprobes, because E[Omega Omega^T] = I.
-
 					Eigen::MatrixXd Xhat = (Z * Omega.transpose()) / static_cast<double>(Lprobes);
 
 					// Add 2 logdet_adj F^{-1} LW
-
 					p.Lmatrix_trans_dense.adj() += 2.0 * logdet_adj * Xhat;
 
 					if (!qlens->use_covariance_matrix) {
 						// We use exact calculations for this (upgrade later?).
 						Eigen::MatrixXd Rmatrix = stan::math::value_of(p.Rmatrix_dense);
 						Eigen::MatrixXd Rsolve = chol->solve(Rmatrix);
-						Eigen::MatrixXd covmatrix_adj = -logdet_adj * p.regparam_ptr->val() * Rmatrix * Rsolve;
-						delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj, kernel_type, NULL, 1.0);
+
+						Eigen::MatrixXd contribution = -logdet_adj * p.regparam_ptr->val() * Rmatrix * Rsolve;
+						if (covmatrix_adj_accum.size() == 0) covmatrix_adj_accum = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+						covmatrix_adj_accum += contribution;
+
+						//Eigen::MatrixXd covmatrix_adj = -logdet_adj * p.regparam_ptr->val() * Rmatrix * Rsolve;
+						//delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj,covmatrix_dense,covmatrix_deriv_sup, kernel_type, NULL, 1.0,qlens->show_wtime);
 					}
 				}
 			} else {
@@ -23028,12 +23278,12 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 				}
 
 				if (qlens->regularization_method==SmoothCurvature) {
-					Eigen::MatrixXd hmatrix_adj[2];
-
 					for (int i=0; i < 2; i++) {
 						if (qlens->dense_Rmatrix) {
 							Eigen::MatrixXd hsolve = chol->solve(hmatrix_dense[i].transpose());
-							hmatrix_adj[i] = 2.0 * logdet_adj * p.regparam_ptr->val() * hsolve.transpose();
+							Eigen::MatrixXd contribution = 2.0 * logdet_adj * p.regparam_ptr->val() * hsolve.transpose();
+							if (hmatrix_adj_accum[i].size() == 0) hmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+							hmatrix_adj_accum[i] += contribution;
 						} else {
 							const auto& H = hmatrix_sparse[i];
 							Eigen::MatrixXd Ht = Eigen::MatrixXd::Zero(n_amps,n_amps);
@@ -23044,12 +23294,12 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 									Ht(col,row) = it.value();
 								}
 							}
-
 							Eigen::MatrixXd hsolve = chol->solve(Ht);
-							hmatrix_adj[i] = 2.0 * logdet_adj * p.regparam_ptr->val() * hsolve.transpose();
+							Eigen::MatrixXd contribution = 2.0 * logdet_adj * p.regparam_ptr->val() * hsolve.transpose();
+							if (hmatrix_adj_accum[i].size() == 0) hmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+							hmatrix_adj_accum[i] += contribution;
 						}
 					}
-					delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj);
 				} else if (qlens->regularization_method==SmoothGradient) {
 					Eigen::MatrixXd gmatrix_adj[4];
 					for (int i=0; i < 4; i++) {
@@ -23068,7 +23318,6 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 								}
 							}
 							Eigen::MatrixXd gsolve = chol->solve(Gt);
-
 							Eigen::MatrixXd contribution = 2.0 * logdet_adj * p.regparam_ptr->val() * gsolve.transpose();
 							if (gmatrix_adj_accum[i].size() == 0) gmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
 							gmatrix_adj_accum[i] += contribution;
@@ -23200,9 +23449,13 @@ void ImagePixelGrid::invert_lens_mapping_Gmatrix(bool verbal)
 			// Avoid a right-side triangular solve by solving
 			// B^T S^T = X^T.
 			Eigen::MatrixXd S = B.transpose().triangularView<Eigen::Upper>().solve(X.transpose()).transpose();
-			Eigen::MatrixXd covmatrix_adj = S;
 
-			delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj, kernel_type, NULL, 1.0);
+			Eigen::MatrixXd contribution = S;
+			if (covmatrix_adj_accum.size() == 0) covmatrix_adj_accum = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+			covmatrix_adj_accum += contribution;
+
+			//Eigen::MatrixXd covmatrix_adj = S;
+			//delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj, covmatrix_dense, covmatrix_deriv_sup, kernel_type, NULL, 1.0,qlens->show_wtime);
 		};
 
 		p.y_amplitude_vector = stan::math::make_callback_var(y_amplitude, [&, y_amplitude, B, chol = std::make_shared< Eigen::LLT<Eigen::MatrixXd, Eigen::Upper>>(Gmatrix_llt), apply_K, scatter_B_adjoint](const auto& res) mutable
@@ -23402,16 +23655,15 @@ void ImagePixelGrid::invert_lens_mapping_Gmatrix(bool verbal)
 			//   B^T C_adj^T = X^T
 			//
 			// and transpose the result.
-			Eigen::MatrixXd covmatrix_adj = B.transpose().triangularView<Eigen::Upper>().solve(cov_X.transpose()).transpose();
 
-			covmatrix_adj *= logdet_adj;
+			Eigen::MatrixXd contribution = B.transpose().triangularView<Eigen::Upper>().solve(cov_X.transpose()).transpose();
+			contribution *= logdet_adj;
+			if (covmatrix_adj_accum.size() == 0) covmatrix_adj_accum = Eigen::MatrixXd::Zero(contribution.rows(),contribution.cols());
+			covmatrix_adj_accum += contribution;
 
-			// -------------------------------------------------------
-			// Convert the full matrix derivative to the same
-			// symmetric covariance convention used elsewhere.
-			// -------------------------------------------------------
-
-			delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj, kernel_type, NULL, 1.0);
+			//Eigen::MatrixXd covmatrix_adj = B.transpose().triangularView<Eigen::Upper>().solve(cov_X.transpose()).transpose();
+			//covmatrix_adj *= logdet_adj;
+			//delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj, covmatrix_dense, covmatrix_deriv_sup, kernel_type, NULL, 1.0,qlens->show_wtime);
 
 			if ((qlens->show_wtime) and (qlens->mpi_id==0)) {
 				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;

@@ -567,7 +567,7 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	find_covmatrix_inverse = true;
 	use_covariance_matrix = false;
 	penalize_defective_covmatrix = true;
-	covmatrix_epsilon = 1e-9;
+	covmatrix_epsilon = 1e-6;
 
 	inversion_nthreads = 1;
 	include_potential_perturbations = false;
@@ -15102,10 +15102,6 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 	}
 
 	fitmodel->chisq_it++;
-//#ifdef USE_STAN
-	// if we're not using autodiff, then we should recover any memory for autodiff variables to prevent memory leaks
-	//if (use_autodiff==false) stan::math::recover_memory();
-//#endif
 	return loglike;
 }
 template double QLens::fitmodel_loglike_extended_source<double>(const double* params);

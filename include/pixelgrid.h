@@ -529,6 +529,7 @@ class DelaunayGrid : private Sort
 
 	public:
 	static bool zero_outside_border;
+	bool using_autodiff;
 	int n_gridpts;
 	int n_triangles;
 	int *adj_triangles[4];
@@ -566,17 +567,20 @@ class DelaunayGrid : private Sort
 	void find_interpolation_weights_nn_ad2(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, AD2* interpolation_wgts, const int thread);
 
 
-	void generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, const KernelType kernel_type, const double epsilon, double *wgtfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
+	void generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, Eigen::MatrixXd& cov_deriv_matrix, const KernelType kernel_type, const double epsilon, double *wgtfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
 #ifdef USE_STAN
-	void scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_adj, const KernelType kernel_type, double *wgtfac, const double amplitude);
+	void scatter_covmatrix_adjoints(const Eigen::MatrixXd& covmatrix_adj, const Eigen::MatrixXd& covmatrix, const Eigen::MatrixXd& cov_deriv_matrix, const KernelType kernel_type, double *wgtfac, const double amplitude, const bool show_wtime = false);
 #endif
 
-	template <typename QScalar>
-	QScalar modified_bessel_function(const QScalar x, const QScalar nu);
-	template <typename QScalar>
-	void beschb(const QScalar x, QScalar& gam1, QScalar& gam2, QScalar& gampl, QScalar& gammi);
-	template <typename QScalar>
-	QScalar chebev(const QScalar a, const QScalar b, const double* c, const int m, const QScalar x);
+	double modified_bessel_function_K(const double x, const double nu, double& knu_deriv);
+	double modified_bessel_function_K(const double x, const double nu) { double dum; return modified_bessel_function_K(x,nu,dum); } // if we don't care about derivative
+	double dK_dnu(const double nu, const double x);
+	double dK_dnu_noninteger(const double nu, const double x);
+	double dK_dnu_integer(const int n, const double x);
+
+	void get_bessel_gam12(const double x, double& gam1, double& gam2, double& gampl, double& gammi);
+	void chebyshev_compute_coeffs(const double* f_at_nodes, const int n, double* coeffs);
+	double chebyshev_evaluate(const double a, const double b, const double* coeffs, const int m, const double x);
 
 	void delete_grid_arrays();
 	~DelaunayGrid();
@@ -1189,6 +1193,7 @@ class ImagePixelGrid : private Sort
 
 	KernelType kernel_type;
 	Eigen::MatrixXd covmatrix_dense;
+	Eigen::MatrixXd covmatrix_deriv_sup; // stores table of derivatives of Knu function for matern kernel if needed
 	Eigen::LLT<Eigen::MatrixXd, Eigen::Upper> covmatrix_factored;
 	Eigen::MatrixXd Bmatrix;
 	Eigen::MatrixXd Rmatrix_pot_dense;
@@ -1258,19 +1263,17 @@ class ImagePixelGrid : private Sort
 	void add_regularization_prior_terms_to_logev_stan(QScalar& logev_times_two, QScalar& loglike_reg, QScalar& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
 
 #ifdef USE_STAN
+	Eigen::MatrixXd covmatrix_adj_accum;
+
+	void scatter_covmatrix_adjoints_accum() {
+		if (covmatrix_adj_accum.size() != 0) {
+			delaunay_srcgrid->scatter_covmatrix_adjoints(covmatrix_adj_accum,covmatrix_dense,covmatrix_deriv_sup,kernel_type,NULL,1.0,qlens->show_wtime);
+
+		}
+	}
+
 	Eigen::MatrixXd gmatrix_adj_accum[4];
 	Eigen::SparseMatrix<double, Eigen::ColMajor> gmatrix_adj_accum_sparse[4];
-
-	//void scatter_gmatrix_adjoints_accum() {
-		//if (gmatrix_adj_accum[0].size() != 0) {
-			//delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj_accum);
-		//}
-	//}
-	//void scatter_gmatrix_adjoints_accum_sparse() {
-		//if (gmatrix_adj_accum_sparse[0].rows() != 0) {
-			//delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj_accum_sparse);
-		//}
-	//}
 
 	void scatter_gmatrix_adjoints_accum() {
 		for (int i = 0; i < 4; i++) {
@@ -1291,6 +1294,30 @@ class ImagePixelGrid : private Sort
 			delaunay_srcgrid->scatter_gmatrix_adjoints(gmatrix_adj_accum);
 		}
 	}
+
+	Eigen::MatrixXd hmatrix_adj_accum[2];
+	Eigen::SparseMatrix<double, Eigen::ColMajor> hmatrix_adj_accum_sparse[2];
+
+	void scatter_hmatrix_adjoints_accum() {
+		for (int i = 0; i < 2; i++) {
+			if (hmatrix_adj_accum_sparse[i].size() != 0) {
+				if (hmatrix_adj_accum[i].size() == 0) {
+					hmatrix_adj_accum[i] = Eigen::MatrixXd::Zero(hmatrix_adj_accum_sparse[i].rows(), hmatrix_adj_accum_sparse[i].cols());
+				}
+
+				for (int col = 0; col < hmatrix_adj_accum_sparse[i].outerSize(); ++col) {
+					for (Eigen::SparseMatrix<double>::InnerIterator it(hmatrix_adj_accum_sparse[i], col); it; ++it) {
+						hmatrix_adj_accum[i](it.row(), it.col()) += it.value();
+					}
+				}
+			}
+		}
+
+		if (hmatrix_adj_accum[0].size() != 0) {
+			delaunay_srcgrid->scatter_hmatrix_adjoints(hmatrix_adj_accum);
+		}
+	}
+
 #endif
 
 	template <typename MathTypes>

@@ -129,9 +129,9 @@ QScalar DiGamma(const QScalar x)
 	QScalar r;
 	QScalar value;
 	QScalar x2;
-	if ( x == 0.0 ) die("DiGamma function is singular at x=0");
+	if (x == 0.0) die("DiGamma function is singular at x=0");
 	if (x < 0) return (DiGamma(1+x) - 1/x); // recursive identity to handle negative arguments
-	if ( x <= 0.000001 ) {
+	if (x <= 0.000001) {
 		return (-euler_mascheroni - 1.0/x + 1.6449340668482264365 * x); //  Use approximation for small argument.
 	}
 	//  Reduce to DIGAMMA(X + N).
@@ -154,6 +154,41 @@ QScalar DiGamma(const QScalar x)
 		- r * ( 1.0 / 132.0 ) ) ) ) );
 
 	return value;
+}
+
+inline double DiGammaInt(const int m)
+{
+	// Euler-Mascheroni constant gamma
+	constexpr double euler_mascheroni = 0.57721566490153286060;
+
+	if (m <= 1) {
+		return -euler_mascheroni;
+	}
+
+	double harmonic = 0.0;
+	for (int j = 1; j < m; ++j) {
+		harmonic += 1.0 / static_cast<double>(j);
+	}
+
+	return -euler_mascheroni + harmonic;
+}
+
+// Note: this gives the TriGamma function for integer arguments only
+inline double TriGammaInt(const int m)
+{
+	// Exact value of psi'(1) = pi^2 / 6
+	constexpr double PI_SQ_OVER_6 = 1.64493406684822643647;
+
+	if (m <= 1) {
+		return PI_SQ_OVER_6;
+	}
+
+	double sum = 0.0;
+	for (int j = 1; j < m; ++j) {
+		sum += 1.0 / (static_cast<double>(j) * static_cast<double>(j));
+	}
+
+	return PI_SQ_OVER_6 - sum;
 }
 
 template <typename QScalar>

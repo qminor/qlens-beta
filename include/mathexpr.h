@@ -14,6 +14,7 @@ const double M_SQRT_HALFPI = 1.2533141373155001;
 const double M_4PI = 12.566370614359172;
 const double ln10 = 2.302585092994046;
 const double EULER = 2.718281828459045;
+const double M_ln2 = 0.693147180559945;
 
 template <typename T>
 inline T minval(const T &a, const T &b) { return (a < b ? a : b); }
