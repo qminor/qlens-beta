@@ -64,7 +64,7 @@ q.set_source_mode("shapelet")
 q.sb_ellipticity_components=True
 
 # Note: keyword 'lensed_center_peak_sb' means we're ray-tracing the brightest data pixel to define the source center (which will override the xc, yc, inputs below)
-sersic_src = Sersic({"s_eff": 1, "R_eff": 0.3, "n": 0.5, "e1": 0.0, "e2": 0.0}, pmode=1, qlens=q, lensed_center_peak_sb=True)
+sersic_src = Sersic({"s_eff": 1, "Reff": 0.3, "n": 0.5, "e1": 0.0, "e2": 0.0}, pmode=1, qlens=q, lensed_center_peak_sb=True)
 sersic_src.vary([1,1,1,1,1,1,1])
 sersic_src.set_limits([
     ("s_eff", .01, 10),
@@ -76,7 +76,6 @@ sersic_src.set_limits([
     ("yc_l", -2, 2)
 ])
 
-#shapelets = Shapelet({"sigma": 0.1, "e1": 0, "e2": 0}, n=6, pmode=0, qlens=q)  # n is the shapelet order. No need to define center coordinates, we will anchor to sersic
 shapelets = Shapelet({"sigma": 0.1}, n=6, pmode=0, qlens=q)  # n is the shapelet order. No need to define center coordinates, we will anchor to sersic
 #shapelets.vary(["regparam"]) # only if regularizing
 
