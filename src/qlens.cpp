@@ -169,9 +169,9 @@ int main(int argc, char *argv[])
 	stan::math::init_threadpool_tbb();
 #endif
 
-#ifdef USE_STAN
-	if (mpi_id==0) std::cout << "TBB max threads = " << tbb::global_control::active_value(tbb::global_control::max_allowed_parallelism) << std::endl;
-#endif
+//#ifdef USE_STAN
+	//if (mpi_id==0) std::cout << "TBB max threads = " << tbb::global_control::active_value(tbb::global_control::max_allowed_parallelism) << std::endl;
+//#endif
 
 	//stan::math::set_num_threads(num_threads);
 

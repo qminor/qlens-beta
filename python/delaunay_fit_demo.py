@@ -27,6 +27,7 @@ plotdata(q,nomask=True,title="Mock data for delaunay_fit_demo.py")
 q.sbmap_load_psf("hst_psf.fits")
 
 q.split_imgpixels = False
+q.fft_convolution = True
 
 q.sci_notation = True
 q.shear_components=True

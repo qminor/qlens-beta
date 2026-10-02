@@ -243,7 +243,9 @@ void QLens::process_commands(bool read_file)
 						"chisq_imgsep_threshold -- if any image pairs are closer than threshold, exclude one from chisq\n"
 						"chisq_imgplane_threshold -- switch to imgplane_chisq if below threshold (if imgplane_chisq off)\n"
 						"nimg_penalty -- penalize chi-square if too many images are produced (if imgplane_chisq on)\n"
-						"chisqtol -- chi-square required accuracy during fit\n"
+						"chisqtol -- log-likelihood required accuracy during fit\n"
+						"gradtol -- required accuracy in gradient of log-likelihood during BFGS optimization\n"
+						"gradtol_rel -- required relative accuracy in gradient of log-likelihood during BFGS optimization\n"
 						"srcflux -- flux of point source (for producing or fitting image flux data)\n"
 						"fix_srcflux -- fix source flux to specified value during fit rather than find analytically\n"
 						"syserr_pos -- Systematic error parameter, added in quadrature to all position errors\n"
@@ -254,7 +256,7 @@ void QLens::process_commands(bool read_file)
 						"\033[4mOptimization and Monte Carlo sampler settings\033[0m\n"
 						"nrepeat -- number of repeat chi-square optimizations after original run\n"
 						"find_errors -- calculate and show marginalized error in each parameter after chi-square fit\n"
-						"simplex_nmax -- max number of iterations allowed when using downhill simplex (at temp=0)\n"
+						"opt_nmax -- max number of iterations allowed when optimizing with bfgs or simplex (at temp=0)\n"
 						"simplex_nmax_anneal -- number of iterations at given temperature during simulated annealing\n"
 						"simplex_minchisq -- downhill simplex finishes immediately if chisq falls below this value\n"
 						"simplex_minchisq_anneal -- when annealing, skip to temp=0 if chisq falls below this value\n"
@@ -880,7 +882,7 @@ void QLens::process_commands(bool read_file)
 								"The downhill simplex method uses the Nelder-Mead algorithm to minimize the chi-square function\n"
 								"and returns the best-fit parameter values. If 'find_errors' is on, the Fisher matrix is then\n"
 								"calculated numerically and marginalized error estimates are displayed for each parameter. The\n"
-								"maximum allowed number of iterations is controlled by the variable 'simplex_nmax', while the\n"
+								"maximum allowed number of iterations is controlled by the variable 'opt_nmax', while the\n"
 								"convergence criterion is set by 'chisqtol'.\n\n"
 								"Optional simulated annealing can also be used, where the temperature is exponentially reduced\n"
 								"by a specified factor until reaching a desired final temperature. The initial temperature is set\n"
@@ -888,7 +890,7 @@ void QLens::process_commands(bool read_file)
 								"temperature cooling factor is set by 'simplex_tfac', and final temperature set by 'simplex_tempf'.\n"
 								"After the final temperature is reached, a final run is performed with the temperature set to zero.\n"
 								"If annealing is used, note that 'simplex_nmax_anneal' is the max iterations allowed at each\n"
-								"temperature setting, not the total allowed number of iterations. By contrast, 'simplex_nmax' is\n"
+								"temperature setting, not the total allowed number of iterations. By contrast, 'opt_nmax' is\n"
 								"the max allowed iterations when the temperature is set to zero, which is the case for the final\n"
 								"iteration after annealing. Finally, one may also specify a chi-square threshold 'simplex_minchisq'\n"
 								"such that we skip to zero temperature if the chi-square falls below the given threshold.\n\n";
@@ -2237,7 +2239,7 @@ void QLens::process_commands(bool read_file)
 					cout << "fit source_mode: " << ((source_fit_mode==Point_Source) ? "ptsource\n" : (source_fit_mode==Cartesian_Source) ? "cartesian\n" : (source_fit_mode==Delaunay_Source) ? "delaunay" : (source_fit_mode==Parameterized_Source) ? "sbprofile\n" : (source_fit_mode==Shapelet_Source) ? "shapelet\n" : "unknown\n");
 					cout << "nrepeat = " << n_repeats << endl;
 					cout << "find_errors: " << display_switch(calculate_parameter_errors) << endl;
-					cout << "simplex_nmax = " << simplex_nmax << endl;
+					cout << "opt_nmax = " << optimization_nmax << endl;
 					cout << "simplex_nmax_anneal = " << simplex_nmax_anneal << endl;
 					cout << "simplex_minchisq = " << simplex_minchisq << endl;
 					cout << "simplex_minchisq_anneal = " << simplex_minchisq_anneal << endl;
@@ -5281,6 +5283,7 @@ void QLens::process_commands(bool read_file)
 			int pmode = 0;
 			int emode = -1;
 			bool lensed_center_coords = false;
+			bool use_peak_sb = false;
 			bool egrad = false;
 			int egrad_mode = -1;
 			int n_bspline_coefs = 0; // only used for egrad_mode=0 (B-spline mode)
@@ -5324,6 +5327,13 @@ void QLens::process_commands(bool read_file)
 			for (int i=nwords-1; i > 1; i--) {
 				if (words[i]=="-lensed_center") {
 					lensed_center_coords = true;
+					remove_word(i);
+				}
+			}
+			for (int i=nwords-1; i > 1; i--) {
+				if (words[i]=="-lensed_center_peak_sb") {
+					lensed_center_coords = true;
+					use_peak_sb = true;
 					remove_word(i);
 				}
 			}
@@ -5498,7 +5508,9 @@ void QLens::process_commands(bool read_file)
 								if ((snum != n_sb) and (pnum >= sb_list[snum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given source");
 								parameter_anchors[parameter_anchor_i].anchor_param = true;
 								parameter_anchors[parameter_anchor_i].use_implicit_ratio = true;
-								parameter_anchors[parameter_anchor_i].paramnum = i-2;
+								int paramnum = i-2;
+								for (int ii=2; ii < i; ii++) if ((words[ii].find("=")!=string::npos) and (words[ii].find("anchor")==string::npos)) paramnum--; // any words that have '=' should not be counted as parameter values
+								parameter_anchors[parameter_anchor_i].paramnum = paramnum;
 								parameter_anchors[parameter_anchor_i].anchor_object_number = snum;
 								parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
 								parameter_anchor_i++;
@@ -5526,7 +5538,9 @@ void QLens::process_commands(bool read_file)
 							if (snum > n_sb) Complain("specified source number to anchor to does not exist");
 							if ((snum != n_sb) and (pnum >= sb_list[snum]->get_n_params())) Complain("specified parameter number to anchor to does not exist for given source");
 							parameter_anchors[parameter_anchor_i].anchor_param = true;
-							parameter_anchors[parameter_anchor_i].paramnum = i-2;
+							int paramnum = i-2;
+							for (int ii=2; ii < i; ii++) if ((words[ii].find("=")!=string::npos) and (words[ii].find("anchor")==string::npos)) paramnum--; // any words that have '=' should not be counted as parameter values
+							parameter_anchors[parameter_anchor_i].paramnum = paramnum;
 							parameter_anchors[parameter_anchor_i].anchor_object_number = snum;
 							parameter_anchors[parameter_anchor_i].anchor_paramnum = pnum;
 							parameter_anchor_i++;
@@ -5899,6 +5913,7 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[7] >> yc)) Complain("invalid y-center parameter for model gaussian");
 						}
 					}
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 6;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -5968,11 +5983,12 @@ void QLens::process_commands(bool read_file)
 				}
 				int pi = 2;
 				if (nmax == -1) Complain("must specify nmax via 'n=#' argument");
-				if (nwords > 7) Complain("more than 5 parameters not allowed for model shapelet");
+				if (nwords > 8) Complain("more than 5 parameters not allowed for model shapelet");
 				if (nmax <= 0) Complain("nmax cannot be negative");
-				if (nwords >= 5) {
-					double scale;
+				if (nwords >= 6) {
+					double scale, regparam;
 					double q, theta = 0, xc = 0, yc = 0;
+					if (!(ws[pi++] >> regparam)) Complain("invalid q parameter for model shapelet");
 					if (pmode==0) {
 						if (!(ws[pi++] >> scale)) Complain("invalid sigma parameter for model shapelet");
 					} else {
@@ -6009,11 +6025,13 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[pi++] >> yc)) Complain("invalid y-center parameter for model shapelet");
 						}
 					}
-					default_nparams = 5;
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
+					default_nparams = 6;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
 					//param_vals[0]=amp00; // currently cannot vary amp00 as a free parameter (it would have to be removed from the source amplitudes when inverting)
 					int indx=0;
+					param_vals[indx++]=regparam;
 					param_vals[indx++]=scale;
 					param_vals[indx++]=q;
 					param_vals[indx++]=theta;
@@ -6033,11 +6051,12 @@ void QLens::process_commands(bool read_file)
 						sb_list[src_number]->update_parameters(param_vals.array());
 						if (fft_convolution) cleanup_FFT_convolution_arrays(); // since number of shapelet amplitudes may have changed, will redo FFT setup here
 					} else {
-						create_and_add_shapelet_source(is_lensed, band, zs_in, amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
+						create_and_add_shapelet_source(is_lensed, band, zs_in, regparam, amp00, scale, q, theta, xc, yc, nmax, truncate, pmode);
 						if (anchor_source_center) sb_list[n_sb-1]->anchor_center_to_source(sb_list,anchornum);
 						else if (anchor_center_to_lens) sb_list[n_sb-1]->anchor_center_to_lens(lens_list,anchornum);
 						else if (anchor_center_to_ptsrc) sb_list[n_sb-1]->anchor_center_to_ptsrc(ptsrc_list,anchornum);
 						if (!is_lensed) sb_list[n_sb-1]->set_lensed(false);
+						for (int i=0; i < parameter_anchor_i; i++) sb_list[n_sb-1]->assign_anchored_parameter(parameter_anchors[i].paramnum,parameter_anchors[i].anchor_paramnum,parameter_anchors[i].use_implicit_ratio,parameter_anchors[i].use_exponent,parameter_anchors[i].ratio,parameter_anchors[i].exponent,sb_list[parameter_anchors[i].anchor_object_number]);
 						if (vary_parameters) {
 							if (sb_list[n_sb-1]->vary_parameters(vary_flags)==false) Complain("could not vary parameters for model shapelet");
 						}
@@ -6087,6 +6106,7 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[pi++] >> yc)) Complain("invalid y-center parameter for model mge");
 						}
 					}
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 5;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -6170,6 +6190,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 7;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -6262,6 +6283,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 10;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -6352,6 +6374,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 8;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -6445,6 +6468,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 10;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -6534,6 +6558,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 7;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -6623,6 +6648,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 7;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -6711,6 +6737,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 6;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -6808,6 +6835,7 @@ void QLens::process_commands(bool read_file)
 							if (!(ws[6] >> yc)) Complain("invalid y-center parameter for model " << words[1]);
 						}
 					}
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 5;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -6850,6 +6878,7 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 
+					if ((use_peak_sb) and (band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,0); 
 					default_nparams = 6;
 					nparams_to_vary = default_nparams;
 					param_vals.input(nparams_to_vary);
@@ -8566,7 +8595,10 @@ void QLens::process_commands(bool read_file)
 					}
 					if (nwords==2) {
 						//run_mkdist(false,"",nbins1d,nbins2d,copy_subplot_only,resampled_posts,no2dposts,nohists);
-						bool status = make_histograms(nbins1d,nbins2d,resampled_posts,no2dposts,false,true);
+						bool use_fisher_matrix;
+						if ((fitmethod==MULTINEST) or (fitmethod==POLYCHORD)) use_fisher_matrix = false;
+						else use_fisher_matrix = true;
+						bool status = make_histograms(nbins1d,nbins2d,resampled_posts,no2dposts,use_fisher_matrix,true);
 						if (!status) Complain("could not make histograms");
 					} else Complain("either zero/one argument allowed for 'fit mkposts' (directory name, plus optional '-n' or '-N' args)");
 				}
@@ -9229,7 +9261,7 @@ void QLens::process_commands(bool read_file)
 					if (nwords==3) {
 						if (!(ws[2] >> fit_output_filename)) Complain("Invalid fit label");
 					}
-					if (mpi_id==0) output_bestfit_model();
+					if (mpi_id==0) output_bestfit_model(calculate_parameter_errors);
 				} else if (words[1]=="load_bestfit") {
 					if (nwords <= 3) {
 						bool custom_filename = false;
@@ -10452,7 +10484,7 @@ void QLens::process_commands(bool read_file)
 				if (band_i==n_psf) add_psf();
 				if (!psf_list[band_i]->load_psf_fits(filename,hdu_indx,load_supersampled_psf,show_header,verbal_mode and (mpi_id==0))) Complain("could not load PSF fits file '" << filename << "'");
 				for (int i=0; i < n_image_pixel_grids; i++) {
-					if (image_pixel_grids[i]->band_number==band_i) image_pixel_grids[i]->psf = psf_list[band_i];
+					if ((image_pixel_grids[i] != NULL) and (image_pixel_grids[i]->band_number==band_i)) image_pixel_grids[i]->psf = psf_list[band_i];
 				}
 				if (!load_supersampled_psf) {
 					if (psf_list[band_i]->psf_spline.is_splined()) psf_list[band_i]->psf_spline.unspline();
@@ -10542,7 +10574,7 @@ void QLens::process_commands(bool read_file)
 				if (!psf_list[band_i]->use_input_psf_matrix) Complain("no psf has been loaded from FITS file");
 				psf_list[band_i]->delete_psf_matrix();
 				for (int i=0; i < n_image_pixel_grids; i++) {
-					if (image_pixel_grids[i]->band_number==band_i) image_pixel_grids[i]->psf = NULL;
+					if ((image_pixel_grids[i] != NULL) and (image_pixel_grids[i]->band_number==band_i)) image_pixel_grids[i]->psf = NULL;
 				}
 				psf_list[band_i]->psf_filename = "";
 				reset_PSF_convolution_plans();
@@ -10707,7 +10739,7 @@ void QLens::process_commands(bool read_file)
 						create_sourcegrid_delaunay(src_i,use_mask,verbal_mode);
 						if (auto_sourcegrid) find_optimal_sourcegrid_for_analytic_source();
 					} else {
-						create_sourcegrid_cartesian<PlainTypes>(band_i,zsrc_i,verbal_mode,use_mask);
+						create_sourcegrid_cartesian<PlainTypes>(band_i,zsrc_i,verbal_mode,use_mask,true,false,false,false);
 						cartesian_srcgrids[src_i]->assign_surface_brightness_from_analytic_source<double>(imggrid_i);
 						if ((source_fit_mode==Delaunay_Source) and (delaunay_srcgrids[src_i] != NULL)) {
 							cartesian_srcgrids[src_i]->assign_surface_brightness_from_delaunay_grid<double>(delaunay_srcgrids[src_i],true);
@@ -11257,7 +11289,10 @@ void QLens::process_commands(bool read_file)
 						else if (args[i]=="-nomask") show_all_pixels = true;
 						else if (args[i]=="-fgmask") show_foreground_mask = true;
 						else if (args[i]=="-emask") show_extended_mask = true;
-						else if (args[i]=="-fits") plot_fits = true;
+						else if (args[i]=="-fits") {
+							plot_fits = true;
+							show_all_pixels = true; // the FITS file should never be masked
+						}
 						else if ((args[i]=="-showsrc") or (args[i]=="-showsrcplot")) omit_source_plot = false;
 						else if (args[i]=="-noptsrc") exclude_ptimgs = true;
 						else if (args[i]=="-onlyptsrc") show_only_ptimgs = true;
@@ -11698,7 +11733,7 @@ void QLens::process_commands(bool read_file)
 							} else Complain("Delaunay grid has not been created");
 
 						}
-						if (show_raytraced_pts) image_pixel_grids[zsrc_i]->plot_sourcepts("src_pixel",true); // this will overwrite the source point file to show all ray-traced points
+						if ((show_raytraced_pts) and (zsrc_i < n_image_pixel_grids) and (image_pixel_grids != NULL) and (image_pixel_grids[zsrc_i] != NULL)) image_pixel_grids[zsrc_i]->plot_sourcepts("src_pixel",true); // this will overwrite the source point file to show all ray-traced points
 					}
 					if ((show_cc) and (zsrc_i >= 0)) create_grid(false,extended_src_zfactors[zsrc_i],extended_src_beta_factors[zsrc_i],zsrc_i);
 					if ((nlens > 0) and (show_cc) and (plot_critical_curves("crit.dat")==true)) {
@@ -13140,6 +13175,26 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "chi-square required accuracy = " << chisq_tolerance << endl;
 			} else Complain("must specify either zero or one argument (required chi-square precision)");
 		}
+		else if (words[0]=="gradtol")
+		{
+			double tol;
+			if (nwords == 2) {
+				if (!(ws[1] >> tol)) Complain("invalid gradtol setting");
+				gradient_tolerance=tol;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "gradient of log-likelihood convergence tolerance = " << gradient_tolerance << endl;
+			} else Complain("must specify either zero or one argument (required gradient precision)");
+		}
+		else if (words[0]=="gradtol_rel")
+		{
+			double tol;
+			if (nwords == 2) {
+				if (!(ws[1] >> tol)) Complain("invalid gradtol_rel setting");
+				gradient_tolerance_rel=tol;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "gradient of log-likelihood relative convergence tolerance = " << gradient_tolerance_rel << endl;
+			} else Complain("must specify either zero or one argument (required relative gradient precision)");
+		}
 		/*
 		else if (words[0]=="chisqtol_lumreg")
 		{
@@ -13579,15 +13634,15 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "num_repeats per parameter for polychord = " << polychord_nrepeats << endl;
 			} else Complain("must specify either zero or one argument (num_repeats per parameter for polychord)");
 		}
-		else if (words[0]=="simplex_nmax")
+		else if (words[0]=="opt_nmax")
 		{
 			int nmax;
 			if (nwords == 2) {
-				if (!(ws[1] >> nmax)) Complain("invalid maximum number of iterations for downhill simplex");
-				simplex_nmax = nmax;
+				if (!(ws[1] >> nmax)) Complain("invalid maximum number of iterations for optimization");
+				optimization_nmax = nmax;
 			} else if (nwords==1) {
-				if (mpi_id==0) cout << "Maximum number of iterations for downhill simplex = " << simplex_nmax << endl;
-			} else Complain("must specify either zero or one argument (maximum number of iterations for downhill simplex)");
+				if (mpi_id==0) cout << "Maximum number of iterations for optimizing = " << optimization_nmax << endl;
+			} else Complain("must specify either zero or one argument (maximum number of iterations for optimization)");
 		}
 		else if (words[0]=="simplex_nmax_anneal")
 		{
@@ -14856,6 +14911,16 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==1) {
 				if (mpi_id==0) cout << "exponent for n_image_prior penalty function = " << n_image_prior_expfac << endl;
 			} else Complain("must specify either zero or one argument for nimg_expfac");
+		}
+		else if (words[0]=="outside_sb_expfac")
+		{
+			double outside_sb_expfac;
+			if (nwords == 2) {
+				if (!(ws[1] >> outside_sb_expfac)) Complain("invalid exponent for outside_sb_prior penalty function");
+				outside_sb_prior_expfac = outside_sb_expfac;
+			} else if (nwords==1) {
+				if (mpi_id==0) cout << "exponent for outside_sb_prior penalty function = " << outside_sb_prior_expfac << endl;
+			} else Complain("must specify either zero or one argument for outside_sb_expfac");
 		}
 		else if (words[0]=="outside_sb_prior")
 		{

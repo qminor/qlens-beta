@@ -77,9 +77,8 @@ void Model::update_fit_parameters(const QScalar* fitparams, int &index)
 			}
 		}
 		update_meta_parameters(true);
-		/*
 #ifdef USE_STAN
-		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency. Maybe revisit this later? Might not be necessary
+		// if using autodif params, let's update the non-autodiff params too (or vice versa) for consistency
 		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
 			for (int i=0; i < n_params; i++) {
 				if ((active_params[i]) and (vary_params[i]==true)) {
@@ -94,7 +93,6 @@ void Model::update_fit_parameters(const QScalar* fitparams, int &index)
 			}
 		}
 #endif
-		*/
 	}
 }
 template void Model::update_fit_parameters<double>(const double* fitparams, int &index);

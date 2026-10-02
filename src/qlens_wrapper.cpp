@@ -265,6 +265,13 @@ public:
 		reassign_sb_param_pointers_and_names();
 	}
 
+	bool get_zero_outside_delaunay_border() {
+		return DelaunaySourceGrid::zero_outside_border;
+	}
+	void set_zero_outside_delaunay_border(const bool setting) {
+		DelaunaySourceGrid::zero_outside_border = setting;
+	}
+
 	bool get_split_imgpixels() { return split_imgpixels; }
 	void set_split_imgpixels(const bool split) {
 		bool old_setting = split_imgpixels;
@@ -318,7 +325,12 @@ public:
 				}
 				update_parameter_list();
 			}
-	 }
+	}
+
+	void find_max_sb_point_from_data(double& xc, double& yc, const int band = 0, const int mask_i = 0) {
+		if ((band < n_data_bands) and (imgdata_list[band])) imgdata_list[band]->find_max_sb(xc,yc,mask_i); 
+	}
+
 
 	/*
 	std::string sbmap_load_image_file(const std::string &filename_, py::kwargs& kwargs) { 

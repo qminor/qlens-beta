@@ -538,6 +538,12 @@ class DelaunayGrid : private Sort
 	int** shared_triangles;
 	int* n_shared_triangles;
 
+	// These are for approximating dK_dnu in autodiff for matern kernel
+	double chebyshev_logxmin;
+	double chebyshev_logxmax;
+	int chebyshev_degree;
+	double* chebyshev_coeffs; // Dynamically allocated array for polynomial coefficients
+
 	public:
 	DelaunayGrid();
 #ifdef USE_STAN
@@ -577,6 +583,9 @@ class DelaunayGrid : private Sort
 	double dK_dnu(const double nu, const double x);
 	double dK_dnu_noninteger(const double nu, const double x);
 	double dK_dnu_integer(const int n, const double x);
+	void setup_chebyshev_dK_dnu_fac(int degree_in);
+	void free_chebyshev_coeffs();
+	double chebyshev_evaluate_dK_dnu_fac(const double nu, const double x);
 
 	void get_bessel_gam12(const double x, double& gam1, double& gam2, double& gampl, double& gammi);
 	void chebyshev_compute_coeffs(const double* f_at_nodes, const int n, double* coeffs);
@@ -925,6 +934,8 @@ class ImgGrid_Params
 	Eigen::VectorX<QScalar> amplitude_varvec;
 
 	VecType sbprofile_surface_brightness;
+	VecType sbprofile_sb_primary_mask_unconvolved;
+	VecType sbprofile_sb_primary_mask;
 	VecType srcpt_x_centers, srcpt_y_centers;
 	VecType srcpt_x_subpixel_centers, srcpt_y_subpixel_centers;
 
@@ -964,6 +975,8 @@ class ImgGrid_Params
 		image_surface_brightness = Eigen::VectorXd::Zero(img_npixels);
 		point_image_surface_brightness = Eigen::VectorXd::Zero(img_npixels);
 		image_surface_brightness_emask = Eigen::VectorXd::Zero(img_npixels_emask);
+		sbprofile_sb_primary_mask_unconvolved = Eigen::VectorXd::Zero(img_npixels);
+		sbprofile_sb_primary_mask = Eigen::VectorXd::Zero(img_npixels);
 		sbprofile_surface_brightness = Eigen::VectorXd::Zero(img_npixels_fgmask);
 	}
 	void setup_subpixel_ray_tracing_arrays(const int n_subpixels_emask)
@@ -1026,8 +1039,10 @@ class ImagePixelGrid : private Sort
 	lensvector<double> ***subpixel_center_pts;
 	lensvector<double> ***subpixel_source_gradient;
 
-	double* centerpts_x; // this will be turned into autodiff vector
-	double* centerpts_y; // this will be turned into autodiff vector
+	Eigen::VectorXd center_pts_x_fgmask;
+	Eigen::VectorXd center_pts_y_fgmask;
+	Eigen::VectorXd subpixel_center_pts_x_fgmask;
+	Eigen::VectorXd subpixel_center_pts_y_fgmask;
 
 	double **S0_check;
 	lensvector<double> **x0_check;
@@ -1113,8 +1128,10 @@ class ImagePixelGrid : private Sort
 	lensvector<double> **twist_pts;
 	int *twiststat;
 	int *mask_pixels_i, *mask_pixels_j, *emask_pixels_i, *emask_pixels_j, *fgmask_pixels_i, *fgmask_pixels_j;
+	int *map_primary_mask_to_fgmask;
 	int *masked_pixel_corner_i, *masked_pixel_corner_j, *masked_pixel_corner, *masked_pixel_corner_up;
 	int *extended_mask_subpixel_i, *extended_mask_subpixel_j, *extended_mask_subpixel_index, *emask_subpixels_ii, *emask_subpixels_jj;
+	int *fgmask_subpixel_i, *fgmask_subpixel_j, *fgmask_subpixel_index;
 	int *mask_subpixel_i, *mask_subpixel_j, *mask_subpixel_index;
 
 	lensvector<double> sourcept;
@@ -1122,7 +1139,7 @@ class ImagePixelGrid : private Sort
 	bool include_potential_perturbations;
 
 	long int ntot_corners, image_npixels, image_npixels_emask, image_npixels_fgmask;
-	long int image_n_subpixels_emask, image_n_subpixels;
+	long int image_n_subpixels_fgmask, image_n_subpixels_emask, image_n_subpixels;
 	int image_npixels_data; // right now, only used during optimization of regparam (and is only different from image_npixels when include_fgmask_in_inversion is used and there is padding of the fgmask)
 
 	int n_pixsrc_to_include_in_Lmatrix;
@@ -1240,7 +1257,6 @@ class ImagePixelGrid : private Sort
 
 	bool assign_pixel_mappings(const bool potential_perturbations=false, const bool verbal=false);
 	void assign_foreground_mappings(const bool use_data = true);
-	void construct_Lmatrix_shapelets();
 	void add_MGE_amplitudes_to_Lmatrix();
 	//void PSF_convolution_Lmatrix_dense(const bool verbal=false);
 	template <typename MathTypes>
@@ -1339,6 +1355,7 @@ class ImagePixelGrid : private Sort
 
 	//void add_lum_weighted_reg_term(const bool dense_Fmatrix, const bool use_matrix_copies);
 	double brents_min_method(double (ImagePixelGrid::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
+	template <typename MathTypes>
 	void create_regularization_matrix_shapelet();
 	void create_MGE_regularization_matrices();
 	void generate_Rmatrix_shapelet_gradient();
@@ -1346,6 +1363,7 @@ class ImagePixelGrid : private Sort
 
 	template <typename MathTypes>
 	void initialize_pixel_matrices(const bool potential_perturbations=false, bool verbal=false);
+	template <typename MathTypes>
 	void initialize_pixel_matrices_shapelets(bool verbal=false);
 	void count_shapelet_amplitudes();
 	void count_MGE_amplitudes(int& n_mge_objects, int& n_gaussians);
@@ -1355,6 +1373,8 @@ class ImagePixelGrid : private Sort
 	void construct_Lmatrix_supersampled(const bool delaunay=true, const bool potential_perturbations=false, const bool verbal=false);
 	template <typename MathTypes>
 	void construct_Lmatrix_dense(const bool delaunay, const bool potential_perturbations, const bool verbal);
+	template <typename MathTypes>
+	void construct_Lmatrix_shapelets();
 	void PSF_convolution_Lmatrix(bool verbal = false);
 	void PSF_convolution_pixel_vector(const bool foreground = false, const bool verbal = false, const bool use_fft = false, const bool use_emask = false);
 	void average_supersampled_image_surface_brightness();
@@ -1426,6 +1446,7 @@ class ImagePixelGrid : private Sort
 	void calculate_foreground_pixel_surface_brightness(const bool allow_lensed_nonshapelet_sources = true);
 	template <typename MathTypes>
 	void store_image_pixel_surface_brightness(const bool use_emask = false);
+	template <typename MathTypes>
 	void store_foreground_pixel_surface_brightness();
 	void vectorize_image_pixel_surface_brightness(const bool use_emask = false);
 
@@ -1521,7 +1542,7 @@ class ImagePixelGrid : private Sort
 
 
 	double find_approx_source_size(double& xcavg, double& ycavg, const bool verbal = false);
-	void find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal, double& sig, double& scaled_maxdist);
+	bool find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal, double& sig, double& scaled_maxdist);
 	void set_surface_brightness_vector_to_data();
 	void plot_grid(string filename, bool show_inactive_pixels);
 	void set_lens(QLens* qlensptr) { qlens = qlensptr; }
@@ -1533,6 +1554,14 @@ class ImagePixelGrid : private Sort
 	void find_surface_brightness(const bool use_emask = false, const bool foreground_only = false, const bool lensed_sources_only = false, const bool include_first_order_corrections = false, const bool show_only_first_order_corrections = false, const bool omit_noninverted_sources = false);
 	template <typename MathTypes>
 	void find_surface_brightness_vec(const bool use_extended_mask = false, const bool foreground_only = false, const bool lensed_sources_only = false, const bool omit_noninverted_sources = false);
+	template <typename MathTypes>
+	void find_foreground_surface_brightness_vec(const bool allow_lensed_noninverted_sources = false);
+#ifdef USE_STAN
+	stan::math::var_value<Eigen::VectorXd> scatter_to_large(const stan::math::var_value<Eigen::VectorXd>& small, int large_size, int* map);
+	stan::math::var_value<Eigen::VectorXd> gather_to_small(const stan::math::var_value<Eigen::VectorXd>& large, int small_size, int* map);
+
+#endif
+
 
 	template <typename QScalar>
 	void set_zero_lensed_surface_brightness();
@@ -1649,6 +1678,7 @@ struct ImageData : private Sort
 	bool **high_sn_pixel; // used to help determine optimal source pixel size based on area the high S/N pixels cover when mapped to source plane
 	int n_masks;
 	int *n_mask_pixels;
+	int *n_emask_pixels;
 	int *extended_mask_n_neighbors;
 	bool ***in_mask;
 	bool ***extended_mask;
@@ -1677,6 +1707,7 @@ struct ImageData : private Sort
 		high_sn_pixel = NULL;
 		n_masks = 0;
 		n_mask_pixels = NULL;
+		n_emask_pixels = NULL;
 		in_mask = NULL;
 		extended_mask = NULL;
 		extended_mask_n_neighbors = NULL;
@@ -1716,7 +1747,7 @@ struct ImageData : private Sort
 	bool save_mask_fits(string fits_filename, const bool foreground=false, const bool emask=false, const int mask_k=0, const bool subimage=false, const double xmin_in=-1e30, const double xmax_in=1e30, const double ymin_in=-1e30, const double ymax_in=1e30);
 	bool copy_mask(ImageData* data, const int mask_k = 0);
 	void assign_high_sn_pixels();
-	double find_max_sb(const int mask_k = 0);
+	double find_max_sb(double& peak_x, double& peak_y, const int mask_k = 0);
 	double find_avg_sb(const double sb_threshold, const int mask_k = 0);
 	bool create_new_mask();
 	bool set_no_mask_pixels(const int mask_k = 0);
@@ -1727,7 +1758,7 @@ struct ImageData : private Sort
 	bool assign_mask_windows(const double sb_noise_threshold, const int threshold_size = 0, const int mask_k = 0);
 	bool unset_low_signal_pixels(const double sb_threshold, const int mask_k = 0);
 	bool set_positive_radial_gradient_pixels(const int mask_k = 0);
-	bool set_neighbor_pixels(const bool only_interior_neighbors, const bool only_exterior_neighbors, const int mask_k = 0);
+	bool set_neighbor_pixels(const bool only_interior_neighbors, const bool only_exterior_neighbors, const int mask_k = 0, const bool emask = false);
 	bool expand_foreground_mask(const int n_it);
 	bool set_mask_window(const double xmin, const double xmax, const double ymin, const double ymax, const bool unset = false, const int mask_k = 0);
 	bool set_mask_annulus(const double xc, const double yc, const double rmin, const double rmax, double theta1, double theta2, const double xstretch, const double ystretch, const bool unset = false, const bool foreground = false, const int mask_k = 0);

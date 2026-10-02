@@ -403,9 +403,9 @@ def plotdata(QLens_Object, *, show=True, band=0, title="", nomask=False, fgmask=
     dataimg = q.imgdata[band].plot(nomask=nomask,fgmask=fgmask)
     return plot_sb(dataimg,q,show=show,title=title)
 
-def plotimg(QLens_Object, *, src=-1, show=True, show_cc=True, nomask=False, nres=False, res=False, title="", output_fits=""):
+def plotimg(QLens_Object, *, src=-1, show=True, show_cc=True, nomask=False, emask=False, nres=False, res=False, title="", output_fits=""):
     q = QLens_Object
-    img = q.plotimg(src=src,nres=nres,res=res,nomask=nomask,output_fits=output_fits)
+    img = q.plotimg(src=src,nres=nres,res=res,nomask=nomask,emask=emask,output_fits=output_fits)
     if (output_fits==""):
         if (show_cc==True and src >= 0):
             q.mkgrid_extended_src(src)

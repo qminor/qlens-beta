@@ -1,6 +1,7 @@
 #ifndef QLENS_H
 #define QLENS_H
 
+#include "types.h"
 #include "modelparams.h"
 #include "sort.h"
 #include "brent.h"
@@ -50,38 +51,6 @@
 #endif
 
 using std::string;
-
-// Eventually, I'd like to be able to instantiate EigenTypes with fvar (forward-mode autodif variable), which will be useful for getting the Hessian.
-// But for now, it's only being instantiated with doubles.
-template <typename Scalar>
-struct EigenTypes {
-	using QScalar = Scalar;
-	using VecType = Eigen::VectorX<Scalar>;
-	using MatType = Eigen::MatrixX<Scalar>;
-	using SparseMatType = Eigen::SparseMatrix<Scalar, Eigen::ColMajor>;
-};
-
-using PlainTypes = EigenTypes<double>;
-
-#ifdef USE_STAN
-struct VarmatTypes {
-	using QScalar = stan::math::var;
-	using VecType = stan::math::var_value<Eigen::VectorXd>;
-	using MatType = stan::math::var_value<Eigen::MatrixXd>;
-	using SparseMatType = stan::math::var_value<Eigen::SparseMatrix<double, Eigen::ColMajor>>;
-};
-#endif
-
-// this function is for assigning value that sorts out whether it's autodiff or not. (This should not add overhead as long as compiling with -O2 or -O3)
-template <typename T>
-inline auto value_of(const T& x)
-{
-#ifdef USE_STAN
-    return stan::math::value_of(x);
-#else
-    return x;
-#endif
-}
 
 enum SourceFitMode { Point_Source, Cartesian_Source, Delaunay_Source, Parameterized_Source, Shapelet_Source };
 enum Prior { UNIFORM_PRIOR, LOG_PRIOR, GAUSS_PRIOR, GAUSS2_PRIOR, GAUSS2_PRIOR_SECONDARY };
@@ -349,7 +318,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	inline static bool use_autodiff = false;
 	static int nthreads;
 	int inversion_nthreads;
-	int simplex_nmax, simplex_nmax_anneal;
+	int optimization_nmax, simplex_nmax_anneal;
 	bool simplex_show_bestfit;
 	double simplex_temp_initial, simplex_temp_final, simplex_cooling_factor, simplex_minchisq, simplex_minchisq_anneal;
 	int n_livepts; // for nested sampling
@@ -370,6 +339,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	int n_hutchinson_probes;
 	double n_image_threshold;
 	double n_image_prior_expfac;
+	double outside_sb_prior_expfac;
 	double srcpixel_nimg_mag_threshold;
 	bool outside_sb_prior;
 	double outside_sb_prior_noise_frac, n_image_prior_sb_frac;
@@ -478,6 +448,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	dvector bestfitparams;
 	Eigen::MatrixXd bestfit_param_covmatrix;
 	Eigen::MatrixXd param_covmatrix;
+	double param_covmatrix_scale_factor;
 	double bestfit_flux;
 	double chisq_bestfit;
 	SourceFitMode source_fit_mode;
@@ -527,6 +498,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	bool borrowed_image_data; // tells whether image_data is pointing to that of another QLens object (e.g. fitmodel pointing to initial lens object)
 	WeakLensingData weak_lensing_data;
 	double chisq_tolerance;
+	double gradient_tolerance, gradient_tolerance_rel;
 	double image_pos_accuracy;
 	int lumreg_max_it;
 	int n_repeats;
@@ -773,9 +745,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	template <typename QScalar, typename MathTypes>
 	QScalar pixel_log_evidence_times_two_sbprofile(QScalar &chisq0, const bool verbal);
 	template <typename QScalar, typename MathTypes>
-	QScalar pixel_log_evidence_times_two_delaunay(QScalar &chisq0, const bool verbal, const int ranchisq_i);
-	template <typename QScalar, typename MathTypes>
-	QScalar pixel_log_evidence_times_two_delaunay_test(QScalar &chisq0, const bool verbal, const int ranchisq_i);
+	QScalar pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool verbal, const int ranchisq_i);
 
 	template <typename MathTypes>
 	void setup_auxiliary_sourcegrids_and_point_imgs(int* src_i_list, const bool verbal);
@@ -783,6 +753,9 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	bool generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, const int src_i, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
 	template <typename MathTypes>
 	bool generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, const int src_i, const bool potential_perturbations, const bool save_sb_gradient, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
+	template <typename MathTypes>
+	bool generate_and_invert_lensing_matrix_shapelet(const int imggrid_i, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
+
 	template <typename MathTypes>
 	typename MathTypes::QScalar find_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, const bool verbal);
 	void set_n_imggrids_to_include_in_inversion();
@@ -797,7 +770,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	void find_optimal_sourcegrid_for_analytic_source();
 	template <typename MathTypes>
-	bool create_sourcegrid_cartesian(const int band_number, const int zsrc_i, const bool verbal, const bool use_mask, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false);
+	bool create_sourcegrid_cartesian(const int band_number, const int zsrc_i, const bool verbal, const bool use_mask, const bool autogrid_from_analytic_source = true, const bool image_grid_already_exists = false, const bool use_auxiliary_srcgrid = false, const bool try_to_use_image_pixel_grid = true);
 	bool create_sourcegrid_delaunay(const int src_i, const bool use_mask, const bool verbal);
 	template <typename MathTypes>
 	bool create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal=false);
@@ -1141,7 +1114,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	void create_and_add_source_object(SB_ProfileName name, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double sb_norm, const double scale, const double scale2, const double logslope_param, const double q, const double theta, const double xc, const double yc, const double special_param1 = -1, const double special_param2 = -1, const int pmode = 0);
 	void create_and_add_splined_source_object(const char *splinefile, const bool is_lensed, const int band_number, const double zsrc_in, const int emode, const double q, const double theta, const double qx, const double f, const double xc, const double yc);
 	void create_and_add_multipole_source(const bool is_lensed, const int band_number, const double zsrc_in, int m, const double a_m, const double n, const double theta, const double xc, const double yc, bool sine_term);
-	void create_and_add_shapelet_source(const bool is_lensed, const int band_number, const double zsrc_in, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
+	void create_and_add_shapelet_source(const bool is_lensed, const int band_number, const double zsrc_in, const double regparam, const double amp00, const double sig_x, const double q, const double theta, const double xc, const double yc, const int nmax, const bool truncate, const int pmode = 0);
 	void create_and_add_mge_source(const bool is_lensed, const int band_number, const double zsrc_in, const double reg, const double amp0, const double sig_i, const double sig_f, const double q, const double theta, const double xc, const double yc, const int nmax, const int pmode = 0);
 
 

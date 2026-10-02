@@ -18,7 +18,7 @@ double default_zsrc_ref = 2;
 QLens* global_qlens_ptr = NULL;
 
 void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_ptr, double& z, double& zs, boolvector& vary_list, bool& transform_to_pixsrc_frame, py::kwargs& kwargs); // function definition is at end of file
-void process_init_src_kwargs(int& pmode, int& band, QLens_Wrap*& qlens_ptr, double& zs, boolvector& vary_list, bool& unlensed, bool& lensed_center, py::kwargs& kwargs); // function definition is at end of file
+void process_init_src_kwargs(int& pmode, int& band, QLens_Wrap*& qlens_ptr, double& zs, boolvector& vary_list, bool& unlensed, bool& lensed_center, bool& use_peak_sb_point, py::kwargs& kwargs); // function definition is at end of file
 void check_for_unexpected_params(const py::dict& dict, const std::set<std::string> &allowed);
 
 PYBIND11_MODULE(qlens, m) {
@@ -344,7 +344,7 @@ PYBIND11_MODULE(qlens, m) {
 						val[iter] = py::cast<bool>(item); iter++;
 				}
 				if (current.set_varyflags(val)==false) {
-					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+					throw std::runtime_error("Number of input vary flags does not match number of model parameters");
 				}
 			}
 		})
@@ -790,9 +790,6 @@ PYBIND11_MODULE(qlens, m) {
  				 for (ssize_t i = 0; i < nx; ++i)
  					  zbuf(j,i) = zvals[j*nx + i];
 
-			//py::array_t<double> xvec(nx+1,xvals.array());
-			//py::array_t<double> yvec(ny+1,yvals.array());
-			//py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		.def("mask_all_pixels", [](ImageData &current, py::kwargs &kwargs) {
@@ -840,6 +837,21 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			if (!current.invert_mask(mask_i)) throw std::runtime_error("could not alter mask");
 		})
+		.def("reset_emask", [](ImageData &current, py::kwargs &kwargs) {
+			int mask_i = 0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="mask") {
+					try {
+						mask_i = py::cast<int>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid integer value for 'mask' argument");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for 'reset_mask'");
+				}
+			}
+			if (!current.reset_extended_mask(mask_i)) throw std::runtime_error("could not reset emask");
+		})
 		.def("unmask_neighbor_pixels", [](ImageData &current, py::kwargs &kwargs) {
 			int mask_i = 0;
 			bool interior = false;
@@ -879,6 +891,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def("mask_neighbor_pixels", [](ImageData &current, py::kwargs &kwargs) {
 			int mask_i = 0;
 			int ntimes = 1;
+			bool emask = false;
 			for (auto item : kwargs) {
 				if (py::cast<string>(item.first)=="mask") {
 					try {
@@ -886,6 +899,13 @@ PYBIND11_MODULE(qlens, m) {
 					} catch (...) {
 						throw std::runtime_error("Invalid integer value for 'mask' argument");
 					}
+				} else if (py::cast<string>(item.first)=="emask") {
+					try {
+						emask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'emask' argument");
+					}
+
 				} else if (py::cast<string>(item.first)=="n") {
 					try {
 						ntimes = py::cast<int>(item.second);
@@ -897,7 +917,7 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 			current.invert_mask(mask_i);
-			for (int i=0; i < ntimes; i++) current.set_neighbor_pixels(false,false,mask_i);
+			for (int i=0; i < ntimes; i++) current.set_neighbor_pixels(false,false,mask_i,emask);
 			current.invert_mask(mask_i);
 		})
 		.def("mask_low_sn_pixels", [](ImageData &current, py::kwargs &kwargs) {
@@ -1665,7 +1685,7 @@ PYBIND11_MODULE(qlens, m) {
 						val[iter] = py::cast<bool>(item); iter++;
 				}
 				if (current.set_vary_flags(val)==false) {
-					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+					throw std::runtime_error("Number of input vary flags does not match number of ptsrc parameters");
 				}
 			}
 		})
@@ -1732,21 +1752,61 @@ PYBIND11_MODULE(qlens, m) {
 			//current.get_limits(lower,upper);
 			//// I think it should return a list of tuples with lower limit and upper limit. Do this later
 		//})
-		.def("anchor_param", [](LensProfile &current, const string name, LensProfile* param_anchor_lens, const string anchor_param_name){
+		.def("anchor_param", [](LensProfile &current, const string name, LensProfile* param_anchor_lens, const string anchor_param_name, py::kwargs &kwargs){
 			int paramnum = -1;
 			int anchor_paramnum = -1;
+			double ratio = 1.0;
+			double exponent = 1.0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="ratio") {
+					try {
+						ratio = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid anchor ratio");
+					}
+				} else if (py::cast<string>(item.first)=="exponent") {
+					try {
+						exponent = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid anchor exponent");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for anchor_param");
+				}
+			}
+
 			if (!current.lookup_parameter_number(name,paramnum)) throw std::runtime_error("could not find parameter '" + name +"'");
 			if (current.get_vary_flag(paramnum)==true) throw std::runtime_error("cannot anchor parameter if its vary flag is set to 'True'");
 			if (!param_anchor_lens->lookup_parameter_number(anchor_param_name,anchor_paramnum)) throw std::runtime_error("could not find parameter '" + anchor_param_name +"'");
-			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,1.0,1.0,param_anchor_lens);
+			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,ratio,exponent,param_anchor_lens);
 		})
-		.def("anchor_param", [](LensProfile &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name){
+		.def("anchor_param", [](LensProfile &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name, py::kwargs &kwargs){
 			int paramnum = -1;
 			int anchor_paramnum = -1;
+			double ratio = 1.0;
+			double exponent = 1.0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="ratio") {
+					try {
+						ratio = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid anchor ratio");
+					}
+				} else if (py::cast<string>(item.first)=="exponent") {
+					try {
+						exponent = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid anchor exponent");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for anchor_param");
+				}
+			}
+
 			if (!current.lookup_parameter_number(name,paramnum)) throw std::runtime_error("could not find parameter '" + name +"'");
 			if (current.get_vary_flag(paramnum)==true) throw std::runtime_error("cannot anchor parameter if its vary flag is set to 'True'");
 			if (!param_anchor_source->lookup_parameter_number(anchor_param_name,anchor_paramnum)) throw std::runtime_error("could not find parameter '" + anchor_param_name +"'");
-			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,1.0,1.0,param_anchor_source);
+			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,ratio,exponent,param_anchor_source);
 		})
 		.def("anchor_center",&LensProfile::anchor_center_to_lens)
 		.def("__repr__", [](LensProfile &a) {
@@ -2377,7 +2437,7 @@ PYBIND11_MODULE(qlens, m) {
 						val[iter] = py::cast<bool>(item); iter++;
 				}
 				if (current.set_vary_flags(val)==false) {
-					throw std::runtime_error("Number of input vary flags does not match number of lens parameters");
+					throw std::runtime_error("Number of input vary flags does not match number of src parameters");
 				}
 			}
 		})
@@ -2438,13 +2498,33 @@ PYBIND11_MODULE(qlens, m) {
 			return value;
 		})
 		//.def("sb", &SB_Profile::surface_brightness)
-		.def("anchor_param", [](SB_Profile &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name){
+		.def("anchor_param", [](SB_Profile &current, const string name, SB_Profile* param_anchor_source, const string anchor_param_name, py::kwargs& kwargs){
 			int paramnum = -1;
 			int anchor_paramnum = -1;
+			double ratio = 1.0;
+			double exponent = 1.0;
+			for (auto item : kwargs) {
+				if (py::cast<string>(item.first)=="ratio") {
+					try {
+						ratio = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid anchor ratio");
+					}
+				} else if (py::cast<string>(item.first)=="exponent") {
+					try {
+						exponent = py::cast<double>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid anchor exponent");
+					}
+				} else {
+					throw std::runtime_error("Keyword argument not recognized for anchor_param");
+				}
+			}
+
 			if (!current.lookup_parameter_number(name,paramnum)) throw std::runtime_error("could not find parameter '" + name +"'");
 			if (current.get_vary_flag(paramnum)==true) throw std::runtime_error("cannot anchor parameter if its vary flag is set to 'True'");
 			if (!param_anchor_source->lookup_parameter_number(anchor_param_name,anchor_paramnum)) throw std::runtime_error("could not find parameter '" + anchor_param_name +"'");
-			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,1.0,1.0,param_anchor_source);
+			current.assign_anchored_parameter(paramnum,anchor_paramnum,false,false,ratio,exponent,param_anchor_source);
 		})
 		//.def("anchor_center",&SB_Profile::anchor_center_to_source)
 		.def("__repr__", [](SB_Profile &a) {
@@ -2463,8 +2543,10 @@ PYBIND11_MODULE(qlens, m) {
 			QLens_Wrap* qlens_ptr = NULL;
 			bool unlensed = false;
 			bool lensed_center = false;
+			bool use_peak_sb_point = false;
 			boolvector vary_list;
-			process_init_src_kwargs(pmode, band, qlens_ptr, zsrc, vary_list, unlensed, lensed_center, kwargs);
+			process_init_src_kwargs(pmode, band, qlens_ptr, zsrc, vary_list, unlensed, lensed_center, use_peak_sb_point, kwargs);
+
 			if (zsrc==-1) {
 				if (unlensed) zsrc = 0;
 				else if (qlens_ptr != NULL) zsrc = qlens_ptr->source_redshift;
@@ -2472,10 +2554,8 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			if (kwargs) {
 				for (auto item : kwargs) {
-					//if (py::cast<string>(item.first)=="band") {
+					//if (py::cast<string>(item.first)=="BLA") {
 						//band = py::cast<int>(item.second);
-					//} else if (py::cast<string>(item.first)=="z") {
-						//zsrc = py::cast<double>(item.second);
 					//} else {
 						throw std::runtime_error("unknown argument to Gaussian");
 					//}
@@ -2488,6 +2568,10 @@ PYBIND11_MODULE(qlens, m) {
 			std::set<std::string> allowed = {"sbmax","sigma"};
 			SB_Profile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
 			check_for_unexpected_params(dict,allowed);
+			if ((use_peak_sb_point) and (lensed_center)) {
+				if (qlens_ptr != NULL) qlens_ptr->find_max_sb_point_from_data(xc,yc,band,0);
+				else throw std::runtime_error("need to pass in qlens object to set center from peak surface brightness pixel");
+			}
 
 			Gaussian* gaussian = new Gaussian(band,zsrc,p1,p2,q1,q2,xc,yc,NULL);
 			if (unlensed) gaussian->set_lensed(false);
@@ -2512,8 +2596,9 @@ PYBIND11_MODULE(qlens, m) {
 			QLens_Wrap* qlens_ptr = NULL;
 			bool unlensed = false;
 			bool lensed_center = false;
+			bool use_peak_sb_point = false;
 			boolvector vary_list;
-			process_init_src_kwargs(pmode, band, qlens_ptr, zsrc, vary_list, unlensed, lensed_center, kwargs);
+			process_init_src_kwargs(pmode, band, qlens_ptr, zsrc, vary_list, unlensed, lensed_center, use_peak_sb_point, kwargs);
 			if (zsrc==-1) {
 				if (unlensed) zsrc = 0;
 				else if (qlens_ptr != NULL) zsrc = qlens_ptr->source_redshift;
@@ -2521,12 +2606,8 @@ PYBIND11_MODULE(qlens, m) {
 			}
 			if (kwargs) {
 				for (auto item : kwargs) {
-					//if (py::cast<string>(item.first)=="pmode") {
+					//if (py::cast<string>(item.first)=="BLA") {
 						//pmode = py::cast<int>(item.second);
-					//} else if (py::cast<string>(item.first)=="band") {
-						//band = py::cast<int>(item.second);
-					//} else if (py::cast<string>(item.first)=="z") {
-						//zsrc = py::cast<double>(item.second);
 					//} else {
 						throw std::runtime_error("unknown argument to Sersic");
 					//}
@@ -2539,15 +2620,23 @@ PYBIND11_MODULE(qlens, m) {
 			} else if (pmode==1) {
 				p1 = py::cast<double>(dict["s_eff"]);
 			} else throw std::runtime_error("Can only choose pmode=0 or 1");
-			p2 = py::cast<double>(dict["R_eff"]);
+			try {
+				p2 = py::cast<double>(dict["Reff"]);
+			} catch (...) {
+				p2 = py::cast<double>(dict["R_eff"]);
+			}
 			p3 = py::cast<double>(dict["n"]);
-			std::set<std::string> allowed = {"R_eff","n"};
+			std::set<std::string> allowed = {"Reff","R_eff","n"};
 			if (pmode==0) allowed.insert("s0");
 			else allowed.insert("s_eff");
 			SB_Profile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
 			check_for_unexpected_params(dict,allowed);
+			if ((use_peak_sb_point) and (lensed_center)) {
+				if (qlens_ptr != NULL) qlens_ptr->find_max_sb_point_from_data(xc,yc,band,0);
+				else throw std::runtime_error("need to pass in qlens object to set center from peak surface brightness pixel");
+			}
 
-			Sersic *sersic = new Sersic(band,zsrc,p1,p2,p3,q1,q2,xc,yc,0,NULL);
+			Sersic *sersic = new Sersic(band,zsrc,p1,p2,p3,q1,q2,xc,yc,pmode,NULL);
 			if (unlensed) sersic->set_lensed(false);
 			if (lensed_center) sersic->set_lensed_center(true,qlens_ptr);
 			if (vary_list.size() > 0) {
@@ -2558,6 +2647,75 @@ PYBIND11_MODULE(qlens, m) {
 			return sersic;
 		}))
 		;
+
+
+	py::class_<Shapelet, SB_Profile, std::unique_ptr<Shapelet, py::nodelete>>(m, "Shapelet")
+		.def(py::init<>([](){return new Shapelet();}))
+		.def(py::init<const Shapelet*>())
+		.def(py::init([](py::dict dict, py::kwargs& kwargs) {
+			int pmode = 0;
+			int band = 0;
+			double zsrc = -1;
+			double amp00 = 1.0;
+			QLens_Wrap* qlens_ptr = NULL;
+			bool unlensed = false;
+			bool lensed_center = false;
+			bool use_peak_sb_point = false;
+			double regparam, regparam_default = 1000;
+			int nmax = 1;
+			boolvector vary_list;
+			process_init_src_kwargs(pmode, band, qlens_ptr, zsrc, vary_list, unlensed, lensed_center, use_peak_sb_point, kwargs);
+			if (zsrc==-1) {
+				if (unlensed) zsrc = 0;
+				else if (qlens_ptr != NULL) zsrc = qlens_ptr->source_redshift;
+				else throw std::runtime_error("need to specify either specific source redshift (zsrc), or else pass in qlens object to use default redshift");
+			}
+			if (kwargs) {
+				for (auto item : kwargs) {
+					if (py::cast<string>(item.first)=="n") {
+						nmax = py::cast<int>(item.second);
+					} else if (py::cast<string>(item.first)=="amp00") {
+						amp00 = py::cast<double>(item.second);
+					} else {
+						throw std::runtime_error("unknown argument to Shapelet");
+					}
+				}
+			}
+
+			double p1,q1,q2,xc,yc;
+			if (pmode==0) {
+				p1 = py::cast<double>(dict["sigma"]);
+			} else if (pmode==1) {
+				p1 = py::cast<double>(dict["sigfac"]);
+			} else throw std::runtime_error("Can only choose pmode=0 or 1");
+			try {
+				regparam = py::cast<double>(dict["regparam"]);
+			} catch (...) {
+				regparam = regparam_default;
+			}
+			std::set<std::string> allowed = {"regparam"};
+			if (pmode==0) allowed.insert("sigma");
+			else allowed.insert("sigfac");
+			SB_Profile::extract_geometric_params_from_map(q1,q2,xc,yc,py::cast<std::map<string,double>>(dict),allowed);
+			check_for_unexpected_params(dict,allowed);
+			if ((use_peak_sb_point) and (lensed_center)) {
+				if (qlens_ptr != NULL) qlens_ptr->find_max_sb_point_from_data(xc,yc,band,0);
+				else throw std::runtime_error("need to pass in qlens object to set center from peak surface brightness pixel");
+			}
+
+			Shapelet *shapelet = new Shapelet(band, zsrc, regparam, amp00, p1, q1, q2, xc, yc, nmax, false, pmode, qlens_ptr);
+			if (unlensed) shapelet->set_lensed(false);
+			if (lensed_center) shapelet->set_lensed_center(true,qlens_ptr);
+			if (vary_list.size() > 0) {
+				if (shapelet->set_vary_flags(vary_list)==false) {
+					throw std::runtime_error("Number of input vary flags does not match number of source parameters");
+				}
+			}
+			return shapelet;
+		}))
+		;
+
+
 
 	py::class_<DelaunaySourceGrid, Model, std::unique_ptr<DelaunaySourceGrid, py::nodelete>>(m, "DelaunaySrcGrid")
 		.def(py::init<>([](QLens* qlens_in){return new DelaunaySourceGrid(qlens_in);}))
@@ -2627,9 +2785,6 @@ PYBIND11_MODULE(qlens, m) {
  				 for (ssize_t i = 0; i < nx; ++i)
  					  zbuf(j,i) = zvals[j*nx + i];
  
- 			//py::array_t<double> xvec(nx+1,xvals.array());
- 			//py::array_t<double> yvec(ny+1,yvals.array());
- 			//py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		;
@@ -2696,12 +2851,6 @@ PYBIND11_MODULE(qlens, m) {
  				 for (ssize_t i = 0; i < nx; ++i)
  					  zbuf(j,i) = zvals[j*nx + i];
 
-			//py::array_t<double> xvec(nx+1,xvals.array());
-			//py::array_t<double> yvec(ny+1,yvals.array());
-			//double *zptr;
-			//if (show_mag) zptr = zvals.array();
-			//else zptr = zvals.array();
-			//py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zptr,py::none());
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		;
@@ -2801,6 +2950,8 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("nimg_prior", &QLens_Wrap::n_image_prior)
 		.def_readwrite("nimg_threshold", &QLens_Wrap::n_image_threshold)
 		.def_readwrite("nimg_sb_frac_threshold", &QLens_Wrap::n_image_prior_sb_frac)
+		.def_property("zero_outside_delaunay_border", &QLens_Wrap::get_zero_outside_delaunay_border, &QLens_Wrap::set_zero_outside_delaunay_border)
+		.def_readwrite("natural_neighbor_interpolation", &QLens_Wrap::natural_neighbor_interpolation)
 		.def_readwrite("srcpixel_clustering", &QLens_Wrap::use_srcpixel_clustering)
 		.def_readwrite("n_cluster_it", &QLens_Wrap::n_cluster_iterations)
 		.def_readwrite("show_wtime", &QLens_Wrap::show_wtime)
@@ -3229,6 +3380,12 @@ PYBIND11_MODULE(qlens, m) {
 					} catch (...) {
 						throw std::runtime_error("Invalid boolean value for 'nomask' argument");
 					}
+				} else if (py::cast<string>(item.first)=="emask") {
+					try {
+						show_extended_mask = py::cast<bool>(item.second);
+					} catch (...) {
+						throw std::runtime_error("Invalid boolean value for 'emask' argument");
+					}
 				} else if (py::cast<string>(item.first)=="output_fits") {
 					try {
 						fits_filename = py::cast<string>(item.second);
@@ -3276,12 +3433,13 @@ PYBIND11_MODULE(qlens, m) {
  				 for (ssize_t i = 0; i < nx; ++i)
  					  zbuf(j,i) = zvals[j*nx + i];
  
-			//py::array_t<double> xvec(nx+1,xvals.array());
-			//py::array_t<double> yvec(ny+1,yvals.array());
-			//py::array_t<double> zmat({ny,nx},{sizeof(double)*nx,sizeof(double)},zvals.array(),py::none());
 			return std::make_tuple(plottype,xvec,yvec,zmat);
 		})
 		.def_property("optimize_regparam", &QLens_Wrap::get_optimize_regparam, &QLens_Wrap::set_optimize_regparam)
+		.def_readwrite("regparam_minlog", &QLens_Wrap::optimize_regparam_minlog)
+		.def_readwrite("regparam_maxlog", &QLens_Wrap::optimize_regparam_maxlog)
+		.def_readwrite("auto_shapelet_scale", &QLens_Wrap::auto_shapelet_scaling)
+		.def_readwrite("auto_shapelet_center", &QLens_Wrap::auto_shapelet_center)
 		.def("set_sourcepts_auto",&QLens_Wrap::set_analytic_sourcepts, py::arg("verbal") = true)
 		.def("fitmodel", &QLens_Wrap::print_fit_model)
 		.def_readonly("sorted_critical_curve", &QLens_Wrap::sorted_critical_curve)
@@ -3442,14 +3600,21 @@ PYBIND11_MODULE(qlens, m) {
 		.def_readwrite("nrepeat", &QLens_Wrap::n_repeats)
 		.def_readwrite("flux_chisq", &QLens_Wrap::include_flux_chisq)
 		.def_readwrite("chisqtol", &QLens_Wrap::chisq_tolerance)
+		.def_readwrite("gradtol", &QLens_Wrap::gradient_tolerance)
+		.def_readwrite("gradtol_rel", &QLens_Wrap::gradient_tolerance_rel)
 		.def_readwrite("central_image", &QLens_Wrap::include_central_image)
 		.def_readwrite("chisqlog", &QLens_Wrap::open_chisq_logfile)
 		.def_readwrite("skip_newtons_method", &QLens_Wrap::skip_newtons_method)
 		.def_readwrite("invert_imgflux", &QLens_Wrap::include_imgfluxes_in_inversion)
 		.def_readwrite("invert_srcflux", &QLens_Wrap::include_srcflux_in_inversion)
-		//.def_readwrite("sourcepts_fit", &QLens_Wrap::sourcepts_fit)
+		.def_readwrite("find_covmatrix_inverse", &QLens_Wrap::find_covmatrix_inverse)
+		.def_readwrite("dense_Rmatrix", &QLens_Wrap::dense_Rmatrix)
+		.def_readwrite("covmatrix_epsilon", &QLens_Wrap::covmatrix_epsilon)
+		.def_readwrite("covmatrix_penalty", &QLens_Wrap::penalize_defective_covmatrix)
+		.def_readwrite("param_covmatrix_scale_fac", &QLens_Wrap::param_covmatrix_scale_factor)
+		.def_readwrite("nimg_prior_expfac", &QLens_Wrap::n_image_prior_expfac)
+		.def_readwrite("outside_sb_prior_expfac", &QLens_Wrap::outside_sb_prior_expfac)
 		.def_readwrite("n_livepts", &QLens_Wrap::n_livepts)
-		//.def_readwrite("warnings", &QLens_Wrap::warnings)
 		.def_property("warnings", &QLens_Wrap::get_warnings, &QLens_Wrap::set_warnings)
 		.def_property("sci_notation", &QLens_Wrap::get_sci_notation, &QLens_Wrap::set_sci_notation)
 		.def_property("fit_label", &QLens_Wrap::get_fit_label, &QLens_Wrap::set_fit_label)
@@ -3620,9 +3785,9 @@ void process_init_lens_kwargs(int& pmode, Cosmology*& cosmo, QLens_Wrap*& qlens_
 	}
 }	
 
-void process_init_src_kwargs(int& pmode, int& band, QLens_Wrap*& qlens_ptr, double& zs, boolvector& vary_list, bool& unlensed, bool& lensed_center, py::kwargs& kwargs) // function definition is at end of file
+void process_init_src_kwargs(int& pmode, int& band, QLens_Wrap*& qlens_ptr, double& zs, boolvector& vary_list, bool& unlensed, bool& lensed_center, bool& use_peak_sb_point, py::kwargs& kwargs)
 {
-	bool set_pmode=false, set_band=false, set_qlens=false, set_zs=false, set_vary=false, set_unlensed=false, set_lensed_center=false;
+	bool set_pmode=false, set_band=false, set_qlens=false, set_zs=false, set_vary=false, set_unlensed=false, set_lensed_center=false, set_use_peak_sb_point=false;
 	if (kwargs) {
 		for (auto item : kwargs) {
 			if (py::cast<string>(item.first)=="band") {
@@ -3645,6 +3810,11 @@ void process_init_src_kwargs(int& pmode, int& band, QLens_Wrap*& qlens_ptr, doub
 				lensed_center = py::cast<bool>(item.second);
 				if ((lensed_center) and (unlensed)) throw std::runtime_error("cannot set 'unlensed' and also 'lensed_center' at the same time");
 				set_lensed_center = true;
+			} else if (py::cast<string>(item.first)=="lensed_center_peak_sb") {
+				use_peak_sb_point = py::cast<bool>(item.second);
+				if (use_peak_sb_point) lensed_center = true;
+				if ((lensed_center) and (unlensed)) throw std::runtime_error("cannot set 'unlensed' and also 'lensed_center' at the same time");
+				set_use_peak_sb_point = true;
 			} else if (py::cast<string>(item.first)=="vary") { // allows for vary flags to be given at the same time as creating model
 				py::list py_vary_list = py::cast<py::list>(item.second);
 				vary_list.input(py_vary_list.size());
@@ -3662,6 +3832,7 @@ void process_init_src_kwargs(int& pmode, int& band, QLens_Wrap*& qlens_ptr, doub
 		if (set_vary) kwargs.attr("pop")("vary");
 		if (set_unlensed) kwargs.attr("pop")("unlensed");
 		if (set_lensed_center) kwargs.attr("pop")("lensed_center");
+		if (set_use_peak_sb_point) kwargs.attr("pop")("lensed_center_peak_sb");
 	}
 }
 

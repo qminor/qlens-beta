@@ -1,6 +1,7 @@
 #ifndef SBPROFILE_H
 #define SBPROFILE_H
 
+#include "types.h"
 #include "mathexpr.h"
 #include "spline.h"
 #include "egrad.h"
@@ -75,6 +76,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 #ifdef USE_STAN
 	protected:
 	using AutoDiffVec = stan::math::var_value<Eigen::VectorXd>;
+	using AutoDiffMat = stan::math::var_value<Eigen::MatrixXd>;
 #endif
 
 	private:
@@ -135,7 +137,6 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	bool include_boxiness_parameter;
 	bool include_truncation_radius;
 	boolvector vary_params;
-	std::string model_name;
 	std::vector<std::string> paramnames;
 	std::vector<std::string> latex_paramnames, latex_param_subscripts;
 	boolvector set_auto_penalty_limits;
@@ -202,6 +203,7 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 #endif
 
 	public:
+	std::string model_name;
 	static bool orient_major_axis_north;
 	static bool use_sb_ellipticity_components; // if set to true, uses e_1 and e_2 as fit parameters instead of q and theta
 	static int default_ellipticity_mode;
@@ -460,9 +462,20 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 		return surface_brightness_zoom(centerpt_stan,pt1_stan,pt2_stan,pt3_stan,pt4_stan,sb_noise); // this is for evaluating foreground surface brightness, where x and y are in imgplane (hence not autodiff)
 	}
 #endif
+	virtual Eigen::MatrixXd construct_Lmatrix_vec(const Eigen::VectorXd& input_pts_x, const Eigen::VectorXd& input_pts_y, const int nsp) {
+		return construct_Lmatrix_vec_impl<PlainTypes>(input_pts_x,input_pts_y,nsp);
+	}
+#ifdef USE_STAN
+	virtual AutoDiffMat construct_Lmatrix_vec(const AutoDiffVec& input_pts_x, const AutoDiffVec& input_pts_y, const int nsp) {
+		return construct_Lmatrix_vec_impl<VarmatTypes>(input_pts_x,input_pts_y,nsp);
+	}
+#endif
 
 	//virtual double calculate_Lmatrix_element(const double x, const double y, const int amp_index); // used by Shapelet subclass
 	virtual void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight); // used by Shapelet subclass
+	template <typename MathTypes>
+	typename MathTypes::MatType construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp);
+
 	//virtual void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
 	//virtual void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
 	virtual void calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements);
@@ -471,7 +484,11 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 	virtual void calculate_curvature_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix);
 
 
-	virtual void update_amplitudes(double*& ampvec); // used by Shapelet subclass
+	virtual void update_amplitudes(double*& ampvec); // used by MGE class
+	virtual void update_amplitudes(Eigen::VectorXd& ampvec); // used by Shapelet subclass
+#ifdef USE_STAN
+	virtual void update_amplitudes(stan::math::var_value<Eigen::VectorXd>& ampvec);
+#endif
 	virtual void get_regularization_param_ptr(double*& regparam_ptr); // for source objects that are regularized
 #ifdef USE_STAN
 	virtual void get_regularization_param_ptr(stan::math::var*& regparam_ptr); // for source objects that are regularized
@@ -507,6 +524,9 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 		sbparams->x_center_lensed = sbparams->x_center;
 		sbparams->y_center_lensed = sbparams->y_center;
 		set_center_if_lensed_coords<double>(qlens_ptr_in);
+#ifdef USE_STAN
+		sync_autodif_geometric_parameters();
+#endif
 		assign_paramnames();
 		assign_param_pointers();
 #ifdef USE_STAN
@@ -1170,7 +1190,7 @@ class Shapelet : public SB_Profile
 
 	public:
 	Shapelet() : SB_Profile() {}
-	Shapelet(const int band_in, const double &zsrc_in, const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate_2sig, const int parameter_mode_in, QLens* qlens_in);
+	Shapelet(const int band_in, const double &zsrc_in, const double &reg, const double &amp00, const double &sig_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate_2sig, const int parameter_mode_in, QLens* qlens_in);
 	Shapelet(const Shapelet* sb_in);
 	~Shapelet() {
 		if (sbparams_shapelet.amps != NULL) {
@@ -1193,8 +1213,16 @@ class Shapelet : public SB_Profile
 	stan::math::var surface_brightness(stan::math::var x, stan::math::var y) { return surface_brightness_impl(x,y); }
 #endif
 
+	void surface_brightness_vec(const Eigen::VectorXd& x0, const Eigen::VectorXd& y0, Eigen::VectorXd& sb, const int nsp=1) { surface_brightness_vec_impl<Eigen::VectorXd,double>(x0,y0,sb,nsp); }
+#ifdef USE_STAN
+	void surface_brightness_vec(const AutoDiffVec& x0, const AutoDiffVec& y0, AutoDiffVec& sb, const int nsp=1) { surface_brightness_vec_impl<AutoDiffVec,stan::math::var>(x0,y0,sb,nsp); }
+#endif
+
 	template <typename QScalar>
 	QScalar surface_brightness_impl(QScalar x, QScalar y);
+
+	template <typename VecType, typename QScalar>
+	void surface_brightness_vec_impl(const VecType& x0, const VecType& y0, VecType& sb, const int nsp);
 
 	double hermite_polynomial(const double x, const int n);
 
@@ -1211,6 +1239,15 @@ class Shapelet : public SB_Profile
 	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
 #endif
 
+	Eigen::MatrixXd construct_Lmatrix_vec(const Eigen::VectorXd& input_pts_x, const Eigen::VectorXd& input_pts_y, const int nsp) {
+		return construct_Lmatrix_vec_impl<PlainTypes>(input_pts_x,input_pts_y,nsp);
+	}
+#ifdef USE_STAN
+	AutoDiffMat construct_Lmatrix_vec(const AutoDiffVec& input_pts_x, const AutoDiffVec& input_pts_y, const int nsp) {
+		return construct_Lmatrix_vec_impl<VarmatTypes>(input_pts_x,input_pts_y,nsp);
+	}
+#endif
+
 	void assign_paramnames();
 	template <typename QScalar>
 	void assign_param_pointers_impl();
@@ -1221,13 +1258,20 @@ class Shapelet : public SB_Profile
 	void set_auto_ranges();
 	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
+	template <typename MathTypes>
+	typename MathTypes::MatType construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp);
+
 	void calculate_gradient_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix);
 	void calculate_curvature_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix);
 	void get_regularization_param_ptr(double*& regparam_ptr);
 #ifdef USE_STAN
 	void get_regularization_param_ptr(stan::math::var*& regparam_ptr);
 #endif
-	void update_amplitudes(double*& ampvec);
+	void update_amplitudes(Eigen::VectorXd& ampvec);
+#ifdef USE_STAN
+	void update_amplitudes(stan::math::var_value<Eigen::VectorXd>& ampvec);
+#endif
+
 	//void get_amplitudes(double *ampvec);
 	double get_scale_parameter();
 	void update_scale_parameter(const double scale);

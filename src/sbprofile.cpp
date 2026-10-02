@@ -55,6 +55,7 @@ void SB_Profile::setup_base_source_properties(const int np, const int sbprofile_
 	sbparams_dif->zsrc = 0;
 #endif
 
+	sb_number = -1; // until qlens adds it to source list and assigns it
 	parameter_mode = pmode_in;
 	center_anchored_to_lens = false;
 	center_anchored_to_source = false;
@@ -803,7 +804,7 @@ bool SB_Profile::vary_parameters(const boolvector& vary_params_in)
 	}
 
 	int pi, pf;
-	if (qlens) qlens->get_sb_parameter_numbers(sb_number,pi,pf); // these are the old parameter numbers
+	if ((qlens) and (sb_number >= 0)) qlens->get_sb_parameter_numbers(sb_number,pi,pf); // these are the old parameter numbers
 	if (vary_params_in.size() != n_params) {
 		if ((vary_params_in.size() == n_params-2) and ((center_anchored_to_source) or (center_anchored_to_lens))) {
 			vary_params[n_params-2] = false;
@@ -848,7 +849,7 @@ bool SB_Profile::vary_parameters(const boolvector& vary_params_in)
 	}
 	if (k != n_vary_params) die("k != n_vary_params");
 
-	if (qlens) {
+	if ((qlens) and (sb_number >= 0)) {
 		if (pf > pi) qlens->param_list->remove_params(pi,pf);
 		return qlens->register_sb_vary_parameters(sb_number);
 	}
@@ -888,7 +889,7 @@ void SB_Profile::get_vary_flags(boolvector& vary_flags)
 bool SB_Profile::register_vary_flags()
 {
 	// This function is called if there are already vary flags that have been set before adding the source to the list
-	if ((n_vary_params > 0) and (qlens != NULL))
+	if ((n_vary_params > 0) and (qlens))
 		return qlens->register_sb_vary_parameters(sb_number);
 	else return false;
 }
@@ -900,7 +901,7 @@ void SB_Profile::set_limits(const Vector<double>& lower, const Vector<double>& u
 	if (upper.size() != n_vary_params) die("number of parameters with upper limits does not match number of variable parameters");
 	lower_limits = lower;
 	upper_limits = upper;
-	if (qlens != NULL) qlens->register_sb_prior_limits(sb_number);
+	if ((qlens) and (sb_number >= 0)) qlens->register_sb_prior_limits(sb_number);
 }
 
 bool SB_Profile::set_limits_specific_parameter(const string name_in, const double& lower, const double& upper)
@@ -921,7 +922,7 @@ bool SB_Profile::set_limits_specific_parameter(const string name_in, const doubl
 		lower_limits[param_i] = lower;
 		upper_limits[param_i] = upper;
 	}
-	if (qlens != NULL) qlens->register_sb_prior_limits(sb_number);
+	if ((qlens) and (sb_number >= 0)) qlens->register_sb_prior_limits(sb_number);
 	return (param_i != -1);
 }
 
@@ -1015,7 +1016,7 @@ void SB_Profile::update_parameters(const double* params)
 	sync_autodif_parameters();
 	update_meta_parameters_autodif();
 #endif
-	if (qlens != NULL) {
+	if ((qlens) and (sb_number >= 0)) {
 		qlens->update_anchored_parameters_and_redshift_data();
 		qlens->update_sb_fitparams(sb_number);
 	}
@@ -1038,7 +1039,7 @@ bool SB_Profile::update_specific_parameter(const string name_in, const double& v
 		if (angle_param[paramnum]) *(p.param[paramnum]) = degrees_to_radians(value);
 		else *(p.param[paramnum]) = value;
 		update_meta_parameters();
-		if (qlens != NULL) {
+		if ((qlens) and (sb_number >= 0)) {
 			qlens->update_anchored_parameters_and_redshift_data();
 			qlens->update_sb_fitparams(sb_number);
 		}
@@ -1074,7 +1075,7 @@ bool SB_Profile::update_specific_parameter(const int paramnum, const double& val
 	sync_autodif_parameters();
 	update_meta_parameters_autodif();
 #endif
-	if (qlens != NULL) {
+	if ((qlens) and (sb_number >= 0)) {
 		qlens->update_anchored_parameters_and_redshift_data();
 		qlens->update_sb_fitparams(sb_number);
 	}
@@ -1131,8 +1132,10 @@ void SB_Profile::update_anchored_parameters()
 	for (int i=0; i < n_params; i++) {
 		if (anchor_parameter_to_source[i]) {
 			(*sbparams->param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->sbparams->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+			//cout << "anchored param: " << (*sbparams->param[i]) << endl;
 #ifdef USE_STAN
 			(*sbparams_dif->param[i]) = parameter_anchor_ratio[i]*pow(*(parameter_anchor_source[i]->sbparams_dif->param[parameter_anchor_paramnum[i]]),parameter_anchor_exponent[i]);
+			//cout << "anchored autodif param: " << value_of(*sbparams_dif->param[i]) << endl;
 #endif
 			if (at_least_one_param_anchored==false) at_least_one_param_anchored = true;
 		}
@@ -1346,8 +1349,8 @@ void SB_Profile::assign_anchored_parameter(const int& paramnum, const int& ancho
 	parameter_anchor_source[paramnum] = param_anchor_source;
 	parameter_anchor_paramnum[paramnum] = anchor_paramnum;
 	if ((!use_implicit_ratio) and (!use_exponent)) {
-		parameter_anchor_ratio[paramnum] = 1.0;
-		(*sbparams->param[paramnum]) = *(param_anchor_source->sbparams->param[anchor_paramnum]);
+		parameter_anchor_ratio[paramnum] = ratio;
+		(*sbparams->param[paramnum]) = ratio*(*(param_anchor_source->sbparams->param[anchor_paramnum]));
 	}
 	else if (use_implicit_ratio) {
 		parameter_anchor_exponent[paramnum] = 1.0;
@@ -1472,10 +1475,8 @@ void SB_Profile::sync_autodif_geometric_parameters()
 	sbparams_dif->theta = sbparams->theta;
 	sbparams_dif->x_center = sbparams->x_center;
 	sbparams_dif->y_center = sbparams->y_center;
-	if (lensed_center_coords) {
-		sbparams_dif->x_center_lensed = sbparams->x_center_lensed;
-		sbparams_dif->y_center_lensed = sbparams->y_center_lensed;
-	}
+	sbparams_dif->x_center_lensed = sbparams->x_center_lensed;
+	sbparams_dif->y_center_lensed = sbparams->y_center_lensed;
 	if ((!fourier_gradient) and (n_fourier_modes > 0)) {
 		for (int i=0; i < n_fourier_modes; i++) {
 			sbparams_dif->fourier_mode_cosamp[i] = sbparams->fourier_mode_cosamp[i];
@@ -1512,7 +1513,17 @@ void SB_Profile::set_center_if_lensed_coords(QLens* qlens_ptr_in)
 			if (qlens==NULL) die("Cannot use lensed center coordinates if pointer to QLens object hasn't been assigned");
 			else qlens_ptr = qlens;
 		}
+		//lensvector<double> xld;
+		//xld[0] = sbparams->x_center_lensed;
+		//xld[1] = sbparams->y_center_lensed;
+		//cout << "HI0 xld=" << xld[0] << " " << xld[1] << endl;
 		lensvector<QScalar> xl;
+		//lensvector<stan::math::var> xla;
+		//cout << "GORG?" << endl;
+		//if (sbparams_dif==NULL) cout << "WOAH sbparams_dif is null" << endl;
+		//xla[0] = sbparams_dif->x_center_lensed;
+		//xla[1] = sbparams_dif->y_center_lensed;
+		//cout << "HI0 xla=" << value_of(xla[0]) << " " << value_of(xla[1]) << endl;
 		xl[0] = p.x_center_lensed;
 		xl[1] = p.y_center_lensed;
 		qlens_ptr->find_sourcept<QScalar>(xl,p.x_center,p.y_center,0,qlens_ptr->reference_zfactors,qlens_ptr->default_zsrc_beta_factors);
@@ -1579,6 +1590,7 @@ void SB_Profile::update_ellipticity_meta_parameters()
 		}
 		*/
 	}
+
 	if (lensed_center_coords) set_center_if_lensed_coords<QScalar>();
 }
 template void SB_Profile::update_ellipticity_meta_parameters<double>();
@@ -1887,6 +1899,10 @@ template double SB_Profile::surface_brightness_impl<double>(double x, double y);
 template stan::math::var SB_Profile::surface_brightness_impl<stan::math::var>(stan::math::var x, stan::math::var y);
 #endif
 
+
+
+
+
 template <typename QScalar>
 QScalar SB_Profile::surface_brightness_zoom(lensvector<QScalar> &centerpt, lensvector<QScalar> &pt1, lensvector<QScalar> &pt2, lensvector<QScalar> &pt3, lensvector<QScalar> &pt4, const double sb_noise)
 {
@@ -2126,6 +2142,34 @@ template stan::math::var SB_Profile::surface_brightness_impl<stan::math::var>(st
 #endif
 */
 
+/*
+template <typename QScalar>
+QScalar SB_Profile::surface_brightness_impl(QScalar x, QScalar y)
+{
+#ifdef USE_STAN
+	using stan::math::sqrt;
+#endif
+	// switch to coordinate system centered on surface brightness profile
+	SB_Params<QScalar>& p = assign_sbparam_object<QScalar>();
+	x -= p.x_center;
+	y -= p.y_center;
+	if (p.theta != 0) rotate(x,y);
+
+	QScalar xisq;
+
+	if (ellipticity_mode==0) xisq = sqrt(x*x + SQR(y/p.q));
+	else xisq = sqrt(x*x*p.q + y*y/p.q);
+
+	QScalar sb = sb_rsq(xisq);
+	return sb;
+}
+template double SB_Profile::surface_brightness_impl<double>(double x, double y);
+#ifdef USE_STAN
+template stan::math::var SB_Profile::surface_brightness_impl<stan::math::var>(stan::math::var x, stan::math::var y);
+#endif
+*/
+
+
 template <typename VecType, typename QScalar>
 void SB_Profile::surface_brightness_vec_impl(const VecType& x0, const VecType& y0, VecType& sb, const int nsp)
 {
@@ -2146,7 +2190,7 @@ void SB_Profile::surface_brightness_vec_impl(const VecType& x0, const VecType& y
 	VecType x = p.costheta * dx + p.sintheta * dy;
 	VecType y = -p.sintheta * dx + p.costheta * dy;
 
-	VecType xisq;
+	VecType xisq, fourier_factor = Eigen::VectorXd::Ones(x.size());
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<VecType>) {
 		if (ellipticity_mode==0) xisq = stan::math::elt_multiply(x,x) + stan::math::elt_multiply(y,y)/(p.q*p.q);
@@ -2157,6 +2201,36 @@ void SB_Profile::surface_brightness_vec_impl(const VecType& x0, const VecType& y
 		if (ellipticity_mode==0) xisq = (x.array().square() + y.array().square()/(p.q*p.q)).matrix();
 		else if (ellipticity_mode==1) xisq = (p.q*x.array().square() + y.array().square()/p.q).matrix();
 	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+	} else
+#endif
+	if (n_fourier_modes > 0) {
+		VecType phi_q; // used for Fourier modes
+		Eigen::VectorXd angle_correct = Eigen::VectorXd::Zero(x.size());
+		if (fourier_use_eccentric_anomaly) phi_q = (y.array()/(p.q*x.array())).atan().matrix();
+		else phi_q = (y.array()/x.array()).atan().matrix(); // for SB perturbations, we don't use eccentric anomaly as our angle because the corresponding lensing multipoles can't either
+			// Check the angle below!!!! Shouldn't you use angle c.c. from x-axis here? (comp to ellipse sampling angle in pixelgrid.cpp)
+		for (int i=0; i < phi_q.size(); i++) {
+			if (x(i) < 0) angle_correct(i) = M_PI;
+			else if (y(i) < 0) angle_correct(i) = M_2PI;
+		}
+		phi_q = phi_q + angle_correct;
+
+		if (use_fmode_scaled_amplitudes) {
+			for (int i=0; i < n_fourier_modes; i++) {
+				fourier_factor = fourier_factor + ((p.fourier_mode_cosamp[i]*(fourier_mode_mvals[i]*phi_q.array()).cos() + p.fourier_mode_sinamp[i]*(fourier_mode_mvals[i]*phi_q.array()).sin())/fourier_mode_mvals[i]).matrix();
+			}
+		} else {
+			for (int i=0; i < n_fourier_modes; i++) {
+				fourier_factor = fourier_factor + (p.fourier_mode_cosamp[i]*(fourier_mode_mvals[i]*phi_q.array()).cos() + p.fourier_mode_sinamp[i]*(fourier_mode_mvals[i]*phi_q.array()).sin()).matrix();
+			}
+		}
+		if (!fourier_sb_perturbation) xisq.array() *= (fourier_factor.array().square());
+	}
+
+	// put in code for fourier_sb_perturbation!
    sb_rsq_vec(xisq,sb,nsp);
 }
 template void SB_Profile::surface_brightness_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, const int);
@@ -2638,6 +2712,21 @@ void SB_Profile::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix
 	return; // this is only used in the derived classes Shapelet, MGE
 }
 
+
+template <typename MathTypes>
+typename MathTypes::MatType SB_Profile::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp)
+{
+	using MatType = typename MathTypes::MatType;
+	MatType Lmatrix = Eigen::MatrixXd::Zero(1.0, input_pts_x.size()/nsp);
+	return Lmatrix;
+}
+template typename PlainTypes::MatType SB_Profile::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int nsp);
+#ifdef USE_STAN
+template typename VarmatTypes::MatType SB_Profile::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int nsp);
+#endif
+
+
+
 /*
 void SB_Profile::calculate_gradient_Rmatrix_elements(double*& Rmatrix_elements, double &logdet)
 {
@@ -2674,8 +2763,20 @@ void SB_Profile::get_regularization_param_ptr(stan::math::var*& regparam_ptr)
 
 void SB_Profile::update_amplitudes(double*& ampvec)
 {
+	return;
+}
+
+void SB_Profile::update_amplitudes(Eigen::VectorXd& ampvec)
+{
 	return; // this is only used in the derived classes Shapelet, MGE
 }
+
+#ifdef USE_STAN
+void SB_Profile::update_amplitudes(stan::math::var_value<Eigen::VectorXd>& ampvec)
+{
+	return; // this is only used in the derived classes Shapelet, MGE
+}
+#endif
 
 double SB_Profile::get_scale_parameter()
 {
@@ -2872,9 +2973,12 @@ string SB_Profile::mkstring_int(const int i)
 string SB_Profile::get_parameters_string()
 {
 	string paramstring = "";
-	if (sb_number != -1) paramstring += mkstring_int(sb_number) + ". (";
-	if (!is_lensed) paramstring += "unlensed): ";
-	else paramstring += "z=" + mkstring_doub(sbparams->zsrc) + "): ";
+	if (sb_number != -1) paramstring += mkstring_int(sb_number) + ". " + model_name + "(";
+	if (!is_lensed) paramstring += "unlensed";
+	else paramstring += "z=" + mkstring_doub(sbparams->zsrc);
+	if (sbtype==SHAPELET) paramstring += ",n_shapelets=" + mkstring_int(*indxptr); 
+	else if (sbtype==MULTI_GAUSSIAN_EXPANSION) paramstring += ",n_gaussians=" + mkstring_int(*indxptr);
+	paramstring += "): ";
 	for (int i=0; i < n_params; i++) {
 		paramstring += paramnames[i] + "=";
 		if (angle_param[i]) paramstring += mkstring_doub(radians_to_degrees(*(sbparams->param[i]))) + " degrees";
@@ -2896,10 +3000,10 @@ string SB_Profile::get_parameters_string()
 			else paramstring += " (egrad=on)";
 		}
 	}
-	//if (lensed_center_coords) paramstring += " (xc=" + mkstring_doub(x_center) + ", yc=" + mkstring_doub(y_center) + ")";
-	//if (show_band) {
-		//paramstring += " (band=" + mkstring_int(band) + ")";
-	//}
+	if (lensed_center_coords) paramstring += " (xc=" + mkstring_doub(sbparams->x_center) + ", yc=" + mkstring_doub(sbparams->y_center) + ")";
+	if ((qlens) and (qlens->n_model_bands > 1)) {
+		paramstring += " (band=" + mkstring_int(band) + ")";
+	}
 
 	return paramstring;
 }
@@ -4147,7 +4251,7 @@ double NFW_Source::length_scale()
 	return sbparams_nfw.rs;
 }
 
-Shapelet::Shapelet(const int band_in, const double &zsrc_in, const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate, const int parameter_mode_in, QLens* qlens_in)
+Shapelet::Shapelet(const int band_in, const double &zsrc_in, const double &reg, const double &amp00, const double &scale_in, const double &q_in, const double &theta_degrees, const double &xc_in, const double &yc_in, const int nn, const bool truncate, const int parameter_mode_in, QLens* qlens_in)
 {
 	sbparams = &sbparams_shapelet;
 #ifdef USE_STAN
@@ -4158,6 +4262,7 @@ Shapelet::Shapelet(const int band_in, const double &zsrc_in, const double &amp00
 	band = band_in;
 	setup_base_source_properties(6,1,false,parameter_mode_in);
 	qlens = qlens_in;
+	sbparams_shapelet.regparam = reg;
 	if (parameter_mode==0) {
 		sbparams_shapelet.sig = scale_in;
 		sbparams_shapelet.sig_factor = 1.0;
@@ -4165,7 +4270,6 @@ Shapelet::Shapelet(const int band_in, const double &zsrc_in, const double &amp00
 		sbparams_shapelet.sig_factor = scale_in;
 		sbparams_shapelet.sig = 1.0; // this will be set automatically using the 'find_shapelet_scaling_parameters' function in lens.cpp
 	}
-	sbparams_shapelet.regparam = 100; // default
 	n_shapelets = nn;
 	indxptr = &n_shapelets;
 	sbparams_shapelet.amps = new double*[n_shapelets];
@@ -4176,6 +4280,18 @@ Shapelet::Shapelet(const int band_in, const double &zsrc_in, const double &amp00
 		}
 	}
 	sbparams_shapelet.amps[0][0] = amp00;
+
+#ifdef USE_STAN
+	sbparams_shapelet_dif.amps = new stan::math::var*[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) sbparams_shapelet_dif.amps[i] = new stan::math::var[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) {
+		for (int j=0; j < n_shapelets; j++) {
+			sbparams_shapelet_dif.amps[i][j] = 0;
+		}
+	}
+	sbparams_shapelet_dif.amps[0][0] = amp00;
+#endif
+
 	truncate_at_3sigma = truncate;
 
 	set_geometric_parameters(q_in,theta_degrees,xc_in,yc_in,zsrc_in);
@@ -4194,9 +4310,9 @@ Shapelet::Shapelet(const Shapelet* sb_in)
 #endif
 	n_shapelets = sb_in->n_shapelets;
 	indxptr = &n_shapelets;
+	sbparams_shapelet.regparam = sb_in->sbparams_shapelet.regparam;
 	sbparams_shapelet.sig = sb_in->sbparams_shapelet.sig;
 	sbparams_shapelet.sig_factor = sb_in->sbparams_shapelet.sig_factor;
-	sbparams_shapelet.regparam = sb_in->sbparams_shapelet.regparam;
 	sbparams_shapelet.amps = new double*[n_shapelets];
 	for (int i=0; i < n_shapelets; i++) sbparams_shapelet.amps[i] = new double[n_shapelets];
 	for (int i=0; i < n_shapelets; i++) {
@@ -4204,6 +4320,15 @@ Shapelet::Shapelet(const Shapelet* sb_in)
 			sbparams_shapelet.amps[i][j] = sb_in->sbparams_shapelet.amps[i][j];
 		}
 	}
+#ifdef USE_STAN
+	sbparams_shapelet_dif.amps = new stan::math::var*[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) sbparams_shapelet_dif.amps[i] = new stan::math::var[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) {
+		for (int j=0; j < n_shapelets; j++) {
+			sbparams_shapelet_dif.amps[i][j] = sb_in->sbparams_shapelet_dif.amps[i][j];
+		}
+	}
+#endif
 	truncate_at_3sigma = sb_in->truncate_at_3sigma;
 	copy_base_source_data(sb_in);
 	update_meta_parameters();
@@ -4217,10 +4342,18 @@ Shapelet::Shapelet(const Shapelet* sb_in)
 void Shapelet::sync_autodif_parameters()
 {
 	sync_autodif_geometric_parameters();
-	sbparams_shapelet_dif.sig = sbparams_shapelet.sig;
 	sbparams_shapelet_dif.regparam = sbparams_shapelet.regparam;
+	sbparams_shapelet_dif.sig = sbparams_shapelet.sig;
 	sbparams_shapelet_dif.sig_factor = sbparams_shapelet.sig_factor;
-	// what to do about the amplitudes? Do we sync them here?
+#ifdef USE_STAN
+	sbparams_shapelet_dif.amps = new stan::math::var*[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) sbparams_shapelet_dif.amps[i] = new stan::math::var[n_shapelets];
+	for (int i=0; i < n_shapelets; i++) {
+		for (int j=0; j < n_shapelets; j++) {
+			sbparams_shapelet_dif.amps[i][j] = sbparams_shapelet.amps[i][j];
+		}
+	}
+#endif
 }
 #endif
 
@@ -4237,12 +4370,12 @@ template void Shapelet::update_meta_parameters_impl<stan::math::var>();
 void Shapelet::assign_paramnames()
 {
 	int indx=0;
+	paramnames[indx] = "regparam"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = ""; indx++;
 	if (parameter_mode==0) {
 		paramnames[indx] = "sigma"; latex_paramnames[indx] = "\\sigma"; latex_param_subscripts[indx] = ""; indx++;
 	} else {
 		paramnames[indx] = "sigfac"; latex_paramnames[indx] = "f"; latex_param_subscripts[indx] = "\\sigma"; indx++;
 	}
-	paramnames[indx] = "regparam"; latex_paramnames[indx] = "\\lambda"; latex_param_subscripts[indx] = ""; indx++;
 	set_geometric_paramnames(indx);
 }
 
@@ -4251,12 +4384,12 @@ void Shapelet::assign_param_pointers_impl()
 {
 	Shapelet_Params<QScalar>& p = assign_shapelet_param_object<QScalar>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
 	int indx=0;
+	p.param[indx++] = &p.regparam;
 	if (parameter_mode==0) {
 		p.param[indx++] = &p.sig;
 	} else {
 		p.param[indx++] = &p.sig_factor;
 	}
-	p.param[indx++] = &p.regparam;
 	set_geometric_param_pointers<QScalar>(indx);
 }
 template void Shapelet::assign_param_pointers_impl<double>();
@@ -4268,12 +4401,12 @@ void Shapelet::set_auto_stepsizes()
 {
 	int indx=0;
 	Shapelet_Params<double>& p = assign_shapelet_param_object<double>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
+	stepsizes[indx++] = 0.3*p.regparam; // arbitrary
 	if (parameter_mode==0) {
 		stepsizes[indx++] = (p.sig != 0) ? 0.1*p.sig : 0.1; // arbitrary
 	} else {
 		stepsizes[indx++] = (p.sig_factor != 0) ? 0.1*p.sig_factor : 0.1; // arbitrary
 	}
-	stepsizes[indx++] = 0.3*p.regparam; // arbitrary
 	set_geometric_param_auto_stepsizes(indx);
 }
 
@@ -4338,6 +4471,358 @@ template double Shapelet::surface_brightness_impl<double>(double x, double y);
 template stan::math::var Shapelet::surface_brightness_impl<stan::math::var>(stan::math::var x, stan::math::var y);
 #endif
 
+
+/*
+template <typename VecType, typename QScalar>
+void Shapelet::surface_brightness_vec_impl(const VecType& x0, const VecType& y0, VecType& sb, const int nsp)
+{
+	auto& p = assign_shapelet_param_object<QScalar>();
+	cout << "HI0" << endl;
+
+	VecType dx, dy;
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dx = x0 - p.x_center;
+		dy = y0 - p.y_center;
+	} else
+#endif
+	{
+		dx = (x0.array() - p.x_center).matrix();
+		dy = (y0.array() - p.y_center).matrix();
+	}
+
+	VecType x = p.costheta * dx + p.sintheta * dy;
+	VecType y = -p.sintheta * dx + p.costheta * dy;
+
+	VecType gaussfactor, xarg, yarg;
+	QScalar sqrtq;
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		sqrtq = stan::math::sqrt(p.q);
+		gaussfactor = (0.5641895835477563 / p.sig) * stan::math::exp(-(p.q * stan::math::elt_multiply(x, x) + stan::math::elt_multiply(y, y) / p.q) / (2.0 * p.sig * p.sig));
+		xarg = x * sqrtq / p.sig;
+		yarg = y / (sqrtq * p.sig);
+	} else
+#endif
+	{
+		sqrtq = std::sqrt(p.q);
+		gaussfactor = (0.5641895835477563 / p.sig) * (-(p.q * x.array().square() + y.array().square() / p.q) / (2.0 * p.sig * p.sig)).exp().matrix();
+		xarg = (x.array() * sqrtq / p.sig).matrix();
+		yarg = (y.array() / (sqrtq * p.sig)).matrix();
+	}
+	cout << "HI1" << endl;
+
+	std::vector<VecType> hermvals_x(n_shapelets);
+	std::vector<VecType> hermvals_y(n_shapelets);
+
+	hermvals_x[0] = Eigen::VectorXd::Constant(nsp, 1.0);
+	hermvals_y[0] = Eigen::VectorXd::Constant(nsp, 1.0);
+
+	if (n_shapelets > 1) {
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			hermvals_x[1] = 2.0 * xarg / M_SQRT2;
+			hermvals_y[1] = 2.0 * yarg / M_SQRT2;
+		} else
+#endif
+		{
+			hermvals_x[1] = (2.0 * xarg.array() / M_SQRT2).matrix();
+			hermvals_y[1] = (2.0 * yarg.array() / M_SQRT2).matrix();
+		}
+	}
+	cout << "HI2" << endl;
+
+	double lastfac = 1.0 / M_SQRT2;
+
+	for (int i = 2; i < n_shapelets; ++i) {
+		const double fac = 1.0 / std::sqrt(2.0 * i);
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			hermvals_x[i] = 2.0 * (stan::math::elt_multiply(xarg, hermvals_x[i - 1]) - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+			hermvals_y[i] = 2.0 * (stan::math::elt_multiply(yarg, hermvals_y[i - 1]) - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+		} else
+#endif
+		{
+			cout << "HI2b " << i << endl;
+			hermvals_x[i] = (2.0 * (xarg.array() * hermvals_x[i - 1].array() - (i - 1) * hermvals_x[i - 2].array() * lastfac) * fac).matrix();
+			cout << "HI2c " << i << endl;
+			hermvals_y[i] = (2.0 * (yarg.array() * hermvals_y[i - 1].array() - (i - 1) * hermvals_y[i - 2].array() * lastfac) * fac).matrix();
+			cout << "HI2d " << i << endl;
+		}
+		lastfac = fac;
+	}
+	cout << "HI3" << endl;
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		sb = Eigen::VectorXd::Zero(nsp);
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				sb = sb + p.amps[i][j] * stan::math::elt_multiply(hermvals_x[i], hermvals_y[j]);
+			}
+		}
+		sb = stan::math::elt_multiply(sb, gaussfactor);
+	} else
+#endif
+	{
+		sb = Eigen::VectorXd::Zero(nsp);
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				sb.array() += p.amps[i][j] * hermvals_x[i].array() * hermvals_y[j].array();
+			}
+		}
+		sb.array() *= gaussfactor.array();
+	}
+	cout << "HI4" << endl;
+}
+template void Shapelet::surface_brightness_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, const int);
+#ifdef USE_STAN
+template void Shapelet::surface_brightness_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, const int);
+#endif
+*/
+
+
+
+/*
+template <typename VecType, typename QScalar>
+void Shapelet::surface_brightness_vec_impl(const VecType& x0, const VecType& y0, VecType& sb, const int nsp)
+{
+	auto& p = assign_shapelet_param_object<QScalar>();
+
+	VecType dx, dy;
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dx = x0 - p.x_center;
+		dy = y0 - p.y_center;
+	} else
+#endif
+	{
+		dx = (x0.array() - p.x_center).matrix();
+		dy = (y0.array() - p.y_center).matrix();
+	}
+
+	VecType x = p.costheta * dx + p.sintheta * dy;
+	VecType y = -p.sintheta * dx + p.costheta * dy;
+
+	VecType gaussfactor, xarg, yarg;
+	QScalar sqrtq;
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		sqrtq = stan::math::sqrt(p.q);
+		gaussfactor = (0.5641895835477563 / p.sig) * stan::math::exp(-(p.q * stan::math::elt_multiply(x, x) + stan::math::elt_multiply(y, y) / p.q) / (2.0 * p.sig * p.sig));
+		xarg = x * sqrtq / p.sig;
+		yarg = y / (sqrtq * p.sig);
+	} else
+#endif
+	{
+		sqrtq = std::sqrt(p.q);
+		gaussfactor = (0.5641895835477563 / p.sig) * (-(p.q * x.array().square() + y.array().square() / p.q) / (2.0 * p.sig * p.sig)).exp().matrix();
+		xarg = (x.array() * sqrtq / p.sig).matrix();
+		yarg = (y.array() / (sqrtq * p.sig)).matrix();
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		std::vector<stan::math::var_value<Eigen::VectorXd>> hermvals_x(n_shapelets);
+		std::vector<stan::math::var_value<Eigen::VectorXd>> hermvals_y(n_shapelets);
+
+		hermvals_x[0] = Eigen::VectorXd::Constant(nsp, 1.0);
+		hermvals_y[0] = Eigen::VectorXd::Constant(nsp, 1.0);
+
+		if (n_shapelets > 1) {
+			hermvals_x[1] = 2.0 * xarg / M_SQRT2;
+			hermvals_y[1] = 2.0 * yarg / M_SQRT2;
+		}
+
+		double lastfac = 1.0 / M_SQRT2;
+
+		for (int i = 2; i < n_shapelets; ++i) {
+			const double fac = 1.0 / std::sqrt(2.0 * i);
+			hermvals_x[i] = 2.0 * (stan::math::elt_multiply(xarg, hermvals_x[i - 1]) - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+			hermvals_y[i] = 2.0 * (stan::math::elt_multiply(yarg, hermvals_y[i - 1]) - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+			lastfac = fac;
+		}
+
+		sb = Eigen::VectorXd::Zero(nsp);
+
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				sb = sb + p.amps[i][j] * stan::math::elt_multiply(hermvals_x[i], hermvals_y[j]);
+			}
+		}
+
+		sb = stan::math::elt_multiply(sb, gaussfactor);
+	} else
+#endif
+	{
+		std::vector<Eigen::VectorXd> hermvals_x(n_shapelets);
+		std::vector<Eigen::VectorXd> hermvals_y(n_shapelets);
+
+		hermvals_x[0] = Eigen::VectorXd::Constant(nsp, 1.0);
+		hermvals_y[0] = Eigen::VectorXd::Constant(nsp, 1.0);
+
+		if (n_shapelets > 1) {
+			hermvals_x[1] = (2.0 * xarg.array() / M_SQRT2).matrix();
+			hermvals_y[1] = (2.0 * yarg.array() / M_SQRT2).matrix();
+		}
+
+		double lastfac = 1.0 / M_SQRT2;
+
+		cout << "HI0" << endl;
+		for (int i = 2; i < n_shapelets; ++i) {
+			const double fac = 1.0 / std::sqrt(2.0 * i);
+		cout << "HI1" << endl;
+			hermvals_x[i] = (2.0 * (xarg.array() * hermvals_x[i - 1].array() - (i - 1) * hermvals_x[i - 2].array() * lastfac) * fac).matrix();
+		cout << "HI2" << endl;
+			hermvals_y[i] = (2.0 * (yarg.array() * hermvals_y[i - 1].array() - (i - 1) * hermvals_y[i - 2].array() * lastfac) * fac).matrix();
+		cout << "HI3" << endl;
+			lastfac = fac;
+		}
+
+		sb = Eigen::VectorXd::Zero(nsp);
+
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				sb.array() += p.amps[i][j] * hermvals_x[i].array() * hermvals_y[j].array();
+			}
+		}
+
+		sb.array() *= gaussfactor.array();
+	}
+}
+template void Shapelet::surface_brightness_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, const int);
+#ifdef USE_STAN
+template void Shapelet::surface_brightness_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, const int);
+#endif
+*/
+
+
+
+template <typename VecType, typename QScalar>
+void Shapelet::surface_brightness_vec_impl(const VecType& x0, const VecType& y0, VecType& sb, const int nsp)
+{
+	auto& p = assign_shapelet_param_object<QScalar>();
+
+	int npix = sb.size();
+
+	VecType dx, dy;
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dx = x0 - p.x_center;
+		dy = y0 - p.y_center;
+	} else
+#endif
+	{
+		dx = (x0.array() - p.x_center).matrix();
+		dy = (y0.array() - p.y_center).matrix();
+	}
+
+	VecType x = p.costheta * dx + p.sintheta * dy;
+	VecType y = -p.sintheta * dx + p.costheta * dy;
+
+	VecType gaussfactor, xarg, yarg;
+	QScalar sqrtq;
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		sqrtq = stan::math::sqrt(p.q);
+		gaussfactor = (0.5641895835477563 / p.sig) * stan::math::exp(-(p.q * stan::math::elt_multiply(x, x) + stan::math::elt_multiply(y, y) / p.q) / (2.0 * p.sig * p.sig));
+		xarg = x * sqrtq / p.sig;
+		yarg = y / (sqrtq * p.sig);
+	} else
+#endif
+	{
+		sqrtq = std::sqrt(p.q);
+		gaussfactor = (0.5641895835477563 / p.sig) * (-(p.q * x.array().square() + y.array().square() / p.q) / (2.0 * p.sig * p.sig)).exp().matrix();
+		xarg = (x.array() * sqrtq / p.sig).matrix();
+		yarg = (y.array() / (sqrtq * p.sig)).matrix();
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		std::vector<stan::math::var_value<Eigen::VectorXd>> hermvals_x(n_shapelets);
+		std::vector<stan::math::var_value<Eigen::VectorXd>> hermvals_y(n_shapelets);
+
+		hermvals_x[0] = Eigen::VectorXd::Ones(x0.size());
+		hermvals_y[0] = Eigen::VectorXd::Ones(y0.size());
+
+		if (n_shapelets > 1) {
+			hermvals_x[1] = 2.0 * xarg / M_SQRT2;
+			hermvals_y[1] = 2.0 * yarg / M_SQRT2;
+		}
+
+		double lastfac = 1.0 / M_SQRT2;
+
+		for (int i = 2; i < n_shapelets; ++i) {
+			const double fac = 1.0 / std::sqrt(2.0 * i);
+			hermvals_x[i] = 2.0 * (stan::math::elt_multiply(xarg, hermvals_x[i - 1]) - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+			hermvals_y[i] = 2.0 * (stan::math::elt_multiply(yarg, hermvals_y[i - 1]) - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+			lastfac = fac;
+		}
+
+		stan::math::var_value<Eigen::VectorXd> accum(Eigen::VectorXd::Zero(x0.size()));
+
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				accum = accum + p.amps[i][j] * stan::math::elt_multiply(hermvals_x[i], hermvals_y[j]);
+			}
+		}
+
+		accum = stan::math::elt_multiply(accum, gaussfactor);
+
+		Eigen::VectorXd sb_val(npix);
+		for (int i = 0; i < npix; ++i) {
+			auto block = accum.val().segment(i * nsp, nsp);
+			sb_val(i) = block.mean();
+		}
+
+		sb = stan::math::var_value<Eigen::VectorXd>(sb_val);
+	} else
+#endif
+	{
+		std::vector<Eigen::VectorXd> hermvals_x(n_shapelets);
+		std::vector<Eigen::VectorXd> hermvals_y(n_shapelets);
+
+		hermvals_x[0] = Eigen::VectorXd::Ones(x0.size());
+		hermvals_y[0] = Eigen::VectorXd::Ones(y0.size());
+
+		if (n_shapelets > 1) {
+			hermvals_x[1] = (2.0 * xarg.array() / M_SQRT2).matrix();
+			hermvals_y[1] = (2.0 * yarg.array() / M_SQRT2).matrix();
+		}
+
+		double lastfac = 1.0 / M_SQRT2;
+
+		for (int i = 2; i < n_shapelets; ++i) {
+			const double fac = 1.0 / std::sqrt(2.0 * i);
+			hermvals_x[i] = (2.0 * (xarg.array() * hermvals_x[i - 1].array() - (i - 1) * hermvals_x[i - 2].array() * lastfac) * fac).matrix();
+			hermvals_y[i] = (2.0 * (yarg.array() * hermvals_y[i - 1].array() - (i - 1) * hermvals_y[i - 2].array() * lastfac) * fac).matrix();
+			lastfac = fac;
+		}
+
+		Eigen::VectorXd accum = Eigen::VectorXd::Zero(x0.size());
+
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				accum.array() += p.amps[i][j] * hermvals_x[i].array() * hermvals_y[j].array();
+			}
+		}
+
+		accum.array() *= gaussfactor.array();
+
+		Eigen::Map<const Eigen::MatrixXd> accum_mat(accum.data(), nsp, npix);
+		sb = sb + (accum_mat.colwise().mean()).transpose();
+	}
+}
+template void Shapelet::surface_brightness_vec_impl<Eigen::VectorXd,double>(const Eigen::VectorXd&, const Eigen::VectorXd&, Eigen::VectorXd&, const int);
+#ifdef USE_STAN
+template void Shapelet::surface_brightness_vec_impl<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>&, const stan::math::var_value<Eigen::VectorXd>&, stan::math::var_value<Eigen::VectorXd>&, const int);
+#endif
+
+
+
 void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight)
 {
 	Shapelet_Params<double>& p = assign_shapelet_param_object<double>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
@@ -4368,6 +4853,7 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_e
 		lastfac = fac;
 	}
 	int n=0;
+	//cout << "x=" << x << " y=" << y << endl;
 	for (i=0; i < n_shapelets; i++) {
 		for (j=0; j < n_shapelets; j++) {
 			*(Lmatrix_elements++) += weight*gaussfactor*hermvals_x[i]*hermvals_y[j];
@@ -4377,6 +4863,614 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_e
 	delete[] hermvals_x;
 	delete[] hermvals_y;
 }
+
+
+/*
+template <typename MathTypes>
+typename MathTypes::MatType Shapelet::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp)
+{
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	Shapelet_Params<QScalar>& p = assign_shapelet_param_object<QScalar>();
+
+	const int nsubpts = input_pts_x.size();
+	const int npix = nsubpts / nsp;
+	const int ncoeff = n_shapelets * n_shapelets;
+
+	const double sig = value_of(p.sig);
+	const double q = value_of(p.q);
+	const double x_center = value_of(p.x_center);
+	const double y_center = value_of(p.y_center);
+	const double costheta = value_of(p.costheta);
+	const double sintheta = value_of(p.sintheta);
+	const double sqrtq = std::sqrt(q);
+
+	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
+
+#ifdef USE_STAN
+	Eigen::MatrixXd dL_dx;
+	Eigen::MatrixXd dL_dy;
+	Eigen::MatrixXd dL_dxc;
+	Eigen::MatrixXd dL_dyc;
+	Eigen::MatrixXd dL_dsig;
+	Eigen::MatrixXd dL_dq;
+	Eigen::MatrixXd dL_dcostheta;
+	Eigen::MatrixXd dL_dsintheta;
+
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dL_dx = Eigen::MatrixXd::Zero(ncoeff, nsubpts);
+		dL_dy = Eigen::MatrixXd::Zero(ncoeff, nsubpts);
+		dL_dxc = Eigen::MatrixXd::Zero(ncoeff, npix);
+		dL_dyc = Eigen::MatrixXd::Zero(ncoeff, npix);
+		dL_dsig = Eigen::MatrixXd::Zero(ncoeff, npix);
+		dL_dq = Eigen::MatrixXd::Zero(ncoeff, npix);
+		dL_dcostheta = Eigen::MatrixXd::Zero(ncoeff, npix);
+		dL_dsintheta = Eigen::MatrixXd::Zero(ncoeff, npix);
+	}
+#endif
+
+	for (int k = 0; k < nsubpts; ++k) {
+		const double dx0 = value_of(input_pts_x(k)) - x_center;
+		const double dy0 = value_of(input_pts_y(k)) - y_center;
+
+		const double x = costheta * dx0 + sintheta * dy0;
+		const double y = -sintheta * dx0 + costheta * dy0;
+
+		const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
+		const double xarg = x * sqrtq / sig;
+		const double yarg = y / (sqrtq * sig);
+
+		Eigen::VectorXd hermvals_x(n_shapelets);
+		Eigen::VectorXd hermvals_y(n_shapelets);
+
+		hermvals_x[0] = 1.0;
+		hermvals_y[0] = 1.0;
+
+		if (n_shapelets > 1) {
+			hermvals_x[1] = 2.0 * xarg / M_SQRT2;
+			hermvals_y[1] = 2.0 * yarg / M_SQRT2;
+		}
+
+		double lastfac = 1.0 / M_SQRT2;
+
+		for (int i = 2; i < n_shapelets; ++i) {
+			const double fac = 1.0 / std::sqrt(2.0 * i);
+			hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+			hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+			lastfac = fac;
+		}
+
+		const int pixel = k / nsp;
+		const double norm = 1.0 / static_cast<double>(nsp);
+
+#ifdef USE_STAN
+		Eigen::VectorXd dherm_x;
+		Eigen::VectorXd dherm_y;
+
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			dherm_x = Eigen::VectorXd::Zero(n_shapelets);
+			dherm_y = Eigen::VectorXd::Zero(n_shapelets);
+
+			if (n_shapelets > 1) {
+				dherm_x[1] = M_SQRT2;
+				dherm_y[1] = M_SQRT2;
+			}
+
+			for (int i = 2; i < n_shapelets; ++i) {
+				dherm_x[i] = std::sqrt(2.0 * i) * hermvals_x[i - 1];
+				dherm_y[i] = std::sqrt(2.0 * i) * hermvals_y[i - 1];
+			}
+		}
+#endif
+
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			const double dgauss_dx = -gaussfactor * q * x / (sig * sig);
+			const double dgauss_dy = -gaussfactor * y / (q * sig * sig);
+			const double dgauss_dsig = gaussfactor * (-1.0 / sig + (q * x * x + y * y / q) / (sig * sig * sig));
+			const double dgauss_dq = -gaussfactor * (x * x - y * y / (q * q)) / (2.0 * sig * sig);
+
+			const double dxarg_dx = sqrtq / sig;
+			const double dyarg_dy = 1.0 / (sqrtq * sig);
+			const double dxarg_dsig = -xarg / sig;
+			const double dyarg_dsig = -yarg / sig;
+			const double dxarg_dq = xarg / (2.0 * q);
+			const double dyarg_dq = -yarg / (2.0 * q);
+
+			const double dx_dx0 = costheta;
+			const double dy_dx0 = -sintheta;
+			const double dx_dy0 = sintheta;
+			const double dy_dy0 = costheta;
+			const double dx_dxc = -costheta;
+			const double dy_dxc = sintheta;
+			const double dx_dyc = -sintheta;
+			const double dy_dyc = -costheta;
+			const double dx_dcostheta = dx0;
+			const double dy_dcostheta = dy0;
+			const double dx_dsintheta = dy0;
+			const double dy_dsintheta = -dx0;
+
+			for (int i = 0; i < n_shapelets; ++i) {
+				const double Hx = hermvals_x[i];
+				const double dHx_dx = dherm_x[i] * dxarg_dx;
+				const double dHx_dsig = dherm_x[i] * dxarg_dsig;
+				const double dHx_dq = dherm_x[i] * dxarg_dq;
+
+				for (int j = 0; j < n_shapelets; ++j) {
+					const int row = i * n_shapelets + j;
+					const double Hy = hermvals_y[j];
+					const double dHy_dy = dherm_y[j] * dyarg_dy;
+					const double dHy_dsig = dherm_y[j] * dyarg_dsig;
+					const double dHy_dq = dherm_y[j] * dyarg_dq;
+
+					const double dL_dxrot = dgauss_dx * Hx * Hy + gaussfactor * dHx_dx * Hy;
+					const double dL_dyrot = dgauss_dy * Hx * Hy + gaussfactor * Hx * dHy_dy;
+
+					dL_dx(row, k) += dL_dxrot * dx_dx0 + dL_dyrot * dy_dx0;
+					dL_dy(row, k) += dL_dxrot * dx_dy0 + dL_dyrot * dy_dy0;
+					dL_dxc(row, pixel) += (dL_dxrot * dx_dxc + dL_dyrot * dy_dxc) / static_cast<double>(nsp);
+					dL_dyc(row, pixel) += (dL_dxrot * dx_dyc + dL_dyrot * dy_dyc) / static_cast<double>(nsp);
+					dL_dsig(row, pixel) += (dgauss_dsig * Hx * Hy + gaussfactor * dHx_dsig * Hy + gaussfactor * Hx * dHy_dsig) / static_cast<double>(nsp);
+					dL_dq(row, pixel) += (dgauss_dq * Hx * Hy + gaussfactor * dHx_dq * Hy + gaussfactor * Hx * dHy_dq) / static_cast<double>(nsp);
+					dL_dcostheta(row, pixel) += (dL_dxrot * dx_dcostheta + dL_dyrot * dy_dcostheta) / static_cast<double>(nsp);
+					dL_dsintheta(row, pixel) += (dL_dxrot * dx_dsintheta + dL_dyrot * dy_dsintheta) / static_cast<double>(nsp);
+				}
+			}
+		}
+#endif
+
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				const int row = i * n_shapelets + j;
+				Lmatrix(row, pixel) += norm * gaussfactor * hermvals_x[i] * hermvals_y[j];
+			}
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		return stan::math::make_callback_var(
+			Lmatrix,
+			[&p, &input_pts_x, &input_pts_y, dL_dx, dL_dy, dL_dxc, dL_dyc, dL_dsig, dL_dq, dL_dcostheta, dL_dsintheta, nsp](auto& res) mutable {
+				for (int k = 0; k < input_pts_x.size(); ++k) {
+					input_pts_x.adj()(k) += (res.adj().col(k / nsp).array() * dL_dx.col(k).array()).sum();
+					input_pts_y.adj()(k) += (res.adj().col(k / nsp).array() * dL_dy.col(k).array()).sum();
+				}
+
+				p.x_center.adj() += (res.adj().array() * dL_dxc.array()).sum();
+				p.y_center.adj() += (res.adj().array() * dL_dyc.array()).sum();
+				p.sig.adj() += (res.adj().array() * dL_dsig.array()).sum();
+				p.q.adj() += (res.adj().array() * dL_dq.array()).sum();
+				p.costheta.adj() += (res.adj().array() * dL_dcostheta.array()).sum();
+				p.sintheta.adj() += (res.adj().array() * dL_dsintheta.array()).sum();
+			});
+	}
+#endif
+
+	return Lmatrix;
+}
+template typename PlainTypes::MatType Shapelet::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int nsp);
+#ifdef USE_STAN
+template typename VarmatTypes::MatType Shapelet::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int nsp);
+#endif
+*/
+
+
+
+/*
+template <typename MathTypes>
+typename MathTypes::MatType Shapelet::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp)
+{
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	Shapelet_Params<QScalar>& p = assign_shapelet_param_object<QScalar>();
+
+	const int nsubpts = input_pts_x.size();
+	const int npix = nsubpts / nsp;
+	const int ncoeff = n_shapelets * n_shapelets;
+
+	const double sig = value_of(p.sig);
+	const double q = value_of(p.q);
+	const double x_center = value_of(p.x_center);
+	const double y_center = value_of(p.y_center);
+	const double costheta = value_of(p.costheta);
+	const double sintheta = value_of(p.sintheta);
+	const double sqrtq = std::sqrt(q);
+	const double inv_nsp = 1.0 / static_cast<double>(nsp);
+
+	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
+
+#ifdef USE_STAN
+	Eigen::MatrixXd dL_dx;
+	Eigen::MatrixXd dL_dy;
+	Eigen::MatrixXd dL_dsig;
+	Eigen::MatrixXd dL_dq;
+	Eigen::VectorXd dx0;
+	Eigen::VectorXd dy0;
+
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dL_dx = Eigen::MatrixXd::Zero(ncoeff, nsubpts);
+		dL_dy = Eigen::MatrixXd::Zero(ncoeff, nsubpts);
+		dL_dsig = Eigen::MatrixXd::Zero(ncoeff, npix);
+		dL_dq = Eigen::MatrixXd::Zero(ncoeff, npix);
+		dx0 = Eigen::VectorXd::Zero(nsubpts);
+		dy0 = Eigen::VectorXd::Zero(nsubpts);
+	}
+#endif
+
+	Eigen::VectorXd hermvals_x(n_shapelets);
+	Eigen::VectorXd hermvals_y(n_shapelets);
+	Eigen::VectorXd sqrt2n(n_shapelets);
+
+	for (int i = 1; i < n_shapelets; ++i) sqrt2n[i] = std::sqrt(2.0 * i);
+
+	for (int k = 0; k < nsubpts; ++k) {
+		const double dx = value_of(input_pts_x(k)) - x_center;
+		const double dy = value_of(input_pts_y(k)) - y_center;
+
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			dx0(k) = dx;
+			dy0(k) = dy;
+		}
+#endif
+
+		const double x = costheta * dx + sintheta * dy;
+		const double y = -sintheta * dx + costheta * dy;
+
+		const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
+		const double xarg = x * sqrtq / sig;
+		const double yarg = y / (sqrtq * sig);
+
+		hermvals_x[0] = 1.0;
+		hermvals_y[0] = 1.0;
+
+		if (n_shapelets > 1) {
+			hermvals_x[1] = M_SQRT2 * xarg;
+			hermvals_y[1] = M_SQRT2 * yarg;
+		}
+
+		double lastfac = 1.0 / M_SQRT2;
+
+		for (int i = 2; i < n_shapelets; ++i) {
+			const double fac = 1.0 / std::sqrt(2.0 * i);
+			hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+			hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+			lastfac = fac;
+		}
+
+		const int pixel = k / nsp;
+
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			const double dgauss_dx = -gaussfactor * q * x / (sig * sig);
+			const double dgauss_dy = -gaussfactor * y / (q * sig * sig);
+			const double dgauss_dsig = gaussfactor * (-1.0 / sig + (q * x * x + y * y / q) / (sig * sig * sig));
+			const double dgauss_dq = -gaussfactor * (x * x - y * y / (q * q)) / (2.0 * sig * sig);
+
+			const double dxarg_dx = sqrtq / sig;
+			const double dyarg_dy = 1.0 / (sqrtq * sig);
+			const double dxarg_dsig = -xarg / sig;
+			const double dyarg_dsig = -yarg / sig;
+			const double dxarg_dq = xarg / (2.0 * q);
+			const double dyarg_dq = -yarg / (2.0 * q);
+
+			for (int i = 0; i < n_shapelets; ++i) {
+				const double Hx = hermvals_x[i];
+				const double dHx_dx = i == 0 ? 0.0 : sqrt2n[i] * hermvals_x[i - 1] * dxarg_dx;
+				const double dHx_dsig = i == 0 ? 0.0 : sqrt2n[i] * hermvals_x[i - 1] * dxarg_dsig;
+				const double dHx_dq = i == 0 ? 0.0 : sqrt2n[i] * hermvals_x[i - 1] * dxarg_dq;
+
+				for (int j = 0; j < n_shapelets; ++j) {
+					const int row = i * n_shapelets + j;
+					const double Hy = hermvals_y[j];
+					const double dHy_dy = j == 0 ? 0.0 : sqrt2n[j] * hermvals_y[j - 1] * dyarg_dy;
+					const double dHy_dsig = j == 0 ? 0.0 : sqrt2n[j] * hermvals_y[j - 1] * dyarg_dsig;
+					const double dHy_dq = j == 0 ? 0.0 : sqrt2n[j] * hermvals_y[j - 1] * dyarg_dq;
+
+					const double dL_dxrot = dgauss_dx * Hx * Hy + gaussfactor * dHx_dx * Hy;
+					const double dL_dyrot = dgauss_dy * Hx * Hy + gaussfactor * Hx * dHy_dy;
+
+					dL_dx(row, k) = dL_dxrot * costheta - dL_dyrot * sintheta;
+					dL_dy(row, k) = dL_dxrot * sintheta + dL_dyrot * costheta;
+
+					dL_dsig(row, pixel) += inv_nsp * (dgauss_dsig * Hx * Hy + gaussfactor * dHx_dsig * Hy + gaussfactor * Hx * dHy_dsig);
+					dL_dq(row, pixel) += inv_nsp * (dgauss_dq * Hx * Hy + gaussfactor * dHx_dq * Hy + gaussfactor * Hx * dHy_dq);
+				}
+			}
+		}
+#endif
+
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				const int row = i * n_shapelets + j;
+				Lmatrix(row, pixel) += inv_nsp * gaussfactor * hermvals_x[i] * hermvals_y[j];
+			}
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		return stan::math::make_callback_var(Lmatrix, [&p, &input_pts_x, &input_pts_y, dL_dx, dL_dy, dL_dsig, dL_dq, dx0, dy0, nsp, costheta, sintheta, this](auto& res) mutable {
+			const Eigen::MatrixXd& adj = res.adj();
+
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			for (int k = 0; k < input_pts_x.size(); ++k) {
+				const int pixel = k / nsp;
+				const Eigen::VectorXd& adjcol = adj.col(pixel);
+				const Eigen::VectorXd& dX = dL_dx.col(k);
+				const Eigen::VectorXd& dY = dL_dy.col(k);
+
+				const double adj_dX = adjcol.dot(dX);
+				const double adj_dY = adjcol.dot(dY);
+
+				const double dx = dx0(k);
+				const double dy = dy0(k);
+
+				const double dLc_dx = dx * costheta - dy * sintheta;
+				const double dLc_dy = dx * sintheta + dy * costheta;
+				const double dLs_dx = dy * costheta + dx * sintheta;
+				const double dLs_dy = dy * sintheta - dx * costheta;
+
+				input_pts_x.adj()(k) += adj_dX;
+				input_pts_y.adj()(k) += adj_dY;
+
+				p.x_center.adj() -= adj_dX;
+				p.y_center.adj() -= adj_dY;
+
+				p.costheta.adj() += dLc_dx * adj_dX + dLc_dy * adj_dY;
+				p.sintheta.adj() += dLs_dx * adj_dX + dLs_dy * adj_dY;
+			}
+
+			p.sig.adj() += (adj.array() * dL_dsig.array()).sum();
+			p.q.adj() += (adj.array() * dL_dq.array()).sum();
+
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now()-callback_wtime0;
+				if (qlens->mpi_id==0) cout << "Wall time for Lmatrix_shapelet callback: " << callback_wtime.count() << endl;
+			}
+		});
+	}
+#endif
+
+	return Lmatrix;
+}
+template typename PlainTypes::MatType Shapelet::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int nsp);
+#ifdef USE_STAN
+template typename VarmatTypes::MatType Shapelet::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int nsp);
+#endif
+*/
+
+
+template <typename MathTypes>
+typename MathTypes::MatType Shapelet::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp)
+{
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	Shapelet_Params<QScalar>& p = assign_shapelet_param_object<QScalar>();
+
+	const int nsubpts = input_pts_x.size();
+	const int npix = nsubpts / nsp;
+	const int ncoeff = n_shapelets * n_shapelets;
+	const double inv_nsp = 1.0 / static_cast<double>(nsp);
+
+	const double sig = value_of(p.sig);
+	const double q = value_of(p.q);
+	const double x_center = value_of(p.x_center);
+	const double y_center = value_of(p.y_center);
+	const double costheta = value_of(p.costheta);
+	const double sintheta = value_of(p.sintheta);
+	const double sqrtq = std::sqrt(q);
+
+	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
+
+#ifdef USE_STAN
+	Eigen::VectorXd dx0;
+	Eigen::VectorXd dy0;
+
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dx0.resize(nsubpts);
+		dy0.resize(nsubpts);
+	}
+#endif
+
+	Eigen::VectorXd hermvals_x(n_shapelets);
+	Eigen::VectorXd hermvals_y(n_shapelets);
+
+	for (int k = 0; k < nsubpts; ++k) {
+		const double dx = value_of(input_pts_x(k)) - x_center;
+		const double dy = value_of(input_pts_y(k)) - y_center;
+
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			dx0(k) = dx;
+			dy0(k) = dy;
+		}
+#endif
+
+		const double x = costheta * dx + sintheta * dy;
+		const double y = -sintheta * dx + costheta * dy;
+
+		if (truncate_at_3sigma && std::sqrt(x * x + y * y) > 2.3 * sig) continue;
+
+		const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
+		const double xarg = x * sqrtq / sig;
+		const double yarg = y / (sqrtq * sig);
+
+		hermvals_x[0] = 1.0;
+		hermvals_y[0] = 1.0;
+
+		if (n_shapelets > 1) {
+			hermvals_x[1] = M_SQRT2 * xarg;
+			hermvals_y[1] = M_SQRT2 * yarg;
+		}
+
+		double lastfac = 1.0 / M_SQRT2;
+
+		for (int i = 2; i < n_shapelets; ++i) {
+			const double fac = 1.0 / std::sqrt(2.0 * i);
+			hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+			hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+			lastfac = fac;
+		}
+
+		const int pixel = k / nsp;
+
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				const int row = i * n_shapelets + j;
+				Lmatrix(row, pixel) += inv_nsp * gaussfactor * hermvals_x[i] * hermvals_y[j];
+			}
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		return stan::math::make_callback_var(Lmatrix, [&p, &input_pts_x, &input_pts_y, dx0, dy0, nsp, npix, ncoeff, inv_nsp, costheta, sintheta, this](auto& res) mutable {
+				const Eigen::MatrixXd& adj = res.adj();
+
+				std::chrono::steady_clock::time_point callback_wtime0;
+				std::chrono::duration<double> callback_wtime;
+				if (qlens->show_wtime) {
+					callback_wtime0 = std::chrono::steady_clock::now();
+				}
+
+				const double sig = value_of(p.sig);
+				const double q = value_of(p.q);
+				const double sqrtq = std::sqrt(q);
+
+				Eigen::VectorXd hermvals_x(n_shapelets);
+				Eigen::VectorXd hermvals_y(n_shapelets);
+
+				double sig_adj = 0.0;
+				double q_adj = 0.0;
+				double xcenter_adj = 0.0;
+				double ycenter_adj = 0.0;
+				double costheta_adj = 0.0;
+				double sintheta_adj = 0.0;
+
+				for (int k = 0; k < input_pts_x.size(); ++k) {
+					const int pixel = k / nsp;
+
+					const double dx = dx0(k);
+					const double dy = dy0(k);
+					const double x = costheta * dx + sintheta * dy;
+					const double y = -sintheta * dx + costheta * dy;
+
+					if (truncate_at_3sigma && std::sqrt(x * x + y * y) > 2.3 * sig) continue;
+
+					const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
+					const double xarg = x * sqrtq / sig;
+					const double yarg = y / (sqrtq * sig);
+
+					hermvals_x[0] = 1.0;
+					hermvals_y[0] = 1.0;
+
+					if (n_shapelets > 1) {
+						hermvals_x[1] = M_SQRT2 * xarg;
+						hermvals_y[1] = M_SQRT2 * yarg;
+					}
+
+					double lastfac = 1.0 / M_SQRT2;
+
+					for (int i = 2; i < n_shapelets; ++i) {
+						const double fac = 1.0 / std::sqrt(2.0 * i);
+						hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+						hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+						lastfac = fac;
+					}
+
+					double adj_f = 0.0;
+					double adj_fx = 0.0;
+					double adj_fy = 0.0;
+					double adj_fsig = 0.0;
+					double adj_fq = 0.0;
+
+					const double dgauss_dx = -gaussfactor * q * x / (sig * sig);
+					const double dgauss_dy = -gaussfactor * y / (q * sig * sig);
+					const double dgauss_dsig = gaussfactor * (-1.0 / sig + (q * x * x + y * y / q) / (sig * sig * sig));
+					const double dgauss_dq = -gaussfactor * (x * x - y * y / (q * q)) / (2.0 * sig * sig);
+
+					for (int i = 0; i < n_shapelets; ++i) {
+						const double Hx = hermvals_x[i];
+						const double dHx_dxarg = i == 0 ? 0.0 : std::sqrt(2.0 * i) * hermvals_x[i - 1];
+
+						const double dHx_dsig = dHx_dxarg * (-xarg / sig);
+						const double dHx_dq = dHx_dxarg * (xarg / (2.0 * q));
+
+						for (int j = 0; j < n_shapelets; ++j) {
+							const int row = i * n_shapelets + j;
+							const double A = adj(row, pixel);
+							const double Hy = hermvals_y[j];
+							const double dHy_dyarg = j == 0 ? 0.0 : std::sqrt(2.0 * j) * hermvals_y[j - 1];
+
+							const double dHy_dsig = dHy_dyarg * (-yarg / sig);
+							const double dHy_dq = dHy_dyarg * (-yarg / (2.0 * q));
+
+							const double Hxy = Hx * Hy;
+
+							adj_f += A * Hxy;
+							adj_fx += A * dHx_dxarg * (sqrtq / sig) * Hy;
+							adj_fy += A * Hx * dHy_dyarg / (sqrtq * sig);
+							adj_fsig += A * (dHx_dsig * Hy + Hx * dHy_dsig);
+							adj_fq += A * (dHx_dq * Hy + Hx * dHy_dq);
+						}
+					}
+
+					const double dL_dxrot = inv_nsp * (dgauss_dx * adj_f + gaussfactor * adj_fx);
+					const double dL_dyrot = inv_nsp * (dgauss_dy * adj_f + gaussfactor * adj_fy);
+					const double dL_dsig = inv_nsp * (dgauss_dsig * adj_f + gaussfactor * adj_fsig);
+					const double dL_dq = inv_nsp * (dgauss_dq * adj_f + gaussfactor * adj_fq);
+
+					const double adj_dX = costheta * dL_dxrot - sintheta * dL_dyrot;
+					const double adj_dY = sintheta * dL_dxrot + costheta * dL_dyrot;
+
+					input_pts_x.adj()(k) += adj_dX;
+					input_pts_y.adj()(k) += adj_dY;
+
+					xcenter_adj -= adj_dX;
+					ycenter_adj -= adj_dY;
+
+					costheta_adj += dx * dL_dxrot + dy * dL_dyrot;
+					sintheta_adj += dy * dL_dxrot - dx * dL_dyrot;
+
+					sig_adj += dL_dsig;
+					q_adj += dL_dq;
+				}
+
+				p.x_center.adj() += xcenter_adj;
+				p.y_center.adj() += ycenter_adj;
+				p.costheta.adj() += costheta_adj;
+				p.sintheta.adj() += sintheta_adj;
+				p.sig.adj() += sig_adj;
+				p.q.adj() += q_adj;
+				if (qlens->show_wtime) {
+					callback_wtime = std::chrono::steady_clock::now()-callback_wtime0;
+					if (qlens->mpi_id==0) cout << "Wall time for Lmatrix_shapelet callback: " << callback_wtime.count() << endl;
+				}
+
+			});
+	}
+#endif
+
+	return Lmatrix;
+}
+template typename PlainTypes::MatType Shapelet::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int nsp);
+#ifdef USE_STAN
+template typename VarmatTypes::MatType Shapelet::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int nsp);
+#endif
+
 
 /*
 void Shapelet::calculate_gradient_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index)
@@ -4490,17 +5584,36 @@ void Shapelet::get_regularization_param_ptr(stan::math::var*& regparam_ptr)
 }
 #endif
 
-void Shapelet::update_amplitudes(double*& ampvec)
+void Shapelet::update_amplitudes(Eigen::VectorXd& ampvec)
 {
 	Shapelet_Params<double>& p = assign_shapelet_param_object<double>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
 	int i,j,k=0;
 
+	int idx=0;
 	for (i=0; i < n_shapelets; i++) {
 		for (j=0; j < n_shapelets; j++) {
-			p.amps[i][j] = *(ampvec++);
+			p.amps[i][j] = ampvec(idx++);
 		}
 	}
 }
+
+#ifdef USE_STAN
+void Shapelet::update_amplitudes(stan::math::var_value<Eigen::VectorXd>& ampvec)
+{
+	Shapelet_Params<stan::math::var>& p = assign_shapelet_param_object<stan::math::var>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
+	int i,j,k=0;
+
+	int idx=0;
+	for (i=0; i < n_shapelets; i++) {
+		for (j=0; j < n_shapelets; j++) {
+			p.amps[i][j] = ampvec(idx++);
+			sbparams_shapelet.amps[i][j] = stan::math::value_of(p.amps[i][j]);
+		}
+	}
+}
+#endif
+
+
 
 /*
 void Shapelet::get_amplitudes(double *ampvec)
