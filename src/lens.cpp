@@ -445,7 +445,7 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 
 	source_fit_mode = Point_Source;
 	use_ansi_characters = false;
-	chisq_tolerance = 1e-4;
+	chisq_tolerance = 1e-6;
 	gradient_tolerance = 0.1; // for BFGS algorithm
 	gradient_tolerance_rel = 1e-3; // for BFGS algorithm
 	image_pos_accuracy = 1e-6;
@@ -11625,6 +11625,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 	}
 
 	LBFGSBParam<double> param;
+	param.delta = chisq_tolerance;
 	param.epsilon = gradient_tolerance;
 	param.epsilon_rel = gradient_tolerance_rel;
 	param.max_iterations = optimization_nmax;

@@ -65,7 +65,7 @@ q.sb_ellipticity_components=True
 
 # Note: keyword 'lensed_center_peak_sb' means we're ray-tracing the brightest data pixel to define the source center (which will override the xc, yc, inputs below)
 sersic_src = Sersic({"s_eff": 1, "Reff": 0.3, "n": 0.5, "e1": 0.0, "e2": 0.0}, pmode=1, qlens=q, lensed_center_peak_sb=True)
-sersic_src.vary([1,1,1,1,1,1,1])
+sersic_src.vary_all()
 sersic_src.set_limits([
     ("s_eff", .01, 10),
     ("Reff", .001, 1.0),
@@ -94,6 +94,7 @@ params.transform("Reff_src","log")
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
 q.gradtol = 1.0  # tolerance for convergence of gradient in BFGS method
+q.chisqtol = 1e-6
 q.nrepeat = 0
 
 q.run_fit("bfgs",adopt=True,show_errors=True)

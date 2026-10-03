@@ -63,7 +63,7 @@ q.sb_ellipticity_components=True
 
 # Note: keyword 'lensed_center_peak_sb' means we're ray-tracing the brightest data pixel to define the source center (which will override the xc, yc, inputs below)
 gauss_src = Gaussian({"sbmax": 0.8, "sigma": 0.1, "e1": 0.0, "e2": 0, "xc": 0, "yc": 0}, pmode=0, qlens=q, lensed_center_peak_sb=True)
-gauss_src.vary([1,1,1,1,1,1])
+gauss_src.vary_all()
 gauss_src.set_limits([
     ("sbmax", .01, 10),
     ("sigma", .001, 0.2),
@@ -78,6 +78,7 @@ src.add(gauss_src)
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
 q.gradtol = 1
+q.chisqtol = 1e-6
 q.nrepeat = 0
 
 q.run_fit("bfgs",adopt=True,show_errors=False)
