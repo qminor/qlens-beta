@@ -7537,6 +7537,153 @@ bool QLens::get_tangential_critical_curve_points(const vector<double>& phivals_i
 	return true;
 }
 
+double QLens::get_img_kappa_ratio_max_dist(const double x_in, const double y_in)
+{
+	double src_x, src_y;
+	src_x = x_in;
+	src_y = y_in;
+	PtImageSet imgset(this);
+	get_imageset(src_x, src_y, imgset, false);
+	
+	// create x, y, magnification lists
+	std::vector<double> x;
+	std::vector<double> y;
+	std::vector<double> mag;
+
+	for (auto img : imgset.images) {
+		x.push_back(img.pos[0]);
+		y.push_back(img.pos[1]);
+		mag.push_back(img.mag);
+	}
+
+	// now that there are lists of x, y coordinates, can compare distances between them
+	// need to save coordinates for maximum distance & minimum distance -- those are the two options
+	// but need to make sure to exclude central image 
+
+	double max_dist_sq = 0.0;
+	double min_dist_sq = std::numeric_limits<double>::max();
+	double x1, x2, y1, y2, mag1, mag2;
+
+	for (int i = 0; i < imgset.images.size(); i++) {
+		for (int j = i + 1; j < imgset.images.size(); j++) {
+			double dx = x[i] - x[j];
+			double dy = y[i] - y[j];
+			double dist_sq = dx*dx + dy*dy;
+
+			if (std::abs(mag[i]) < 0.01 || std::abs(mag[j]) < 0.01) {
+				continue;
+			}
+				
+			if (dist_sq > max_dist_sq) {
+				max_dist_sq = dist_sq;
+				x1 = x[i];
+				x2 = x[j];
+				y1 = y[i];
+				y2 = y[j];
+				mag1 = mag[i]; 
+				mag2 = mag[j];
+			}
+		}
+	}
+
+	lensvector<double> point1(x1, y1);
+	lensvector<double> point2(x2, y2);
+
+	double kappa1, kappa2, sheartot1, sheartot2, shear_angle1, shear_angle2;
+
+	kappa1 = kappa<double>(point1,reference_zfactors,default_zsrc_beta_factors);
+	kappa2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+
+	shear<double>(point1,sheartot1,shear_angle1,0,reference_zfactors,default_zsrc_beta_factors);
+	shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+
+	double img1_g = sheartot1/(1-kappa1);
+	double img2_g = sheartot2/(1-kappa2);
+
+	double kappa_ratio_sq = (mag2/mag1)*(1-img2_g*img2_g)/(1-img1_g*img1_g);
+	double kappa_ratio = sqrt(kappa_ratio_sq);
+
+	return kappa_ratio;
+		
+}
+
+double QLens::get_img_kappa_ratio_min_dist(const double x_in, const double y_in)
+{
+	double src_x, src_y;
+	src_x = x_in;
+	src_y = y_in;
+	PtImageSet imgset(this);
+	get_imageset(src_x, src_y, imgset, false);
+	
+	// create x, y, magnification lists
+	std::vector<double> x;
+	std::vector<double> y;
+	std::vector<double> mag;
+
+	for (auto img : imgset.images) {
+		x.push_back(img.pos[0]);
+		y.push_back(img.pos[1]);
+		mag.push_back(img.mag);
+	}
+
+	// now that there are lists of x, y coordinates, can compare distances between them
+	// need to save coordinates for maximum distance & minimum distance -- those are the two options
+	// but need to make sure to exclude central image 
+
+	double min_dist_sq = std::numeric_limits<double>::max();
+	double x1, x2, y1, y2, mag1, mag2;
+
+	for (int i = 0; i < imgset.images.size(); i++) {
+		for (int j = i + 1; j < imgset.images.size(); j++) {
+			double dx = x[i] - x[j];
+			double dy = y[i] - y[j];
+			double dist_sq = dx*dx + dy*dy;
+			cout << "this is first x: " << x[i] << endl;
+			cout << "this is second x: " << x[j] << endl;
+			cout << "this is min_dist_sq: " << dist_sq << endl;
+
+			if (std::abs(mag[i]) < 0.01 || std::abs(mag[j]) < 0.01) {
+				continue;
+			}
+
+			if (dist_sq < min_dist_sq) {
+				min_dist_sq = dist_sq;
+				x1 = x[i];
+				x2 = x[j];
+				y1 = y[i];
+				y2 = y[j];
+				mag1 = mag[i];
+				mag2 = mag[j];
+				
+			}
+		}
+	}
+
+	lensvector<double> point1(x1, y1);
+	lensvector<double> point2(x2, y2);
+
+	cout << "min x1 val: " << x1 << endl;
+	cout << "min y1 val: " << y1 << endl;
+	cout << "min x2 val: " << x2 << endl;
+	cout << "min y2 val: " << y2 << endl;
+
+	double kappa1, kappa2, sheartot1, sheartot2, shear_angle1, shear_angle2;
+
+	kappa1 = kappa<double>(point1,reference_zfactors,default_zsrc_beta_factors);
+	kappa2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+
+	shear<double>(point1,sheartot1,shear_angle1,0,reference_zfactors,default_zsrc_beta_factors);
+	shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+
+	double img1_g = sheartot1/(1-kappa1);
+	double img2_g = sheartot2/(1-kappa2);
+
+	double kappa_ratio_sq = (mag2/mag1)*(1-img2_g*img2_g)/(1-img1_g*img1_g);
+	double kappa_ratio = sqrt(kappa_ratio_sq);
+
+	return kappa_ratio;
+}
+
 double QLens::total_kappa(const double r, const int lensnum, const bool use_kpc)
 {
 	// this is used by the DerivedParam class in qlens.h

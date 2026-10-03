@@ -76,7 +76,8 @@ sersic_src.set_limits([
     ("yc_l", -2, 2)
 ])
 
-shapelets = Shapelet({"sigma": 0.1}, n=6, pmode=0, qlens=q)  # n is the shapelet order. No need to define center coordinates, we will anchor to sersic
+shapelets = Shapelet({"sigma": 0.1}, n=6, pmode=0, qlens=q)  # n is the shapelet order. No need to define center coordinates, we will anchor to sersic.
+# also note that "sigma" value will be meaningless because we will anchor it to the Reff of the Sersic profile
 #shapelets.vary(["regparam"]) # only if regularizing
 
 src.add(sersic_src)

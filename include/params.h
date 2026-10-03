@@ -124,6 +124,10 @@ struct DerivedParam
 			name = "xi_phi"; latex_name = "\\xi_{\\phi,cc}";
 		} else if (derived_param_type == Scaled_Xi_Phi_Param) {
 			name = "scaled_xi_phi"; latex_name = "\\xi_{\\phi,scaled}";
+		} else if (derived_param_type == Kappa_Ratio_Max_Param) {
+			name = "kappa_ratio_max"; latex_name = "\\frac{1-\\kappa_1}{1-\\kappa_2}_{,max}";
+		} else if (derived_param_type == Kappa_Ratio_Min_Param) {
+			name = "kappa_ratio_min"; latex_name = "\\frac{1-\\kappa_1}{1-\\kappa_2}_{,min}";
 		} else if (derived_param_type == Kappa_Re) {
 			name = "kappa_re"; latex_name = "\\kappa_{E}";
 		} else if (derived_param_type == LensParam) {
@@ -214,6 +218,12 @@ struct DerivedParam
 		}
 		else if (derived_param_type == Scaled_Xi_Phi_Param) {
 			return lens_in->get_scaled_xi_phi_parameter(funcparam);
+		}
+		else if (derived_param_type == Kappa_Ratio_Max_Param) {
+			return lens_in->get_img_kappa_ratio_max_dist(funcparam,funcparam2);
+		}
+		else if (derived_param_type == Kappa_Ratio_Min_Param) {
+			return lens_in->get_img_kappa_ratio_min_dist(funcparam,funcparam2);
 		}
 		else if (derived_param_type == AvgLogSlope) return lens_in->calculate_average_log_slope(int_param,funcparam,funcparam2,use_kpc_units);
 		else if (derived_param_type == Einstein_Mass) {
@@ -363,6 +373,10 @@ struct DerivedParam
 			outstring = "xi parameter of lens on critical curve at angle phi = " + mkstring_doub(funcparam) + "\n";
 		} else if (derived_param_type == Scaled_Xi_Phi_Param) {
 			outstring = "scaled xi parameter of lens on critical curve at angle phi = " + mkstring_doub(funcparam) + "\n";
+		} else if (derived_param_type == Kappa_Ratio_Max_Param) {
+			outstring = "1-kappa ratio between farthest pair of images \n";
+		} else if (derived_param_type == Kappa_Ratio_Min_Param) {
+			outstring = "1-kappa ratio between closest pair of images\n";
 		} else if (derived_param_type == Kappa_Re) {
 			outstring = "Kappa at Einstein radius of primary lens (plus other lenses that are co-centered with primary), averaged over all angles\n";
 		} else if (derived_param_type == LensParam) {

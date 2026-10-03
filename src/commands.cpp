@@ -9154,6 +9154,18 @@ void QLens::process_commands(bool read_file)
 								if (nwords != 5) Complain("derived parameter scaled_xi_phi requires one argument (angle phi)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								dparam_list->add_dparam(words[3],dparam_arg,-1,-1,use_kpc);
+							} else if (words[3]=="kappa_ratio_max") {
+								int pmode;
+								double dparam_arg2 = -1;
+								if (nwords != 6) Complain("derived parameter kappa_ratio_max requires two arguments (xc_src, yc_src)");
+								if (!(ws[5] >> dparam_arg)) Complain("invalid derived parameter argument");
+								dparam_list->add_dparam(words[3],dparam_arg,-1,dparam_arg2,false);
+							} else if (words[3]=="kappa_ratio_min") {
+								int pmode;
+								double dparam_arg2 = -1;
+								if (nwords != 6) Complain("derived parameter kappa_ratio_min requires two arguments (xc_src, yc_src)");
+								if (!(ws[5] >> dparam_arg)) Complain("invalid derived parameter argument");
+								dparam_list->add_dparam(words[3],dparam_arg,-1,dparam_arg2,false);
 							} else if (words[3]=="kappa_re") {
 								if (nwords != 4) Complain("derived parameter mass_re doesn't allow any arguments");
 								dparam_list->add_dparam(words[3],-1e30,-1,-1,false);

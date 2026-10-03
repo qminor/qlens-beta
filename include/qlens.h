@@ -73,6 +73,8 @@ enum DerivedParamType {
 	CC_Xi_Param,
 	Xi_Phi_Param,
 	Scaled_Xi_Phi_Param,
+	Kappa_Ratio_Max_Param,
+	Kappa_Ratio_Min_Param,
 	Kappa_Re,
 	LensParam,
 	AvgLogSlope,
@@ -1305,6 +1307,9 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	bool get_xi_phi_derivs(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals, vector<double>& kapvals, vector<double>& kap_deriv, vector<double>& shear_deriv);
 	bool get_tangential_critical_curve_points(const std::vector<double>& phivals, std::vector<double>& xvals, std::vector<double>& yvals);
+
+	double get_img_kappa_ratio_max_dist(const double x_in, const double y_in);
+	double get_img_kappa_ratio_min_dist(const double x_in, const double y_in);
 
 	bool *centered;
 	double einstein_radius_of_primary_lens(const double zfac, double& reav);
