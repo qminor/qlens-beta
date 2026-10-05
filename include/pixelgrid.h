@@ -1207,6 +1207,8 @@ class ImagePixelGrid : private Sort
 	//int *Rmatrix_index;
 	//double *Rmatrix_pot;
 	//int *Rmatrix_pot_index;
+	Eigen::LLT<Eigen::MatrixXd, Eigen::Upper> Rmatrix_factored;
+	Eigen::LLT<Eigen::MatrixXd, Eigen::Upper> Fmatrix_llt;
 
 	KernelType kernel_type;
 	Eigen::MatrixXd covmatrix_dense;

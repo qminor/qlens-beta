@@ -77,11 +77,11 @@ src.add(gauss_src)
 
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
-q.gradtol = 1
-q.chisqtol = 1e-6
+q.gradtol = 0.001
+q.chisqtol = 0
 q.nrepeat = 0
 
-q.run_fit("bfgs",adopt=True,show_errors=False)
+#q.run_fit("bfgs",adopt=True,show_errors=False)
 
 pause()
 
@@ -110,12 +110,14 @@ params.set_limits([
  
 q.fitmodel()
 
-q.sbmap_invert()
-plotimg(q,nres=True,title="Residuals before optimizing")      # NOTE: plotimg, plotsrc, and plotdata all return figures and axes, so you can also do e.g.
-plotsrc(q,interp=False,title="Reconstructed source before optimizing")    # (fig, ax) = plotimg(q,show=False) and modify the figures
+#q.sbmap_invert()
+#plotimg(q,nres=True,title="Residuals before optimizing")      # NOTE: plotimg, plotsrc, and plotdata all return figures and axes, so you can also do e.g.
+#plotsrc(q,interp=False,title="Reconstructed source before optimizing")    # (fig, ax) = plotimg(q,show=False) and modify the figures
 
 pause()
 
+q.nimg_prior=False
+q.outside_sb_prior=False
 #q.param_covmatrix_scale_fac = 5   # we will scale the uncertainties by this factor because with pixellated sources, fisher matrix uncertainties are often unreliably small
 q.run_fit("bfgs",adopt=True,show_errors=True)
 

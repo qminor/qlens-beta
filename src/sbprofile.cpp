@@ -2714,15 +2714,15 @@ void SB_Profile::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix
 
 
 template <typename MathTypes>
-typename MathTypes::MatType SB_Profile::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp)
+typename MathTypes::MatType SB_Profile::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const typename MathTypes::MatType& original_Lmatrix, const int indx_start, const int nsp)
 {
 	using MatType = typename MathTypes::MatType;
 	MatType Lmatrix = Eigen::MatrixXd::Zero(1.0, input_pts_x.size()/nsp);
 	return Lmatrix;
 }
-template typename PlainTypes::MatType SB_Profile::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int nsp);
+template typename PlainTypes::MatType SB_Profile::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const typename PlainTypes::MatType& original_Lmatrix, const int indx_start, const int nsp);
 #ifdef USE_STAN
-template typename VarmatTypes::MatType SB_Profile::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int nsp);
+template typename VarmatTypes::MatType SB_Profile::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const typename VarmatTypes::MatType& original_Lmatrix, const int indx_start, const int nsp);
 #endif
 
 
@@ -4828,7 +4828,6 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_e
 	Shapelet_Params<double>& p = assign_shapelet_param_object<double>(); // this reference will point to either the <double> sbparams or <stan::math::var> sbparams for autodiff
 	x -= p.x_center;
 	y -= p.y_center;
-	if ((truncate_at_3sigma) and (sqrt(x*x+y*y) > 2.3*p.sig)) return;
 	if (p.theta != 0) rotate(x,y);
 
 	double gaussfactor, xarg, yarg, fac, lastfac, sqrtq;
@@ -4864,393 +4863,7 @@ void Shapelet::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_e
 	delete[] hermvals_y;
 }
 
-
 /*
-template <typename MathTypes>
-typename MathTypes::MatType Shapelet::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp)
-{
-	using QScalar = typename MathTypes::QScalar;
-	using VecType = typename MathTypes::VecType;
-	using MatType = typename MathTypes::MatType;
-
-	Shapelet_Params<QScalar>& p = assign_shapelet_param_object<QScalar>();
-
-	const int nsubpts = input_pts_x.size();
-	const int npix = nsubpts / nsp;
-	const int ncoeff = n_shapelets * n_shapelets;
-
-	const double sig = value_of(p.sig);
-	const double q = value_of(p.q);
-	const double x_center = value_of(p.x_center);
-	const double y_center = value_of(p.y_center);
-	const double costheta = value_of(p.costheta);
-	const double sintheta = value_of(p.sintheta);
-	const double sqrtq = std::sqrt(q);
-
-	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
-
-#ifdef USE_STAN
-	Eigen::MatrixXd dL_dx;
-	Eigen::MatrixXd dL_dy;
-	Eigen::MatrixXd dL_dxc;
-	Eigen::MatrixXd dL_dyc;
-	Eigen::MatrixXd dL_dsig;
-	Eigen::MatrixXd dL_dq;
-	Eigen::MatrixXd dL_dcostheta;
-	Eigen::MatrixXd dL_dsintheta;
-
-	if constexpr (stan::is_autodiff_v<VecType>) {
-		dL_dx = Eigen::MatrixXd::Zero(ncoeff, nsubpts);
-		dL_dy = Eigen::MatrixXd::Zero(ncoeff, nsubpts);
-		dL_dxc = Eigen::MatrixXd::Zero(ncoeff, npix);
-		dL_dyc = Eigen::MatrixXd::Zero(ncoeff, npix);
-		dL_dsig = Eigen::MatrixXd::Zero(ncoeff, npix);
-		dL_dq = Eigen::MatrixXd::Zero(ncoeff, npix);
-		dL_dcostheta = Eigen::MatrixXd::Zero(ncoeff, npix);
-		dL_dsintheta = Eigen::MatrixXd::Zero(ncoeff, npix);
-	}
-#endif
-
-	for (int k = 0; k < nsubpts; ++k) {
-		const double dx0 = value_of(input_pts_x(k)) - x_center;
-		const double dy0 = value_of(input_pts_y(k)) - y_center;
-
-		const double x = costheta * dx0 + sintheta * dy0;
-		const double y = -sintheta * dx0 + costheta * dy0;
-
-		const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
-		const double xarg = x * sqrtq / sig;
-		const double yarg = y / (sqrtq * sig);
-
-		Eigen::VectorXd hermvals_x(n_shapelets);
-		Eigen::VectorXd hermvals_y(n_shapelets);
-
-		hermvals_x[0] = 1.0;
-		hermvals_y[0] = 1.0;
-
-		if (n_shapelets > 1) {
-			hermvals_x[1] = 2.0 * xarg / M_SQRT2;
-			hermvals_y[1] = 2.0 * yarg / M_SQRT2;
-		}
-
-		double lastfac = 1.0 / M_SQRT2;
-
-		for (int i = 2; i < n_shapelets; ++i) {
-			const double fac = 1.0 / std::sqrt(2.0 * i);
-			hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
-			hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
-			lastfac = fac;
-		}
-
-		const int pixel = k / nsp;
-		const double norm = 1.0 / static_cast<double>(nsp);
-
-#ifdef USE_STAN
-		Eigen::VectorXd dherm_x;
-		Eigen::VectorXd dherm_y;
-
-		if constexpr (stan::is_autodiff_v<VecType>) {
-			dherm_x = Eigen::VectorXd::Zero(n_shapelets);
-			dherm_y = Eigen::VectorXd::Zero(n_shapelets);
-
-			if (n_shapelets > 1) {
-				dherm_x[1] = M_SQRT2;
-				dherm_y[1] = M_SQRT2;
-			}
-
-			for (int i = 2; i < n_shapelets; ++i) {
-				dherm_x[i] = std::sqrt(2.0 * i) * hermvals_x[i - 1];
-				dherm_y[i] = std::sqrt(2.0 * i) * hermvals_y[i - 1];
-			}
-		}
-#endif
-
-#ifdef USE_STAN
-		if constexpr (stan::is_autodiff_v<VecType>) {
-			const double dgauss_dx = -gaussfactor * q * x / (sig * sig);
-			const double dgauss_dy = -gaussfactor * y / (q * sig * sig);
-			const double dgauss_dsig = gaussfactor * (-1.0 / sig + (q * x * x + y * y / q) / (sig * sig * sig));
-			const double dgauss_dq = -gaussfactor * (x * x - y * y / (q * q)) / (2.0 * sig * sig);
-
-			const double dxarg_dx = sqrtq / sig;
-			const double dyarg_dy = 1.0 / (sqrtq * sig);
-			const double dxarg_dsig = -xarg / sig;
-			const double dyarg_dsig = -yarg / sig;
-			const double dxarg_dq = xarg / (2.0 * q);
-			const double dyarg_dq = -yarg / (2.0 * q);
-
-			const double dx_dx0 = costheta;
-			const double dy_dx0 = -sintheta;
-			const double dx_dy0 = sintheta;
-			const double dy_dy0 = costheta;
-			const double dx_dxc = -costheta;
-			const double dy_dxc = sintheta;
-			const double dx_dyc = -sintheta;
-			const double dy_dyc = -costheta;
-			const double dx_dcostheta = dx0;
-			const double dy_dcostheta = dy0;
-			const double dx_dsintheta = dy0;
-			const double dy_dsintheta = -dx0;
-
-			for (int i = 0; i < n_shapelets; ++i) {
-				const double Hx = hermvals_x[i];
-				const double dHx_dx = dherm_x[i] * dxarg_dx;
-				const double dHx_dsig = dherm_x[i] * dxarg_dsig;
-				const double dHx_dq = dherm_x[i] * dxarg_dq;
-
-				for (int j = 0; j < n_shapelets; ++j) {
-					const int row = i * n_shapelets + j;
-					const double Hy = hermvals_y[j];
-					const double dHy_dy = dherm_y[j] * dyarg_dy;
-					const double dHy_dsig = dherm_y[j] * dyarg_dsig;
-					const double dHy_dq = dherm_y[j] * dyarg_dq;
-
-					const double dL_dxrot = dgauss_dx * Hx * Hy + gaussfactor * dHx_dx * Hy;
-					const double dL_dyrot = dgauss_dy * Hx * Hy + gaussfactor * Hx * dHy_dy;
-
-					dL_dx(row, k) += dL_dxrot * dx_dx0 + dL_dyrot * dy_dx0;
-					dL_dy(row, k) += dL_dxrot * dx_dy0 + dL_dyrot * dy_dy0;
-					dL_dxc(row, pixel) += (dL_dxrot * dx_dxc + dL_dyrot * dy_dxc) / static_cast<double>(nsp);
-					dL_dyc(row, pixel) += (dL_dxrot * dx_dyc + dL_dyrot * dy_dyc) / static_cast<double>(nsp);
-					dL_dsig(row, pixel) += (dgauss_dsig * Hx * Hy + gaussfactor * dHx_dsig * Hy + gaussfactor * Hx * dHy_dsig) / static_cast<double>(nsp);
-					dL_dq(row, pixel) += (dgauss_dq * Hx * Hy + gaussfactor * dHx_dq * Hy + gaussfactor * Hx * dHy_dq) / static_cast<double>(nsp);
-					dL_dcostheta(row, pixel) += (dL_dxrot * dx_dcostheta + dL_dyrot * dy_dcostheta) / static_cast<double>(nsp);
-					dL_dsintheta(row, pixel) += (dL_dxrot * dx_dsintheta + dL_dyrot * dy_dsintheta) / static_cast<double>(nsp);
-				}
-			}
-		}
-#endif
-
-		for (int i = 0; i < n_shapelets; ++i) {
-			for (int j = 0; j < n_shapelets; ++j) {
-				const int row = i * n_shapelets + j;
-				Lmatrix(row, pixel) += norm * gaussfactor * hermvals_x[i] * hermvals_y[j];
-			}
-		}
-	}
-
-#ifdef USE_STAN
-	if constexpr (stan::is_autodiff_v<VecType>) {
-		return stan::math::make_callback_var(
-			Lmatrix,
-			[&p, &input_pts_x, &input_pts_y, dL_dx, dL_dy, dL_dxc, dL_dyc, dL_dsig, dL_dq, dL_dcostheta, dL_dsintheta, nsp](auto& res) mutable {
-				for (int k = 0; k < input_pts_x.size(); ++k) {
-					input_pts_x.adj()(k) += (res.adj().col(k / nsp).array() * dL_dx.col(k).array()).sum();
-					input_pts_y.adj()(k) += (res.adj().col(k / nsp).array() * dL_dy.col(k).array()).sum();
-				}
-
-				p.x_center.adj() += (res.adj().array() * dL_dxc.array()).sum();
-				p.y_center.adj() += (res.adj().array() * dL_dyc.array()).sum();
-				p.sig.adj() += (res.adj().array() * dL_dsig.array()).sum();
-				p.q.adj() += (res.adj().array() * dL_dq.array()).sum();
-				p.costheta.adj() += (res.adj().array() * dL_dcostheta.array()).sum();
-				p.sintheta.adj() += (res.adj().array() * dL_dsintheta.array()).sum();
-			});
-	}
-#endif
-
-	return Lmatrix;
-}
-template typename PlainTypes::MatType Shapelet::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int nsp);
-#ifdef USE_STAN
-template typename VarmatTypes::MatType Shapelet::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int nsp);
-#endif
-*/
-
-
-
-/*
-template <typename MathTypes>
-typename MathTypes::MatType Shapelet::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp)
-{
-	using QScalar = typename MathTypes::QScalar;
-	using VecType = typename MathTypes::VecType;
-	using MatType = typename MathTypes::MatType;
-
-	Shapelet_Params<QScalar>& p = assign_shapelet_param_object<QScalar>();
-
-	const int nsubpts = input_pts_x.size();
-	const int npix = nsubpts / nsp;
-	const int ncoeff = n_shapelets * n_shapelets;
-
-	const double sig = value_of(p.sig);
-	const double q = value_of(p.q);
-	const double x_center = value_of(p.x_center);
-	const double y_center = value_of(p.y_center);
-	const double costheta = value_of(p.costheta);
-	const double sintheta = value_of(p.sintheta);
-	const double sqrtq = std::sqrt(q);
-	const double inv_nsp = 1.0 / static_cast<double>(nsp);
-
-	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
-
-#ifdef USE_STAN
-	Eigen::MatrixXd dL_dx;
-	Eigen::MatrixXd dL_dy;
-	Eigen::MatrixXd dL_dsig;
-	Eigen::MatrixXd dL_dq;
-	Eigen::VectorXd dx0;
-	Eigen::VectorXd dy0;
-
-	if constexpr (stan::is_autodiff_v<VecType>) {
-		dL_dx = Eigen::MatrixXd::Zero(ncoeff, nsubpts);
-		dL_dy = Eigen::MatrixXd::Zero(ncoeff, nsubpts);
-		dL_dsig = Eigen::MatrixXd::Zero(ncoeff, npix);
-		dL_dq = Eigen::MatrixXd::Zero(ncoeff, npix);
-		dx0 = Eigen::VectorXd::Zero(nsubpts);
-		dy0 = Eigen::VectorXd::Zero(nsubpts);
-	}
-#endif
-
-	Eigen::VectorXd hermvals_x(n_shapelets);
-	Eigen::VectorXd hermvals_y(n_shapelets);
-	Eigen::VectorXd sqrt2n(n_shapelets);
-
-	for (int i = 1; i < n_shapelets; ++i) sqrt2n[i] = std::sqrt(2.0 * i);
-
-	for (int k = 0; k < nsubpts; ++k) {
-		const double dx = value_of(input_pts_x(k)) - x_center;
-		const double dy = value_of(input_pts_y(k)) - y_center;
-
-#ifdef USE_STAN
-		if constexpr (stan::is_autodiff_v<VecType>) {
-			dx0(k) = dx;
-			dy0(k) = dy;
-		}
-#endif
-
-		const double x = costheta * dx + sintheta * dy;
-		const double y = -sintheta * dx + costheta * dy;
-
-		const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
-		const double xarg = x * sqrtq / sig;
-		const double yarg = y / (sqrtq * sig);
-
-		hermvals_x[0] = 1.0;
-		hermvals_y[0] = 1.0;
-
-		if (n_shapelets > 1) {
-			hermvals_x[1] = M_SQRT2 * xarg;
-			hermvals_y[1] = M_SQRT2 * yarg;
-		}
-
-		double lastfac = 1.0 / M_SQRT2;
-
-		for (int i = 2; i < n_shapelets; ++i) {
-			const double fac = 1.0 / std::sqrt(2.0 * i);
-			hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
-			hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
-			lastfac = fac;
-		}
-
-		const int pixel = k / nsp;
-
-#ifdef USE_STAN
-		if constexpr (stan::is_autodiff_v<VecType>) {
-			const double dgauss_dx = -gaussfactor * q * x / (sig * sig);
-			const double dgauss_dy = -gaussfactor * y / (q * sig * sig);
-			const double dgauss_dsig = gaussfactor * (-1.0 / sig + (q * x * x + y * y / q) / (sig * sig * sig));
-			const double dgauss_dq = -gaussfactor * (x * x - y * y / (q * q)) / (2.0 * sig * sig);
-
-			const double dxarg_dx = sqrtq / sig;
-			const double dyarg_dy = 1.0 / (sqrtq * sig);
-			const double dxarg_dsig = -xarg / sig;
-			const double dyarg_dsig = -yarg / sig;
-			const double dxarg_dq = xarg / (2.0 * q);
-			const double dyarg_dq = -yarg / (2.0 * q);
-
-			for (int i = 0; i < n_shapelets; ++i) {
-				const double Hx = hermvals_x[i];
-				const double dHx_dx = i == 0 ? 0.0 : sqrt2n[i] * hermvals_x[i - 1] * dxarg_dx;
-				const double dHx_dsig = i == 0 ? 0.0 : sqrt2n[i] * hermvals_x[i - 1] * dxarg_dsig;
-				const double dHx_dq = i == 0 ? 0.0 : sqrt2n[i] * hermvals_x[i - 1] * dxarg_dq;
-
-				for (int j = 0; j < n_shapelets; ++j) {
-					const int row = i * n_shapelets + j;
-					const double Hy = hermvals_y[j];
-					const double dHy_dy = j == 0 ? 0.0 : sqrt2n[j] * hermvals_y[j - 1] * dyarg_dy;
-					const double dHy_dsig = j == 0 ? 0.0 : sqrt2n[j] * hermvals_y[j - 1] * dyarg_dsig;
-					const double dHy_dq = j == 0 ? 0.0 : sqrt2n[j] * hermvals_y[j - 1] * dyarg_dq;
-
-					const double dL_dxrot = dgauss_dx * Hx * Hy + gaussfactor * dHx_dx * Hy;
-					const double dL_dyrot = dgauss_dy * Hx * Hy + gaussfactor * Hx * dHy_dy;
-
-					dL_dx(row, k) = dL_dxrot * costheta - dL_dyrot * sintheta;
-					dL_dy(row, k) = dL_dxrot * sintheta + dL_dyrot * costheta;
-
-					dL_dsig(row, pixel) += inv_nsp * (dgauss_dsig * Hx * Hy + gaussfactor * dHx_dsig * Hy + gaussfactor * Hx * dHy_dsig);
-					dL_dq(row, pixel) += inv_nsp * (dgauss_dq * Hx * Hy + gaussfactor * dHx_dq * Hy + gaussfactor * Hx * dHy_dq);
-				}
-			}
-		}
-#endif
-
-		for (int i = 0; i < n_shapelets; ++i) {
-			for (int j = 0; j < n_shapelets; ++j) {
-				const int row = i * n_shapelets + j;
-				Lmatrix(row, pixel) += inv_nsp * gaussfactor * hermvals_x[i] * hermvals_y[j];
-			}
-		}
-	}
-
-#ifdef USE_STAN
-	if constexpr (stan::is_autodiff_v<VecType>) {
-		return stan::math::make_callback_var(Lmatrix, [&p, &input_pts_x, &input_pts_y, dL_dx, dL_dy, dL_dsig, dL_dq, dx0, dy0, nsp, costheta, sintheta, this](auto& res) mutable {
-			const Eigen::MatrixXd& adj = res.adj();
-
-			std::chrono::steady_clock::time_point callback_wtime0;
-			std::chrono::duration<double> callback_wtime;
-			if (qlens->show_wtime) {
-				callback_wtime0 = std::chrono::steady_clock::now();
-			}
-
-			for (int k = 0; k < input_pts_x.size(); ++k) {
-				const int pixel = k / nsp;
-				const Eigen::VectorXd& adjcol = adj.col(pixel);
-				const Eigen::VectorXd& dX = dL_dx.col(k);
-				const Eigen::VectorXd& dY = dL_dy.col(k);
-
-				const double adj_dX = adjcol.dot(dX);
-				const double adj_dY = adjcol.dot(dY);
-
-				const double dx = dx0(k);
-				const double dy = dy0(k);
-
-				const double dLc_dx = dx * costheta - dy * sintheta;
-				const double dLc_dy = dx * sintheta + dy * costheta;
-				const double dLs_dx = dy * costheta + dx * sintheta;
-				const double dLs_dy = dy * sintheta - dx * costheta;
-
-				input_pts_x.adj()(k) += adj_dX;
-				input_pts_y.adj()(k) += adj_dY;
-
-				p.x_center.adj() -= adj_dX;
-				p.y_center.adj() -= adj_dY;
-
-				p.costheta.adj() += dLc_dx * adj_dX + dLc_dy * adj_dY;
-				p.sintheta.adj() += dLs_dx * adj_dX + dLs_dy * adj_dY;
-			}
-
-			p.sig.adj() += (adj.array() * dL_dsig.array()).sum();
-			p.q.adj() += (adj.array() * dL_dq.array()).sum();
-
-			if (qlens->show_wtime) {
-				callback_wtime = std::chrono::steady_clock::now()-callback_wtime0;
-				if (qlens->mpi_id==0) cout << "Wall time for Lmatrix_shapelet callback: " << callback_wtime.count() << endl;
-			}
-		});
-	}
-#endif
-
-	return Lmatrix;
-}
-template typename PlainTypes::MatType Shapelet::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int nsp);
-#ifdef USE_STAN
-template typename VarmatTypes::MatType Shapelet::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int nsp);
-#endif
-*/
-
-
 template <typename MathTypes>
 typename MathTypes::MatType Shapelet::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp)
 {
@@ -5469,6 +5082,498 @@ typename MathTypes::MatType Shapelet::construct_Lmatrix_vec_impl(const typename 
 template typename PlainTypes::MatType Shapelet::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int nsp);
 #ifdef USE_STAN
 template typename VarmatTypes::MatType Shapelet::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int nsp);
+#endif
+*/
+
+
+/*
+template <typename MathTypes>
+typename MathTypes::MatType Shapelet::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const typename MathTypes::MatType& original_Lmatrix, const int nsp)
+{
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	Shapelet_Params<QScalar>& p = assign_shapelet_param_object<QScalar>();
+
+	const int nsubpts = input_pts_x.size();
+	const int npix = nsubpts / nsp;
+	const int original_ncoeff = original_Lmatrix.rows();
+	const int ncoeff_current = n_shapelets * n_shapelets;
+	const int ncoeff = original_ncoeff + ncoeff_current;
+	const double inv_nsp = 1.0 / static_cast<double>(nsp);
+
+	const double sig = value_of(p.sig);
+	const double q = value_of(p.q);
+	const double x_center = value_of(p.x_center);
+	const double y_center = value_of(p.y_center);
+	const double costheta = value_of(p.costheta);
+	const double sintheta = value_of(p.sintheta);
+	const double sqrtq = std::sqrt(q);
+
+	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
+
+	if (original_ncoeff > 0) {
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<MatType>) {
+			Lmatrix.topRows(original_ncoeff) = original_Lmatrix.val();
+		} else {
+			Lmatrix.topRows(original_ncoeff) = original_Lmatrix;
+		}
+#else
+		Lmatrix.topRows(original_ncoeff) = original_Lmatrix;
+#endif
+	}
+
+#ifdef USE_STAN
+	Eigen::VectorXd dx0;
+	Eigen::VectorXd dy0;
+
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dx0.resize(nsubpts);
+		dy0.resize(nsubpts);
+	}
+#endif
+
+	Eigen::VectorXd hermvals_x(n_shapelets);
+	Eigen::VectorXd hermvals_y(n_shapelets);
+
+	for (int k = 0; k < nsubpts; ++k) {
+		const double dx = value_of(input_pts_x(k)) - x_center;
+		const double dy = value_of(input_pts_y(k)) - y_center;
+
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			dx0(k) = dx;
+			dy0(k) = dy;
+		}
+#endif
+
+		const double x = costheta * dx + sintheta * dy;
+		const double y = -sintheta * dx + costheta * dy;
+
+		if (truncate_at_3sigma && std::sqrt(x * x + y * y) > 2.3 * sig) continue;
+
+		const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
+		const double xarg = x * sqrtq / sig;
+		const double yarg = y / (sqrtq * sig);
+
+		hermvals_x[0] = 1.0;
+		hermvals_y[0] = 1.0;
+
+		if (n_shapelets > 1) {
+			hermvals_x[1] = M_SQRT2 * xarg;
+			hermvals_y[1] = M_SQRT2 * yarg;
+		}
+
+		double lastfac = 1.0 / M_SQRT2;
+
+		for (int i = 2; i < n_shapelets; ++i) {
+			const double fac = 1.0 / std::sqrt(2.0 * i);
+			hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+			hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+			lastfac = fac;
+		}
+
+		const int pixel = k / nsp;
+
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				const int row = original_ncoeff + i * n_shapelets + j;
+				Lmatrix(row, pixel) += inv_nsp * gaussfactor * hermvals_x[i] * hermvals_y[j];
+			}
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType> || stan::is_autodiff_v<MatType>) {
+		return stan::math::make_callback_var(Lmatrix, [&p, &input_pts_x, &input_pts_y, original_Lmatrix, dx0, dy0, nsp, npix, original_ncoeff, ncoeff_current, inv_nsp, costheta, sintheta, this](auto& res) mutable {
+			const Eigen::MatrixXd& adj = res.adj();
+
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			if constexpr (stan::is_autodiff_v<MatType>) {
+				if (original_ncoeff > 0) {
+					original_Lmatrix.adj() += adj.topRows(original_ncoeff);
+				}
+			}
+
+			const double sig = value_of(p.sig);
+			const double q = value_of(p.q);
+			const double sqrtq = std::sqrt(q);
+
+			Eigen::VectorXd hermvals_x(n_shapelets);
+			Eigen::VectorXd hermvals_y(n_shapelets);
+
+			double sig_adj = 0.0;
+			double q_adj = 0.0;
+			double xcenter_adj = 0.0;
+			double ycenter_adj = 0.0;
+			double costheta_adj = 0.0;
+			double sintheta_adj = 0.0;
+
+			for (int k = 0; k < input_pts_x.size(); ++k) {
+				const int pixel = k / nsp;
+
+				double dx;
+				double dy;
+
+				if constexpr (stan::is_autodiff_v<VecType>) {
+					dx = dx0(k);
+					dy = dy0(k);
+				} else {
+					dx = value_of(input_pts_x(k)) - value_of(p.x_center);
+					dy = value_of(input_pts_y(k)) - value_of(p.y_center);
+				}
+
+				const double x = costheta * dx + sintheta * dy;
+				const double y = -sintheta * dx + costheta * dy;
+
+				if (truncate_at_3sigma && std::sqrt(x * x + y * y) > 2.3 * sig) continue;
+
+				const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
+				const double xarg = x * sqrtq / sig;
+				const double yarg = y / (sqrtq * sig);
+
+				hermvals_x[0] = 1.0;
+				hermvals_y[0] = 1.0;
+
+				if (n_shapelets > 1) {
+					hermvals_x[1] = M_SQRT2 * xarg;
+					hermvals_y[1] = M_SQRT2 * yarg;
+				}
+
+				double lastfac = 1.0 / M_SQRT2;
+
+				for (int i = 2; i < n_shapelets; ++i) {
+					const double fac = 1.0 / std::sqrt(2.0 * i);
+					hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+					hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+					lastfac = fac;
+				}
+
+				double adj_f = 0.0;
+				double adj_fx = 0.0;
+				double adj_fy = 0.0;
+				double adj_fsig = 0.0;
+				double adj_fq = 0.0;
+
+				const double dgauss_dx = -gaussfactor * q * x / (sig * sig);
+				const double dgauss_dy = -gaussfactor * y / (q * sig * sig);
+				const double dgauss_dsig = gaussfactor * (-1.0 / sig + (q * x * x + y * y / q) / (sig * sig * sig));
+				const double dgauss_dq = -gaussfactor * (x * x - y * y / (q * q)) / (2.0 * sig * sig);
+
+				for (int i = 0; i < n_shapelets; ++i) {
+					const double Hx = hermvals_x[i];
+					const double dHx_dxarg = i == 0 ? 0.0 : std::sqrt(2.0 * i) * hermvals_x[i - 1];
+
+					const double dHx_dsig = dHx_dxarg * (-xarg / sig);
+					const double dHx_dq = dHx_dxarg * (xarg / (2.0 * q));
+
+					for (int j = 0; j < n_shapelets; ++j) {
+						const int row = original_ncoeff + i * n_shapelets + j;
+						const double A = adj(row, pixel);
+						const double Hy = hermvals_y[j];
+						const double dHy_dyarg = j == 0 ? 0.0 : std::sqrt(2.0 * j) * hermvals_y[j - 1];
+
+						const double dHy_dsig = dHy_dyarg * (-yarg / sig);
+						const double dHy_dq = dHy_dyarg * (-yarg / (2.0 * q));
+
+						const double Hxy = Hx * Hy;
+
+						adj_f += A * Hxy;
+						adj_fx += A * dHx_dxarg * (sqrtq / sig) * Hy;
+						adj_fy += A * Hx * dHy_dyarg / (sqrtq * sig);
+						adj_fsig += A * (dHx_dsig * Hy + Hx * dHy_dsig);
+						adj_fq += A * (dHx_dq * Hy + Hx * dHy_dq);
+					}
+				}
+
+				const double dL_dxrot = inv_nsp * (dgauss_dx * adj_f + gaussfactor * adj_fx);
+				const double dL_dyrot = inv_nsp * (dgauss_dy * adj_f + gaussfactor * adj_fy);
+				const double dL_dsig = inv_nsp * (dgauss_dsig * adj_f + gaussfactor * adj_fsig);
+				const double dL_dq = inv_nsp * (dgauss_dq * adj_f + gaussfactor * adj_fq);
+
+				const double adj_dX = costheta * dL_dxrot - sintheta * dL_dyrot;
+				const double adj_dY = sintheta * dL_dxrot + costheta * dL_dyrot;
+
+				if constexpr (stan::is_autodiff_v<VecType>) {
+					input_pts_x.adj()(k) += adj_dX;
+					input_pts_y.adj()(k) += adj_dY;
+				}
+
+				xcenter_adj -= adj_dX;
+				ycenter_adj -= adj_dY;
+
+				costheta_adj += dx * dL_dxrot + dy * dL_dyrot;
+				sintheta_adj += dy * dL_dxrot - dx * dL_dyrot;
+
+				sig_adj += dL_dsig;
+				q_adj += dL_dq;
+			}
+
+			p.x_center.adj() += xcenter_adj;
+			p.y_center.adj() += ycenter_adj;
+			p.costheta.adj() += costheta_adj;
+			p.sintheta.adj() += sintheta_adj;
+			p.sig.adj() += sig_adj;
+			p.q.adj() += q_adj;
+
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+				if (qlens->mpi_id == 0) cout << "Wall time for Lmatrix_shapelet callback: " << callback_wtime.count() << endl;
+			}
+		});
+	}
+#endif
+
+	return Lmatrix;
+}
+template typename PlainTypes::MatType Shapelet::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const typename PlainTypes::MatType& original_Lmatrix, const int nsp);
+#ifdef USE_STAN
+template typename VarmatTypes::MatType Shapelet::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const typename VarmatTypes::MatType& original_Lmatrix, const int nsp);
+#endif
+*/
+
+
+template <typename MathTypes>
+typename MathTypes::MatType Shapelet::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const typename MathTypes::MatType& original_Lmatrix, const int indx_start, const int nsp)
+{
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	Shapelet_Params<QScalar>& p = assign_shapelet_param_object<QScalar>();
+
+	const int nsubpts = input_pts_x.size();
+	const int npix = nsubpts / nsp;
+	int original_ncoeff = (indx_start==0)? 0 : original_Lmatrix.rows();
+
+	if (indx_start < 0 || indx_start > original_ncoeff) {
+		throw std::runtime_error("Shapelet::construct_Lmatrix_vec_impl: indx_start must be between 0 and the number of rows in original_Lmatrix");
+	}
+
+	const int ncoeff_current = n_shapelets * n_shapelets;
+	const int ncoeff = indx_start + ncoeff_current;
+	const double inv_nsp = 1.0 / static_cast<double>(nsp);
+
+	const double sig = value_of(p.sig);
+	const double q = value_of(p.q);
+	const double x_center = value_of(p.x_center);
+	const double y_center = value_of(p.y_center);
+	const double costheta = value_of(p.costheta);
+	const double sintheta = value_of(p.sintheta);
+	const double sqrtq = std::sqrt(q);
+
+	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
+
+	if (indx_start > 0) {
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<MatType>) {
+			Lmatrix.topRows(indx_start) = original_Lmatrix.val().topRows(indx_start);
+		} else {
+			Lmatrix.topRows(indx_start) = original_Lmatrix.topRows(indx_start);
+		}
+#else
+		Lmatrix.topRows(indx_start) = original_Lmatrix.topRows(indx_start);
+#endif
+	}
+
+	Eigen::VectorXd hermvals_x(n_shapelets);
+	Eigen::VectorXd hermvals_y(n_shapelets);
+
+	for (int k = 0; k < nsubpts; ++k) {
+		const double dx = value_of(input_pts_x(k)) - x_center;
+		const double dy = value_of(input_pts_y(k)) - y_center;
+
+		const double x = costheta * dx + sintheta * dy;
+		const double y = -sintheta * dx + costheta * dy;
+
+		const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
+		const double xarg = x * sqrtq / sig;
+		const double yarg = y / (sqrtq * sig);
+
+		hermvals_x[0] = 1.0;
+		hermvals_y[0] = 1.0;
+
+		if (n_shapelets > 1) {
+			hermvals_x[1] = M_SQRT2 * xarg;
+			hermvals_y[1] = M_SQRT2 * yarg;
+		}
+
+		double lastfac = 1.0 / M_SQRT2;
+
+		for (int i = 2; i < n_shapelets; ++i) {
+			const double fac = 1.0 / std::sqrt(2.0 * i);
+			hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+			hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+			lastfac = fac;
+		}
+
+		const int pixel = k / nsp;
+
+		for (int i = 0; i < n_shapelets; ++i) {
+			for (int j = 0; j < n_shapelets; ++j) {
+				const int row = indx_start + i * n_shapelets + j;
+				Lmatrix(row, pixel) += inv_nsp * gaussfactor * hermvals_x[i] * hermvals_y[j];
+			}
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType> || stan::is_autodiff_v<MatType>) {
+		//return stan::math::make_callback_var(Lmatrix, [&p, &input_pts_x, &input_pts_y, dx0, dy0, nsp, indx_start, inv_nsp, costheta, sintheta, this](auto& res) mutable {
+		return stan::math::make_callback_var(Lmatrix, [&p, &input_pts_x, &input_pts_y, original_Lmatrix, nsp, indx_start, inv_nsp, costheta, sintheta, this](auto& res) mutable {
+			const Eigen::MatrixXd& adj = res.adj();
+
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			if constexpr (stan::is_autodiff_v<MatType>) {
+				if (indx_start > 0) {
+					original_Lmatrix.adj().topRows(indx_start) += adj.topRows(indx_start);
+				}
+			}
+
+			const double sig = value_of(p.sig);
+			const double q = value_of(p.q);
+			const double sqrtq = std::sqrt(q);
+
+			Eigen::VectorXd hermvals_x(n_shapelets);
+			Eigen::VectorXd hermvals_y(n_shapelets);
+
+			double sig_adj = 0.0;
+			double q_adj = 0.0;
+			double xcenter_adj = 0.0;
+			double ycenter_adj = 0.0;
+			double costheta_adj = 0.0;
+			double sintheta_adj = 0.0;
+
+			for (int k = 0; k < input_pts_x.size(); ++k) {
+				const int pixel = k / nsp;
+
+				double dx;
+				double dy;
+
+				//if constexpr (stan::is_autodiff_v<VecType>) {
+					//dx = dx0(k);
+					//dy = dy0(k);
+				//} else {
+					dx = value_of(input_pts_x(k)) - value_of(p.x_center);
+					dy = value_of(input_pts_y(k)) - value_of(p.y_center);
+				//}
+
+				const double x = costheta * dx + sintheta * dy;
+				const double y = -sintheta * dx + costheta * dy;
+
+				const double gaussfactor = 0.5641895835477563 / sig * std::exp(-(q * x * x + y * y / q) / (2.0 * sig * sig));
+				const double xarg = x * sqrtq / sig;
+				const double yarg = y / (sqrtq * sig);
+
+				hermvals_x[0] = 1.0;
+				hermvals_y[0] = 1.0;
+
+				if (n_shapelets > 1) {
+					hermvals_x[1] = M_SQRT2 * xarg;
+					hermvals_y[1] = M_SQRT2 * yarg;
+				}
+
+				double lastfac = 1.0 / M_SQRT2;
+
+				for (int i = 2; i < n_shapelets; ++i) {
+					const double fac = 1.0 / std::sqrt(2.0 * i);
+					hermvals_x[i] = 2.0 * (xarg * hermvals_x[i - 1] - (i - 1) * hermvals_x[i - 2] * lastfac) * fac;
+					hermvals_y[i] = 2.0 * (yarg * hermvals_y[i - 1] - (i - 1) * hermvals_y[i - 2] * lastfac) * fac;
+					lastfac = fac;
+				}
+
+				double adj_f = 0.0;
+				double adj_fx = 0.0;
+				double adj_fy = 0.0;
+				double adj_fsig = 0.0;
+				double adj_fq = 0.0;
+
+				const double dgauss_dx = -gaussfactor * q * x / (sig * sig);
+				const double dgauss_dy = -gaussfactor * y / (q * sig * sig);
+				const double dgauss_dsig = gaussfactor * (-1.0 / sig + (q * x * x + y * y / q) / (sig * sig * sig));
+				const double dgauss_dq = -gaussfactor * (x * x - y * y / (q * q)) / (2.0 * sig * sig);
+
+				for (int i = 0; i < n_shapelets; ++i) {
+					const double Hx = hermvals_x[i];
+					const double dHx_dxarg = i == 0 ? 0.0 : std::sqrt(2.0 * i) * hermvals_x[i - 1];
+
+					const double dHx_dsig = dHx_dxarg * (-xarg / sig);
+					const double dHx_dq = dHx_dxarg * (xarg / (2.0 * q));
+
+					for (int j = 0; j < n_shapelets; ++j) {
+						const int row = indx_start + i * n_shapelets + j;
+						const double A = adj(row, pixel);
+						const double Hy = hermvals_y[j];
+						const double dHy_dyarg = j == 0 ? 0.0 : std::sqrt(2.0 * j) * hermvals_y[j - 1];
+
+						const double dHy_dsig = dHy_dyarg * (-yarg / sig);
+						const double dHy_dq = dHy_dyarg * (-yarg / (2.0 * q));
+
+						const double Hxy = Hx * Hy;
+
+						adj_f += A * Hxy;
+						adj_fx += A * dHx_dxarg * (sqrtq / sig) * Hy;
+						adj_fy += A * Hx * dHy_dyarg / (sqrtq * sig);
+						adj_fsig += A * (dHx_dsig * Hy + Hx * dHy_dsig);
+						adj_fq += A * (dHx_dq * Hy + Hx * dHy_dq);
+					}
+				}
+
+				const double dL_dxrot = inv_nsp * (dgauss_dx * adj_f + gaussfactor * adj_fx);
+				const double dL_dyrot = inv_nsp * (dgauss_dy * adj_f + gaussfactor * adj_fy);
+				const double dL_dsig = inv_nsp * (dgauss_dsig * adj_f + gaussfactor * adj_fsig);
+				const double dL_dq = inv_nsp * (dgauss_dq * adj_f + gaussfactor * adj_fq);
+
+				const double adj_dX = costheta * dL_dxrot - sintheta * dL_dyrot;
+				const double adj_dY = sintheta * dL_dxrot + costheta * dL_dyrot;
+
+				if constexpr (stan::is_autodiff_v<VecType>) {
+					input_pts_x.adj()(k) += adj_dX;
+					input_pts_y.adj()(k) += adj_dY;
+				}
+
+				xcenter_adj -= adj_dX;
+				ycenter_adj -= adj_dY;
+
+				costheta_adj += dx * dL_dxrot + dy * dL_dyrot;
+				sintheta_adj += dy * dL_dxrot - dx * dL_dyrot;
+
+				sig_adj += dL_dsig;
+				q_adj += dL_dq;
+			}
+
+			p.x_center.adj() += xcenter_adj;
+			p.y_center.adj() += ycenter_adj;
+			p.costheta.adj() += costheta_adj;
+			p.sintheta.adj() += sintheta_adj;
+			p.sig.adj() += sig_adj;
+			p.q.adj() += q_adj;
+
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+				if (qlens->mpi_id == 0) cout << "Wall time for Lmatrix_shapelet callback: " << callback_wtime.count() << endl;
+			}
+		});
+	}
+#endif
+
+	return Lmatrix;
+}
+template typename PlainTypes::MatType Shapelet::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const typename PlainTypes::MatType& original_Lmatrix, const int indx_start, const int nsp);
+#ifdef USE_STAN
+template typename VarmatTypes::MatType Shapelet::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const typename VarmatTypes::MatType& original_Lmatrix, const int indx_start, const int nsp);
 #endif
 
 
@@ -5836,6 +5941,524 @@ void MGE::calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elemen
 		*(Lmatrix_elements++) += weight*exp(-xisq/SQR(p.sigs[i])/2)/M_SQRT_2PI/p.sigs[i];
 	}
 }
+
+/*
+template <typename MathTypes>
+typename MathTypes::MatType MGE::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp)
+{
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	MGE_Params<QScalar>& p = assign_mge_param_object<QScalar>();
+
+	const int nsubpts = input_pts_x.size();
+	const int npix = nsubpts / nsp;
+	const int ncoeff = n_gaussians;
+	const double inv_nsp = 1.0 / static_cast<double>(nsp);
+
+	const double q = value_of(p.q);
+	const double x_center = value_of(p.x_center);
+	const double y_center = value_of(p.y_center);
+	const double costheta = value_of(p.costheta);
+	const double sintheta = value_of(p.sintheta);
+
+	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
+
+#ifdef USE_STAN
+	Eigen::VectorXd dx0;
+	Eigen::VectorXd dy0;
+
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dx0.resize(nsubpts);
+		dy0.resize(nsubpts);
+	}
+#endif
+
+	for (int k = 0; k < nsubpts; ++k) {
+		const double dx = value_of(input_pts_x(k)) - x_center;
+		const double dy = value_of(input_pts_y(k)) - y_center;
+
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			dx0(k) = dx;
+			dy0(k) = dy;
+		}
+#endif
+
+		const double x = costheta * dx + sintheta * dy;
+		const double y = -sintheta * dx + costheta * dy;
+		const int pixel = k / nsp;
+		const double q2 = q * q;
+		const double xisq = x * x + y * y / q2;
+
+		for (int i = 0; i < n_gaussians; ++i) {
+			const double sig = value_of(p.sigs[i]);
+			const double gaussfactor = std::exp(-xisq / (2.0 * sig * sig)) / M_SQRT_2PI / sig;
+			Lmatrix(i, pixel) += inv_nsp * gaussfactor;
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		return stan::math::make_callback_var(Lmatrix, [&p, &input_pts_x, &input_pts_y, dx0, dy0, nsp, npix, ncoeff, inv_nsp, q, costheta, sintheta, this](auto& res) mutable {
+			const Eigen::MatrixXd& adj = res.adj();
+
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			const double qval = value_of(p.q);
+			const double q2 = qval * qval;
+			const double q3 = q2 * qval;
+
+			Eigen::VectorXd sig_adj = Eigen::VectorXd::Zero(n_gaussians);
+
+			double q_adj = 0.0;
+			double xcenter_adj = 0.0;
+			double ycenter_adj = 0.0;
+			double costheta_adj = 0.0;
+			double sintheta_adj = 0.0;
+
+			for (int k = 0; k < input_pts_x.size(); ++k) {
+				const int pixel = k / nsp;
+				const double dx = dx0(k);
+				const double dy = dy0(k);
+				const double x = costheta * dx + sintheta * dy;
+				const double y = -sintheta * dx + costheta * dy;
+				const double xisq = x * x + y * y / q2;
+
+				double adj_dx = 0.0;
+				double adj_dy = 0.0;
+
+				for (int i = 0; i < n_gaussians; ++i) {
+					const double sig = value_of(p.sigs[i]);
+					const double sig2 = sig * sig;
+					const double gaussfactor = std::exp(-xisq / (2.0 * sig2)) / M_SQRT_2PI / sig;
+					const double A = adj(i, pixel);
+
+					const double dL_dx = -gaussfactor * x / sig2;
+					const double dL_dy = -gaussfactor * y / (q2 * sig2);
+					const double dL_dsig = gaussfactor * (-1.0 / sig + xisq / (sig2 * sig));
+					const double dL_dq = gaussfactor * y * y / (q3 * sig2);
+
+					adj_dx += A * dL_dx;
+					adj_dy += A * dL_dy;
+					sig_adj(i) += inv_nsp * A * dL_dsig;
+					q_adj += inv_nsp * A * dL_dq;
+				}
+
+				adj_dx *= inv_nsp;
+				adj_dy *= inv_nsp;
+
+				const double adj_dX = costheta * adj_dx - sintheta * adj_dy;
+				const double adj_dY = sintheta * adj_dx + costheta * adj_dy;
+
+				input_pts_x.adj()(k) += adj_dX;
+				input_pts_y.adj()(k) += adj_dY;
+
+				xcenter_adj -= adj_dX;
+				ycenter_adj -= adj_dY;
+
+				costheta_adj += dx * adj_dx - dy * adj_dy;
+				sintheta_adj += dy * adj_dx + dx * adj_dy;
+			}
+
+			p.x_center.adj() += xcenter_adj;
+			p.y_center.adj() += ycenter_adj;
+			p.costheta.adj() += costheta_adj;
+			p.sintheta.adj() += sintheta_adj;
+			p.q.adj() += q_adj;
+
+			for (int i = 0; i < n_gaussians; ++i) {
+				p.sigs[i].adj() += sig_adj(i);
+			}
+
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+				if (qlens->mpi_id == 0) cout << "Wall time for Lmatrix_MGE callback: " << callback_wtime.count() << endl;
+			}
+		});
+	}
+#endif
+
+	return Lmatrix;
+}
+template typename PlainTypes::MatType MGE::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int nsp);
+#ifdef USE_STAN
+template typename VarmatTypes::MatType MGE::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int nsp);
+#endif
+*/
+
+
+
+/*
+template <typename MathTypes>
+typename MathTypes::MatType MGE::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const typename MathTypes::MatType& original_Lmatrix, const int nsp)
+{
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	MGE_Params<QScalar>& p = assign_mge_param_object<QScalar>();
+
+	const int nsubpts = input_pts_x.size();
+	const int npix = nsubpts / nsp;
+	const int original_ncoeff = original_Lmatrix.rows();
+	const int ncoeff = original_ncoeff + n_gaussians;
+	const double inv_nsp = 1.0 / static_cast<double>(nsp);
+
+	const double q = value_of(p.q);
+	const double x_center = value_of(p.x_center);
+	const double y_center = value_of(p.y_center);
+	const double costheta = value_of(p.costheta);
+	const double sintheta = value_of(p.sintheta);
+
+	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
+
+	if (original_ncoeff > 0) {
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<MatType>) {
+			Lmatrix.topRows(original_ncoeff) = original_Lmatrix.val();
+		} else {
+			Lmatrix.topRows(original_ncoeff) = original_Lmatrix;
+		}
+#else
+		Lmatrix.topRows(original_ncoeff) = original_Lmatrix;
+#endif
+	}
+
+#ifdef USE_STAN
+	Eigen::VectorXd dx0;
+	Eigen::VectorXd dy0;
+
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dx0.resize(nsubpts);
+		dy0.resize(nsubpts);
+	}
+#endif
+
+	for (int k = 0; k < nsubpts; ++k) {
+		const double dx = value_of(input_pts_x(k)) - x_center;
+		const double dy = value_of(input_pts_y(k)) - y_center;
+
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			dx0(k) = dx;
+			dy0(k) = dy;
+		}
+#endif
+
+		const double x = costheta * dx + sintheta * dy;
+		const double y = -sintheta * dx + costheta * dy;
+		const int pixel = k / nsp;
+		const double q2 = q * q;
+		const double xisq = x * x + y * y / q2;
+
+		for (int i = 0; i < n_gaussians; ++i) {
+			const double sig = value_of(p.sigs[i]);
+			const double gaussfactor = std::exp(-xisq / (2.0 * sig * sig)) / M_SQRT_2PI / sig;
+			Lmatrix(original_ncoeff + i, pixel) += inv_nsp * gaussfactor;
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType> || stan::is_autodiff_v<MatType>) {
+		return stan::math::make_callback_var(Lmatrix, [&p, &input_pts_x, &input_pts_y, original_Lmatrix, dx0, dy0, nsp, npix, original_ncoeff, ncoeff, inv_nsp, q, costheta, sintheta, this](auto& res) mutable {
+			const Eigen::MatrixXd& adj = res.adj();
+
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			if constexpr (stan::is_autodiff_v<MatType>) {
+				if (original_ncoeff > 0) {
+					original_Lmatrix.adj() += adj.topRows(original_ncoeff);
+				}
+			}
+
+			const double qval = value_of(p.q);
+			const double q2 = qval * qval;
+			const double q3 = q2 * qval;
+
+			Eigen::VectorXd sig_adj = Eigen::VectorXd::Zero(n_gaussians);
+
+			double q_adj = 0.0;
+			double xcenter_adj = 0.0;
+			double ycenter_adj = 0.0;
+			double costheta_adj = 0.0;
+			double sintheta_adj = 0.0;
+
+			for (int k = 0; k < input_pts_x.size(); ++k) {
+				const int pixel = k / nsp;
+
+				double dx;
+				double dy;
+
+				if constexpr (stan::is_autodiff_v<VecType>) {
+					dx = dx0(k);
+					dy = dy0(k);
+				} else {
+					dx = value_of(input_pts_x(k)) - value_of(p.x_center);
+					dy = value_of(input_pts_y(k)) - value_of(p.y_center);
+				}
+
+				const double x = costheta * dx + sintheta * dy;
+				const double y = -sintheta * dx + costheta * dy;
+				const double xisq = x * x + y * y / q2;
+
+				double adj_dx = 0.0;
+				double adj_dy = 0.0;
+
+				for (int i = 0; i < n_gaussians; ++i) {
+					const double sig = value_of(p.sigs[i]);
+					const double sig2 = sig * sig;
+					const double gaussfactor = std::exp(-xisq / (2.0 * sig2)) / M_SQRT_2PI / sig;
+					const double A = adj(original_ncoeff + i, pixel);
+
+					const double dL_dx = -gaussfactor * x / sig2;
+					const double dL_dy = -gaussfactor * y / (q2 * sig2);
+					const double dL_dsig = gaussfactor * (-1.0 / sig + xisq / (sig2 * sig));
+					const double dL_dq = gaussfactor * y * y / (q3 * sig2);
+
+					adj_dx += A * dL_dx;
+					adj_dy += A * dL_dy;
+					sig_adj(i) += inv_nsp * A * dL_dsig;
+					q_adj += inv_nsp * A * dL_dq;
+				}
+
+				adj_dx *= inv_nsp;
+				adj_dy *= inv_nsp;
+
+				const double adj_dX = costheta * adj_dx - sintheta * adj_dy;
+				const double adj_dY = sintheta * adj_dx + costheta * adj_dy;
+
+				if constexpr (stan::is_autodiff_v<VecType>) {
+					input_pts_x.adj()(k) += adj_dX;
+					input_pts_y.adj()(k) += adj_dY;
+				}
+
+				xcenter_adj -= adj_dX;
+				ycenter_adj -= adj_dY;
+				costheta_adj += dx * adj_dx - dy * adj_dy;
+				sintheta_adj += dy * adj_dx + dx * adj_dy;
+			}
+
+			p.x_center.adj() += xcenter_adj;
+			p.y_center.adj() += ycenter_adj;
+			p.costheta.adj() += costheta_adj;
+			p.sintheta.adj() += sintheta_adj;
+			p.q.adj() += q_adj;
+
+			for (int i = 0; i < n_gaussians; ++i) {
+				p.sigs[i].adj() += sig_adj(i);
+			}
+
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+				if (qlens->mpi_id == 0) cout << "Wall time for Lmatrix_MGE callback: " << callback_wtime.count() << endl;
+			}
+		});
+	}
+#endif
+
+	return Lmatrix;
+}
+template typename PlainTypes::MatType MGE::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const typename PlainTypes::MatType& original_Lmatrix, const int nsp);
+#ifdef USE_STAN
+template typename VarmatTypes::MatType MGE::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const typename VarmatTypes::MatType& original_Lmatrix, const int nsp);
+#endif
+*/
+
+template <typename MathTypes>
+typename MathTypes::MatType MGE::construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const typename MathTypes::MatType& original_Lmatrix, const int indx_start, const int nsp)
+{
+	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
+	using MatType = typename MathTypes::MatType;
+
+	MGE_Params<QScalar>& p = assign_mge_param_object<QScalar>();
+
+	const int nsubpts = input_pts_x.size();
+	const int npix = nsubpts / nsp;
+	int original_ncoeff = (indx_start==0) ? 0 : original_Lmatrix.rows();
+
+	if (indx_start < 0 || indx_start > original_ncoeff) {
+		throw std::runtime_error("MGE::construct_Lmatrix_vec_impl: indx_start must be between 0 and the number of rows in original_Lmatrix");
+	}
+
+	const int ncoeff = indx_start + n_gaussians;
+	const double inv_nsp = 1.0 / static_cast<double>(nsp);
+
+	const double q = value_of(p.q);
+	const double x_center = value_of(p.x_center);
+	const double y_center = value_of(p.y_center);
+	const double costheta = value_of(p.costheta);
+	const double sintheta = value_of(p.sintheta);
+
+	Eigen::MatrixXd Lmatrix = Eigen::MatrixXd::Zero(ncoeff, npix);
+
+	if (indx_start > 0) {
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<MatType>) {
+			Lmatrix.topRows(indx_start) = original_Lmatrix.val().topRows(indx_start);
+		} else {
+			Lmatrix.topRows(indx_start) = original_Lmatrix.topRows(indx_start);
+		}
+#else
+		Lmatrix.topRows(indx_start) = original_Lmatrix.topRows(indx_start);
+#endif
+	}
+
+#ifdef USE_STAN
+	Eigen::VectorXd dx0;
+	Eigen::VectorXd dy0;
+
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		dx0.resize(nsubpts);
+		dy0.resize(nsubpts);
+	}
+#endif
+
+	for (int k = 0; k < nsubpts; ++k) {
+		const double dx = value_of(input_pts_x(k)) - x_center;
+		const double dy = value_of(input_pts_y(k)) - y_center;
+
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<VecType>) {
+			dx0(k) = dx;
+			dy0(k) = dy;
+		}
+#endif
+
+		const double x = costheta * dx + sintheta * dy;
+		const double y = -sintheta * dx + costheta * dy;
+		const int pixel = k / nsp;
+		const double q2 = q * q;
+		const double xisq = x * x + y * y / q2;
+
+		for (int i = 0; i < n_gaussians; ++i) {
+			const double sig = value_of(p.sigs[i]);
+			const double gaussfactor = std::exp(-xisq / (2.0 * sig * sig)) / M_SQRT_2PI / sig;
+			Lmatrix(indx_start + i, pixel) += inv_nsp * gaussfactor;
+		}
+	}
+
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<VecType> || stan::is_autodiff_v<MatType>) {
+		return stan::math::make_callback_var(Lmatrix, [&p, &input_pts_x, &input_pts_y, original_Lmatrix, dx0, dy0, nsp, indx_start, inv_nsp, q, costheta, sintheta, this](auto& res) mutable {
+			const Eigen::MatrixXd& adj = res.adj();
+
+			std::chrono::steady_clock::time_point callback_wtime0;
+			std::chrono::duration<double> callback_wtime;
+			if (qlens->show_wtime) {
+				callback_wtime0 = std::chrono::steady_clock::now();
+			}
+
+			if constexpr (stan::is_autodiff_v<MatType>) {
+				if (indx_start > 0) {
+					original_Lmatrix.adj().topRows(indx_start) += adj.topRows(indx_start);
+				}
+			}
+
+			const double qval = value_of(p.q);
+			const double q2 = qval * qval;
+			const double q3 = q2 * qval;
+
+			Eigen::VectorXd sig_adj = Eigen::VectorXd::Zero(n_gaussians);
+
+			double q_adj = 0.0;
+			double xcenter_adj = 0.0;
+			double ycenter_adj = 0.0;
+			double costheta_adj = 0.0;
+			double sintheta_adj = 0.0;
+
+			for (int k = 0; k < input_pts_x.size(); ++k) {
+				const int pixel = k / nsp;
+
+				double dx;
+				double dy;
+
+				if constexpr (stan::is_autodiff_v<VecType>) {
+					dx = dx0(k);
+					dy = dy0(k);
+				} else {
+					dx = value_of(input_pts_x(k)) - value_of(p.x_center);
+					dy = value_of(input_pts_y(k)) - value_of(p.y_center);
+				}
+
+				const double x = costheta * dx + sintheta * dy;
+				const double y = -sintheta * dx + costheta * dy;
+				const double xisq = x * x + y * y / q2;
+
+				double adj_dx = 0.0;
+				double adj_dy = 0.0;
+
+				for (int i = 0; i < n_gaussians; ++i) {
+					const double sig = value_of(p.sigs[i]);
+					const double sig2 = sig * sig;
+					const double gaussfactor = std::exp(-xisq / (2.0 * sig2)) / M_SQRT_2PI / sig;
+					const double A = adj(indx_start + i, pixel);
+
+					const double dL_dx = -gaussfactor * x / sig2;
+					const double dL_dy = -gaussfactor * y / (q2 * sig2);
+					const double dL_dsig = gaussfactor * (-1.0 / sig + xisq / (sig2 * sig));
+					const double dL_dq = gaussfactor * y * y / (q3 * sig2);
+
+					adj_dx += A * dL_dx;
+					adj_dy += A * dL_dy;
+					sig_adj(i) += inv_nsp * A * dL_dsig;
+					q_adj += inv_nsp * A * dL_dq;
+				}
+
+				adj_dx *= inv_nsp;
+				adj_dy *= inv_nsp;
+
+				const double adj_dX = costheta * adj_dx - sintheta * adj_dy;
+				const double adj_dY = sintheta * adj_dx + costheta * adj_dy;
+
+				if constexpr (stan::is_autodiff_v<VecType>) {
+					input_pts_x.adj()(k) += adj_dX;
+					input_pts_y.adj()(k) += adj_dY;
+				}
+
+				xcenter_adj -= adj_dX;
+				ycenter_adj -= adj_dY;
+				costheta_adj += dx * adj_dx - dy * adj_dy;
+				sintheta_adj += dy * adj_dx + dx * adj_dy;
+			}
+
+			p.x_center.adj() += xcenter_adj;
+			p.y_center.adj() += ycenter_adj;
+			p.costheta.adj() += costheta_adj;
+			p.sintheta.adj() += sintheta_adj;
+			p.q.adj() += q_adj;
+
+			for (int i = 0; i < n_gaussians; ++i) {
+				p.sigs[i].adj() += sig_adj(i);
+			}
+
+			if (qlens->show_wtime) {
+				callback_wtime = std::chrono::steady_clock::now() - callback_wtime0;
+				if (qlens->mpi_id == 0) cout << "Wall time for Lmatrix_MGE callback: " << callback_wtime.count() << endl;
+			}
+		});
+	}
+#endif
+
+	return Lmatrix;
+}
+template typename PlainTypes::MatType MGE::construct_Lmatrix_vec_impl<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const typename PlainTypes::MatType& original_Lmatrix, const int indx_start, const int nsp);
+#ifdef USE_STAN
+template typename VarmatTypes::MatType MGE::construct_Lmatrix_vec_impl<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const typename VarmatTypes::MatType& original_Lmatrix, const int indx_start, const int nsp);
+#endif
+
+
+
 
 void MGE::calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements)
 {

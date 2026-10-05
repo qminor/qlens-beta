@@ -18,6 +18,8 @@ sim_hst_data.load_noise_map("demo_noisemap.fits")
 
 plotdata(q,nomask=True,title="Mock data for delaunay_fit_demo.py")
 
+fit_method = "bfgs"
+
 q.psf_threshold = 0
 q.sbmap_load_psf("hst_psf.fits")
 
@@ -69,7 +71,7 @@ sersic_src.vary_all()
 sersic_src.set_limits([
     ("s_eff", .01, 10),
     ("Reff", .001, 1.0),
-    ("n", .1, 5),
+    ("n", 0.1, 5.0),
     ("e1", -0.6, 0.6),
     ("e2", -0.6, 0.6),
     ("xc_l", -2, 2),
@@ -97,7 +99,7 @@ q.gradtol = 1.0  # tolerance for convergence of gradient in BFGS method
 q.chisqtol = 1e-6
 q.nrepeat = 0
 
-q.run_fit("bfgs",adopt=True,show_errors=True)
+q.run_fit(fit_method,adopt=True,show_errors=True)
 q.sbmap_invert()
 
 pause()

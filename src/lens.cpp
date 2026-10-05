@@ -11485,6 +11485,7 @@ class LogLikeGrad_Func
 		//ridders_method(params,grad);
 #ifdef USE_STAN
 		if constexpr (stan::is_autodiff_v<QScalar>) {
+			//for (;;) {
 			stan::math::start_nested();
 			{
 				stan::math::var* params_stan = new stan::math::var[n];
@@ -11500,31 +11501,10 @@ class LogLikeGrad_Func
 					tot_wtime = std::chrono::steady_clock::now() - tot_wtime0;
 					if (qptr->mpi_id==0) cout << "Total wall time for loglike+grad: " << tot_wtime.count() << endl;
 				}
-				//double arg;
 				//double *derivs = new double[n];
 				//get_grad_finite_diff(params,derivs,n,1e-7);
 
-				/*
-				double *x = new double[n];
-				double fp,fm;
-				const double h = 1e-7;
-				for (int k=0; k < n; k++) x[k] = params[k];
-				for (int k=0; k < n; k++) {
-					x[k] = params[k]+h*steps[k];
-					fp = (qptr->*doublefunc)(x);
-					x[k] = params[k] - h*steps[k];
-					fm = (qptr->*doublefunc)(x);
-					derivs[k] = (fp-fm)/(2*h*steps[k]);
-					x[k] = params[k];
-				}
-				delete[] x;
-				*/
-
-				//double ff = (qptr->*doublefunc)(params.data());
-				//cout <<  "ff = " << ff << endl;
-
 				for (int i=0; i < n; i++) {
-					//arg = params_stan[i].adj();
 					grad(i) = params_stan[i].adj();
 					//cout << "GRAD(" << i << "): " << grad(i) << " numerical: " << derivs[i] << endl;
 				}
@@ -11532,6 +11512,7 @@ class LogLikeGrad_Func
 				delete[] params_stan;
 			}
 			stan::math::recover_memory_nested();
+			//}
 		}
 		else
 #endif
@@ -12059,10 +12040,12 @@ void QLens::loglike_deriv_stan(const stan::math::var* params, double* derivs)
 	} else {
 		loglikeptr_stan = &QLens::fitmodel_loglike_extended_source<stan::math::var>;
 	}
+	stan::math::start_nested();
 	stan::math::var loglike_stan = (this->*loglikeptr_stan)(params);
 	stan::math::set_zero_all_adjoints();
 	loglike_stan.grad();
 	for (int i=0; i < param_list->nparams; i++) derivs[i] = params[i].adj();
+	stan::math::recover_memory_nested();
 }
 #endif
 
@@ -15215,11 +15198,15 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 	} else if ((source_fit_mode==Delaunay_Source) or (source_fit_mode==Shapelet_Source)) {
 #ifdef USE_STAN
 		if constexpr (stan::is_autodiff_v<QScalar>) {
+			//for (;;) {
 			chisq = fitmodel->pixel_log_evidence_times_two_autodiff<QScalar,VarmatTypes>(chisq0,false,0);
+			//}
 		} else
 #endif
 		{
+			//for (;;) {
 			chisq = fitmodel->pixel_log_evidence_times_two_autodiff<QScalar,PlainTypes>(chisq0,false,0);
+			//}
 			//chisq = fitmodel->pixel_log_evidence_times_two(chisq0,false,0); // original version for now, just to be safe
 		}
 	} else {
@@ -18145,6 +18132,10 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 	using stan::math::pow;
 #endif
 
+	std::chrono::steady_clock::time_point tot_wtime0;
+	std::chrono::duration<double> tot_wtime;
+
+	int imggrid_i, src_i;
 
 	if (n_data_bands==0) { warn("No image data have been loaded"); return -1e30; }
 	if (n_model_bands < n_data_bands) { warn("Numebr of model bands is not large enough to accommodate number of data bands"); }
@@ -18164,7 +18155,6 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 	}
 
 	if (image_pixel_grids == NULL) { warn("No image surface brightness grid has been generated"); return -1e30; }
-	int imggrid_i, src_i;
 	for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
 		if (image_pixel_grids[imggrid_i] == NULL) { warn("No image surface brightness grid for imggrid_i=%i has been generated",imggrid_i); return -1e30; }
 	}
@@ -18173,8 +18163,7 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 		chisq0=-1e30; return -1e30;
 	}
 
-
-	int *src_i_list = new int[n_image_pixel_grids];
+	Eigen::VectorXi src_i_list(n_image_pixel_grids);
 	for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
 		src_i_list[imggrid_i] = -1;
 		for (int i=0; i < n_pixellated_src; i++) {
@@ -18191,8 +18180,6 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 	}
 
 	if ((mpi_id==0) and (verbal)) cout << "Number of data pixels in mask 0 : " << imgdata_list[0]->n_mask_pixels[0] << endl;
-	std::chrono::steady_clock::time_point tot_wtime0;
-	std::chrono::duration<double> tot_wtime;
 	if (show_wtime) {
 		tot_wtime0 = std::chrono::steady_clock::now();
 	}
@@ -18217,7 +18204,7 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 	bool skip_inversion = false;
 
 	if ((n_image_prior) or (n_ptsrc > 0)) {
-		setup_auxiliary_sourcegrids_and_point_imgs<MathTypes>(src_i_list,verbal);
+		setup_auxiliary_sourcegrids_and_point_imgs<MathTypes>(src_i_list.data(),verbal);
 	}
 
 	bool include_foreground_sbmask, include_foreground_sb, at_least_one_noninverted_foreground_src, at_least_one_lensed_src, at_least_one_lensed_nonshapelet_src, at_least_one_shapelet_src, at_least_one_mge_src; 
@@ -18475,7 +18462,7 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 		}
 		sb_outside_window = false;
 		if ((outside_sb_prior) and (source_fit_mode != Parameterized_Source)) {
-			logev_penalty_band = find_outside_sb_prior_penalty<MathTypes>(band_number,src_i_list,sb_outside_window,verbal);
+			logev_penalty_band = find_outside_sb_prior_penalty<MathTypes>(band_number,src_i_list.data(),sb_outside_window,verbal);
 			logev_times_two += logev_penalty_band;
 			logev_penalty += logev_penalty_band;
 		}
@@ -18500,7 +18487,6 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 	
 	chisq_it++;
 
-	delete[] src_i_list;
 	return logev_times_two;
 }
 template double QLens::pixel_log_evidence_times_two_autodiff<double,PlainTypes>(double &chisq0, const bool verbal, const int ranchisq_i);

@@ -17,10 +17,10 @@ q.shear_components=True
 q.ellipticity_components=True
 
 Alpha = SPLE({"b": 4.5, "alpha": 1, "s": 0.0, "e1": 0.0, "e2": 0.0, "xc": 0.7, "yc": 0.4}, qlens=q)
-Alpha.vary([1,0,0,1,1,1,1])
+Alpha.vary(["b","e1","e2","xc","yc"])
 
 extshear = Shear({"shear1": 0.0, "shear2": 0.0},qlens=q)
-extshear.vary([1,1,0,0])
+extshear.vary(["shear1","shear2"])
 
 lens.add(Alpha,shear=extshear)
 print("Lenses:",lens,"\n")
@@ -54,7 +54,7 @@ q.run_fit("bfgs",adopt=True)
 
 #q.adopt_chain_bestfit()
 
-#plot_fit_ptimgs(q) # plot_fit_ptimgs returns the source and image figures, so you can also do
+plot_fit_ptimgs(q) # plot_fit_ptimgs returns the source and image figures, so you can also do
                 # (srcfig, imgfig) = plot_fit_ptimgs(q,showplot=False) and modify the figures
 
 #plt.show() # If you're not running in interactive mode, this makes matplotlib still show the plots after finishing

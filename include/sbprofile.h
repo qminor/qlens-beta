@@ -462,19 +462,19 @@ class SB_Profile : public EllipticityGradient, private UCMC, private Simplex
 		return surface_brightness_zoom(centerpt_stan,pt1_stan,pt2_stan,pt3_stan,pt4_stan,sb_noise); // this is for evaluating foreground surface brightness, where x and y are in imgplane (hence not autodiff)
 	}
 #endif
-	virtual Eigen::MatrixXd construct_Lmatrix_vec(const Eigen::VectorXd& input_pts_x, const Eigen::VectorXd& input_pts_y, const int nsp) {
-		return construct_Lmatrix_vec_impl<PlainTypes>(input_pts_x,input_pts_y,nsp);
+	virtual Eigen::MatrixXd construct_Lmatrix_vec(const Eigen::VectorXd& input_pts_x, const Eigen::VectorXd& input_pts_y, const Eigen::MatrixXd& original_Lmatrix, const int indx_start, const int nsp) {
+		return construct_Lmatrix_vec_impl<PlainTypes>(input_pts_x,input_pts_y,original_Lmatrix,indx_start,nsp);
 	}
 #ifdef USE_STAN
-	virtual AutoDiffMat construct_Lmatrix_vec(const AutoDiffVec& input_pts_x, const AutoDiffVec& input_pts_y, const int nsp) {
-		return construct_Lmatrix_vec_impl<VarmatTypes>(input_pts_x,input_pts_y,nsp);
+	virtual AutoDiffMat construct_Lmatrix_vec(const AutoDiffVec& input_pts_x, const AutoDiffVec& input_pts_y, const AutoDiffMat& original_Lmatrix, const int indx_start, const int nsp) {
+		return construct_Lmatrix_vec_impl<VarmatTypes>(input_pts_x,input_pts_y,original_Lmatrix,indx_start,nsp);
 	}
 #endif
 
 	//virtual double calculate_Lmatrix_element(const double x, const double y, const int amp_index); // used by Shapelet subclass
 	virtual void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight); // used by Shapelet subclass
 	template <typename MathTypes>
-	typename MathTypes::MatType construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp);
+	typename MathTypes::MatType construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const typename MathTypes::MatType& original_Lmatrix, const int indx_start, const int nsp);
 
 	//virtual void calculate_gradient_Rmatrix_elements(double* Rmatrix_elements, int* Rmatrix_index);
 	//virtual void calculate_curvature_Rmatrix_elements(double* Rmatrix, int* Rmatrix_index);
@@ -1239,12 +1239,12 @@ class Shapelet : public SB_Profile
 	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
 #endif
 
-	Eigen::MatrixXd construct_Lmatrix_vec(const Eigen::VectorXd& input_pts_x, const Eigen::VectorXd& input_pts_y, const int nsp) {
-		return construct_Lmatrix_vec_impl<PlainTypes>(input_pts_x,input_pts_y,nsp);
+	Eigen::MatrixXd construct_Lmatrix_vec(const Eigen::VectorXd& input_pts_x, const Eigen::VectorXd& input_pts_y, const Eigen::MatrixXd& original_Lmatrix, const int indx_start, const int nsp) {
+		return construct_Lmatrix_vec_impl<PlainTypes>(input_pts_x,input_pts_y,original_Lmatrix,indx_start,nsp);
 	}
 #ifdef USE_STAN
-	AutoDiffMat construct_Lmatrix_vec(const AutoDiffVec& input_pts_x, const AutoDiffVec& input_pts_y, const int nsp) {
-		return construct_Lmatrix_vec_impl<VarmatTypes>(input_pts_x,input_pts_y,nsp);
+	AutoDiffMat construct_Lmatrix_vec(const AutoDiffVec& input_pts_x, const AutoDiffVec& input_pts_y, const AutoDiffMat& original_Lmatrix, const int indx_start, const int nsp) {
+		return construct_Lmatrix_vec_impl<VarmatTypes>(input_pts_x,input_pts_y,original_Lmatrix,indx_start,nsp);
 	}
 #endif
 
@@ -1259,7 +1259,7 @@ class Shapelet : public SB_Profile
 	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
 	template <typename MathTypes>
-	typename MathTypes::MatType construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int nsp);
+	typename MathTypes::MatType construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const typename MathTypes::MatType& original_Lmatrix, const int indx_start, const int nsp);
 
 	void calculate_gradient_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix);
 	void calculate_curvature_Rmatrix_elements(Eigen::SparseMatrix<double, Eigen::ColMajor>& Rmatrix);
@@ -1360,6 +1360,15 @@ class MGE : public SB_Profile
 	void update_meta_parameters_autodif() { update_meta_parameters_impl<stan::math::var>(); }
 #endif
 
+	Eigen::MatrixXd construct_Lmatrix_vec(const Eigen::VectorXd& input_pts_x, const Eigen::VectorXd& input_pts_y, const Eigen::MatrixXd& original_Lmatrix, const int indx_start, const int nsp) {
+		return construct_Lmatrix_vec_impl<PlainTypes>(input_pts_x,input_pts_y,original_Lmatrix,indx_start,nsp);
+	}
+#ifdef USE_STAN
+	AutoDiffMat construct_Lmatrix_vec(const AutoDiffVec& input_pts_x, const AutoDiffVec& input_pts_y, const AutoDiffMat& original_Lmatrix, const int indx_start, const int nsp) {
+		return construct_Lmatrix_vec_impl<VarmatTypes>(input_pts_x,input_pts_y,original_Lmatrix,indx_start,nsp);
+	}
+#endif
+
 	void assign_paramnames();
 	template <typename QScalar>
 	void assign_param_pointers_impl();
@@ -1370,6 +1379,8 @@ class MGE : public SB_Profile
 	void set_auto_ranges();
 	//double calculate_Lmatrix_element(double x, double y, const int amp_index);
 	void calculate_Lmatrix_elements(double x, double y, double*& Lmatrix_elements, const double weight);
+	template <typename MathTypes>
+	typename MathTypes::MatType construct_Lmatrix_vec_impl(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const typename MathTypes::MatType& original_Lmatrix, const int indx_start, const int nsp);
 	void calculate_curvature_Rmatrix_elements_rvals(double *rvalsq, const int n_rvals, double* Rmatrix_elements);
 	void get_regularization_param_ptr(double*& regparam_ptr);
 #ifdef USE_STAN
