@@ -5482,7 +5482,7 @@ typename MathTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_v
 			if (qlens->show_wtime) {
 				callback_wtime0 = std::chrono::steady_clock::now();
 			}
-			//reverse_construct_Lmatrix(cache, input_pts_x, input_pts_y, res.adj());
+			reverse_construct_Lmatrix(cache, input_pts_x, input_pts_y, res.adj());
 
 			if (qlens->show_wtime) {
 				callback_wtime = std::chrono::steady_clock::now()-callback_wtime0;
@@ -5501,7 +5501,7 @@ template typename VarmatTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_den
 #endif
 
 #ifdef USE_STAN
-void DelaunaySourceGrid::reverse_construct_Lmatrix(const std::vector<ImgPtInfo>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::MatrixXd& Ladj)
+void DelaunaySourceGrid::reverse_construct_Lmatrix(const std::vector<ImgPtInfo, stan::math::arena_allocator<ImgPtInfo>>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::MatrixXd& Ladj)
 {
 	stan::math::nested_rev_autodiff nested;
 	std::vector<stan::math::var> local_x;
@@ -5923,7 +5923,10 @@ typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_v
 
 	double weight = 1.0/nsubpix_per_pixel;
 	int n_imgpts = npixels * nsubpix_per_pixel;
-	std::vector<ImgPtInfo> cache(n_imgpts);
+#ifdef USE_STAN
+	std::vector<ImgPtInfo, stan::math::arena_allocator<ImgPtInfo>> cache(n_imgpts);
+#endif
+
 
 	int trinum,kmin;
 	bool inside_triangle, on_vertex;
@@ -5949,30 +5952,38 @@ typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_v
 
 			Triangle<double> *triptr = &p.triangle[trinum];
 
+#ifdef USE_STAN
 			cache[subpixel_idx].skip = false;
 			cache[subpixel_idx].use_nearest_neighbor = false;
+#endif
 
 			if (!inside_triangle) {
 				// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
 				if ((zero_outside_border) and (!on_vertex)) {
+#ifdef USE_STAN
 					cache[subpixel_idx].skip = true;
+#endif
 					continue;
 				}
 				// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
 				double distnorm;
 				distnorm = SQR(input_pt_x - p.gridpts[triptr->vertex_index[kmin]][0]) + SQR(input_pt_y - p.gridpts[triptr->vertex_index[kmin]][1]);
 				if ((!qlens->natural_neighbor_interpolation) or (distnorm < 1e-6)) {
+#ifdef USE_STAN
 					cache[subpixel_idx].use_nearest_neighbor = true;
 					cache[subpixel_idx].kmin = kmin;
+#endif
 					interpolation_indx[0] = triptr->vertex_index[kmin];
 					p.interpolation_wgts[0] = 1.0;
 					n_mapped_srcpixels = 1;
 				}
 			}
+#ifdef USE_STAN
 			cache[subpixel_idx].subpixel_idx = subpixel_idx;
 			cache[subpixel_idx].imgpixel_idx = img_index;
 			cache[subpixel_idx].trinum = trinum;
 			cache[subpixel_idx].weight = weight;
+#endif
 
 			if (n_mapped_srcpixels < 0) {
 				if (qlens->natural_neighbor_interpolation) {
@@ -6016,7 +6027,7 @@ template typename VarmatTypes::VecType DelaunaySourceGrid::find_lensed_surface_b
 #endif
 
 #ifdef USE_STAN
-void DelaunaySourceGrid::scatter_lensed_sb_adjoints(const std::vector<ImgPtInfo>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::VectorXd& sbadj)
+void DelaunaySourceGrid::scatter_lensed_sb_adjoints(const std::vector<ImgPtInfo, stan::math::arena_allocator<ImgPtInfo>>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::VectorXd& sbadj)
 {
 	stan::math::nested_rev_autodiff nested;
 	std::vector<stan::math::var> local_x;

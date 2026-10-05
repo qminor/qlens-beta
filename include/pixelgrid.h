@@ -733,13 +733,13 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 	template <typename MathTypes>
 	typename MathTypes::VecType find_lensed_surface_brightness_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, bool& trouble_with_starting_vertex);
 #ifdef USE_STAN
-	void scatter_lensed_sb_adjoints(const std::vector<ImgPtInfo>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::VectorXd& sbadj);
+	void scatter_lensed_sb_adjoints(const std::vector<ImgPtInfo, stan::math::arena_allocator<ImgPtInfo>>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::VectorXd& sbadj);
 #endif
 
 	template <typename MathTypes>
 	typename MathTypes::MatType calculate_Lmatrix_dense_direct_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int image_npixels, const int nsubpix_per_pixel, const double weight, bool& trouble_with_starting_vertex);
 #ifdef USE_STAN
-	void reverse_construct_Lmatrix(const std::vector<ImgPtInfo>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::MatrixXd& Ladj);
+	void reverse_construct_Lmatrix(const std::vector<ImgPtInfo, stan::math::arena_allocator<ImgPtInfo>>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::MatrixXd& Ladj);
 #endif
 
 

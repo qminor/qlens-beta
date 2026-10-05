@@ -116,8 +116,8 @@ q.fitmodel()
 
 pause()
 
-q.nimg_prior=False
-q.outside_sb_prior=False
+q.nimg_prior=True
+q.outside_sb_prior=True
 #q.param_covmatrix_scale_fac = 5   # we will scale the uncertainties by this factor because with pixellated sources, fisher matrix uncertainties are often unreliably small
 q.run_fit("bfgs",adopt=True,show_errors=True)
 
