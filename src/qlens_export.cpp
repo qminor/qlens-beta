@@ -2945,11 +2945,13 @@ PYBIND11_MODULE(qlens, m) {
 		//.def("sbmap_load_mask", &QLens_Wrap::sbmap_load_mask)
 
 		.def_readwrite("outside_sb_prior", &QLens_Wrap::outside_sb_prior)
+		.def_readwrite("use_Lmatrix_in_outside_sb_prior", &QLens_Wrap::use_Lmatrix_in_outside_sb_prior)
 		.def_readwrite("outside_sb_frac_threshold", &QLens_Wrap::outside_sb_prior_threshold)
 		.def_readwrite("outside_sb_noise_threshold", &QLens_Wrap::outside_sb_prior_noise_frac)
 		.def_readwrite("nimg_prior", &QLens_Wrap::n_image_prior)
 		.def_readwrite("nimg_threshold", &QLens_Wrap::n_image_threshold)
 		.def_readwrite("nimg_sb_frac_threshold", &QLens_Wrap::n_image_prior_sb_frac)
+		.def_readwrite("auxgrid_npixels", &QLens_Wrap::auxiliary_srcgrid_npixels)
 		.def_property("zero_outside_delaunay_border", &QLens_Wrap::get_zero_outside_delaunay_border, &QLens_Wrap::set_zero_outside_delaunay_border)
 		.def_readwrite("natural_neighbor_interpolation", &QLens_Wrap::natural_neighbor_interpolation)
 		.def_readwrite("srcpixel_clustering", &QLens_Wrap::use_srcpixel_clustering)

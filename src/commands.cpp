@@ -11349,7 +11349,7 @@ void QLens::process_commands(bool read_file)
 				ncontstr2 >> ncontstring2;
 				if ((replot) and (plot_fits)) Complain("Cannot use 'replot' option when plotting to fits files");
 
-				if ((show_current_sb) and (outside_sb_prior)) Complain("cannot use '-current' option if outside_sb_prior is set to 'on'");
+				//if ((show_current_sb) and (outside_sb_prior)) Complain("cannot use '-current' option if outside_sb_prior is set to 'on'");
 
 				if ((first_order_sb_correction) and (no_first_order_potential_corrections)) {
 					first_order_sb_correction = false;
@@ -14941,6 +14941,15 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'outside_sb_prior' command; must specify 'on' or 'off'");
 				set_switch(outside_sb_prior,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="use_Lmatrix_in_outside_sb_prior")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use Lmatrix to speed up outside_sb_prior: " << display_switch(use_Lmatrix_in_outside_sb_prior) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_Lmatrix_in_outside_sb_prior' command; must specify 'on' or 'off'");
+				set_switch(use_Lmatrix_in_outside_sb_prior,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="Re_prior")

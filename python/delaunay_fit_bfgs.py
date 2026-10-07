@@ -78,10 +78,10 @@ src.add(gauss_src)
 pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
 q.gradtol = 0.001
-q.chisqtol = 0
+q.chisqtol = 1e-6
 q.nrepeat = 0
 
-#q.run_fit("bfgs",adopt=True,show_errors=False)
+q.run_fit("bfgs",adopt=True,show_errors=False)
 
 pause()
 
@@ -90,6 +90,7 @@ src.clear() # Now we delete the analytic source and switch to a pixellated sourc
 q.set_source_mode("delaunay")
 q.nimg_prior=True
 q.nimg_threshold=1.5
+q.auxgrid_npixels=30
 q.outside_sb_prior=True
 q.outside_sb_frac_threshold=0.15
 q.regularization_method="matern_kernel"

@@ -344,6 +344,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double outside_sb_prior_expfac;
 	double srcpixel_nimg_mag_threshold;
 	bool outside_sb_prior;
+	bool use_Lmatrix_in_outside_sb_prior;
 	double outside_sb_prior_noise_frac, n_image_prior_sb_frac;
 	double outside_sb_prior_threshold;
 	bool einstein_radius_prior;
@@ -759,7 +760,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	bool generate_and_invert_lensing_matrix_shapelet(const int imggrid_i, std::chrono::duration<double>& tot_wtime, const std::chrono::steady_clock::time_point& tot_wtime0, const bool verbal);
 
 	template <typename MathTypes>
-	typename MathTypes::QScalar find_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, const bool verbal);
+	typename MathTypes::QScalar find_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, const bool use_Lmatrix, const bool verbal);
 	void set_n_imggrids_to_include_in_inversion();
 
 	bool load_pixel_grid_from_data(const int band_number);

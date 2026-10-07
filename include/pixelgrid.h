@@ -731,7 +731,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 	template <typename MathTypes, typename QScalar>
 	void calculate_Lmatrix_dense_direct(const int img_index, const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, const double weight, const int thread, bool& trouble_with_starting_vertex);
 	template <typename MathTypes>
-	typename MathTypes::VecType find_lensed_surface_brightness_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, bool& trouble_with_starting_vertex);
+	typename MathTypes::VecType find_lensed_surface_brightness_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, const int start_indx, bool& trouble_with_starting_vertex);
 #ifdef USE_STAN
 	void scatter_lensed_sb_adjoints(const std::vector<ImgPtInfo, stan::math::arena_allocator<ImgPtInfo>>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::VectorXd& sbadj);
 #endif
@@ -927,6 +927,7 @@ class ImgGrid_Params
 	VecType image_surface_brightness;
 	VecType image_surface_brightness_emask;
 	VecType image_surface_brightness_supersampled;
+	VecType image_surface_brightness_unconvolved;
 	VecType point_image_surface_brightness;
 	VecType amplitude_vector_minchisq; // used to store best-fit solution during optimization of regularization parameter
 	VecType y_amplitude_vector; // used for Gmatrix formulation
@@ -946,6 +947,7 @@ class ImgGrid_Params
 	Eigen::VectorX<QScalar> srcplane_area_tri2; // area of triangle 2 (connecting points 1,3,2) when mapped to the source plane
 
 	MatType Lmatrix_trans_dense;
+	MatType Lmatrix_trans_dense_unconvolved; // only used if using outside_sb_prior
 	MatType Lmatrix_trans_supersampled;
 
 	MatType Rmatrix_dense;
@@ -1444,7 +1446,7 @@ class ImagePixelGrid : private Sort
 	void calculate_source_pixel_surface_brightness();
 	void calculate_image_pixel_surface_brightness();
 	template <typename MathTypes>
-	void calculate_image_pixel_surface_brightness_dense();
+	void calculate_image_pixel_surface_brightness_dense(const bool unconvolved = false);
 	void calculate_foreground_pixel_surface_brightness(const bool allow_lensed_nonshapelet_sources = true);
 	template <typename MathTypes>
 	void store_image_pixel_surface_brightness(const bool use_emask = false);
@@ -1529,7 +1531,7 @@ class ImagePixelGrid : private Sort
 	template <typename MathTypes>
 	void PSF_convolution_pixel_vector_wrapper(const bool foreground = false, const bool verbal = false, const bool use_fft = false, const bool use_extended_mask = false);
 	template <typename MathTypes>
-	void PSF_convolution_Lmatrix_dense_wrapper(const bool verbal = false);
+	void PSF_convolution_Lmatrix_dense_wrapper(const bool verbal = false, const bool save_unconvolved_Lmatrix = false);
 
 	~ImagePixelGrid();
 	template <typename MathTypes>
@@ -1555,12 +1557,16 @@ class ImagePixelGrid : private Sort
 	void find_optimal_firstlevel_sourcegrid_npixels(double srcgrid_xmin, double srcgrid_xmax, double srcgrid_ymin, double srcgrid_ymax, int& nsrcpixel_x, int& nsrcpixel_y, int& n_expected_active_pixels);
 	void find_surface_brightness(const bool use_emask = false, const bool foreground_only = false, const bool lensed_sources_only = false, const bool include_first_order_corrections = false, const bool show_only_first_order_corrections = false, const bool omit_noninverted_sources = false);
 	template <typename MathTypes>
-	void find_surface_brightness_vec(const bool use_extended_mask = false, const bool foreground_only = false, const bool lensed_sources_only = false, const bool omit_noninverted_sources = false);
+	void find_surface_brightness_vec(const bool use_extended_mask = false, const bool foreground_only = false, const bool lensed_sources_only = false, const bool omit_noninverted_sources = false, const bool exclude_primary_mask = false);
 	template <typename MathTypes>
 	void find_foreground_surface_brightness_vec(const bool allow_lensed_noninverted_sources = false);
+	template <typename MathTypes>
+	void fill_primary_mask_sb_into_emask_sb();
+
 #ifdef USE_STAN
 	stan::math::var_value<Eigen::VectorXd> scatter_to_large(const stan::math::var_value<Eigen::VectorXd>& small, int large_size, int* map);
 	stan::math::var_value<Eigen::VectorXd> gather_to_small(const stan::math::var_value<Eigen::VectorXd>& large, int small_size, int* map);
+	stan::math::var_value<Eigen::VectorXd> partial_fill_vec(const stan::math::var_value<Eigen::VectorXd>& small, const stan::math::var_value<Eigen::VectorXd>& large_orig, int large_size);
 
 #endif
 

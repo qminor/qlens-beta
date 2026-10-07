@@ -399,8 +399,9 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	outside_sb_prior_expfac = 8;
 	srcpixel_nimg_mag_threshold = 0.1; // this is the minimum magnification an image pixel must have to be counted when calculating source pixel n_images
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
-	auxiliary_srcgrid_npixels = 60; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
+	auxiliary_srcgrid_npixels = 40; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
 	outside_sb_prior = false;
+	use_Lmatrix_in_outside_sb_prior = false;
 	outside_sb_prior_noise_frac = -1e30; // surface brightness threshold is given as multiple of data pixel noise (negative by default so it's effectively not used)
 	outside_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
 	einstein_radius_prior = false;
@@ -774,6 +775,7 @@ QLens::QLens(QLens *lens_in) : UCMC(), Model() // creates lens object with same 
 	n_image_prior_sb_frac = lens_in->n_image_prior_sb_frac;
 	auxiliary_srcgrid_npixels = lens_in->auxiliary_srcgrid_npixels;
 	outside_sb_prior = lens_in->outside_sb_prior;
+	use_Lmatrix_in_outside_sb_prior = lens_in->use_Lmatrix_in_outside_sb_prior;
 	outside_sb_prior_noise_frac = lens_in->outside_sb_prior_noise_frac; // surface brightness threshold is given as multiple of data pixel noise
 	outside_sb_prior_threshold = lens_in->outside_sb_prior_threshold; // surface brightness threshold is given as fraction of max surface brightness
 	einstein_radius_prior = lens_in->einstein_radius_prior;
@@ -15205,9 +15207,9 @@ QScalar QLens::fitmodel_loglike_extended_source(const QScalar* params)
 #endif
 		{
 			//for (;;) {
-			chisq = fitmodel->pixel_log_evidence_times_two_autodiff<QScalar,PlainTypes>(chisq0,false,0);
+			//chisq = fitmodel->pixel_log_evidence_times_two_autodiff<QScalar,PlainTypes>(chisq0,false,0);
 			//}
-			//chisq = fitmodel->pixel_log_evidence_times_two(chisq0,false,0); // original version for now, just to be safe
+			chisq = fitmodel->pixel_log_evidence_times_two(chisq0,false,0); // original version for now, just to be safe
 		}
 	} else {
 		double chisq00;
@@ -18099,7 +18101,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 		}
 		sb_outside_window = false;
 		if ((outside_sb_prior) and (source_fit_mode != Parameterized_Source)) {
-			logev_times_two += find_outside_sb_prior_penalty<PlainTypes>(band_number,src_i_list,sb_outside_window,verbal);
+			logev_times_two += find_outside_sb_prior_penalty<PlainTypes>(band_number,src_i_list,sb_outside_window,use_Lmatrix_in_outside_sb_prior,verbal);
 		}
 		if (sb_outside_window) sb_outside_window_allbands = true;
 	}
@@ -18280,8 +18282,9 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 				} else {
 					//image_pixel_grid->assign_foreground_mappings();
 					if (!ignore_foreground_in_chisq) {
-						image_pixel_grid->calculate_foreground_pixel_surface_brightness(true);
+						image_pixel_grid->find_foreground_surface_brightness_vec<MathTypes>(true);
 						image_pixel_grid->store_foreground_pixel_surface_brightness<MathTypes>();
+						//image_pixel_grid->calculate_foreground_pixel_surface_brightness(true);
 					}
 					if (image_pixel_grid->n_pixsrc_to_include_in_Lmatrix==0) continue; // that means this pixellated source will be included with the inversion handled from another ImagePixelGrid (with a different imggrid_i index)
 
@@ -18462,7 +18465,7 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 		}
 		sb_outside_window = false;
 		if ((outside_sb_prior) and (source_fit_mode != Parameterized_Source)) {
-			logev_penalty_band = find_outside_sb_prior_penalty<MathTypes>(band_number,src_i_list.data(),sb_outside_window,verbal);
+			logev_penalty_band = find_outside_sb_prior_penalty<MathTypes>(band_number,src_i_list.data(),sb_outside_window,use_Lmatrix_in_outside_sb_prior,verbal);
 			logev_times_two += logev_penalty_band;
 			logev_penalty += logev_penalty_band;
 		}
@@ -18913,7 +18916,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 	}
 
 	if (matrix_format==DENSE) {
-		image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
+		image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal,outside_sb_prior);
 	} else {
 		image_pixel_grid->PSF_convolution_Lmatrix(verbal);
 	}
@@ -19138,7 +19141,7 @@ template bool QLens::generate_and_invert_lensing_matrix_shapelet<VarmatTypes>(co
 
 
 template <typename MathTypes>
-typename MathTypes::QScalar QLens::find_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, const bool verbal)
+typename MathTypes::QScalar QLens::find_outside_sb_prior_penalty(const int band_number, int* src_i_list, bool& sb_outside_window, const bool use_Lmatrix, const bool verbal)
 {
 #ifdef USE_STAN
 	using stan::math::abs;
@@ -19159,8 +19162,18 @@ typename MathTypes::QScalar QLens::find_outside_sb_prior_penalty(const int band_
 			imggrid_i = band_number*n_extended_src_redshifts + zsrc_i;
 			ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i]; 
 			if (src_i_list[imggrid_i] == -1) continue;
+			if (use_Lmatrix) {
+				if (matrix_format==DENSE) {
+					image_pixel_grid->calculate_image_pixel_surface_brightness_dense<MathTypes>(true); // this finds the unconvolved sb in primary mask using the (unconvolved) Lmatrix
+				} else {
+					// fill in sparse version
+				}
+			}
 			delaunay_srcgrids[src_i_list[imggrid_i]]->look_for_starting_point = false; // since we're unmasking, don't use the masked pixels to look for starting point when finding containing triangles
-			image_pixel_grid->find_surface_brightness_vec<MathTypes>(true,false,true);
+			image_pixel_grid->find_surface_brightness_vec<MathTypes>(true,false,true,false,use_Lmatrix);
+			if (use_Lmatrix) {
+				image_pixel_grid->fill_primary_mask_sb_into_emask_sb<MathTypes>();
+			}
 			image_pixel_grid->PSF_convolution_pixel_vector_wrapper<MathTypes>(false,verbal,false,true); // no PSF supersampling, no FFT convolution (saves time)
 			image_pixel_grid->store_image_pixel_surface_brightness<MathTypes>(true);
 			delaunay_srcgrids[src_i_list[imggrid_i]]->look_for_starting_point = true; // BTW, you should use a better algorithm to look for containing triangles that doesn't rely on ray tracing, but don't worry about it for now
@@ -19208,6 +19221,7 @@ typename MathTypes::QScalar QLens::find_outside_sb_prior_penalty(const int band_
 			for (j=0; j < image_data->npixels_y; j++) {
 				if ((mask_for_inversion) and (image_pixel_grids[imggrid_i]->maps_to_source_pixel[i][j])) {
 					//img_index = image_pixel_grids[imggrid_i]->pixel_index[i][j];
+					//cout << "SB: " << i << " " << j << " " << image_pixel_grids[imggrid_i]->surface_brightness[i][j] << " (img_index=" << image_pixel_grids[imggrid_i]->pixel_index[i][j] << ")" << endl;
 					if (image_pixel_grids[imggrid_i]->surface_brightness[i][j] > max_sb_doub) {
 						 max_sb_doub = image_pixel_grids[imggrid_i]->surface_brightness[i][j];
 						 i_maxsb = i;
@@ -19283,9 +19297,9 @@ typename MathTypes::QScalar QLens::find_outside_sb_prior_penalty(const int band_
 
 	return chisq_penalty;
 }
-template double QLens::find_outside_sb_prior_penalty<PlainTypes>(const int band_number, int* src_i_list, bool& sb_outside_window, const bool verbal);
+template double QLens::find_outside_sb_prior_penalty<PlainTypes>(const int band_number, int* src_i_list, bool& sb_outside_window, const bool use_Lmatrix, const bool verbal);
 #ifdef USE_STAN
-template stan::math::var QLens::find_outside_sb_prior_penalty<VarmatTypes>(const int band_number, int* src_i_list, bool& sb_outside_window, const bool verbal);
+template stan::math::var QLens::find_outside_sb_prior_penalty<VarmatTypes>(const int band_number, int* src_i_list, bool& sb_outside_window, const bool use_Lmatrix, const bool verbal);
 #endif
 
 void QLens::set_n_imggrids_to_include_in_inversion()

@@ -3356,6 +3356,7 @@ template void DelaunayGrid::find_interpolation_weights_3pt<double>(const double 
 template void DelaunayGrid::find_interpolation_weights_3pt<stan::math::var>(const stan::math::var input_pt_x, const stan::math::var input_pt_y, const int trinum, int& npts, const int thread);
 #endif
 
+/*
 template <typename QScalar>
 void DelaunayGrid::find_interpolation_weights_nn(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread) // natural neighbor interpolation
 {
@@ -3616,6 +3617,295 @@ template void DelaunayGrid::find_interpolation_weights_nn<double>(const double i
 #ifdef USE_STAN
 template void DelaunayGrid::find_interpolation_weights_nn<stan::math::var>(const stan::math::var input_pt_x, const stan::math::var input_pt_y, const int trinum, int& npts, const int thread); // natural neighbor interpolation;
 #endif
+*/
+
+
+template <typename QScalar>
+void DelaunayGrid::find_interpolation_weights_nn(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread)
+{
+	DelaunayGrid_Params<QScalar>& p = assign_delaunay_param_object<QScalar>();
+	npts = 0;
+	const int nmax_tri = 60;
+	Triangle<QScalar>* adjacent_triangles[nmax_tri];
+	int n_adjacent_triangles;
+
+	QScalar area_initial, area_leftover, wgt, totwgt = 0.0;
+	int ntri_in_envelope = 1;
+	Triangle<QScalar>* triptr = &p.triangle[trinum];
+	triangles_in_envelope[0] = trinum;
+	int k, l, m;
+
+	function<bool(Triangle<QScalar>*, const int, const int, int&, int&)> find_triangles_in_envelope = [&](Triangle<QScalar>* neighbor_ptr, const int trinum_local, const int neighbor_num, int& npt, int& ntri)
+	{
+		Triangle<QScalar>* neighbor_ptr2;
+		int l, l_new_vertex = -1, l_left, l_right, neighbor_num2;
+		double distsq;
+
+		for (l = 0; l < 3; l++) {
+			if (neighbor_ptr->neighbor_index[l] == trinum_local) {
+				l_new_vertex = l;
+				break;
+			}
+		}
+
+		if (l_new_vertex == -1) {
+			warn("could not find vertex within Bowyer-Watson envelope");
+			l_new_vertex = 0;
+		}
+
+		l_left = l_new_vertex - 1;
+		if (l_left == -1) l_left = 2;
+		l_right = l_new_vertex + 1;
+		if (l_right == 3) l_right = 0;
+
+		neighbor_num2 = neighbor_ptr->neighbor_index[l_right];
+		if (neighbor_num2 != -1) {
+			neighbor_ptr2 = &p.triangle[neighbor_num2];
+			distsq = SQR(value_of(input_pt_x - neighbor_ptr2->circumcenter[0])) + SQR(value_of(input_pt_y - neighbor_ptr2->circumcenter[1]));
+			if (distsq < neighbor_ptr2->circumcircle_radsq) {
+				if (!find_triangles_in_envelope(neighbor_ptr2, neighbor_num, neighbor_num2, npt, ntri)) return false;
+			}
+		}
+
+		triangles_in_envelope[ntri++] = neighbor_num;
+
+		if (npt >= nmax_pts_interp) {
+			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point", (npt + 1), nmax_pts_interp);
+			return false;
+		}
+
+		interpolation_indx[npt] = neighbor_ptr->vertex_index[l_new_vertex];
+		npt++;
+
+		neighbor_num2 = neighbor_ptr->neighbor_index[l_left];
+		if (neighbor_num2 != -1) {
+			neighbor_ptr2 = &p.triangle[neighbor_num2];
+			distsq = SQR(value_of(input_pt_x - neighbor_ptr2->circumcenter[0])) + SQR(value_of(input_pt_y - neighbor_ptr2->circumcenter[1]));
+			if (distsq < neighbor_ptr2->circumcircle_radsq) {
+				if (!find_triangles_in_envelope(neighbor_ptr2, neighbor_num, neighbor_num2, npt, ntri)) return false;
+			}
+		}
+
+		return true;
+	};
+
+	Triangle<QScalar>* neighbor_ptr;
+	double distsq;
+	int kleft, neighbor_num;
+
+	for (k = 0; k < 3; k++) {
+		if (npts >= nmax_pts_interp) {
+			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point", (npts + 1), nmax_pts_interp);
+			find_interpolation_weights_3pt(input_pt_x, input_pt_y, trinum, npts, thread);
+			return;
+		}
+
+		interpolation_indx[npts] = triptr->vertex_index[k];
+		npts++;
+
+		kleft = k - 1;
+		if (kleft == -1) kleft = 2;
+		neighbor_num = triptr->neighbor_index[kleft];
+
+		if (neighbor_num != -1) {
+			neighbor_ptr = &p.triangle[neighbor_num];
+			distsq = SQR(value_of(input_pt_x - neighbor_ptr->circumcenter[0])) + SQR(value_of(input_pt_y - neighbor_ptr->circumcenter[1]));
+			if (distsq < neighbor_ptr->circumcircle_radsq) {
+				if (!find_triangles_in_envelope(neighbor_ptr, trinum, neighbor_num, npts, ntri_in_envelope)) {
+					find_interpolation_weights_3pt(input_pt_x, input_pt_y, trinum, npts, thread);
+					return;
+				}
+			}
+		}
+	}
+
+	int idx, kright;
+
+	for (k = 0; k < npts; k++) {
+		idx = interpolation_indx[k];
+		p.interpolation_pts[k] = &p.gridpts[idx];
+	}
+
+	for (k = 0; k < npts; k++) {
+		kright = k + 1;
+		if (kright == npts) kright = 0;
+
+		const QScalar ax = (*p.interpolation_pts[k])[0] - input_pt_x;
+		const QScalar ay = (*p.interpolation_pts[k])[1] - input_pt_y;
+		const QScalar cx = (*p.interpolation_pts[kright])[0] - input_pt_x;
+		const QScalar cy = (*p.interpolation_pts[kright])[1] - input_pt_y;
+		const QScalar asq = ax * ax + ay * ay;
+		const QScalar csq = cx * cx + cy * cy;
+		const QScalar det = stan::math::fma(ax, cy, -cx * ay);
+		const QScalar inv2det = 0.5 / det;
+
+		p.new_circumcenter[k][0] = input_pt_x + inv2det * stan::math::fma(asq, cy, -csq * ay);
+		p.new_circumcenter[k][1] = input_pt_y + inv2det * stan::math::fma(csq, ax, -asq * cx);
+	}
+
+	bool first_iteration, fix_mmin, fix_mmax;
+	bool mmin_in_envelope, mmax_in_envelope, mmin_in_envelope_prev, mmax_in_envelope_prev;
+	int n_polygon_vertices, shared_tri_idx_min, shared_tri_idx_max, mmin_adjacent, mmax_adjacent, mmax, iter;
+
+	for (k = 0; k < npts; k++) {
+		idx = interpolation_indx[k];
+		mmin_adjacent = 0;
+		mmax_adjacent = n_shared_triangles[idx] - 1;
+		first_iteration = true;
+		mmin_in_envelope_prev = false;
+		mmax_in_envelope_prev = false;
+		fix_mmin = false;
+		fix_mmax = false;
+		iter = 0;
+
+		do {
+			mmin_in_envelope = false;
+			mmax_in_envelope = false;
+			shared_tri_idx_min = shared_triangles[idx][mmin_adjacent];
+			shared_tri_idx_max = shared_triangles[idx][mmax_adjacent];
+
+			for (m = 0; m < ntri_in_envelope; m++) {
+				if (shared_tri_idx_min == triangles_in_envelope[m]) mmin_in_envelope = true;
+				if (shared_tri_idx_max == triangles_in_envelope[m]) mmax_in_envelope = true;
+			}
+
+			if ((mmin_adjacent >= mmax_adjacent) && ((!mmin_in_envelope) && (!mmax_in_envelope) && (!mmin_in_envelope_prev) && (!mmax_in_envelope_prev))) die("there are no shared triangles in envelope!");
+
+			if ((mmin_adjacent <= mmax_adjacent) && ((!first_iteration) && (mmin_in_envelope) && (mmax_in_envelope) && (mmin_in_envelope_prev) && (mmax_in_envelope_prev))) {
+				mmin_adjacent = 0;
+				mmax_adjacent = n_shared_triangles[idx] - 1;
+				break;
+			}
+
+			if (!fix_mmin) {
+				if (!mmin_in_envelope_prev) {
+					if (!mmin_in_envelope) {
+						mmin_adjacent++;
+						if (mmin_adjacent == n_shared_triangles[idx]) mmin_adjacent = 0;
+					}
+					else if (first_iteration && mmin_in_envelope) {
+						mmin_adjacent--;
+						if (mmin_adjacent == -1) mmin_adjacent = n_shared_triangles[idx] - 1;
+					}
+					else {
+						fix_mmin = true;
+					}
+				}
+				else {
+					if (mmin_in_envelope) {
+						mmin_adjacent--;
+						if (mmin_adjacent == -1) mmin_adjacent = n_shared_triangles[idx] - 1;
+					}
+					else {
+						mmin_adjacent++;
+						if (mmin_adjacent == n_shared_triangles[idx]) mmin_adjacent = 0;
+					}
+				}
+			}
+
+			if (!fix_mmax) {
+				if (!mmax_in_envelope_prev) {
+					if (!mmax_in_envelope) {
+						mmax_adjacent--;
+						if (mmax_adjacent == -1) mmax_adjacent = n_shared_triangles[idx] - 1;
+					}
+					else if (first_iteration && mmax_in_envelope) {
+						mmax_adjacent++;
+						if (mmax_adjacent == n_shared_triangles[idx]) mmax_adjacent = 0;
+					}
+					else {
+						fix_mmax = true;
+					}
+				}
+				else {
+					if (mmax_in_envelope) {
+						mmax_adjacent++;
+						if (mmax_adjacent == n_shared_triangles[idx]) mmax_adjacent = 0;
+					}
+					else {
+						mmax_adjacent--;
+						if (mmax_adjacent == -1) mmax_adjacent = n_shared_triangles[idx] - 1;
+					}
+				}
+			}
+
+			mmin_in_envelope_prev = mmin_in_envelope;
+			mmax_in_envelope_prev = mmax_in_envelope;
+			first_iteration = false;
+			iter++;
+
+			if (iter > 100) die("Too many iterations finding ordered list of shared triangles within envelope)");
+		} while ((!fix_mmin) || (!fix_mmax));
+
+		if (mmax_adjacent >= mmin_adjacent) n_adjacent_triangles = mmax_adjacent - mmin_adjacent + 1;
+		else n_adjacent_triangles = n_shared_triangles[idx] - mmin_adjacent + mmax_adjacent + 1;
+
+		if (n_adjacent_triangles > nmax_tri) die("number of adjacent triangles exceeded maximum allowed number (%i vs %i)", n_adjacent_triangles, nmax_tri);
+
+		mmax = (mmax_adjacent >= mmin_adjacent) ? mmax_adjacent : n_shared_triangles[idx] - 1;
+		l = 0;
+
+		for (m = mmin_adjacent; m <= mmax; m++) adjacent_triangles[l++] = &p.triangle[shared_triangles[idx][m]];
+
+		if (mmax_adjacent < mmin_adjacent) {
+			for (m = 0; m <= mmax_adjacent; m++) adjacent_triangles[l++] = &p.triangle[shared_triangles[idx][m]];
+		}
+
+		if (l != n_adjacent_triangles) die("number of adjacent triangles didn't add up right (l=%i vs %i)", l, n_adjacent_triangles);
+
+		kleft = k - 1;
+		kright = k + 1;
+		if (kleft == -1) kleft = npts - 1;
+		if (kright == npts) kright = 0;
+
+		const QScalar left_mid_x = 0.5 * ((*p.interpolation_pts[k])[0] + (*p.interpolation_pts[kleft])[0]);
+		const QScalar left_mid_y = 0.5 * ((*p.interpolation_pts[k])[1] + (*p.interpolation_pts[kleft])[1]);
+		const QScalar right_mid_x = 0.5 * ((*p.interpolation_pts[kright])[0] + (*p.interpolation_pts[k])[0]);
+		const QScalar right_mid_y = 0.5 * ((*p.interpolation_pts[kright])[1] + (*p.interpolation_pts[k])[1]);
+
+		area_initial = 0.0;
+
+		area_initial += stan::math::fma(left_mid_x, adjacent_triangles[n_adjacent_triangles - 1]->circumcenter[1], -adjacent_triangles[n_adjacent_triangles - 1]->circumcenter[0] * left_mid_y);
+
+		for (m = n_adjacent_triangles - 1; m > 0; m--) {
+			const QScalar& x0 = adjacent_triangles[m]->circumcenter[0];
+			const QScalar& y0 = adjacent_triangles[m]->circumcenter[1];
+			const QScalar& x1 = adjacent_triangles[m - 1]->circumcenter[0];
+			const QScalar& y1 = adjacent_triangles[m - 1]->circumcenter[1];
+			area_initial += stan::math::fma(x0, y1, -x1 * y0);
+		}
+
+		area_initial += stan::math::fma(adjacent_triangles[0]->circumcenter[0], right_mid_y, -right_mid_x * adjacent_triangles[0]->circumcenter[1]);
+		area_initial *= -0.5;
+
+		const QScalar& ncl_x = p.new_circumcenter[kleft][0];
+		const QScalar& ncl_y = p.new_circumcenter[kleft][1];
+		const QScalar& nck_x = p.new_circumcenter[k][0];
+		const QScalar& nck_y = p.new_circumcenter[k][1];
+
+		area_leftover = stan::math::fma(left_mid_x, ncl_y, -ncl_x * left_mid_y);
+		area_leftover += stan::math::fma(ncl_x, nck_y, -nck_x * ncl_y);
+		area_leftover += stan::math::fma(nck_x, right_mid_y, -right_mid_x * nck_y);
+		area_leftover *= -0.5;
+
+		const QScalar signed_wgt = area_initial - area_leftover;
+
+		if (value_of(signed_wgt) >= 0.0) wgt = signed_wgt;
+		else wgt = -signed_wgt;
+
+		p.interpolation_wgts[k] = wgt;
+		totwgt += wgt;
+	}
+
+	const QScalar inv_totwgt = 1.0 / totwgt;
+
+	for (k = 0; k < npts; k++) p.interpolation_wgts[k] *= inv_totwgt;
+}
+template void DelaunayGrid::find_interpolation_weights_nn<double>(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, const int thread); // natural neighbor interpolation;
+#ifdef USE_STAN
+template void DelaunayGrid::find_interpolation_weights_nn<stan::math::var>(const stan::math::var input_pt_x, const stan::math::var input_pt_y, const int trinum, int& npts, const int thread); // natural neighbor interpolation;
+#endif
+
 
 void DelaunayGrid::find_interpolation_weights_3pt_ad2(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, AD2* interpolation_wgts)
 {
@@ -5914,7 +6204,7 @@ template stan::math::var DelaunaySourceGrid::interpolate_surface_brightness<stan
 #endif
 
 template <typename MathTypes>
-typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, bool& trouble_with_starting_vertex)
+typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, const int start_indx, bool& trouble_with_starting_vertex)
 {
 	using QScalar = typename MathTypes::QScalar;
 	// Note, in the forward calculation we don't use autodiff variables; we only use autodiff in the reverse pass, below
@@ -5922,7 +6212,7 @@ typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_v
 	ImgGrid_Params<MathTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
 
 	double weight = 1.0/nsubpix_per_pixel;
-	int n_imgpts = npixels * nsubpix_per_pixel;
+	int n_imgpts = (npixels - start_indx) * nsubpix_per_pixel;
 #ifdef USE_STAN
 	std::vector<ImgPtInfo, stan::math::arena_allocator<ImgPtInfo>> cache(n_imgpts);
 #endif
@@ -5933,16 +6223,17 @@ typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_v
 	trouble_with_starting_vertex = false;
 	int n_mapped_srcpixels;
 	int img_pixel_i, img_pixel_j;
-	int subpixel_idx = 0;
+	int subpixel_idx = start_indx*nsubpix_per_pixel;
+	int cache_idx = 0;
 
 	Eigen::VectorXd sbvec = Eigen::VectorXd::Zero(npixels);
 
-	for (int img_index=0; img_index < npixels; img_index++)
+	for (int img_index=start_indx; img_index < npixels; img_index++)
 	{
 		img_pixel_i = image_pixel_grid->emask_pixels_i[img_index];
 		img_pixel_j = image_pixel_grid->emask_pixels_j[img_index];
 
-		for (int subcell_idx=0; subcell_idx < nsubpix_per_pixel; subcell_idx++, subpixel_idx++) {
+		for (int subcell_idx=0; subcell_idx < nsubpix_per_pixel; subcell_idx++, cache_idx++, subpixel_idx++) {
 			//img_index = subpixel_idx / nsubpix_per_pixel;
 			int n_mapped_srcpixels = -1;
 			double input_pt_x = value_of(input_pts_x(subpixel_idx));
@@ -5953,15 +6244,15 @@ typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_v
 			Triangle<double> *triptr = &p.triangle[trinum];
 
 #ifdef USE_STAN
-			cache[subpixel_idx].skip = false;
-			cache[subpixel_idx].use_nearest_neighbor = false;
+			cache[cache_idx].skip = false;
+			cache[cache_idx].use_nearest_neighbor = false;
 #endif
 
 			if (!inside_triangle) {
 				// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
 				if ((zero_outside_border) and (!on_vertex)) {
 #ifdef USE_STAN
-					cache[subpixel_idx].skip = true;
+					cache[cache_idx].skip = true;
 #endif
 					continue;
 				}
@@ -5970,8 +6261,8 @@ typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_v
 				distnorm = SQR(input_pt_x - p.gridpts[triptr->vertex_index[kmin]][0]) + SQR(input_pt_y - p.gridpts[triptr->vertex_index[kmin]][1]);
 				if ((!qlens->natural_neighbor_interpolation) or (distnorm < 1e-6)) {
 #ifdef USE_STAN
-					cache[subpixel_idx].use_nearest_neighbor = true;
-					cache[subpixel_idx].kmin = kmin;
+					cache[cache_idx].use_nearest_neighbor = true;
+					cache[cache_idx].kmin = kmin;
 #endif
 					interpolation_indx[0] = triptr->vertex_index[kmin];
 					p.interpolation_wgts[0] = 1.0;
@@ -5979,10 +6270,10 @@ typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_v
 				}
 			}
 #ifdef USE_STAN
-			cache[subpixel_idx].subpixel_idx = subpixel_idx;
-			cache[subpixel_idx].imgpixel_idx = img_index;
-			cache[subpixel_idx].trinum = trinum;
-			cache[subpixel_idx].weight = weight;
+			cache[cache_idx].subpixel_idx = subpixel_idx;
+			cache[cache_idx].imgpixel_idx = img_index;
+			cache[cache_idx].trinum = trinum;
+			cache[cache_idx].weight = weight;
 #endif
 
 			if (n_mapped_srcpixels < 0) {
@@ -5996,10 +6287,12 @@ typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_v
 			for (int i=0; i < n_mapped_srcpixels; i++) {
 				maps_to_image_pixel[interpolation_indx[i]] = true;
 				sbvec(img_index) += weight*p.interpolation_wgts[i]*p.surface_brightness[interpolation_indx[i]];
+				//cout << "SBVEC(" << img_index << "): " << sbvec(img_index) << endl;
 				//cout << "weight=" << weight << " wgts=" << value_of(p.interpolation_wgts[i]) << " sb=" << value_of(p.surface_brightness[interpolation_indx[i]]) << endl;
 			}
 		}
 	}
+	//cout << "NPIXELS=" << npixels << " start_indx=" << start_indx << endl;
 
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<QScalar>) {
@@ -6021,9 +6314,9 @@ typename MathTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_v
 		return sbvec;
 	}
 }
-template typename PlainTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_vec<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, bool& trouble_with_starting_vertex);
+template typename PlainTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_vec<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, const int start_indx, bool& trouble_with_starting_vertex);
 #ifdef USE_STAN
-template typename VarmatTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_vec<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, bool& trouble_with_starting_vertex);
+template typename VarmatTypes::VecType DelaunaySourceGrid::find_lensed_surface_brightness_vec<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, const int start_indx, bool& trouble_with_starting_vertex);
 #endif
 
 #ifdef USE_STAN
@@ -6036,6 +6329,7 @@ void DelaunaySourceGrid::scatter_lensed_sb_adjoints(const std::vector<ImgPtInfo,
 
 	// Build local objective
 	stan::math::var objective = 0.0;
+	//cout << "size of cache: " << cache.size() << endl;
 
 	for (const auto& imgpt : cache)
 	{
@@ -6171,10 +6465,11 @@ bool DelaunaySourceGrid::find_containing_triangle_with_imgpix(const double input
 		sqrdist = SQR(input_pt_x-triptr->vertex[k][0]) + SQR(input_pt_y-triptr->vertex[k][1]);
 		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
 	}
-	if ((inside_triangle) and (sqrdistmin < 1e-6)) {
+	if (sqrdistmin < 1e-10) {
 		inside_triangle = false;
 		on_vertex = true;
 	}
+	//if ((!inside_triangle) and (!on_vertex)) cout << "FUCK sqrdistmin=" << sqrdistmin << endl;
 	return found_good_starting_vertex;
 }
 
@@ -13855,6 +14150,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 			}
 		}
 	}
+	if (image_npixels > image_npixels_emask) die("number of pixels in primary mask cannot be great than number of pixels in emask");
 
 	if (mask_pixels_i != NULL) {
 		delete_ray_tracing_arrays(include_fft_arrays);
@@ -16017,7 +16313,7 @@ void ImagePixelGrid::find_surface_brightness(const bool use_extended_mask, const
 }
 
 template <typename MathTypes>
-void ImagePixelGrid::find_surface_brightness_vec(const bool use_extended_mask, const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources)
+void ImagePixelGrid::find_surface_brightness_vec(const bool use_extended_mask, const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources, const bool exclude_primary_mask)
 {
 	using VecType = typename MathTypes::VecType;
 	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
@@ -16050,6 +16346,7 @@ void ImagePixelGrid::find_surface_brightness_vec(const bool use_extended_mask, c
 	const VecType &xvec = (qlens->split_imgpixels) ? p.srcpt_x_subpixel_centers : p.srcpt_x_centers;
 	const VecType &yvec = (qlens->split_imgpixels) ? p.srcpt_y_subpixel_centers : p.srcpt_y_centers;
 	VecType &sbvec = (use_extended_mask) ? p.image_surface_brightness_emask : p.image_surface_brightness;
+	int start_indx = ((use_extended_mask) and (exclude_primary_mask)) ? image_npixels : 0;
 
 	int npix, n_subpixels_per_pixel, nsp; // nsp is effectively the ratio of lengths of xvec/yvec over sbvec
 	if (qlens->split_imgpixels) {
@@ -16073,7 +16370,7 @@ void ImagePixelGrid::find_surface_brightness_vec(const bool use_extended_mask, c
 	} else {
 		if (source_fit_mode==Delaunay_Source) {
 			bool trouble_with_starting_vertex = false;
-			sbvec = delaunay_srcgrid->find_lensed_surface_brightness_vec<MathTypes>(xvec,yvec,npix,n_subpixels_per_pixel,trouble_with_starting_vertex);
+			sbvec = delaunay_srcgrid->find_lensed_surface_brightness_vec<MathTypes>(xvec,yvec,npix,n_subpixels_per_pixel,start_indx,trouble_with_starting_vertex);
 			if (trouble_with_starting_vertex) warn(qlens->warnings,"could not find good starting vertices for Delaunay grid; started with vertex 0 when searching for enclosing triangles");
 		} else if (source_fit_mode==Cartesian_Source) {
 			die("cartesian source grid not yet supported in new find_surface_brightness function");
@@ -16092,9 +16389,9 @@ void ImagePixelGrid::find_surface_brightness_vec(const bool use_extended_mask, c
 		}
 	}
 }
-template void ImagePixelGrid::find_surface_brightness_vec<PlainTypes>(const bool use_extended_mask, const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources);
+template void ImagePixelGrid::find_surface_brightness_vec<PlainTypes>(const bool use_extended_mask, const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources, const bool exclude_primary_mask);
 #ifdef USE_STAN
-template void ImagePixelGrid::find_surface_brightness_vec<VarmatTypes>(const bool use_extended_mask, const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources);
+template void ImagePixelGrid::find_surface_brightness_vec<VarmatTypes>(const bool use_extended_mask, const bool foreground_only, const bool lensed_sources_only, const bool omit_noninverted_sources, const bool exclude_primary_mask);
 #endif
 
 template <typename MathTypes>
@@ -16125,7 +16422,7 @@ void ImagePixelGrid::find_foreground_surface_brightness_vec(const bool allow_len
 		//else cout << "WTF?" << endl;
 	}
 	if ((!at_least_one_foreground_src) and (!at_least_one_lensed_noninverted_src)) {
-		cout << "setting fg sbvecs to zero" << endl;
+		//cout << "setting fg sbvecs to zero" << endl;
 		p.sbprofile_surface_brightness = Eigen::VectorXd::Zero(image_npixels_fgmask);
 		p.sbprofile_sb_primary_mask = Eigen::VectorXd::Zero(image_npixels);
 		return;
@@ -16189,6 +16486,31 @@ template void ImagePixelGrid::find_foreground_surface_brightness_vec<PlainTypes>
 template void ImagePixelGrid::find_foreground_surface_brightness_vec<VarmatTypes>(const bool allow_lensed_noninverted_sources);
 #endif
 
+template <typename MathTypes>
+void ImagePixelGrid::fill_primary_mask_sb_into_emask_sb()
+{
+	using VecType = typename MathTypes::VecType;
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<typename MathTypes::QScalar>) {
+		stan::math::var_value<Eigen::VectorXd> old_sbvec = std::move(p.image_surface_brightness_emask);
+		p.image_surface_brightness_emask = partial_fill_vec(p.image_surface_brightness_unconvolved,old_sbvec,image_npixels_emask);
+	} else
+#endif
+	{
+		//p.image_surface_brightness_emask = Eigen::VectorXd::Zero(image_npixels_emask);
+		for (int i = 0; i < p.image_surface_brightness_unconvolved.size(); ++i) {
+			p.image_surface_brightness_emask(i) = p.image_surface_brightness_unconvolved.val()(i);
+		}
+	}
+}
+template void ImagePixelGrid::fill_primary_mask_sb_into_emask_sb<PlainTypes>();
+#ifdef USE_STAN
+template void ImagePixelGrid::fill_primary_mask_sb_into_emask_sb<VarmatTypes>();
+#endif
+
+
+
 #ifdef USE_STAN
 stan::math::var_value<Eigen::VectorXd> ImagePixelGrid::gather_to_small(const stan::math::var_value<Eigen::VectorXd>& large, int small_size, int* map)
 {
@@ -16225,6 +16547,34 @@ stan::math::var_value<Eigen::VectorXd> ImagePixelGrid::scatter_to_large(const st
 	auto large = stan::math::make_callback_var(large_val, [small_arena, map](auto& large_var) mutable {
 		for (int i = 0; i < small_arena.size(); ++i) {
 			small_arena.adj()(i) += large_var.adj()(map[i]);
+		}
+	});
+
+	return large;
+}
+#endif
+
+#ifdef USE_STAN
+stan::math::var_value<Eigen::VectorXd> ImagePixelGrid::partial_fill_vec(const stan::math::var_value<Eigen::VectorXd>& small, const stan::math::var_value<Eigen::VectorXd>& large_orig, int large_size)
+{
+	auto small_arena = stan::arena_t<stan::math::var_value<Eigen::VectorXd>>(small);
+	auto large_arena = stan::arena_t<stan::math::var_value<Eigen::VectorXd>>(large_orig);
+
+	Eigen::VectorXd large_val = Eigen::VectorXd::Zero(large_size);
+
+	for (int i = 0; i < small_arena.size(); ++i) {
+		large_val(i) = small_arena.val()(i);
+	}
+	for (int i = small_arena.size(); i < large_size; ++i) {
+		large_val(i) = large_arena.val()(i);
+	}
+
+	auto large = stan::math::make_callback_var(large_val, [small_arena, large_arena, large_size](auto& large_var) mutable {
+		for (int i = 0; i < small_arena.size(); ++i) {
+			small_arena.adj()(i) += large_var.adj()(i);
+		}
+		for (int i = small_arena.size(); i < large_size; ++i) {
+			large_arena.adj()(i) += large_var.adj()(i);
 		}
 	});
 
@@ -19128,7 +19478,10 @@ VecType ImagePixelGrid::PSF_convolution_pixel_vector_stan(const VecType& sbvec, 
 
 		for (int e = begin; e < end; ++e) {
 			//cout << "idx=" << conv_plan->in_idx[e] << ", w=" << conv_plan->weight[e] << "..." << endl;
-			if (conv_plan->in_idx[e] > sbvec_val.size()) die("invalid index! sbvec size=%i",sbvec_val.size());
+			if (conv_plan->in_idx[e] > sbvec_val.size()) {
+				if (use_emask) die("invalid index! sbvec size=%i (using emask)",sbvec_val.size());
+				else die("invalid index! sbvec size=%i",sbvec_val.size());
+			}
 			sum += sbvec_val[conv_plan->in_idx[e]] * conv_plan->weight[e];
 			//cout << "psf_weight=" << conv_plan->weight[e] << " sbval=" << sbvec_val[conv_plan->in_idx[e]] << " idx=" << conv_plan->in_idx[e] << endl;
 		}
@@ -19171,7 +19524,7 @@ template stan::math::var_value<Eigen::VectorXd> ImagePixelGrid::PSF_convolution_
 #endif
 
 template <typename MathTypes>
-void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal)
+void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal, const bool save_unconvolved_Lmatrix)
 {
 	using MatType = typename MathTypes::MatType;
 	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
@@ -19217,14 +19570,20 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal)
 		}
 
 		if ((qlens->mpi_id==0) and (verbal)) cout << "Beginning PSF convolution...\n";
-		MatType *Lptr;
-		if (qlens->psf_supersampling) Lptr = &p.Lmatrix_trans_supersampled;
-		else Lptr = &p.Lmatrix_trans_dense;
+		MatType *Lptr_out, *Lptr_in;
+		if (qlens->psf_supersampling) Lptr_out = &p.Lmatrix_trans_supersampled;
+		else Lptr_out = &p.Lmatrix_trans_dense;
+		if (save_unconvolved_Lmatrix) {
+			p.Lmatrix_trans_dense_unconvolved = std::move(p.Lmatrix_trans_dense);
+			Lptr_in = &p.Lmatrix_trans_dense_unconvolved;
+		} else {
+			Lptr_in = Lptr_out;
+		}
 
 		if (qlens->fft_convolution) {
-			(*Lptr) = PSF_convolution_Lmatrix_dense_stan_FFT((*Lptr),verbal);
+			(*Lptr_out) = PSF_convolution_Lmatrix_dense_stan_FFT((*Lptr_in),verbal);
 		} else {
-			(*Lptr) = PSF_convolution_Lmatrix_dense_stan((*Lptr)); 
+			(*Lptr_out) = PSF_convolution_Lmatrix_dense_stan((*Lptr_in)); 
 		}
 		if (qlens->psf_supersampling) average_supersampled_dense_Lmatrix();
 		if (qlens->include_fgmask_in_inversion) {
@@ -19273,9 +19632,9 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal)
 		}
 	}
 }
-template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<PlainTypes>(const bool verbal);
+template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<PlainTypes>(const bool verbal, const bool save_unconvolved_Lmatrix);
 #ifdef USE_STAN
-template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<VarmatTypes>(const bool verbal);
+template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<VarmatTypes>(const bool verbal, const bool save_unconvolved_Lmatrix);
 #endif
 
 template <typename MatType>
@@ -24702,7 +25061,7 @@ void ImagePixelGrid::calculate_image_pixel_surface_brightness()
 }
 
 template <typename MathTypes>
-void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense()
+void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense(const bool unconvolved)
 {
 	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	//int i,j;
@@ -24717,7 +25076,15 @@ void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense()
 	}
 	*/
 
-	p.image_surface_brightness = p.Lmatrix_trans_dense.transpose()*p.amplitude_vector;
+	if (!unconvolved) {
+		p.image_surface_brightness = p.Lmatrix_trans_dense.transpose()*p.amplitude_vector;
+	} else {
+		if (p.Lmatrix_trans_dense_unconvolved.size() != 0) {
+			p.image_surface_brightness_unconvolved = p.Lmatrix_trans_dense_unconvolved.transpose()*p.amplitude_vector;
+		} else {
+			p.image_surface_brightness_unconvolved = p.Lmatrix_trans_dense.transpose()*p.amplitude_vector;
+		}
+	}
 	/*
 	bool Lmatrix_is_zero = true;
 	int i,j;
@@ -24758,9 +25125,9 @@ void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense()
 	}
 	*/
 }
-template void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense<PlainTypes>();
+template void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense<PlainTypes>(const bool unconvolved);
 #ifdef USE_STAN
-template void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense<VarmatTypes>();
+template void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense<VarmatTypes>(const bool unconvolved);
 #endif
 
 void ImagePixelGrid::calculate_foreground_pixel_surface_brightness(const bool allow_lensed_noninverted_sources)
@@ -24924,6 +25291,7 @@ void ImagePixelGrid::store_image_pixel_surface_brightness(const bool use_emask)
 		i = emask_pixels_i[img_index];
 		j = emask_pixels_j[img_index];
 		surface_brightness[i][j] = value_of((*surface_brightness_vector)(img_index));
+		//cout << "STORING(" << img_index << "): i=" << i << " j=" << j << " sb=" << surface_brightness[i][j] << endl;
 	}
 }
 template void ImagePixelGrid::store_image_pixel_surface_brightness<PlainTypes>(const bool use_emask);
