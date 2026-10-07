@@ -6612,7 +6612,7 @@ double QLens::get_sph_xi_parameter(const double src_redshift)
 	return (2*r_ein*dkappa_e_tot/(1-kappa_e_tot)+2);
 }
 
-double QLens::get_circ_xi_parameter(const double src_redshift)
+double QLens::get_circ_xi_parameter(const double src_redshift, const int n_theta, std::vector<double>* xi_vals)
 {
 	double r_ein,zfac,xi_param;
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),src_redshift,reference_source_redshift);
@@ -6622,7 +6622,6 @@ double QLens::get_circ_xi_parameter(const double src_redshift)
 	lens_list[primary_lens_number]->get_center_coords(xc,yc);
 
 	int i,j;
-	const int n_theta = 100;
 	double theta, theta_step = M_2PI/n_theta;
 
 	double xifac_avg = 0;
@@ -6640,8 +6639,9 @@ double QLens::get_circ_xi_parameter(const double src_redshift)
 			}
 		}
 	}
+	double two_R_ein = 2*r_ein;
 
-	double x,y;
+	double x,y,xifac;
 	for (i=0, theta=0.0; i < n_theta; i++, theta += theta_step) {
 		x = xc + r_ein*cos(theta);
 		y = yc + r_ein*sin(theta);
@@ -6656,11 +6656,13 @@ double QLens::get_circ_xi_parameter(const double src_redshift)
 				//cout << "dK=" << dkap << " " << dkappa_e_tot << endl;
 			}
 		}
-		xifac_avg += dkappa_e_tot/(1-kappa_e_tot);
+		xifac = dkappa_e_tot/(1-kappa_e_tot);
+		xifac_avg += xifac;
+		if (xi_vals != NULL) xi_vals->push_back(two_R_ein*xifac+2);
 	}
 	xifac_avg /= n_theta;
 	delete[] include_lens;
-	return (2*r_ein*xifac_avg+2);
+	return (two_R_ein*xifac_avg+2);
 }
 
 bool QLens::find_tangential_critical_curve(int &cc_num)

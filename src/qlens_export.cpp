@@ -254,7 +254,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def("add", [](DerivedParamList &current, const string param_type, py::args &args, py::kwargs &kwargs){
 			double param1=-1.0, param2=-1.0;
 			bool use_kpc = false;
-			int lens_number = -1;
+			int intval = -1;
 			if (args.size()>=1) {
 				try {
 					param1 = args[0].cast<double>();
@@ -273,16 +273,25 @@ PYBIND11_MODULE(qlens, m) {
 				}
 			}
 			for (auto item : kwargs) {
+				// this is clunky. you should really specialize arguments to specific dparams
 				if (py::cast<string>(item.first)=="lens") {
-					lens_number = py::cast<int>(item.second);
+					intval = py::cast<int>(item.second);
+				} else if (py::cast<string>(item.first)=="n") {
+					intval = py::cast<int>(item.second);
 				} else if (py::cast<string>(item.first)=="use_kpc") {
 					use_kpc = py::cast<bool>(item.second);
 				} else {
 					throw std::runtime_error("Keyword argument not recognized for derived parameter type '" + param_type + "'");
 				}
 			}
-			return current.add_dparam(param_type,param1,lens_number,param2,use_kpc);
+			return current.add_dparam(param_type,param1,intval,param2,use_kpc);
 		})
+		.def("get_data", [](DerivedParamList &current, const int i) {
+			std::vector<double> dparam_data;
+			current.get_dparam_data(i,dparam_data);
+			return dparam_data;
+		})
+
 		.def("remove",&DerivedParamList::remove_dparam)
 		.def("clear",&DerivedParamList::clear_dparams)
 		.def("rename", [](DerivedParamList &current, const string old_name, const string new_name, const string new_latex_name=""){

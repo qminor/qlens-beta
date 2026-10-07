@@ -6469,7 +6469,6 @@ bool DelaunaySourceGrid::find_containing_triangle_with_imgpix(const double input
 		inside_triangle = false;
 		on_vertex = true;
 	}
-	//if ((!inside_triangle) and (!on_vertex)) cout << "FUCK sqrdistmin=" << sqrdistmin << endl;
 	return found_good_starting_vertex;
 }
 

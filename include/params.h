@@ -117,6 +117,7 @@ struct DerivedParam
 			name = "sph_xi"; latex_name = "\\xi_{sph}";
 		} else if (derived_param_type == Circ_Xi_Param) {
 			name = "circ_xi"; latex_name = "\\xi_{circ}";
+			if (int_param <= 0) int_param = 100; // number of theta values
 		} else if (derived_param_type == CC_Xi_Param) {
 			name = "cc_xi"; latex_name = "\\xi_{cc}";
 			funcparam = -1e30; // no input parameter for this dparam
@@ -208,7 +209,7 @@ struct DerivedParam
 			return lens_in->get_sph_xi_parameter(funcparam);
 		}
 		else if (derived_param_type == Circ_Xi_Param) {
-			return lens_in->get_circ_xi_parameter(funcparam);
+			return lens_in->get_circ_xi_parameter(funcparam,int_param);
 		}
 		else if (derived_param_type == CC_Xi_Param) {
 			return lens_in->cc_xi_parameter();
@@ -325,6 +326,13 @@ struct DerivedParam
 		else die("no user defined function yet");
 		return 0.0;
 	}
+	void get_derived_param_data(QLens* lens_in, std::vector<double>& dparam_data)
+	{
+		dparam_data.resize(0);
+		if (derived_param_type == Circ_Xi_Param) {
+			lens_in->get_circ_xi_parameter(funcparam,int_param,&dparam_data);
+		}
+	}
 	string mkstring_doub(const double db)
 	{
 		std::stringstream dstr;
@@ -366,7 +374,7 @@ struct DerivedParam
 		} else if (derived_param_type == Sph_Xi_Param) {
 			outstring = "xi parameter of primary + cocentered lenses, ignoring ellipticity\n";
 		} else if (derived_param_type == Circ_Xi_Param) {
-			outstring = "circuklar averaged xi parameter of primary and co-centered lenses\n";
+			outstring = "circular averaged xi parameter of primary and co-centered lenses with " + mkstring_int(int_param) + " points\n";
 		} else if (derived_param_type == CC_Xi_Param) {
 			outstring = "xi parameter of lens along critical curve \n";
 		} else if (derived_param_type == Xi_Phi_Param) {
@@ -1275,6 +1283,14 @@ struct DerivedParamList
 	double get_dparam(const int i)
 	{
 		if (i < n_dparams) return dparams[i]->get_derived_param(qlens);
+		else {
+			die("specified derived parameter index has not been created");
+		}
+		return -VERY_LARGE;
+	}
+	double get_dparam_data(const int i, std::vector<double>& dparam_data)
+	{
+		if (i < n_dparams) dparams[i]->get_derived_param_data(qlens,dparam_data);
 		else {
 			die("specified derived parameter index has not been created");
 		}
