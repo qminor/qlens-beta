@@ -1,0 +1,6 @@
+cmake \
+      -DPYTHON_EXECUTABLE=/usr/bin/python3 \
+      -DCFITSIO_ROOT_DIR=/home/libraries/cfitsio/lib \
+      -DMULTINEST_HINT=/home/libraries/multinest \
+      -DPolychord_HINT=/home/src/PolyChordLite \
+      ..
