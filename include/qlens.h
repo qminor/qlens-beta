@@ -521,6 +521,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	int delaunay_mode;
 	bool delaunay_high_sn_mode;
 	bool use_srcpixel_clustering;
+	bool use_bluenoise_relaxation;
 	bool include_two_pixsrc_in_Lmatrix;
 
 	bool use_random_delaunay_srcgrid;
@@ -534,6 +535,13 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double f_src_clusters;
 	int n_src_clusters;
 	int n_cluster_iterations;
+	double bluenoise_repulsion_strength;
+	double bluenoise_stepsize;
+	bool bluenoise_tsgrad;
+	double bluenoise_tether_strength;
+	double bluenoise_lscale;
+	int bluenoise_n_iterations;
+	bool fix_boundary_pts;
 	bool include_potential_perturbations;
 	bool first_order_sb_correction;
 	bool adopt_final_sbgrad;
@@ -1065,6 +1073,9 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	bool get_warnings() { return warnings; }
 	void set_warnings(const bool setting) { warnings = setting; }
+
+	bool get_natural_neighbor_interpolation() { return natural_neighbor_interpolation; }
+	void set_natural_neighbor_interpolation(const bool setting);
 
 	bool register_lens_vary_parameters(const int lensnumber);
 	void register_lens_prior_limits(const int lens_number);

@@ -81,7 +81,7 @@ q.gradtol = 0.001
 q.chisqtol = 1e-6
 q.nrepeat = 0
 
-q.run_fit("bfgs",adopt=True,show_errors=False)
+#q.run_fit("bfgs",adopt=True,show_errors=False)    # if you comment this out, it will skip the initial analytic source run and do pixel fitting immediately, but result may be somewhat biased
 
 pause()
 
@@ -90,7 +90,7 @@ src.clear() # Now we delete the analytic source and switch to a pixellated sourc
 q.set_source_mode("delaunay")
 q.nimg_prior=True
 q.nimg_threshold=1.5
-q.auxgrid_npixels=30
+q.auxgrid_npixels=30  # size of source grid (NxN) used to calculate average number of images produced
 q.outside_sb_prior=True
 q.outside_sb_frac_threshold=0.15
 q.regularization_method="matern_kernel"
@@ -115,11 +115,12 @@ q.fitmodel()
 #plotimg(q,nres=True,title="Residuals before optimizing")      # NOTE: plotimg, plotsrc, and plotdata all return figures and axes, so you can also do e.g.
 #plotsrc(q,interp=False,title="Reconstructed source before optimizing")    # (fig, ax) = plotimg(q,show=False) and modify the figures
 
-pause()
-
 q.nimg_prior=True
 q.outside_sb_prior=True
 #q.param_covmatrix_scale_fac = 5   # we will scale the uncertainties by this factor because with pixellated sources, fisher matrix uncertainties are often unreliably small
+
+pause()
+
 q.run_fit("bfgs",adopt=True,show_errors=True)
 
 q.sbmap_invert()

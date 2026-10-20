@@ -12,7 +12,7 @@
 
 #ifdef USE_STAN
 #include <stan/math.hpp>
-//#include <stan/math/prim/core/init_threadpool_tbb.hpp>
+#include <stan/math/prim/core/init_threadpool_tbb.hpp>
 #include <tbb/global_control.h>
 #endif
 
@@ -161,19 +161,16 @@ int main(int argc, char *argv[])
 	}
 
 #ifdef USE_STAN
-	tbb::global_control control(
-		 tbb::global_control::max_allowed_parallelism,
-		 num_tbb_threads
-	);
+	tbb::global_control control(tbb::global_control::max_allowed_parallelism, num_tbb_threads);
 
-	stan::math::init_threadpool_tbb();
+	//stan::math::init_threadpool_tbb();
 #endif
 
-//#ifdef USE_STAN
-	//if (mpi_id==0) std::cout << "TBB max threads = " << tbb::global_control::active_value(tbb::global_control::max_allowed_parallelism) << std::endl;
-//#endif
+#ifdef USE_STAN
+	if (mpi_id==0) std::cout << "TBB max threads = " << tbb::global_control::active_value(tbb::global_control::max_allowed_parallelism) << std::endl;
+#endif
 
-	//stan::math::set_num_threads(num_threads);
+	//stan::math::set_num_threads(num_tbb_threads);
 
 	if ((load_cosmology_file) and (cosmology.load_params(cosmology_filename)==false)) die();
 

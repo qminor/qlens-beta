@@ -1116,14 +1116,14 @@ void QLens::kappa_inverse_mag_sourcept(const lensvector<QScalar>& xvec, lensvect
 			QScalar *kapi = new QScalar[nthreads];
 
 			//cout << "Starting new deflection calculation..." << endl << flush;
-			#pragma omp parallel
+			//#pragma omp parallel
 			{
 				int thread2;
-#ifdef USE_OPENMP
-				thread2 = omp_get_thread_num();
-#else
+//#ifdef USE_OPENMP
+				//thread2 = omp_get_thread_num();
+//#else
 				thread2 = 0;
-#endif
+//#endif
 				lensvector<QScalar> *def = &lc.defs_i[thread2];
 				lensmatrix<QScalar> *hess = &lc.hesses_i[thread2];
 				//QScalar hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;
@@ -1356,14 +1356,14 @@ void QLens::sourcept_jacobian(const lensvector<double>& xvec, lensvector<QScalar
 			QScalar *def0 = new QScalar[nthreads];
 			QScalar *def1 = new QScalar[nthreads];
 
-			#pragma omp parallel
+			//#pragma omp parallel
 			{
 				int thread2;
-#ifdef USE_OPENMP
-				thread2 = omp_get_thread_num();
-#else
+//#ifdef USE_OPENMP
+				//thread2 = omp_get_thread_num();
+//#else
 				thread2 = 0;
-#endif
+//#endif
 				lensvector<QScalar> *def = &lc.defs_i[thread2];
 				lensmatrix<QScalar> *hess = &lc.hesses_i[thread2];
 				//QScalar hess00=0, hess11=0, hess01=0, def0=0, def1=0, kapi=0;

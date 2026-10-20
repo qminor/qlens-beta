@@ -283,6 +283,7 @@ class CartesianSourceGrid : public CartesianSourcePixel, public Model
 
 
 
+/*
 struct AD2
 {
 	double val;
@@ -475,6 +476,7 @@ inline AD2 cross_term(const AD2Point& a, const AD2Point& b)
 {
 	return a.x * b.y - b.x * a.y;
 }
+*/
 
 
 static const int nmax_pts_interp = 120; // I had to take this out of DelaunayGrid so it could be seen by DelaunayGrid_Params
@@ -529,6 +531,7 @@ class DelaunayGrid : private Sort
 
 	public:
 	static bool zero_outside_border;
+	bool natural_neighbor_interpolation;
 	bool using_autodiff;
 	int n_gridpts;
 	int n_triangles;
@@ -569,9 +572,10 @@ class DelaunayGrid : private Sort
 	void find_interpolation_weights_3pt(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread);
 	template <typename QScalar>
 	void find_interpolation_weights_nn(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread); // natural neighbor interpolation
-	void find_interpolation_weights_3pt_ad2(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, AD2* interpolation_wgts);
-	void find_interpolation_weights_nn_ad2(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, AD2* interpolation_wgts, const int thread);
+	//void find_interpolation_weights_3pt_ad2(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, AD2* interpolation_wgts);
+	//void find_interpolation_weights_nn_ad2(const double input_pt_x, const double input_pt_y, const int trinum, int& npts, AD2* interpolation_wgts, const int thread);
 
+	std::vector<std::pair<int,int>> get_edge_pairs();
 
 	void generate_covariance_matrix(Eigen::MatrixXd& cov_matrix, Eigen::MatrixXd& cov_deriv_matrix, const KernelType kernel_type, const double epsilon, double *wgtfac = NULL, const bool add_to_covmatrix = false, const double amplitude = -1);
 #ifdef USE_STAN
@@ -693,6 +697,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 		setup_parameters(true);
 		copy_pixsrc_data(pixsrc_in);
 	}
+	void set_natural_neighbor_interpolation(const bool setting) { natural_neighbor_interpolation = setting; }
 	void copy_pixsrc_data(const DelaunaySourceGrid* grid_in);
 	void update_meta_parameters(const bool varied_only_fitparams);
 	void get_parameter_numbers_from_qlens(int& pi, int& pf);
@@ -713,12 +718,18 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 
 	template <typename QScalar>
 	void assign_surface_brightness_from_analytic_source(const int imggrid_i=-1);
+	template <typename QScalar>
+	bool assign_surface_brightness(QScalar* sb_in, const int size);
+
 	template <typename MathTypes>
 	void update_surface_brightness(int& index);
 
 	double sum_edge_sqrlengths(const double min_sb);
 	template <typename QScalar>
 	QScalar find_lensed_surface_brightness(const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, const int thread);
+	template <typename QScalar>
+	QScalar find_lensed_surface_brightness_direct_3pt(const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, QScalar& xder, QScalar& yder);
+
 	bool find_containing_triangle_with_imgpix(const double input_pt_x, const double input_pt_y, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	template <typename QScalar>
 	QScalar interpolate_surface_brightness(const QScalar input_pt_x, const QScalar input_pt_y, const bool interp_mag = false, const int thread = 0);
@@ -1135,6 +1146,7 @@ class ImagePixelGrid : private Sort
 	int *extended_mask_subpixel_i, *extended_mask_subpixel_j, *extended_mask_subpixel_index, *emask_subpixels_ii, *emask_subpixels_jj;
 	int *fgmask_subpixel_i, *fgmask_subpixel_j, *fgmask_subpixel_index;
 	int *mask_subpixel_i, *mask_subpixel_j, *mask_subpixel_index;
+	bool *is_boundary_pixel;
 
 	lensvector<double> sourcept;
 

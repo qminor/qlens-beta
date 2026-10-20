@@ -717,9 +717,10 @@ class SPLE_Lens : public LensProfile
 	class SPLE_Params : public LensParams<QScalar>
 	{
 		public:
-		QScalar alpha, bprime, sprime;
-		QScalar b, s, gamma;
-		QScalar qsq, ssq_prime;
+		QScalar b, s, alpha, gamma; // gamma is the 3D density (negative) log-slope (gamma = alpha+1), which is an alternative parameter instead of alpha
+		QScalar bprime, sprime;
+		// brime and sprime give lengths along the major axis. Note that in emode=1, the actual fit parameters are given by b = bprime/sqrt(q) and s = sprime/sqrt(q), not bprime and sprime. (See the constructor function for more on how this is implemented.)
+		QScalar qsq, ssq_prime; // used in lensing calculations
 	};
 
 	public:
@@ -739,11 +740,6 @@ class SPLE_Lens : public LensProfile
 	}
 
 	private:
-	//double alpha, bprime, sprime; // alpha=2D density log-slope, whereas bprime,sprime are defined along the major axis
-	// Note that in emode=1, the actual fit parameters are bprime' = bprime*sqrt(q) and sprime' = sprime*sqrt(q), not bprime and sprime. (See the constructor function for more on how this is implemented.)
-	//double b, s;
-	//double qsq, ssq_prime; // used in lensing calculations
-	//double gamma; // 3D density log-slope, which is an alternative parameter instead of alpha
 	inline static const double euler_mascheroni = 0.57721566490153286060;
 	inline static const double def_tolerance = 1e-10;
 
@@ -850,9 +846,11 @@ class dPIE_Lens : public LensProfile
 	class dPIE_Params : public LensParams<QScalar>
 	{
 		public:
-		QScalar bprime, sprime, aprime;
-		QScalar b, s, a;
-		QScalar sigma0, mtot, s_kpc, a_kpc;
+		QScalar b, s, a; // a is the truncation radius
+		QScalar sigma0, mtot, s_kpc, a_kpc; // alternate parametrizations
+
+		// the following are meta-parameters used in lensing calculations
+		QScalar bprime, sprime, aprime; // these are the lengths along the major axis
 		QScalar qsq, ssq_prime, asq;
 	};
 
@@ -873,12 +871,6 @@ class dPIE_Lens : public LensProfile
 	}
 
 	private:
-	//double b, s, a; // a is the truncation radius
-	//double sigma0, mtot, s_kpc, a_kpc; // alternate parametrizations
-
-	// the following are meta-parameters used in lensing calculations
-	//double bprime, sprime, aprime; // these are the lengths along the major axis
-	//double qsq, ssq_prime, asq;
 
 	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
 	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
@@ -983,9 +975,6 @@ class NFW : public LensProfile
 	}
 
 	public:
-	//double ks, rs;
-	//double m200, c200, rs_kpc; // alternate parametrizations
-
 	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
 	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
 #ifdef USE_STAN
@@ -1088,8 +1077,6 @@ class Truncated_NFW : public LensProfile
 
 	// This profile is the same as NFW, times a factor (1+(r/rt)^2)^-2 which smoothly truncates the halo (prescription from Baltz, Marshall & Oguri (2008))
 	private:
-	//double ks, rs, rt;
-	//double m200, c200, rs_kpc, rt_kpc, tau200, tau_s; // alternate parametrizations
 
 	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
 	double kappa_rsq_deriv(const double rsq) { return 0; } // no implementation in this class for kappa_rsq_deriv...still overloading the wrapper just to be safe
@@ -1178,8 +1165,6 @@ class Cored_NFW : public LensProfile
 
 	// This profile goes like 1/(r+rc)/(r+rs)^2
 	private:
-	//double ks, rs, rc;
-	//double m200, c200, beta, rs_kpc, rc_kpc; // alternate parametrization
 
 	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
 	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
@@ -1415,8 +1400,6 @@ class Shear : public LensProfile
 	}
 
 	private:
-	//double shear, theta_eff;
-	//double shear1, shear2; // used when shear_components is turned on
 	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
 	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }
 #ifdef USE_STAN
@@ -1535,7 +1518,6 @@ class Multipole : public LensProfile
 
 	private:
 	int m;
-	//double A_n, n, theta_eff;
 	bool kappa_multipole; // specifies whether it is a multipole in the potential or in kappa
 	bool sine_term; // specifies whether it is a sine or cosine multipole term
 
@@ -1641,8 +1623,6 @@ class PointMass : public LensProfile
 	}
 
 	private:
-	//double b; // Einstein radius of point mass
-	//double mtot; // alternative parameterization
 
 	double kappa_rsq(const double rsq) { return kappa_rsq_impl(rsq); }
 	double kappa_rsq_deriv(const double rsq) { return kappa_rsq_deriv_impl(rsq); }

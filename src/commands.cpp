@@ -2522,6 +2522,75 @@ void QLens::process_commands(bool read_file)
 				if (mpi_id==0) cout << "Number of clustering iterations for Delaunay grid = " << n_cluster_iterations << endl;
 			} else Complain("must specify either zero or one argument (number of clustering iterations)");
 		}
+		else if (words[0]=="bn_strength")
+		{
+			double strength;
+			if (nwords == 2) {
+				if (!(ws[1] >> strength)) Complain("invalid blue noise relaxation force strength for Delaunay grid");
+				bluenoise_repulsion_strength = strength;
+			} else if (nwords==1) {
+				if (mpi_id==0) {
+					cout << "Blue noise relaxation force strength for Delaunay grid = " << bluenoise_repulsion_strength << endl;
+				}
+			} else Complain("must specify either zero or one argument");
+		}
+		else if (words[0]=="bn_lscale")
+		{
+			double lscale;
+			if (nwords == 2) {
+				if (!(ws[1] >> lscale)) Complain("invalid blue noise relaxation force lscale for Delaunay grid");
+				bluenoise_lscale = lscale;
+			} else if (nwords==1) {
+				if (mpi_id==0) {
+					cout << "Blue noise relaxation force lscale for Delaunay grid = " << bluenoise_lscale << endl;
+				}
+			} else Complain("must specify either zero or one argument");
+		}
+		else if (words[0]=="bn_it")
+		{
+			int n_it;
+			if (nwords == 2) {
+				if (!(ws[1] >> n_it)) Complain("invalid blue noise relaxation n_iterations for Delaunay grid");
+				bluenoise_n_iterations = n_it;
+			} else if (nwords==1) {
+				if (mpi_id==0) {
+					cout << "Blue noise relaxation n_iterations for Delaunay grid = " << bluenoise_n_iterations << endl;
+				}
+			} else Complain("must specify either zero or one argument");
+		}
+		else if (words[0]=="bn_tether_strength")
+		{
+			double tether_strength;
+			if (nwords == 2) {
+				if (!(ws[1] >> tether_strength)) Complain("invalid blue noise relaxation force tether_strength for Delaunay grid");
+				bluenoise_tether_strength = tether_strength;
+			} else if (nwords==1) {
+				if (mpi_id==0) {
+					cout << "Blue noise relaxation force tether_strength for Delaunay grid = " << bluenoise_tether_strength << endl;
+				}
+			} else Complain("must specify either zero or one argument");
+		}
+		else if (words[0]=="bn_stepsize")
+		{
+			double stepsize;
+			if (nwords == 2) {
+				if (!(ws[1] >> stepsize)) Complain("invalid blue noise relaxation stepsize for Delaunay grid");
+				bluenoise_stepsize = stepsize;
+			} else if (nwords==1) {
+				if (mpi_id==0) {
+					cout << "Blue noise relaxation stepsize for Delaunay grid = " << bluenoise_stepsize << endl;
+				}
+			} else Complain("must specify either zero or one argument");
+		}
+		else if (words[0]=="bn_tsgrad")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use tsgrad: " << display_switch(bluenoise_tsgrad) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'bn_tsgrad' command; must specify 'on' or 'off'");
+				set_switch(bluenoise_tsgrad,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
 		else if (words[0]=="auxgrid_npixels")
 		{
 			// This is the number of pixels (along x and y) for the sourcegrid created for the nimg_prior; not used if fitting with cartesian sourcegrid
@@ -15015,9 +15084,44 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_srcpixel_clustering' command; must specify 'on' or 'off'");
 				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use source pixel clustering");
+#ifndef USE_MLPACK
+				if (setword=="on") {
+					if (mpi_id==0) cout << "cannot use source pixel clustering without MLPACK; turning 'bluenoise_relaxation' on instead" << endl;
+					use_bluenoise_relaxation = true;
+				}
+#else
+				if ((setword=="on") and (use_bluenoise_relaxation) and (!use_srcpixel_clustering)) {
+					use_bluenoise_relaxation = false;
+					if (mpi_id==0) cout << "Turning blue noise relaxation off" << endl;
+				}
 				set_switch(use_srcpixel_clustering,setword);
+#endif
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 			if ((use_srcpixel_clustering==true) and (default_imgpixel_nsplit < 3)) warn("source pixel clustering algorithm not recommended unless imgpixel_nsplit >= 3");
+		}
+		else if (words[0]=="bluenoise_relaxation")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use clustering algorithm to find adaptive grid source pixels: " << display_switch(use_bluenoise_relaxation) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'use_bluenoise_relaxation' command; must specify 'on' or 'off'");
+				if ((setword=="on") and ((split_imgpixels==false) or (default_imgpixel_nsplit==1))) Complain("split_imgpixels must be turned on (and imgpixel_nsplit > 1) to use blue noise relaxation");
+				if ((setword=="on") and (!use_bluenoise_relaxation) and (use_srcpixel_clustering)) {
+					use_srcpixel_clustering = false;
+					if (mpi_id==0) cout << "Turning use_srcpixel_clustering off" << endl;
+				}
+				set_switch(use_bluenoise_relaxation,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+			if ((use_bluenoise_relaxation==true) and (default_imgpixel_nsplit < 3)) warn("blue noise relaxation algorithm not recommended unless imgpixel_nsplit >= 3");
+		}
+		else if (words[0]=="fix_boundary_pts")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Fix boundary points for blue noise relaxation: " << display_switch(fix_boundary_pts) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'fix_boundary_pts' command; must specify 'on' or 'off'");
+				set_switch(fix_boundary_pts,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="use_f_src_clusters")
 		{
@@ -15372,8 +15476,8 @@ void QLens::process_commands(bool read_file)
 				}
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'interpolation_method' command; must specify valid interpolation method");
-				if (setword=="3pt") natural_neighbor_interpolation = false;
-				else if (setword=="nn") natural_neighbor_interpolation = true;
+				if (setword=="3pt") set_natural_neighbor_interpolation(false);
+				else if (setword=="nn") set_natural_neighbor_interpolation(true);
 				else Complain("invalid argument to 'interpolation_method'; must specify either '3pt' or 'nn'");
 			} else Complain("invalid number of arguments; can only specify one argument ('3pt' or 'nn')");
 		}

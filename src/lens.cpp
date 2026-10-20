@@ -67,6 +67,9 @@ using namespace mlpack;
 using namespace mlpack::util;
 #endif
 
+//#include "bluenoise_openmp.h"
+//#include "bluenoise_tbb.h"
+
 const int QLens::nmax_lens_planes = 100;
 const double QLens::default_autogrid_initial_step = 1.0e-3;
 const double QLens::default_autogrid_rmin = 1.0e-5;
@@ -297,13 +300,13 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 #endif
 
 	int threads = 1;
-#ifdef USE_OPENMP
-	#pragma omp parallel
-	{
-		#pragma omp master
-		threads = omp_get_num_threads();
-	}
-#endif
+//#ifdef USE_OPENMP
+	//#pragma omp parallel
+	//{
+		//#pragma omp master
+		//threads = omp_get_num_threads();
+	//}
+//#endif
 
 	allocate_multithreaded_variables(threads,false); // allocate multithreading arrays ONLY if it hasn't been allocated already (avoids seg faults)
 	use_autodiff = false;
@@ -401,7 +404,7 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	n_image_prior_sb_frac = 0.25; // ********ALSO SHOULD BE SPECIFIED BY THE USER, AND ONLY GETS USED IF n_image_prior IS SET TO 'TRUE'
 	auxiliary_srcgrid_npixels = 40; // used for the sourcegrid for nimg_prior (unless fitting with a cartesian grid, in which case src_npixels is used)
 	outside_sb_prior = false;
-	use_Lmatrix_in_outside_sb_prior = false;
+	use_Lmatrix_in_outside_sb_prior = true;
 	outside_sb_prior_noise_frac = -1e30; // surface brightness threshold is given as multiple of data pixel noise (negative by default so it's effectively not used)
 	outside_sb_prior_threshold = 0.3; // surface brightness threshold is given as fraction of max surface brightness
 	einstein_radius_prior = false;
@@ -586,6 +589,7 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	delaunay_high_sn_mode = false;
 	delaunay_high_sn_sbfrac = 2.0;
 	use_srcpixel_clustering = false;
+	use_bluenoise_relaxation = false;
 	include_two_pixsrc_in_Lmatrix = false;
 
 	clustering_random_initialization = false;
@@ -596,6 +600,13 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	f_src_clusters = 0.5;
 	n_src_clusters = -1;
 	n_cluster_iterations = 20;
+	bluenoise_repulsion_strength = 2.0;
+	bluenoise_tether_strength = 0.01;
+	bluenoise_stepsize = 0.001;
+	bluenoise_tsgrad = true;
+	bluenoise_lscale = 3;
+	bluenoise_n_iterations = 1;
+	fix_boundary_pts = true;
 	default_imgpixel_nsplit = 2;
 	emask_imgpixel_nsplit = 1;
 	split_imgpixels = true;
@@ -958,6 +969,8 @@ QLens::QLens(QLens *lens_in) : UCMC(), Model() // creates lens object with same 
 	delaunay_high_sn_mode = lens_in->delaunay_high_sn_mode;
 	delaunay_high_sn_sbfrac = lens_in->delaunay_high_sn_sbfrac;
 	use_srcpixel_clustering = lens_in->use_srcpixel_clustering;
+	use_bluenoise_relaxation = lens_in->use_bluenoise_relaxation;
+
 	include_two_pixsrc_in_Lmatrix = lens_in->include_two_pixsrc_in_Lmatrix;
 
 	clustering_random_initialization = lens_in->clustering_random_initialization;
@@ -968,6 +981,14 @@ QLens::QLens(QLens *lens_in) : UCMC(), Model() // creates lens object with same 
 	f_src_clusters = lens_in->f_src_clusters;
 	n_src_clusters = lens_in->n_src_clusters;
 	n_cluster_iterations = lens_in->n_cluster_iterations;
+	bluenoise_repulsion_strength = lens_in->bluenoise_repulsion_strength;
+	bluenoise_tether_strength = lens_in->bluenoise_tether_strength;
+	bluenoise_stepsize = lens_in->bluenoise_stepsize;
+	bluenoise_tsgrad = lens_in->bluenoise_tsgrad;
+	bluenoise_lscale = lens_in->bluenoise_lscale;
+	bluenoise_n_iterations = lens_in->bluenoise_n_iterations;
+	fix_boundary_pts = lens_in->fix_boundary_pts;
+
 	default_imgpixel_nsplit = lens_in->default_imgpixel_nsplit;
 	emask_imgpixel_nsplit = lens_in->emask_imgpixel_nsplit;
 	split_imgpixels = lens_in->split_imgpixels;
@@ -3192,6 +3213,14 @@ void QLens::remove_model_band(const int band_number, const bool removing_pixella
 	}
 }
 
+void QLens::set_natural_neighbor_interpolation(const bool setting)
+{
+	natural_neighbor_interpolation = setting;
+	for (int i=0; i < n_pixellated_src; i++) {
+		delaunay_srcgrids[i]->set_natural_neighbor_interpolation(setting);
+	}
+}
+
 int QLens::add_pixellated_source(const double zsrc, const int band_number)
 {
 	if (band_number > n_model_bands) die("cannot add band with index that is > number of bands");
@@ -3232,6 +3261,7 @@ int QLens::add_pixellated_source(const double zsrc, const int band_number)
 		delaunay_srcgrids[i]->entry_number = i;
 		cartesian_srcgrids[i]->entry_number = i;
 	}
+	delaunay_srcgrids[n_pixellated_src-1]->set_natural_neighbor_interpolation(natural_neighbor_interpolation);
 	delaunay_srcgrids[n_pixellated_src-1]->srcgrid_redshift = zsrc;
 	cartesian_srcgrids[n_pixellated_src-1]->srcgrid_redshift = zsrc;
 	pixsrclist->input_ptr(srcgrids,n_pixellated_src);
@@ -16079,9 +16109,10 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	if (delaunay_srcgrids == NULL) { warn("no pixellated sources have been created"); return false; }
 	if (band_number >= n_model_bands) die("specified model band has not been created");
 	int imggrid_i = band_number*n_extended_src_redshifts + zsrc_i;
+	//cout << "IMGGRID_I=" << imggrid_i << endl;
 	ImgGrid_Params<MathTypes>& imggrid_params = image_pixel_grids[imggrid_i]->assign_imggrid_param_object<MathTypes>();
 	//ImgGrid_Params<double>& imggrid_params = image_pixel_grids[imggrid_i]->assign_imggrid_param_object<double>();
-	bool do_clustering = ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) ? true : false;
+	bool do_clustering = ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (use_bluenoise_relaxation)) ? true : false;
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<QScalar>) {
 		if (do_clustering) {
@@ -16106,8 +16137,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	if (n_data_bands > band_number) image_data = imgdata_list[band_number]; // temporary until I sort out the band stuff
 	else image_data = NULL;
 
-	QScalar *srcpts_x, *srcpts_y;
 	int *ivals, *jvals;
+	bool *is_boundary_pixel;
 	int *pixptr_i, *pixptr_j;
 	int npix_in_mask;
 	if (imggrid_i >= n_image_pixel_grids) die("image grid index does not exist");
@@ -16178,11 +16209,12 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	}
 	if (min_sb < 0) min_sb = 0;
 
-	srcpts_x = new QScalar[npix];
-	srcpts_y = new QScalar[npix];
+	std::vector<QScalar> srcpts_x(npix);
+	std::vector<QScalar> srcpts_y(npix);
 	double *wfactors = new double[npix];
 	ivals = new int[npix];
 	jvals = new int[npix];
+	is_boundary_pixel = new bool[npix];
 
 	npix = 0;
 	int subcell_i1;
@@ -16208,11 +16240,14 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 						n_subpixel = image_pixel_grids[imggrid_i]->subpixel_index_ss[ii][jj];
 						srcpts_x[npix] = imggrid_params.srcpt_x_subpixel_centers(n_subpixel);
 						srcpts_y[npix] = imggrid_params.srcpt_y_subpixel_centers(n_subpixel);
+						//cout << "SRCPT " << n << ": " << srcpts_x[npix] << " " << srcpts_y[npix] << " subpix_i" << n_subpixel << endl;
+						if (srcpts_x[npix]*0.0 != 0.0) die("nan sourcept value");
 						//srcpts_x[npix] = image_pixel_grids[imggrid_i]->subpixel_center_sourcepts[i][j][nsubpix_per_pixel-1-k][0];
 						//srcpts_y[npix] = image_pixel_grids[imggrid_i]->subpixel_center_sourcepts[i][j][nsubpix_per_pixel-1-k][1];
 						ivals[npix] = i;
 						jvals[npix] = j;
 						if (use_weighted_srcpixel_clustering) wfactors[npix] = image_pixel_grids[imggrid_i]->subpixel_weights[i][j][nsubpix_per_pixel-1-k];
+						is_boundary_pixel[npix] = (fix_boundary_pts) ? image_pixel_grids[imggrid_i]->is_boundary_pixel[n] : false;
 						npix++;
 					}
 				} else {
@@ -16234,6 +16269,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			if ((!do_clustering) and (delaunay_mode != 5)) {
 				ivals[npix] = i;
 				jvals[npix] = j;
+				is_boundary_pixel[npix] = (fix_boundary_pts) ? image_pixel_grids[imggrid_i]->is_boundary_pixel[n] : false;
 				npix++;
 			}
 		}
@@ -16241,7 +16277,6 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 
 	bool find_invmag = ((use_mag_weighted_regularization) and (zsrc_i==0)) ? true : false;
 	if (do_clustering) {
-#ifdef USE_MLPACK
 		int *iweights_norm;
 		QScalar min_weight = 1e30;
 		QScalar *input_data = new QScalar[2*npix];
@@ -16268,8 +16303,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			n_src_centroids = (int) (npix_in_lensing_mask * f_src_clusters);
 		} else {
 			n_src_centroids = n_src_clusters;	
-			if (n_src_centroids < 0) n_src_centroids = npix_in_lensing_mask / 2;
-			else if (n_src_centroids == 0) n_src_centroids = npix_in_lensing_mask;
+			if (n_src_centroids == HALF_DATAPIXELS) n_src_centroids = npix_in_lensing_mask / 2;
+			else if (n_src_centroids == ALL_DATAPIXELS) n_src_centroids = npix_in_lensing_mask;
 		}
 
 		int data_reduce_factor;
@@ -16298,6 +16333,10 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		initial_centroids = new QScalar[2*n_src_centroids];
 		ivals_centroids = new int[n_src_centroids];
 		jvals_centroids = new int[n_src_centroids];
+		std::vector<QScalar> initial_centroids_x(n_src_centroids);
+		std::vector<QScalar> initial_centroids_y(n_src_centroids);
+		std::vector<bool> is_boundary_pt(n_src_centroids);
+
 		if (icent_offset >= data_reduce_factor) die("FOOK");
 		if (!use_weighted_initial_centroids) {
 			for (i=0,j=0,k=0,l=0; i < npix; i++) {
@@ -16308,6 +16347,13 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					initial_centroids[k++] = srcpts_y[i];
 					ivals_centroids[l] = ivals[i]; // the centroid locations will shift after k-means, but the image-plane pixel ij will still ray-trace to somewhere near the centroid
 					jvals_centroids[l] = jvals[i];
+					initial_centroids_x[l] = srcpts_x[i];
+					initial_centroids_y[l] = srcpts_y[i];
+					//cout << "centroid " << l << ": " << srcpts_x[i] << " " << srcpts_y[i] << endl;
+					//initial_centroids_x[l] = image_pixel_grids[imggrid_i]->center_sourcepts[ivals[i]][jvals[i]][0];
+					//initial_centroids_y[l] = image_pixel_grids[imggrid_i]->center_sourcepts[ivals[i]][jvals[i]][1];
+
+					is_boundary_pt[l] = is_boundary_pixel[i];
 					//cout << "l=" << l << " ival=" << ivals_centroids[l] << " jval=" << jvals_centroids[l] << endl;
 					l++;
 				}
@@ -16326,6 +16372,9 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 						initial_centroids[k++] = srcpts_y[i];
 						ivals_centroids[l] = ivals[i];
 						jvals_centroids[l] = jvals[i];
+						initial_centroids_x[l] = srcpts_x[i];
+						initial_centroids_y[l] = srcpts_y[i];
+						is_boundary_pt[l] = is_boundary_pixel[i];
 						l++;
 					}
 					n++;
@@ -16336,96 +16385,150 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		}
 		//cout << "Creating source grid for zsrc_i=" << zsrc_i << " with n=" << n_src_centroids << "pixels" << endl;
 
-		arma::mat dataset;
-		arma::Col<double> weightvec;
-		arma::mat centroids;
+		QScalar *src_centroids_x = new QScalar[n_src_centroids];
+		QScalar *src_centroids_y = new QScalar[n_src_centroids];
+
+		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) {
+#ifdef USE_MLPACK
+			arma::mat dataset;
+			arma::Col<double> weightvec;
+			arma::mat centroids;
 
 #ifdef USE_STAN
-		if constexpr (stan::is_autodiff_v<QScalar>) {
-			double *input_data_doub = new double[2*npix];
-			double *weights_doub = new double[npix];
-			double *initial_centroids_doub = new double[2*n_src_centroids];
-			for (int i=0; i < (2*npix); i++) input_data_doub[i] = stan::math::value_of(input_data[i]);
-			for (int i=0; i < npix; i++) weights_doub[i] = stan::math::value_of(weights[i]);
-			for (int i=0; i < (2*n_src_centroids); i++) initial_centroids_doub[i] = stan::math::value_of(initial_centroids[i]);
-			dataset = arma::mat(input_data_doub, 2, npix);
-			weightvec = arma::Col<double> (weights_doub, npix);
-			centroids = arma::mat(initial_centroids_doub, 2, n_src_centroids);
-			delete[] input_data_doub;
-			delete[] initial_centroids_doub;
-			delete[] weights_doub;
-		} else
+			if constexpr (stan::is_autodiff_v<QScalar>) {
+				double *input_data_doub = new double[2*npix];
+				double *weights_doub = new double[npix];
+				double *initial_centroids_doub = new double[2*n_src_centroids];
+				for (int i=0; i < (2*npix); i++) input_data_doub[i] = stan::math::value_of(input_data[i]);
+				for (int i=0; i < npix; i++) weights_doub[i] = stan::math::value_of(weights[i]);
+				for (int i=0; i < (2*n_src_centroids); i++) initial_centroids_doub[i] = stan::math::value_of(initial_centroids[i]);
+				dataset = arma::mat(input_data_doub, 2, npix);
+				weightvec = arma::Col<double> (weights_doub, npix);
+				centroids = arma::mat(initial_centroids_doub, 2, n_src_centroids);
+				delete[] input_data_doub;
+				delete[] initial_centroids_doub;
+				delete[] weights_doub;
+			} else
 #endif
-		{
-			dataset = arma::mat(input_data, 2, npix);
-			weightvec = arma::Col<double> (weights, npix);
-			centroids = arma::mat(initial_centroids, 2, n_src_centroids);
-		}
-
-		bool guess_initial_clusters;
-		if (!clustering_random_initialization) guess_initial_clusters = true;
-		else guess_initial_clusters = false;
-
-		double *src_centroids_x = new double[n_src_centroids];
-		double *src_centroids_y = new double[n_src_centroids];
-
-		if (!use_dualtree_kmeans) {
-			KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus(n_cluster_iterations);
-			clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
-			for (i=0; i < n_src_centroids; i++) {
-				src_centroids_x[i] = (double) centroids(0,i);
-				src_centroids_y[i] = (double) centroids(1,i);
+			{
+				dataset = arma::mat(input_data, 2, npix);
+				weightvec = arma::Col<double> (weights, npix);
+				centroids = arma::mat(initial_centroids, 2, n_src_centroids);
 			}
 
-		} else {
-			KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, DefaultDualTreeKMeans> clus(n_cluster_iterations);
-			bool status;
-			status = clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
-			if (status==false) {
-				warn("Dual-tree k-means algorithm failed, so using naive k-means instead");
-				// Dual Tree didn't work, so let's use naive k-means instead
-				arma::mat dataset2;
-				arma::Col<double> weightvec2;
-				arma::mat centroids2;
+			bool guess_initial_clusters;
+			if (!clustering_random_initialization) guess_initial_clusters = true;
+			else guess_initial_clusters = false;
 
-#ifdef USE_STAN
-				if constexpr (stan::is_autodiff_v<QScalar>) {
-					double *input_data_doub = new double[2*npix];
-					double *weights_doub = new double[npix];
-					double *initial_centroids_doub = new double[2*n_src_centroids];
-					for (int i=0; i < (2*npix); i++) input_data_doub[i] = stan::math::value_of(input_data[i]);
-					for (int i=0; i < npix; i++) weights_doub[i] = stan::math::value_of(weights[i]);
-					for (int i=0; i < (2*n_src_centroids); i++) initial_centroids_doub[i] = stan::math::value_of(initial_centroids[i]);
-					dataset2 = arma::mat(input_data_doub, 2, npix);
-					weightvec2 = arma::Col<double> (weights_doub, npix);
-					centroids2 = arma::mat(initial_centroids_doub, 2, n_src_centroids);
-					delete[] input_data_doub;
-					delete[] initial_centroids_doub;
-					delete[] weights_doub;
-				} else
-#endif
-				{
-					dataset2 = arma::mat(input_data, 2, npix);
-					weightvec2 = arma::Col<double> (weights, npix);
-					centroids2 = arma::mat(initial_centroids, 2, n_src_centroids);
-				}
-				KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus_naive(n_cluster_iterations);
-				clus_naive.Cluster(dataset2, n_src_centroids, centroids2, weightvec2, use_weighted_srcpixel_clustering, guess_initial_clusters);
-				for (i=0; i < n_src_centroids; i++) {
-					src_centroids_x[i] = (double) centroids2(0,i);
-					src_centroids_y[i] = (double) centroids2(1,i);
-				}
-			} else {
+			if (!use_dualtree_kmeans) {
+				KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus(n_cluster_iterations);
+				clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
 				for (i=0; i < n_src_centroids; i++) {
 					src_centroids_x[i] = (double) centroids(0,i);
 					src_centroids_y[i] = (double) centroids(1,i);
 				}
+			} else {
+				KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, DefaultDualTreeKMeans> clus(n_cluster_iterations);
+				bool status;
+				status = clus.Cluster(dataset, n_src_centroids, centroids, weightvec, use_weighted_srcpixel_clustering, guess_initial_clusters);
+				if (status==false) {
+					warn("Dual-tree k-means algorithm failed, so using naive k-means instead");
+					// Dual Tree didn't work, so let's use naive k-means instead
+					arma::mat dataset2;
+					arma::Col<double> weightvec2;
+					arma::mat centroids2;
+
+#ifdef USE_STAN
+					if constexpr (stan::is_autodiff_v<QScalar>) {
+						double *input_data_doub = new double[2*npix];
+						double *weights_doub = new double[npix];
+						double *initial_centroids_doub = new double[2*n_src_centroids];
+						for (int i=0; i < (2*npix); i++) input_data_doub[i] = stan::math::value_of(input_data[i]);
+						for (int i=0; i < npix; i++) weights_doub[i] = stan::math::value_of(weights[i]);
+						for (int i=0; i < (2*n_src_centroids); i++) initial_centroids_doub[i] = stan::math::value_of(initial_centroids[i]);
+						dataset2 = arma::mat(input_data_doub, 2, npix);
+						weightvec2 = arma::Col<double> (weights_doub, npix);
+						centroids2 = arma::mat(initial_centroids_doub, 2, n_src_centroids);
+						delete[] input_data_doub;
+						delete[] initial_centroids_doub;
+						delete[] weights_doub;
+					} else
+#endif
+					{
+						dataset2 = arma::mat(input_data, 2, npix);
+						weightvec2 = arma::Col<double> (weights, npix);
+						centroids2 = arma::mat(initial_centroids, 2, n_src_centroids);
+					}
+					KMeans<EuclideanDistance, SampleInitialization, MaxVarianceNewCluster, NaiveKMeans> clus_naive(n_cluster_iterations);
+					clus_naive.Cluster(dataset2, n_src_centroids, centroids2, weightvec2, use_weighted_srcpixel_clustering, guess_initial_clusters);
+					for (i=0; i < n_src_centroids; i++) {
+						src_centroids_x[i] = (double) centroids2(0,i);
+						src_centroids_y[i] = (double) centroids2(1,i);
+					}
+				} else {
+					for (i=0; i < n_src_centroids; i++) {
+						src_centroids_x[i] = (double) centroids(0,i);
+						src_centroids_y[i] = (double) centroids(1,i);
+					}
+				}
 			}
+#else
+			die("Must compile with -DUSE_MLPACK option to use source pixel clustering algorithm with adaptive grid");
+#endif
+		} else {
+			/*
+				BlueNoiseParameters params;
+				params.densityK = npix/(2*n_src_centroids);
+				params.spacingScale = bluenoise_lscale;
+				params.repulsionStrength = bluenoise_repulsion_strength;
+				//params.sig_fac = bluenoise_sigfac;
+				params.tetherStrength = bluenoise_tether_strength;
+				params.stepSize = bluenoise_stepsize;
+				params.maxStep = 0.0;
+				params.iterations = n_cluster_iterations;
+				params.repulsion_epsilon = 1e-12;
+				params.epsilon = 1e-5;
+
+				std::vector<std::pair<int,int>> edges;
+				for (int j=0; j < bluenoise_n_iterations; j++) {
+					BlueNoiseRelaxation<QScalar> relaxation(srcpts_x, srcpts_y, initial_centroids_x, initial_centroids_y, is_boundary_pt, params, bluenoise_tsgrad);
+
+					//cout << "constructing initial Delaunay grid..." << endl;
+					DelaunaySourceGrid delaunay_centroids(this,band_number);
+					delaunay_centroids.create_srcpixel_grid(initial_centroids_x.data(),initial_centroids_y.data(),n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y,false,imggrid_i);
+					relaxation.set_delaunay_grid(&delaunay_centroids,ivals_centroids,jvals_centroids);
+					if (j==0) edges = delaunay_centroids.get_edge_pairs();
+
+					relaxation.setNeighborEdges(edges);
+
+					//std::cout << "Initial energy: " << relaxation.energy() << std::endl;
+					//std::cout << "Initial Repulsion energy: " << relaxation.repulsionEnergy() << std::endl;
+					//std::cout << "Initial Tether energy: " << relaxation.tetherEnergy() << std::endl;
+
+					relaxation.relax(verbal);
+
+					std::vector<QScalar> newSiteX = relaxation.siteX();
+					std::vector<QScalar> newSiteY = relaxation.siteY();
+					for (i=0; i < n_src_centroids; i++) {
+						initial_centroids_x[i] = newSiteX[i];
+						initial_centroids_y[i] = newSiteY[i];
+					}
+					if (j==bluenoise_n_iterations-1) {
+						for (i=0; i < n_src_centroids; i++) {
+							src_centroids_x[i] = newSiteX[i];
+							src_centroids_y[i] = newSiteY[i];
+						}
+					}
+					//std::cout << "Final energy: " << relaxation.energy() << std::endl;
+					//std::cout << "Repulsion energy: " << relaxation.repulsionEnergy() << std::endl;
+					//std::cout << "Tether energy: " << relaxation.tetherEnergy() << std::endl;
+
+				}
+		*/
 		}
 		delete[] input_data;
 		delete[] initial_centroids;
 		delete[] weights;
-
 
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << n_src_centroids << endl;
 		//cout << "Source grid = (" << sourcegrid_xmin << "," << sourcegrid_xmax << ") x (" << sourcegrid_ymin << "," << sourcegrid_ymax << ")";
@@ -16436,25 +16539,21 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		delete[] src_centroids_y;
 		delete[] ivals_centroids;
 		delete[] jvals_centroids;
-#else
-		die("Must compile with -DUSE_MLPACK option to use source pixel clustering algorithm with adaptive grid");
-#endif
 	} else {
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid has n_pixels=" << npix << endl;
 		//for (int i=0; i < npix; i++) {
 			//cout << "IJ(" << i << "): " << ivals[i] << " " << jvals[i] << " BAND=" << band_number << endl;
 		//}
-		delaunay_srcgrids[src_i]->create_srcpixel_grid(srcpts_x,srcpts_y,npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y,find_invmag,imggrid_i);
+		delaunay_srcgrids[src_i]->create_srcpixel_grid(srcpts_x.data(),srcpts_y.data(),npix,ivals,jvals,n_image_pixels_x,n_image_pixels_y,find_invmag,imggrid_i);
 		double edge_sum = delaunay_srcgrids[src_i]->sum_edge_sqrlengths(avg_sb);
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid edge_sum: " << edge_sum << endl;
 	}
 
 	delete[] include_in_delaunay_grid;
-	delete[] srcpts_x;
-	delete[] srcpts_y;
 	delete[] wfactors;
 	delete[] ivals;
 	delete[] jvals;
+	delete[] is_boundary_pixel;
 	return true;
 }
 template bool QLens::create_sourcegrid_from_imggrid_delaunay<PlainTypes>(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal);
@@ -17800,7 +17899,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 				}
 			}
 			for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
-				//cout << "BAND_I=" << band_number << ", ZSRC_I=" << zsrc_i << " imggrid_i=" << imggrid_i << endl;
+				//cout << "YO BAND_I=" << band_number << ", ZSRC_I=" << zsrc_i << " imggrid_i=" << imggrid_i << endl;
 				ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i]; 
 				ImgGrid_Params<PlainTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 				src_i = src_i_list[imggrid_i];
@@ -18142,7 +18241,7 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 	int imggrid_i, src_i;
 
 	if (n_data_bands==0) { warn("No image data have been loaded"); return -1e30; }
-	if (n_model_bands < n_data_bands) { warn("Numebr of model bands is not large enough to accommodate number of data bands"); }
+	if (n_model_bands < n_data_bands) { warn("Number of model bands is not large enough to accommodate number of data bands"); }
 
 	if ((n_extended_src_redshifts == 0) and (source_fit_mode != Delaunay_Source) and (source_fit_mode != Cartesian_Source)) {
 		add_new_extended_src_redshift(source_redshift,-1,false);
@@ -18247,7 +18346,7 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 		if (source_fit_mode == Delaunay_Source) {
 			if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings..." << endl;
 			for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
-				//cout << "BAND_I=" << band_number << ", ZSRC_I=" << zsrc_i << " imggrid_i=" << imggrid_i << endl;
+				cout << "BAND_I=" << band_number << ", ZSRC_I=" << zsrc_i << " imggrid_i=" << imggrid_i << endl;
 				src_i = src_i_list[imggrid_i];
 				ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i];
 				if (src_i >= 0) {
