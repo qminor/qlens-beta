@@ -537,9 +537,11 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	int n_cluster_iterations;
 	double bluenoise_repulsion_strength;
 	double bluenoise_stepsize;
-	bool bluenoise_tsgrad;
+	double bluenoise_densityk_frac;
 	double bluenoise_tether_strength;
 	double bluenoise_lscale;
+	bool bluenoise_use_nn;
+	bool bluenoise_use_bfgs;
 	int bluenoise_n_iterations;
 	bool fix_boundary_pts;
 	bool include_potential_perturbations;
@@ -1111,6 +1113,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	bool update_parameter_list(const bool check_current_params = false);
 	void update_anchored_parameters_and_redshift_data();
+	template <typename QScalar>
 	bool update_lens_centers_from_pixsrc_coords();
 
 	void reassign_lensparam_pointers_and_names(const bool reset_plimits = true);
@@ -1298,7 +1301,8 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	template <typename QScalar>
 	QScalar find_sbprofile_surface_brightness(lensvector<QScalar> &pt);
-	void find_source_centroid(const int imggrid_i, double& xc_approx, double& yc_approx, const bool verbal);
+	template <typename QScalar>
+	void find_source_centroid(const int imggrid_i, QScalar& xc_approx, QScalar& yc_approx, const bool verbal);
 
 	void plot_kappa_profile(int l, double rmin, double rmax, int steps, const char *kname, const char *kdname = NULL);
 	void plot_total_kappa(const double rmin, const double rmax, const int steps, const char *kname, const char *kdname = NULL);

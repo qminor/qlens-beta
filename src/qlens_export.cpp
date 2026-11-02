@@ -2964,6 +2964,7 @@ PYBIND11_MODULE(qlens, m) {
 		.def_property("zero_outside_delaunay_border", &QLens_Wrap::get_zero_outside_delaunay_border, &QLens_Wrap::set_zero_outside_delaunay_border)
 		.def_property("natural_neighbor_interpolation", &QLens_Wrap::get_natural_neighbor_interpolation, &QLens_Wrap::set_natural_neighbor_interpolation)
 		.def_readwrite("srcpixel_clustering", &QLens_Wrap::use_srcpixel_clustering)
+		.def_property("bluenoise_relaxation", &QLens_Wrap::get_bluenoise_relaxation_setting, &QLens_Wrap::set_bluenoise_relaxation)
 		.def_readwrite("n_cluster_it", &QLens_Wrap::n_cluster_iterations)
 		.def_readwrite("show_wtime", &QLens_Wrap::show_wtime)
 

@@ -67,8 +67,9 @@ using namespace mlpack;
 using namespace mlpack::util;
 #endif
 
-//#include "bluenoise_openmp.h"
 //#include "bluenoise_tbb.h"
+//#include "bluenoise_autodiff_tbb.h"
+//#include "bluenoise_autodiff_simple.h"
 
 const int QLens::nmax_lens_planes = 100;
 const double QLens::default_autogrid_initial_step = 1.0e-3;
@@ -603,9 +604,11 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	bluenoise_repulsion_strength = 2.0;
 	bluenoise_tether_strength = 0.01;
 	bluenoise_stepsize = 0.001;
-	bluenoise_tsgrad = true;
+	bluenoise_densityk_frac = 0.5;
 	bluenoise_lscale = 3;
-	bluenoise_n_iterations = 1;
+	bluenoise_n_iterations = 60;
+	bluenoise_use_nn = false;
+	bluenoise_use_bfgs = false;
 	fix_boundary_pts = true;
 	default_imgpixel_nsplit = 2;
 	emask_imgpixel_nsplit = 1;
@@ -984,9 +987,11 @@ QLens::QLens(QLens *lens_in) : UCMC(), Model() // creates lens object with same 
 	bluenoise_repulsion_strength = lens_in->bluenoise_repulsion_strength;
 	bluenoise_tether_strength = lens_in->bluenoise_tether_strength;
 	bluenoise_stepsize = lens_in->bluenoise_stepsize;
-	bluenoise_tsgrad = lens_in->bluenoise_tsgrad;
+	bluenoise_densityk_frac = lens_in->bluenoise_densityk_frac;
 	bluenoise_lscale = lens_in->bluenoise_lscale;
 	bluenoise_n_iterations = lens_in->bluenoise_n_iterations;
+	bluenoise_use_nn = lens_in->bluenoise_use_nn;
+	bluenoise_use_bfgs = lens_in->bluenoise_use_bfgs;
 	fix_boundary_pts = lens_in->fix_boundary_pts;
 
 	default_imgpixel_nsplit = lens_in->default_imgpixel_nsplit;
@@ -9519,17 +9524,22 @@ void QLens::update_anchored_parameters_and_redshift_data()
 	reset_grid();
 }
 
+template <typename QScalar>
 bool QLens::update_lens_centers_from_pixsrc_coords()
 {
 	bool updated = false;
 	for (int i=0; i < nlens; i++) {
 		if (lens_list[i]->transform_center_coords_to_pixsrc_frame) {
-			lens_list[i]->update_center_from_pixsrc_coords<double>(this);
+			lens_list[i]->update_center_from_pixsrc_coords<QScalar>(this);
 			updated = true;
 		}
 	}
 	return updated;
 }
+template bool QLens::update_lens_centers_from_pixsrc_coords<double>();
+#ifdef USE_STAN
+template bool QLens::update_lens_centers_from_pixsrc_coords<stan::math::var>();
+#endif
 
 void QLens::update_zfactors_and_betafactors()
 {
@@ -9597,7 +9607,6 @@ double QLens::update_model(const QScalar* params)
 		psf_list[i]->update_fit_parameters_doub(temp_doub_params,index);
 	}
 
-	//cosmo->update_fit_parameters(params,index);
 	cosmo->update_fit_parameters(params,index);
 	// *NOTE*: Maybe consider putting the cosmological parameters at the very FRONT of the parameter list? Then the cosmology is updated before updating the lenses
 	/*
@@ -11700,7 +11709,16 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 	LBFGSBSolver<double> solver(param);
 	Eigen::VectorXd lb = Eigen::Map<Eigen::VectorXd>(param_list->prior_limits_lo,n_fitparams);
 	Eigen::VectorXd ub = Eigen::Map<Eigen::VectorXd>(param_list->prior_limits_hi,n_fitparams);
-	n_iterations = solver.minimize(loglikegrad_func,paramvec,chisq_bestfit,lb,ub);
+	int convergence_status = -1;
+	n_iterations = solver.minimize(loglikegrad_func,paramvec,chisq_bestfit,lb,ub,convergence_status);
+	if ((verbal) and (mpi_id==0)) {
+		if (convergence_status==0) cout << "Gradient converged below threshold " << param.epsilon << endl;
+		else if (convergence_status==1) cout << "Gradient converged to within relative threshold " << param.epsilon_rel << "*grad" << endl;
+		else if (convergence_status==2) cout << "Energy converged to within threshold " << param.delta << endl;
+		else if (convergence_status==3) cout << "Max number of iterations reached (" << param.max_iterations << ")" << endl;
+		else cout << "Unknown convergence status" << endl;
+	}
+
 	for (int i=0; i < n_fitparams; i++) fitparams[i] = paramvec(i);
 
 	if (mpi_id==0) {
@@ -11729,7 +11747,8 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		}
 		for (int i=0; i < n_repeats; i++) {
 			if (mpi_id==0) cout << "Repeating optimization (trial " << i+1 << ")                                                  \n\n\n" << flush;
-			n_iterations = solver.minimize(loglikegrad_func,paramvec,chisq_bestfit,lb,ub);
+			int convergence_status = -1;
+			n_iterations = solver.minimize(loglikegrad_func,paramvec,chisq_bestfit,lb,ub,convergence_status);
 			for (int i=0; i < n_fitparams; i++) fitparams[i] = paramvec(i);
 			chisq_bestfit *= 2; // since the loglike function actually returns 0.5*chisq
 			chisq_evals += fitmodel->chisq_it;
@@ -12812,10 +12831,18 @@ bool QLens::adopt_model(Vector<double> &fitpars)
 		}
 		return false;
 	}
-	//double *transformed_params = new double[n_fitparams];
+	double *transformed_params = new double[n_fitparams];
+	stan::math::var *transformed_params_var = new stan::math::var[n_fitparams];
+	stan::math::var *params_var = new stan::math::var[n_fitparams];
+	for (int i=0; i < n_fitparams; i++) params_var[i] = fitpars[i];
 	param_list->update_param_values(fitpars.array());
-	param_list->inverse_transform_parameters();
-	double log_penalty_prior = update_model<double>(param_list->untransformed_values); // the model is adopted here
+	param_list->inverse_transform_parameters(fitpars.array(),transformed_params);
+	param_list->inverse_transform_parameters(params_var,transformed_params_var);
+	double log_penalty_prior;
+#ifdef USE_STAN
+	log_penalty_prior = update_model<stan::math::var>(transformed_params_var); // the model is adopted here
+#endif
+	log_penalty_prior = update_model<double>(transformed_params); // the model is adopted here
 
 	int i;
 	if ((n_extended_src_redshifts > 1) and (source_fit_mode != Point_Source)) {
@@ -12829,10 +12856,13 @@ bool QLens::adopt_model(Vector<double> &fitpars)
 			if ((image_pixel_grids == NULL) or (image_pixel_grids[0]==NULL)) {
 				for (i=0; i < n_data_bands; i++) load_pixel_grid_from_data(i);
 				for (i=0; i < n_extended_src_redshifts; i++) {
+#ifdef USE_STAN
+					image_pixel_grids[i]->redo_lensing_calculations<VarmatTypes>(false);
+#endif
 					image_pixel_grids[i]->redo_lensing_calculations<PlainTypes>(false);
 				}
 			}
-			update_lens_centers_from_pixsrc_coords();  
+			update_lens_centers_from_pixsrc_coords<double>();  
 		}
 	}
 
@@ -13066,8 +13096,13 @@ bool QLens::add_dparams_to_chain(string file_ext)
 		for (i=0; i < n_fitparams; i++) {
 			datastream >> params[i];
 		}
+#ifdef USE_STAN
+		stan::math::start_nested(); // just in case the derived parameter used autodiff
+#endif
 		fitmodel_calculate_derived_params(params, dparams_new[line]);
-
+#ifdef USE_STAN
+		stan::math::recover_memory_nested();
+#endif
 		prev_icount = icount;
 		icount = line/nlines_chunk;
 		if ((mpi_id==0) and (prev_icount != icount)) {
@@ -16105,17 +16140,19 @@ template <typename MathTypes>
 bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcpixel_clustering, const int band_number, const int zsrc_i, const bool verbal)
 {
 	using QScalar = typename MathTypes::QScalar;
+	using VecType = typename MathTypes::VecType;
 
 	if (delaunay_srcgrids == NULL) { warn("no pixellated sources have been created"); return false; }
 	if (band_number >= n_model_bands) die("specified model band has not been created");
 	int imggrid_i = band_number*n_extended_src_redshifts + zsrc_i;
+	ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i];
 	//cout << "IMGGRID_I=" << imggrid_i << endl;
-	ImgGrid_Params<MathTypes>& imggrid_params = image_pixel_grids[imggrid_i]->assign_imggrid_param_object<MathTypes>();
-	//ImgGrid_Params<double>& imggrid_params = image_pixel_grids[imggrid_i]->assign_imggrid_param_object<double>();
+	ImgGrid_Params<MathTypes>& imggrid_params = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
+	ImgGrid_Params<PlainTypes>& imggrid_params_doub = image_pixel_grid->assign_imggrid_param_object<PlainTypes>();
 	bool do_clustering = ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering) or (use_bluenoise_relaxation)) ? true : false;
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<QScalar>) {
-		if (do_clustering) {
+		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) {
 			warn("autodiff is not supported for source pixel clustering; turning source pixel_clustering off");
 			do_clustering = false;
 		}
@@ -16147,9 +16184,9 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		//pixptr_i = image_pixel_grids[zsrc_i]->emask_pixels_i;
 		//pixptr_j = image_pixel_grids[zsrc_i]->emask_pixels_j;
 	//} else {
-		npix_in_mask = image_pixel_grids[imggrid_i]->image_npixels;
-		pixptr_i = image_pixel_grids[imggrid_i]->mask_pixels_i;
-		pixptr_j = image_pixel_grids[imggrid_i]->mask_pixels_j;
+		npix_in_mask = image_pixel_grid->image_npixels;
+		pixptr_i = image_pixel_grid->mask_pixels_i;
+		pixptr_j = image_pixel_grid->mask_pixels_j;
 	//}
 	double avg_sb = -1e30;
 	if (image_data) {
@@ -16169,8 +16206,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	double sb;
 	if (reinitialize_random_grid) reinitialize_random_generator();
 	if (!include_fgmask_in_inversion) npix_in_lensing_mask = npix_in_mask;
-	nysubpix = image_pixel_grids[imggrid_i]->imgpixel_nsplit;
-	nsubpix_per_pixel = image_pixel_grids[imggrid_i]->n_subpix_per_pixel;
+	nysubpix = image_pixel_grid->imgpixel_nsplit;
+	nsubpix_per_pixel = image_pixel_grid->n_subpix_per_pixel;
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
@@ -16209,8 +16246,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	}
 	if (min_sb < 0) min_sb = 0;
 
-	std::vector<QScalar> srcpts_x(npix);
-	std::vector<QScalar> srcpts_y(npix);
+	Eigen::VectorX<QScalar> srcpts_x(npix);
+	Eigen::VectorX<QScalar> srcpts_y(npix);
 	double *wfactors = new double[npix];
 	ivals = new int[npix];
 	jvals = new int[npix];
@@ -16220,16 +16257,16 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 	int subcell_i1;
 	//int subcell_i1, subcell_i2;
 	int nsplit, n_subpixel=0;
-	nsplit = image_pixel_grids[imggrid_i]->imgpixel_nsplit;
-	nsubpix_per_pixel = image_pixel_grids[imggrid_i]->n_subpix_per_pixel;
+	nsplit = image_pixel_grid->imgpixel_nsplit;
+	nsubpix_per_pixel = image_pixel_grid->n_subpix_per_pixel;
 	int ii,jj;
 	for (n=0; n < npix_in_mask; n++) {
 		i = pixptr_i[n];
 		j = pixptr_j[n];
 		if (include_in_delaunay_grid[n]) {
 			if ((!split_imgpixels) or ((delaunay_from_pixel_centers) and (!do_clustering))) {
-				//srcpts_x[npix] = image_pixel_grids[imggrid_i]->center_sourcepts[i][j][0];
-				//srcpts_y[npix] = image_pixel_grids[imggrid_i]->center_sourcepts[i][j][1];
+				//srcpts_x[npix] = image_pixel_grid->center_sourcepts[i][j][0];
+				//srcpts_y[npix] = image_pixel_grid->center_sourcepts[i][j][1];
 				srcpts_x[npix] = imggrid_params.srcpt_x_centers(n);
 				srcpts_y[npix] = imggrid_params.srcpt_y_centers(n);
 			} else {
@@ -16237,17 +16274,17 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					for (int k=0; k < nsubpix_per_pixel; k++) {
 						ii = i*nsplit + (nsubpix_per_pixel-1-k) / nsplit; // I don't remember why we do the subpixels in reverse order here...
 						jj = j*nsplit + (nsubpix_per_pixel-1-k) % nsplit;
-						n_subpixel = image_pixel_grids[imggrid_i]->subpixel_index_ss[ii][jj];
+						n_subpixel = image_pixel_grid->subpixel_index_ss[ii][jj];
 						srcpts_x[npix] = imggrid_params.srcpt_x_subpixel_centers(n_subpixel);
 						srcpts_y[npix] = imggrid_params.srcpt_y_subpixel_centers(n_subpixel);
 						//cout << "SRCPT " << n << ": " << srcpts_x[npix] << " " << srcpts_y[npix] << " subpix_i" << n_subpixel << endl;
 						if (srcpts_x[npix]*0.0 != 0.0) die("nan sourcept value");
-						//srcpts_x[npix] = image_pixel_grids[imggrid_i]->subpixel_center_sourcepts[i][j][nsubpix_per_pixel-1-k][0];
-						//srcpts_y[npix] = image_pixel_grids[imggrid_i]->subpixel_center_sourcepts[i][j][nsubpix_per_pixel-1-k][1];
+						//srcpts_x[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][nsubpix_per_pixel-1-k][0];
+						//srcpts_y[npix] = image_pixel_grid->subpixel_center_sourcepts[i][j][nsubpix_per_pixel-1-k][1];
 						ivals[npix] = i;
 						jvals[npix] = j;
-						if (use_weighted_srcpixel_clustering) wfactors[npix] = image_pixel_grids[imggrid_i]->subpixel_weights[i][j][nsubpix_per_pixel-1-k];
-						is_boundary_pixel[npix] = (fix_boundary_pts) ? image_pixel_grids[imggrid_i]->is_boundary_pixel[n] : false;
+						if (use_weighted_srcpixel_clustering) wfactors[npix] = image_pixel_grid->subpixel_weights[i][j][nsubpix_per_pixel-1-k];
+						is_boundary_pixel[npix] = (fix_boundary_pts) ? image_pixel_grid->is_boundary_pixel[n] : false;
 						npix++;
 					}
 				} else {
@@ -16260,7 +16297,7 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					}
 					ii = i*nsplit + subcell_i1 / nsplit;
 					jj = j*nsplit + subcell_i1 % nsplit;
-					n_subpixel = image_pixel_grids[imggrid_i]->subpixel_index_ss[ii][jj];
+					n_subpixel = image_pixel_grid->subpixel_index_ss[ii][jj];
 					srcpts_x[npix] = imggrid_params.srcpt_x_subpixel_centers(n_subpixel);
 					srcpts_y[npix] = imggrid_params.srcpt_y_subpixel_centers(n_subpixel);
 				}
@@ -16269,11 +16306,22 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			if ((!do_clustering) and (delaunay_mode != 5)) {
 				ivals[npix] = i;
 				jvals[npix] = j;
-				is_boundary_pixel[npix] = (fix_boundary_pts) ? image_pixel_grids[imggrid_i]->is_boundary_pixel[n] : false;
+				is_boundary_pixel[npix] = (fix_boundary_pts) ? image_pixel_grid->is_boundary_pixel[n] : false;
 				npix++;
 			}
 		}
 	}
+
+	VecType srcpts_vec_x = (split_imgpixels) ? image_pixel_grid->truncate_vec(imggrid_params.srcpt_x_subpixel_centers,npix) : image_pixel_grid->truncate_vec(imggrid_params.srcpt_x_centers,npix);
+	VecType srcpts_vec_y = (split_imgpixels) ? image_pixel_grid->truncate_vec(imggrid_params.srcpt_y_subpixel_centers,npix) : image_pixel_grid->truncate_vec(imggrid_params.srcpt_y_centers,npix);
+	//if constexpr (stan::is_autodiff_v<VecType>) {
+		//Eigen::VectorXd srcpts_vec_doub_x = (split_imgpixels) ? imggrid_params_doub.srcpt_x_subpixel_centers.head(npix) : imggrid_params_doub.srcpt_x_centers.head(npix);
+		//Eigen::VectorXd srcpts_vec_x_check = stan::math::value_of(srcpts_vec_x);
+		//for (int i=0; i < npix; i++) {
+			//cout << srcpts_vec_x_check[i] << " " << srcpts_vec_doub_x[i] << endl;
+		//}
+	//}
+
 
 	bool find_invmag = ((use_mag_weighted_regularization) and (zsrc_i==0)) ? true : false;
 	if (do_clustering) {
@@ -16333,9 +16381,9 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		initial_centroids = new QScalar[2*n_src_centroids];
 		ivals_centroids = new int[n_src_centroids];
 		jvals_centroids = new int[n_src_centroids];
-		std::vector<QScalar> initial_centroids_x(n_src_centroids);
-		std::vector<QScalar> initial_centroids_y(n_src_centroids);
-		std::vector<bool> is_boundary_pt(n_src_centroids);
+		Eigen::VectorX<QScalar> initial_centroids_x(n_src_centroids);
+		Eigen::VectorX<QScalar> initial_centroids_y(n_src_centroids);
+		Eigen::VectorX<bool> is_boundary_pt(n_src_centroids);
 
 		if (icent_offset >= data_reduce_factor) die("FOOK");
 		if (!use_weighted_initial_centroids) {
@@ -16350,8 +16398,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 					initial_centroids_x[l] = srcpts_x[i];
 					initial_centroids_y[l] = srcpts_y[i];
 					//cout << "centroid " << l << ": " << srcpts_x[i] << " " << srcpts_y[i] << endl;
-					//initial_centroids_x[l] = image_pixel_grids[imggrid_i]->center_sourcepts[ivals[i]][jvals[i]][0];
-					//initial_centroids_y[l] = image_pixel_grids[imggrid_i]->center_sourcepts[ivals[i]][jvals[i]][1];
+					//initial_centroids_x[l] = image_pixel_grid->center_sourcepts[ivals[i]][jvals[i]][0];
+					//initial_centroids_y[l] = image_pixel_grid->center_sourcepts[ivals[i]][jvals[i]][1];
 
 					is_boundary_pt[l] = is_boundary_pixel[i];
 					//cout << "l=" << l << " ival=" << ivals_centroids[l] << " jval=" << jvals_centroids[l] << endl;
@@ -16385,8 +16433,8 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 		}
 		//cout << "Creating source grid for zsrc_i=" << zsrc_i << " with n=" << n_src_centroids << "pixels" << endl;
 
-		QScalar *src_centroids_x = new QScalar[n_src_centroids];
-		QScalar *src_centroids_y = new QScalar[n_src_centroids];
+		Eigen::VectorX<QScalar> src_centroids_x(n_src_centroids);
+		Eigen::VectorX<QScalar> src_centroids_y(n_src_centroids);
 
 		if ((use_srcpixel_clustering) or (use_weighted_srcpixel_clustering)) {
 #ifdef USE_MLPACK
@@ -16476,55 +16524,73 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			die("Must compile with -DUSE_MLPACK option to use source pixel clustering algorithm with adaptive grid");
 #endif
 		} else {
-			/*
+//#ifdef USE_STAN
+			//if constexpr (stan::is_autodiff_v<QScalar>) {
+				//die("Blue noise relaxation is not autodiff yet");
+			//} else
+//#endif
+			{
+				/*
 				BlueNoiseParameters params;
-				params.densityK = npix/(2*n_src_centroids);
+				params.densityK = bluenoise_densityk_frac*(npix/n_src_centroids);
 				params.spacingScale = bluenoise_lscale;
 				params.repulsionStrength = bluenoise_repulsion_strength;
 				//params.sig_fac = bluenoise_sigfac;
 				params.tetherStrength = bluenoise_tether_strength;
 				params.stepSize = bluenoise_stepsize;
 				params.maxStep = 0.0;
-				params.iterations = n_cluster_iterations;
+				params.iterations = bluenoise_n_iterations;
 				params.repulsion_epsilon = 1e-12;
 				params.epsilon = 1e-5;
 
-				std::vector<std::pair<int,int>> edges;
-				for (int j=0; j < bluenoise_n_iterations; j++) {
-					BlueNoiseRelaxation<QScalar> relaxation(srcpts_x, srcpts_y, initial_centroids_x, initial_centroids_y, is_boundary_pt, params, bluenoise_tsgrad);
-
-					//cout << "constructing initial Delaunay grid..." << endl;
-					DelaunaySourceGrid delaunay_centroids(this,band_number);
-					delaunay_centroids.create_srcpixel_grid(initial_centroids_x.data(),initial_centroids_y.data(),n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y,false,imggrid_i);
-					relaxation.set_delaunay_grid(&delaunay_centroids,ivals_centroids,jvals_centroids);
-					if (j==0) edges = delaunay_centroids.get_edge_pairs();
-
-					relaxation.setNeighborEdges(edges);
-
-					//std::cout << "Initial energy: " << relaxation.energy() << std::endl;
-					//std::cout << "Initial Repulsion energy: " << relaxation.repulsionEnergy() << std::endl;
-					//std::cout << "Initial Tether energy: " << relaxation.tetherEnergy() << std::endl;
-
-					relaxation.relax(verbal);
-
-					std::vector<QScalar> newSiteX = relaxation.siteX();
-					std::vector<QScalar> newSiteY = relaxation.siteY();
-					for (i=0; i < n_src_centroids; i++) {
-						initial_centroids_x[i] = newSiteX[i];
-						initial_centroids_y[i] = newSiteY[i];
-					}
-					if (j==bluenoise_n_iterations-1) {
-						for (i=0; i < n_src_centroids; i++) {
-							src_centroids_x[i] = newSiteX[i];
-							src_centroids_y[i] = newSiteY[i];
-						}
-					}
-					//std::cout << "Final energy: " << relaxation.energy() << std::endl;
-					//std::cout << "Repulsion energy: " << relaxation.repulsionEnergy() << std::endl;
-					//std::cout << "Tether energy: " << relaxation.tetherEnergy() << std::endl;
-
+				DelaunaySourceGrid delaunay_centroids(this,band_number);
+				delaunay_centroids.create_srcpixel_grid(initial_centroids_x.data(),initial_centroids_y.data(),n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y,false,imggrid_i);
+				Eigen::VectorX<bool> is_boundary_pt_grid = delaunay_centroids.get_vertex_boundary_status();
+				for (int i=0; i < n_src_centroids; i++) {
+					//if (is_boundary_pt_grid[i]) is_boundary_pt[i] = true;
+					//if (is_boundary_pt[i]) {
+						//cout << initial_centroids_x[i] << " " << initial_centroids_y[i] << endl;
+					//}
 				}
-		*/
+
+				BlueNoiseRelaxation<VecType,QScalar> relaxation(srcpts_vec_x, srcpts_vec_y, initial_centroids_x, initial_centroids_y, is_boundary_pt, params, bluenoise_use_nn);
+				//BlueNoiseRelaxation<QScalar> relaxation(initial_centroids_x, initial_centroids_y, is_boundary_pt, params);
+
+				std::vector<std::pair<int,int>> edges;
+				relaxation.set_delaunay_grid(&delaunay_centroids,ivals_centroids,jvals_centroids);
+				//relaxation.set_delaunay_grid(&delaunay_centroids);
+				edges = delaunay_centroids.get_edge_pairs();
+				relaxation.setNeighborEdges(edges);
+
+				//std::cout << "Initial energy: " << relaxation.energy() << std::endl;
+				//std::cout << "Initial Repulsion energy: " << relaxation.repulsionEnergy() << std::endl;
+				//std::cout << "Initial Tether energy: " << relaxation.tetherEnergy() << std::endl;
+
+//#ifdef USE_STAN
+				//if constexpr (stan::is_autodiff_v<QScalar>) {
+					//relaxation.diagnoseRepulsionGradient();
+				//}
+//#endif
+				int n_relax_iterations;
+				if (bluenoise_use_bfgs) {
+					n_relax_iterations = relaxation.relax_LBFGS(verbal);
+				} else {
+					n_relax_iterations = relaxation.relax(verbal);
+				}
+				if ((mpi_id==0) and (verbal)) {
+					if (n_relax_iterations < bluenoise_n_iterations) cout << "Blue noise relaxation converged after " << n_relax_iterations << " iterations" << endl;
+					else cout << "NOTE: Blue noise relaxation failed to converged after " << n_relax_iterations << " iterations" << endl;
+				}
+
+				src_centroids_x = relaxation.siteX();
+				src_centroids_y = relaxation.siteY();
+
+				//std::cout << "Final energy: " << relaxation.energy() << std::endl;
+				//std::cout << "Repulsion energy: " << relaxation.repulsionEnergy() << std::endl;
+				//std::cout << "Tether energy: " << relaxation.tetherEnergy() << std::endl;
+				//cout << "SUMS: " << src_centroids_x.sum() << " " << src_centroids_y.sum() << endl;
+				*/
+			}
 		}
 		delete[] input_data;
 		delete[] initial_centroids;
@@ -16532,11 +16598,9 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay grid (with clustering) has n_pixels=" << n_src_centroids << endl;
 		//cout << "Source grid = (" << sourcegrid_xmin << "," << sourcegrid_xmax << ") x (" << sourcegrid_ymin << "," << sourcegrid_ymax << ")";
-		delaunay_srcgrids[src_i]->create_srcpixel_grid(src_centroids_x,src_centroids_y,n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y,find_invmag,imggrid_i);
+		delaunay_srcgrids[src_i]->create_srcpixel_grid(src_centroids_x.data(),src_centroids_y.data(),n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y,find_invmag,imggrid_i);
 		double edge_sum = delaunay_srcgrids[src_i]->sum_edge_sqrlengths(avg_sb);
 		if ((mpi_id==0) and (verbal)) cout << "Delaunay source grid edge_sum: " << edge_sum << endl;
-		delete[] src_centroids_x;
-		delete[] src_centroids_y;
 		delete[] ivals_centroids;
 		delete[] jvals_centroids;
 	} else {
@@ -16894,17 +16958,29 @@ void QLens::plot_source_pixel_grid(const int imggrid_i, const char filename[])
 	cartesian_srcgrid->xgrid.close();
 }
 
-void QLens::find_source_centroid(const int imggrid_i, double& xc_approx, double& yc_approx, const bool verbal)
+template <typename QScalar>
+void QLens::find_source_centroid(const int imggrid_i, QScalar& xc_approx, QScalar& yc_approx, const bool verbal)
 {
 	// This function is accessed by the LensProfile class when a lens is anchored to a reconstructed source
 	if ((image_pixel_grids==NULL) or (image_pixel_grids[imggrid_i]==NULL)) {
 		warn("cannot find approximate source size; image pixel grid does not exist");
-		xc_approx = 1e30;
-		yc_approx = 1e30;
+		xc_approx = 0;
+		yc_approx = 0;
 	} else {
-		image_pixel_grids[imggrid_i]->find_approx_source_size(xc_approx,yc_approx,verbal);
+#ifdef USE_STAN
+		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			image_pixel_grids[imggrid_i]->find_approx_source_size<VarmatTypes>(xc_approx,yc_approx,verbal);
+		} else
+#endif
+		{
+			image_pixel_grids[imggrid_i]->find_approx_source_size<PlainTypes>(xc_approx,yc_approx,verbal);
+		}
 	}
 }
+template void QLens::find_source_centroid<double>(const int imggrid_i, double& xc_approx, double& yc_approx, const bool verbal);
+#ifdef USE_STAN
+template void QLens::find_source_centroid<stan::math::var>(const int imggrid_i, stan::math::var& xc_approx, stan::math::var& yc_approx, const bool verbal);
+#endif
 
 bool QLens::load_image_pixel_data(const int band_i, string image_pixel_filename, const double pixsize, const double pix_xy_ratio, const double x_offset, const double y_offset, const int hdu_indx, const bool show_fits_header)
 {
@@ -17734,11 +17810,9 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 	if ((redo_lensing_calculations_before_inversion) and (ranchisq_i==0)) {
 		for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
 			image_pixel_grids[imggrid_i]->redo_lensing_calculations<PlainTypes>(verbal);
-		}
-	}
-	for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
-		if ((n_extended_src_redshifts > 1) and (imggrid_i==0)) {
-			update_lens_centers_from_pixsrc_coords();
+			if ((n_extended_src_redshifts > 1) and (imggrid_i==0)) {
+				update_lens_centers_from_pixsrc_coords<double>();
+			}
 		}
 	}
 
@@ -18290,11 +18364,9 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 	if ((redo_lensing_calculations_before_inversion) and (ranchisq_i==0)) {
 		for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
 			image_pixel_grids[imggrid_i]->redo_lensing_calculations<MathTypes>(verbal);
-		}
-	}
-	for (imggrid_i=0; imggrid_i < n_image_pixel_grids; imggrid_i++) {
-		if ((n_extended_src_redshifts > 1) and (imggrid_i==0)) {
-			update_lens_centers_from_pixsrc_coords();
+			if ((n_extended_src_redshifts > 1) and (imggrid_i==0)) {
+				update_lens_centers_from_pixsrc_coords<QScalar>();
+			}
 		}
 	}
 
@@ -18346,7 +18418,7 @@ QScalar QLens::pixel_log_evidence_times_two_autodiff(QScalar &chisq0, const bool
 		if (source_fit_mode == Delaunay_Source) {
 			if ((mpi_id==0) and (verbal)) cout << "Assigning foreground pixel mappings..." << endl;
 			for (zsrc_i=0, imggrid_i=band_number*n_extended_src_redshifts; zsrc_i < n_extended_src_redshifts; zsrc_i++, imggrid_i++) {
-				cout << "BAND_I=" << band_number << ", ZSRC_I=" << zsrc_i << " imggrid_i=" << imggrid_i << endl;
+				//cout << "BAND_I=" << band_number << ", ZSRC_I=" << zsrc_i << " imggrid_i=" << imggrid_i << endl;
 				src_i = src_i_list[imggrid_i];
 				ImagePixelGrid* image_pixel_grid = image_pixel_grids[imggrid_i];
 				if (src_i >= 0) {

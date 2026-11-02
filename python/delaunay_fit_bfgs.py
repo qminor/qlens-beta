@@ -75,7 +75,7 @@ gauss_src.set_limits([
 
 src.add(gauss_src)
 
-pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
+#pause() # note, pause will be ignored if script is not run in interactive mode (with '-i' parameter)
 
 q.gradtol = 0.001
 q.chisqtol = 1e-6

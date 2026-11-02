@@ -2582,14 +2582,17 @@ void QLens::process_commands(bool read_file)
 				}
 			} else Complain("must specify either zero or one argument");
 		}
-		else if (words[0]=="bn_tsgrad")
+		else if (words[0]=="bn_densityk_frac")
 		{
-			if (nwords==1) {
-				if (mpi_id==0) cout << "Use tsgrad: " << display_switch(bluenoise_tsgrad) << endl;
-			} else if (nwords==2) {
-				if (!(ws[1] >> setword)) Complain("invalid argument to 'bn_tsgrad' command; must specify 'on' or 'off'");
-				set_switch(bluenoise_tsgrad,setword);
-			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+			double frac;
+			if (nwords == 2) {
+				if (!(ws[1] >> frac)) Complain("invalid densityK frac for Delaunay grid");
+				bluenoise_densityk_frac = frac;
+			} else if (nwords==1) {
+				if (mpi_id==0) {
+					cout << "Blue noise densityK frac for Delaunay grid = " << bluenoise_densityk_frac << endl;
+				}
+			} else Complain("must specify either zero or one argument");
 		}
 		else if (words[0]=="auxgrid_npixels")
 		{
@@ -15121,6 +15124,24 @@ void QLens::process_commands(bool read_file)
 			} else if (nwords==2) {
 				if (!(ws[1] >> setword)) Complain("invalid argument to 'fix_boundary_pts' command; must specify 'on' or 'off'");
 				set_switch(fix_boundary_pts,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="bn_use_nn")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use natural neighbor interpolation for blue noise relaxation: " << display_switch(bluenoise_use_nn) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'bn_use_nn' command; must specify 'on' or 'off'");
+				set_switch(bluenoise_use_nn,setword);
+			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
+		}
+		else if (words[0]=="bn_use_bfgs")
+		{
+			if (nwords==1) {
+				if (mpi_id==0) cout << "Use BFGS optimization for blue noise relaxation: " << display_switch(bluenoise_use_bfgs) << endl;
+			} else if (nwords==2) {
+				if (!(ws[1] >> setword)) Complain("invalid argument to 'bn_use_bfgs' command; must specify 'on' or 'off'");
+				set_switch(bluenoise_use_bfgs,setword);
 			} else Complain("invalid number of arguments; can only specify 'on' or 'off'");
 		}
 		else if (words[0]=="use_f_src_clusters")

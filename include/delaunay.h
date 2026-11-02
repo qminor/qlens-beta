@@ -32,7 +32,7 @@ struct Triangle // the final triangulation will be stored in an array of triangl
 			tri_in->vertex_index[i] = vertex_index[i];
 			tri_in->neighbor_index[i] = neighbor_index[i];
 #ifdef USE_STAN
-			if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+			if constexpr (stan::is_autodiff_v<QScalar>) {
 				tri_in->vertex[i][0] = vertex[i][0].val();
 				tri_in->vertex[i][1] = vertex[i][1].val();
 			} else
@@ -43,7 +43,7 @@ struct Triangle // the final triangulation will be stored in an array of triangl
 			}
 		}
 #ifdef USE_STAN
-		if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		if constexpr (stan::is_autodiff_v<QScalar>) {
 			tri_in->circumcenter[0] = circumcenter[0].val();
 			tri_in->circumcenter[1] = circumcenter[1].val();
 			tri_in->area = area.val();
@@ -172,7 +172,7 @@ class Delaunay
 				tj = tri->vertices[i1[i]] >= 0;
 				
 #ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				if constexpr (stan::is_autodiff_v<QScalar>) {
 					if (ti&&tj)
 					{
 						temp = (y[pt].val()-y[tri->vertices[i]].val())*(x[tri->vertices[i1[i]]].val() - x[tri->vertices[i]].val()) - (x[pt].val()-x[tri->vertices[i]].val())*(y[tri->vertices[i1[i]]].val() - y[tri->vertices[i]].val());
@@ -230,7 +230,7 @@ class Delaunay
 				double a0, a1, c0, c1, det, asq, csq, ctr0, ctr1, rad2, d2;
 		
 #ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				if constexpr (stan::is_autodiff_v<QScalar>) {
 					a0 = x[tri->vertices[0]].val()-x[tri->vertices[1]].val();
 					a1 = y[tri->vertices[0]].val()-y[tri->vertices[1]].val();
 					c0 = x[tri->vertices[2]].val()-x[tri->vertices[1]].val();
@@ -250,7 +250,7 @@ class Delaunay
 				ctr1 = det*(csq*a0 - asq*c0);
 				rad2 = ctr0*ctr0 + ctr1*ctr1;
 #ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				if constexpr (stan::is_autodiff_v<QScalar>) {
 					d2 = (ctr0 + x[tri->vertices[1]].val() - x[in].val())*(ctr0 + x[tri->vertices[1]].val() - x[in].val())+(ctr1 + y[tri->vertices[1]].val() - y[in].val())*(ctr1 + y[tri->vertices[1]].val() - y[in].val());
 				} else
 #endif
@@ -262,7 +262,7 @@ class Delaunay
 			else if (vert1)
 			{
 #ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				if constexpr (stan::is_autodiff_v<QScalar>) {
 					return (x[tri->vertices[1]].val() - x[tri->vertices[0]].val())*(y[in].val() - y[tri->vertices[0]].val())-(x[in].val() - x[tri->vertices[0]].val())*(y[tri->vertices[1]].val() - y[tri->vertices[0]].val()) > 0;
 				} else
 #endif
@@ -273,7 +273,7 @@ class Delaunay
 			else if (vert2)
 			{
 #ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				if constexpr (stan::is_autodiff_v<QScalar>) {
 					return ((x[in].val() - x[tri->vertices[0]].val())*(y[tri->vertices[2]].val() - y[tri->vertices[0]].val())-(x[tri->vertices[2]].val() - x[tri->vertices[0]].val())*(y[in].val() - y[tri->vertices[0]].val())) > 0;
 				} else
 #endif
@@ -552,7 +552,7 @@ class Delaunay
 					triangle->circumcenter[0] = ctr0 + x[botPtr->tri->vertices[1]];
 					triangle->circumcenter[1] = ctr1 + y[botPtr->tri->vertices[1]];
 #ifdef USE_STAN
-				if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+				if constexpr (stan::is_autodiff_v<QScalar>) {
 					triangle->circumcircle_radsq = ctr0.val()*ctr0.val()+ctr1.val()*ctr1.val();
 				} else
 #endif

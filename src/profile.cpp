@@ -492,13 +492,21 @@ bool LensProfile::setup_transform_center_coords_to_pixsrc_frame(const double dxc
 	if (ellipticity_mode == -1) die("can only transform center coords for elliptical lens");
 	if (!transform_center_coords_to_pixsrc_frame) transform_center_coords_to_pixsrc_frame = true;
 	assign_param_pointers();
-#ifdef USE_STAN
-	assign_param_pointers_autodif();
-#endif
-	assign_paramnames();
 	lensparams->xc_prime = dxc;
 	lensparams->yc_prime = dyc;
+#ifdef USE_STAN
+	assign_param_pointers_autodif();
+	lensparams_dif->xc_prime = dxc;
+	lensparams_dif->yc_prime = dyc;
+#endif
+	assign_paramnames();
 	update_center_from_pixsrc_coords<double>(qlensptr);
+	update_meta_parameters();
+#ifdef USE_STAN
+	update_center_from_pixsrc_coords<stan::math::var>(qlensptr);
+	//sync_autodif_parameters();
+	update_meta_parameters_autodif();
+#endif
 	return true;
 }
 
@@ -2025,8 +2033,6 @@ void LensProfile::update_ellipticity_meta_parameters()
 		set_angle_from_components(p.epsilon1,p.epsilon2);
 	}
 
-	//if (transform_center_coords_to_pixsrc_frame) update_center_from_pixsrc_coords();
-
 	if (!ellipticity_gradient) {
 		if (ellipticity_mode==0) {
 			p.epsilon = 1 - p.q;
@@ -2072,13 +2078,25 @@ template <typename QScalar>
 void LensProfile::update_center_from_pixsrc_coords(QLens* qlensptr)
 {
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
-	double xcs, ycs;
+	QScalar xcs, ycs;
 	//cout << "lens " << lens_number << " finding approx source size... " << endl;
 	// generalize this later so it can be anchored to an image_pixel_grid with the appropriate zsrc_i (doesn't have to be 0)
-	qlensptr->find_source_centroid(0,xcs,ycs,false);
-	//cout << "lens " << lens_number << " xcs,ycs: " << xcs << " " << ycs << endl;
+	qlensptr->find_source_centroid<QScalar>(0,xcs,ycs,false);
+//#ifdef USE_STAN
+	//if constexpr (stan::is_autodiff_v<QScalar>) cout << "AUTODIFF: lens " << lens_number << " xcs,ycs: " << xcs << " " << ycs << " xcp,ycp: " << stan::math::value_of(p.xc_prime) << " " << stan::math::value_of(p.yc_prime) << endl;
+	//else
+//#endif
+	//cout << "NOT AUTODIFF: lens " << lens_number << " xcs,ycs: " << xcs << " " << ycs << " xcp,ycp: " << p.xc_prime << " " << p.yc_prime << endl;
 	p.x_center = xcs + p.xc_prime;
 	p.y_center = ycs + p.yc_prime;
+	//p.x_center = p.xc_prime;
+	//p.y_center = p.yc_prime;
+#ifdef USE_STAN
+	if constexpr (stan::is_autodiff_v<QScalar>) {
+		lensparams->x_center = stan::math::value_of(p.x_center);
+		lensparams->y_center = stan::math::value_of(p.y_center);
+	}
+#endif
 }
 template void LensProfile::update_center_from_pixsrc_coords<double>(QLens* qlensptr);
 #ifdef USE_STAN
@@ -2377,6 +2395,8 @@ template void LensProfile::deflection_and_hessian_together<stan::math::var>(cons
 template <typename VecType, typename QScalar>
 void LensProfile::deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& def_x, VecType& def_y)
 {
+	//cout << "HARG: " << x0.size() << " " << def_x.size() << y0.size() << " " << def_y.size() << endl;
+
 	LensParams<QScalar>& p = assign_lensparam_object<QScalar>();
 
 	// switch to coordinate system centered on lens profile
@@ -2391,21 +2411,35 @@ void LensProfile::deflection_vec_impl(const VecType& x0, const VecType& y0, VecT
 		dx = (x0.array() - p.x_center).matrix();
 		dy = (y0.array() - p.y_center).matrix();
 	}
+	//cout << "dxsize=" << dx.size() << " dysize=" << dy.size() << endl;
+	for (int i=0; i < dx.size(); i++) {
+		//cout << x0(i) << " " << dx(i) << endl;
+	}
 
+	//cout << "SMORG" << endl;
 	VecType x = p.costheta * dx + p.sintheta * dy;
 	VecType y = - p.sintheta * dx + p.costheta * dy;
+	//cout << "SMORG2" << endl;
+	//cout << "defxsize=" << def_x.size() << " defysize=" << def_y.size() << endl;
+	//cout << "xsize=" << x.size() << " ysize=" << y.size() << endl;
 
 #ifdef USE_STAN
 	if constexpr (std::is_same_v<QScalar, stan::math::var>) {
+		//cout << "About to run defptr_vec_autodif" << endl;
 		(this->*defptr_vec_autodif)(x,y,def_x,def_y);
 	} else
 #endif
+	{
+		//cout << "About to run defptr_vec" << endl;
 	(this->*defptr_vec)(x,y,def_x,def_y);
+	}
+	//cout << "SMORG3" << endl;
 
 	// Now we rotate deflection vectors back into original (non-rotated) frame. We'll reuse x as a temporary vector below
 	x = def_x*p.costheta - def_y*p.sintheta;
 	def_y = def_x*p.sintheta + def_y*p.costheta;
 	def_x = x;
+	//cout << "SMORG4" << endl;
 
 	/*
 	lensvector<QScalar> defcheck;
@@ -2875,7 +2909,6 @@ template void LensProfile::deflection_spherical_default<stan::math::var>(const s
 template <typename VecType, typename QScalar>
 void LensProfile::deflection_spherical_default_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y)
 {
-	//cout << "DEF SPHERICAL VEC?" << endl;
 	VecType rsq;
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<VecType>) {
@@ -2886,11 +2919,16 @@ void LensProfile::deflection_spherical_default_vec(const VecType& x, const VecTy
 
 	VecType kapavg;
 #ifdef USE_STAN
-	if constexpr (std::is_same_v<QScalar, stan::math::var>) 
+	if constexpr (std::is_same_v<QScalar, stan::math::var>)  {
+		if (this->kapavgptr_rsq_spherical_vec_autodif==NULL) die("FUCK");
 		(this->*kapavgptr_rsq_spherical_vec_autodif)(rsq,kapavg);
+	}
 	else
 #endif
+	{
+
 	(this->*kapavgptr_rsq_spherical_vec)(rsq,kapavg);
+	}
 
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<VecType>) {
@@ -3305,6 +3343,7 @@ template void LensProfile::deflection_and_hessian_numerical<stan::math::var>(con
 template <typename VecType, typename QScalar>
 void LensProfile::deflection_numerical_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y)
 {
+	cout << "RUNNING DEFLETION NUMEROCAL VEC" << endl;
 	bool converged;
 	if (!ellipticity_gradient) {
 		LensIntegral<VecType,QScalar> lens_integral(this,0,0,lensparams->q,0,true); // the 'true' tells it to run the "vec" version of the integrals

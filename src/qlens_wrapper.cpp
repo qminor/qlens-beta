@@ -272,6 +272,17 @@ public:
 		DelaunaySourceGrid::zero_outside_border = setting;
 	}
 
+	bool get_bluenoise_relaxation_setting() {
+		return use_bluenoise_relaxation;
+	}
+	void set_bluenoise_relaxation(const bool setting) {
+		if ((setting==true) and (!use_bluenoise_relaxation) and (use_srcpixel_clustering)) {
+			use_srcpixel_clustering = false;
+			if (mpi_id==0) cout << "Turning use_srcpixel_clustering off" << endl;
+		}
+		use_bluenoise_relaxation = setting;
+	}
+
 	bool get_split_imgpixels() { return split_imgpixels; }
 	void set_split_imgpixels(const bool split) {
 		bool old_setting = split_imgpixels;

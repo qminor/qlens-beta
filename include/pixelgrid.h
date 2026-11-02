@@ -540,6 +540,7 @@ class DelaunayGrid : private Sort
 	protected:
 	int** shared_triangles;
 	int* n_shared_triangles;
+	Eigen::VectorX<bool> is_boundary_vertex;
 
 	// These are for approximating dK_dnu in autodiff for matern kernel
 	double chebyshev_logxmin;
@@ -567,6 +568,7 @@ class DelaunayGrid : private Sort
 	double sum_edge_sqrlengths(const double min_sb);
 	void find_containing_triangle(const double input_pt_x, const double input_pt_y, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	//double interpolate(lensvector<double> &input_pt, const bool interp_mag = false, const int thread = 0);
+	Eigen::VectorX<bool> get_vertex_boundary_status() { return is_boundary_vertex; }
 
 	template <typename QScalar>
 	void find_interpolation_weights_3pt(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread);
@@ -604,6 +606,7 @@ class DelaunaySourceGrid_Params : public DelaunayGrid_Params<QScalar>, public Mo
 {
 	public:
 	Eigen::VectorX<QScalar> surface_brightness;	
+	QScalar min_surface_brightness;
 	QScalar regparam;
 	QScalar regparam_lsc, regparam_lum_index;
 	QScalar distreg_xcenter, distreg_ycenter, distreg_e1, distreg_e2, distreg_rc;
@@ -729,6 +732,10 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 	QScalar find_lensed_surface_brightness(const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, const int thread);
 	template <typename QScalar>
 	QScalar find_lensed_surface_brightness_direct_3pt(const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, QScalar& xder, QScalar& yder);
+	template <typename QScalar>
+	QScalar find_lensed_surface_brightness_direct_nn(const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, QScalar& xder, QScalar& yder);
+
+	std::array<int, 3> find_containing_triangle_vertices(const double x, const double y, const int img_pixel_i, const int img_pixel_j);
 
 	bool find_containing_triangle_with_imgpix(const double input_pt_x, const double input_pt_y, const int img_pixel_i, const int img_pixel_j, int& trinum, bool& inside_triangle, bool& on_vertex, int& kmin);
 	template <typename QScalar>
@@ -1556,8 +1563,12 @@ class ImagePixelGrid : private Sort
 	template <typename MathTypes>
 	void set_sourcegrid_params_from_ray_tracing(typename MathTypes::QScalar& sourcegrid_xmin, typename MathTypes::QScalar& sourcegrid_xmax, typename MathTypes::QScalar& sourcegrid_ymin, typename MathTypes::QScalar& sourcegrid_ymax, const double sourcegrid_limit_xmin, const double sourcegrid_limit_xmax, const double sourcegrid_limit_ymin, const double sourcegrid_limit_ymax);
 
+	//template <typename QScalar>
+	//QScalar find_approx_source_size(QScalar &xcavg, QScalar &ycavg, const bool verbal = false);
 
-	double find_approx_source_size(double& xcavg, double& ycavg, const bool verbal = false);
+	template <typename MathTypes>
+	typename MathTypes::QScalar find_approx_source_size(typename MathTypes::QScalar &xcavg, typename MathTypes::QScalar &ycavg, const bool verbal = false);
+
 	bool find_optimal_shapelet_scale(double& scale, double& xcenter, double& ycenter, double& recommended_nsplit, const bool verbal, double& sig, double& scaled_maxdist);
 	void set_surface_brightness_vector_to_data();
 	void plot_grid(string filename, bool show_inactive_pixels);
@@ -1575,11 +1586,12 @@ class ImagePixelGrid : private Sort
 	template <typename MathTypes>
 	void fill_primary_mask_sb_into_emask_sb();
 
+	Eigen::VectorXd truncate_vec(const Eigen::VectorXd& original, int n);
 #ifdef USE_STAN
 	stan::math::var_value<Eigen::VectorXd> scatter_to_large(const stan::math::var_value<Eigen::VectorXd>& small, int large_size, int* map);
 	stan::math::var_value<Eigen::VectorXd> gather_to_small(const stan::math::var_value<Eigen::VectorXd>& large, int small_size, int* map);
 	stan::math::var_value<Eigen::VectorXd> partial_fill_vec(const stan::math::var_value<Eigen::VectorXd>& small, const stan::math::var_value<Eigen::VectorXd>& large_orig, int large_size);
-
+	stan::math::var_value<Eigen::VectorXd> truncate_vec(const stan::math::var_value<Eigen::VectorXd>& original, int n);
 #endif
 
 

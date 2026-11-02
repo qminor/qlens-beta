@@ -565,7 +565,7 @@ void QLens::find_sourcepts_from_data_vec(const VecType& x, const VecType& y, Vec
 				}
 				for (j=0; j < zlens_group_size[i]; j++) {
 					lens_list[zlens_group_lens_indx[i][j]]->deflection_vec(xi,yi,def_x,def_y);
-					//std::cout << "Lens redshift " << i << ", lens " << zlens_group_lens_indx[i][j] << " def=" << (*def)[0] << " " << (*def)[1] << std::endl;
+					//std::cout << "Lens redshift " << i << ", lens " << zlens_group_lens_indx[i][j] << " def=" << def_x(0) << " " << def_y(0) << std::endl;
 					defi_x[i] = defi_x[i] + def_x;
 					defi_y[i] = defi_y[i] + def_y;
 				}

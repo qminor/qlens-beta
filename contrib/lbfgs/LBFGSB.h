@@ -114,7 +114,7 @@ public:
     /// \return Number of iterations used.
     ///
     template <typename Foo>
-    inline int minimize(Foo& f, Vector& x, Scalar& fx, const Vector& lb, const Vector& ub)
+    inline int minimize(Foo& f, Vector& x, Scalar& fx, const Vector& lb, const Vector& ub, int& convergence_status)
     {
         using std::abs;
 
@@ -143,8 +143,14 @@ public:
         // std::cout << "f(x0) = " << fx << ", ||proj_grad|| = " << m_projgnorm << std::endl << std::endl;
 
         // Early exit if the initial x is already a minimizer
-        if (m_projgnorm <= m_param.epsilon || m_projgnorm <= m_param.epsilon_rel * x.norm())
+        if (m_projgnorm <= m_param.epsilon)
         {
+			  convergence_status = 0;
+            return 1;
+        }
+		 if (m_projgnorm <= m_param.epsilon_rel * x.norm())
+        {
+			  convergence_status = 1;
             return 1;
         }
 
@@ -210,8 +216,14 @@ public:
             std::cout << "   f(x) = " << fx << ", ||proj_grad|| = " << m_projgnorm << std::endl << std::endl; */
 
             // Convergence test -- gradient
-            if (m_projgnorm <= m_param.epsilon || m_projgnorm <= m_param.epsilon_rel * x.norm())
+            if (m_projgnorm <= m_param.epsilon)
             {
+					convergence_status = 0;
+                return k;
+            }
+				if (m_projgnorm <= m_param.epsilon_rel * x.norm())
+            {
+					convergence_status = 1;
                 return k;
             }
             // Convergence test -- objective function value
@@ -219,13 +231,17 @@ public:
             {
                 const Scalar fxd = m_fx[k % fpast];
                 if (k >= fpast && abs(fxd - fx) <= m_param.delta * std::max(std::max(abs(fx), abs(fxd)), Scalar(1)))
+					 {
+							convergence_status = 2;
                     return k;
+					 }
 
                 m_fx[k % fpast] = fx;
             }
             // Maximum number of iterations
             if (m_param.max_iterations != 0 && k >= m_param.max_iterations)
             {
+							convergence_status = 3;
                 return k;
             }
 

@@ -314,7 +314,6 @@ void SPLE_Lens::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg)
 	using stan::math::elt_divide;
 #endif
 	SPLE_Params<QScalar>& p = assign_sple_param_object<QScalar>();
-	//cout << "RUNNING SPHERICAL KAPAVG!" << endl;
 
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<VecType>) {
@@ -1441,10 +1440,12 @@ void NFW::initialize_parameters(const double &p1_in, const double &p2_in, const 
 	}
 #ifdef USE_STAN
 	set_geometric_parameters<stan::math::var>(q_in,theta_degrees,xc_in,yc_in);
-	sync_autodif_parameters();
 #endif
 
 	update_meta_parameters_and_pointers();
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
 }
 
 void NFW::setup_lens_properties(const int parameter_mode, const int subclass)
@@ -1478,6 +1479,9 @@ NFW::NFW(const NFW* lens_in)
 
 	special_anchor_factor = lens_in->special_anchor_factor;
 	update_meta_parameters_and_pointers();
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
 }
 
 NFW::NFW(NFW_Source* sb_in, const int parameter_mode_in, const bool vary_mass_parameter, const bool include_limits_in, const double mass_param_lower, const double mass_param_upper)
@@ -1854,6 +1858,7 @@ template stan::math::var NFW::potential_spherical_rsq<stan::math::var>(const sta
 #endif
 
 
+/*
 template <typename VecType, typename QScalar>
 void NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
 {
@@ -1884,6 +1889,62 @@ void NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
 				lensfunc(i) = atanh(sqrt(1 - xsq(i))) / sqrt(1 - xsq(i));
 			else if (xsq(i) == 1.0)
 				lensfunc(i) = 1.0;
+		}
+	}
+}
+template void NFW::lens_function_xsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& xsq, Eigen::VectorXd& lensfunc);
+#ifdef USE_STAN
+template void NFW::lens_function_xsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& xsq, stan::math::var_value<Eigen::VectorXd>& lensfunc);
+#endif
+*/
+
+template <typename VecType, typename QScalar>
+void NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
+{
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::atanh;
+
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1> xvar = stan::math::from_var_value(xsq);
+		Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1> result(xvar.size());
+		Eigen::VectorXd result_val(xvar.size());
+		for (Eigen::Index i = 0; i < xvar.size(); ++i) {
+			double dval = xvar(i).val() - 1.0;
+			stan::math::var d = xvar(i) - 1.0;
+			if (std::abs(dval) < 1e-6) {
+				result(i) = 1.0 - d/3.0 + d*d/5.0 - d*d*d/7.0 + d*d*d*d/9.0;
+			} else if (dval < 0.0) {
+				stan::math::var u = sqrt(1.0 - xvar(i));
+				result(i) = atanh(u)/u;
+			} else {
+				stan::math::var u = sqrt(xvar(i) - 1.0);
+				result(i) = atan(u)/u;
+			}
+			result_val(i) = result(i).val();
+		}
+		lensfunc = result_val;
+		stan::math::reverse_pass_callback([result, lensfunc]() mutable {
+			for (Eigen::Index i = 0; i < result.size(); ++i) {
+				result(i).adj() += lensfunc.adj()(i);
+			}
+		});
+	} else
+#endif
+	{
+		lensfunc.resize(xsq.size());
+		for (Eigen::Index i = 0; i < xsq.size(); ++i) {
+			double d = xsq(i) - 1.0;
+			if (std::abs(d) < 1e-6) {
+				lensfunc(i) = 1.0 - d/3.0 + d*d/5.0 - d*d*d/7.0 + d*d*d*d/9.0;
+			} else if (d < 0.0) {
+				double u = std::sqrt(-d);
+				lensfunc(i) = std::atanh(u)/u;
+			} else {
+				double u = std::sqrt(d);
+				lensfunc(i) = std::atan(u)/u;
+			}
 		}
 	}
 }
@@ -2048,6 +2109,10 @@ void Truncated_NFW::initialize_parameters(const double &p1_in, const double &p2_
 #endif
 
 	update_meta_parameters_and_pointers();
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
+
 }
 
 void Truncated_NFW::setup_lens_properties(const int parameter_mode, const int subclass)
@@ -2098,6 +2163,10 @@ Truncated_NFW::Truncated_NFW(const Truncated_NFW* lens_in)
 
 	special_anchor_factor = lens_in->special_anchor_factor;
 	update_meta_parameters_and_pointers();
+#ifdef USE_STAN
+	sync_autodif_parameters();
+#endif
+
 }
 
 #ifdef USE_STAN
@@ -2335,8 +2404,8 @@ void Truncated_NFW::set_model_specific_integration_pointers()
 template <typename QScalar>
 void Truncated_NFW::set_ks_c200_from_m200_rs()
 {
-	Truncated_NFW_Params<double>& p = assign_tnfw_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
-	double rvir_kpc;
+	Truncated_NFW_Params<QScalar>& p = assign_tnfw_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
+	QScalar rvir_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
 	rvir_kpc = pow(p.m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(p.zlens)),0.333333333333);
 	p.rs = p.rs_kpc * kpc_to_arcsec;
@@ -2353,8 +2422,8 @@ template void Truncated_NFW::set_ks_c200_from_m200_rs<stan::math::var>();
 template <typename QScalar>
 void Truncated_NFW::set_ks_rs_from_m200_c200()
 {
-	Truncated_NFW_Params<double>& p = assign_tnfw_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
-	double rvir_kpc;
+	Truncated_NFW_Params<QScalar>& p = assign_tnfw_param_object<QScalar>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
+	QScalar rvir_kpc;
 	// the mvir, rvir formulas ignore the truncation, referring to the values before the NFW was tidally stripped
 	rvir_kpc = pow(p.m200/(200.0*M_4PI/3.0*1e-9*cosmo->critical_density(p.zlens)),0.333333333333);
 	p.rs_kpc = rvir_kpc / p.c200;
@@ -2455,10 +2524,14 @@ void Truncated_NFW::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg
 		lx = log(elt_divide(sqrt(xsq), sqrttx + sqrt(tsq)));
 		lens_function_xsq_vec<VecType,QScalar>(xsq,lensfunc);
 		if (lens_subclass==0) {
-			tmp = (tsq + 1 + 2*(xsq - 1))*lensfunc + M_PI*tau + (tsq - 1)*log(tau) + sqrttx*(-M_PI + (tsq - 1)*lx/tau);
+			//tmp = (tsq + 1 + 2*(xsq - 1))*lensfunc + M_PI*tau + (tsq - 1)*log(tau) + sqrttx*(-M_PI + (tsq - 1)*lx/tau);
+			tmp = stan::math::elt_multiply(tsq + 1 + 2*(xsq - 1), lensfunc) + M_PI*tau + (tsq - 1)*log(tau) + stan::math::elt_multiply(sqrttx, -M_PI + (tsq - 1)*lx/tau);
 			kapavg = 4*p.ks*tsq/SQR(tsq + 1)*elt_divide(tmp, xsq);
 		} else {
-			tmp = 2*(tsq + 1 + 4*(xsq - 1))*lensfunc + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq + xsq) - tsq - 1) + (-tsq*(tsq*tsq - 1) + (tsq + xsq)*(3*tsq*tsq - 6*tsq - 1))*lx)/CUBE(tau)/sqrttx;
+			//tmp = 2*(tsq + 1 + 4*(xsq - 1))*lensfunc + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq + xsq) - tsq - 1) + (-tsq*(tsq*tsq - 1) + (tsq + xsq)*(3*tsq*tsq - 6*tsq - 1))*lx)/CUBE(tau)/sqrttx;
+			//tmp = 2*stan::math::elt_multiply(tsq + 1 + 4*(xsq - 1), lensfunc) + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + (-CUBE(tau)*M_PI*(4*(tsq + xsq) - tsq - 1) + stan::math::elt_multiply(-tsq*(tsq*tsq - 1) + (tsq + xsq)*(3*tsq*tsq - 6*tsq - 1), lx)) / CUBE(tau) / sqrttx;
+			auto numerator = -CUBE(tau)*M_PI*(4*(tsq + xsq) - tsq - 1) + stan::math::elt_multiply(-tsq*(tsq*tsq - 1) + (tsq + xsq)*(3*tsq*tsq - 6*tsq - 1), lx);
+			tmp = 2*stan::math::elt_multiply(tsq + 1 + 4*(xsq - 1), lensfunc) + (M_PI*(3*tsq - 1) + 2*tau*(tsq - 3)*log(tau))/tau + stan::math::elt_divide(numerator, sqrttx)/CUBE(tau);
 			kapavg = 2*p.ks*tsq*tsq/CUBE(tsq + 1)*elt_divide(tmp, xsq);
 		}
 	} else
@@ -2475,6 +2548,9 @@ void Truncated_NFW::kapavg_spherical_rsq_vec(const VecType& rsq, VecType& kapavg
 			kapavg = (2*p.ks*tsq*tsq/CUBE(tsq + 1)*tmp.array()/xsq.array()).matrix();
 		}
 	}
+	//for (int i=0; i < kapavg.size(); i++) {
+		//cout << rsq(i) << " " << xsq(i) << " " << tau << " " << kapavg(i) << endl;
+	//}
 }
 template void Truncated_NFW::kapavg_spherical_rsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& rsq, Eigen::VectorXd& kapavg);
 #ifdef USE_STAN
@@ -2491,6 +2567,7 @@ double Truncated_NFW::rho3d_r_integrand_analytic(const double r)
 	}
 }
 
+/*
 template <typename VecType, typename QScalar>
 void Truncated_NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
 {
@@ -2520,6 +2597,62 @@ void Truncated_NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
 				lensfunc(i) = atanh(sqrt(1 - xsq(i))) / sqrt(1 - xsq(i));
 			else if (xsq(i) == 1.0)
 				lensfunc(i) = 1.0;
+		}
+	}
+}
+template void Truncated_NFW::lens_function_xsq_vec<Eigen::VectorXd,double>(const Eigen::VectorXd& xsq, Eigen::VectorXd& lensfunc);
+#ifdef USE_STAN
+template void Truncated_NFW::lens_function_xsq_vec<stan::math::var_value<Eigen::VectorXd>,stan::math::var>(const stan::math::var_value<Eigen::VectorXd>& xsq, stan::math::var_value<Eigen::VectorXd>& lensfunc);
+#endif
+*/
+
+template <typename VecType, typename QScalar>
+void Truncated_NFW::lens_function_xsq_vec(const VecType& xsq, VecType& lensfunc)
+{
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::atan;
+	using stan::math::atanh;
+
+	if constexpr (stan::is_autodiff_v<VecType>) {
+		Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1> xvar = stan::math::from_var_value(xsq);
+		Eigen::Matrix<stan::math::var, Eigen::Dynamic, 1> result(xvar.size());
+		Eigen::VectorXd result_val(xvar.size());
+		for (Eigen::Index i = 0; i < xvar.size(); ++i) {
+			double dval = xvar(i).val() - 1.0;
+			stan::math::var d = xvar(i) - 1.0;
+			if (std::abs(dval) < 1e-6) {
+				result(i) = 1.0 - d/3.0 + d*d/5.0 - d*d*d/7.0 + d*d*d*d/9.0;
+			} else if (dval < 0.0) {
+				stan::math::var u = sqrt(1.0 - xvar(i));
+				result(i) = atanh(u)/u;
+			} else {
+				stan::math::var u = sqrt(xvar(i) - 1.0);
+				result(i) = atan(u)/u;
+			}
+			result_val(i) = result(i).val();
+		}
+		lensfunc = result_val;
+		stan::math::reverse_pass_callback([result, lensfunc]() mutable {
+			for (Eigen::Index i = 0; i < result.size(); ++i) {
+				result(i).adj() += lensfunc.adj()(i);
+			}
+		});
+	} else
+#endif
+	{
+		lensfunc.resize(xsq.size());
+		for (Eigen::Index i = 0; i < xsq.size(); ++i) {
+			double d = xsq(i) - 1.0;
+			if (std::abs(d) < 1e-6) {
+				lensfunc(i) = 1.0 - d/3.0 + d*d/5.0 - d*d*d/7.0 + d*d*d*d/9.0;
+			} else if (d < 0.0) {
+				double u = std::sqrt(-d);
+				lensfunc(i) = std::atanh(u)/u;
+			} else {
+				double u = std::sqrt(d);
+				lensfunc(i) = std::atan(u)/u;
+			}
 		}
 	}
 }
@@ -3183,11 +3316,11 @@ Hernquist::Hernquist(const Hernquist* lens_in)
 	Hernquist_Params<double>& p = assign_hernquist_param_object<double>(); // this reference will point to either the <double> lensparams or <stan::math::var> lensparams for autodiff
 	p.ks = lens_in->lensparams_hernquist.ks;
 	p.rs = lens_in->lensparams_hernquist.rs;
+
+	update_meta_parameters_and_pointers();
 #ifdef USE_STAN
 	sync_autodif_parameters();
 #endif
-
-	update_meta_parameters_and_pointers();
 }
 
 #ifdef USE_STAN
@@ -3738,6 +3871,7 @@ void Shear::deflection_vec_impl(const VecType& x0, const VecType& y0, VecType& d
 
 	VecType x,y;
 #ifdef USE_STAN
+	//cout << "WUGGA" << endl;
 	if constexpr (stan::is_autodiff_v<VecType>) {
 		x = x0 - p.x_center;
 		y = y0 - p.y_center;

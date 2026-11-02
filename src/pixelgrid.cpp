@@ -2946,6 +2946,7 @@ void DelaunayGrid::create_pixel_grid(QScalar* gridpts_x, QScalar* gridpts_y, con
 	n_gridpts = n_gridpts_in;
 	if (p.gridpts != NULL) die("girdpts wasn't NULL");
 	p.gridpts = new lensvector<QScalar>[n_gridpts];
+	is_boundary_vertex.resize(n_gridpts);
 	for (int i=0; i < 4; i++) adj_triangles[i] = new int[n_gridpts];
 	int n;
 	for (n=0; n < n_gridpts; n++) {
@@ -2955,6 +2956,7 @@ void DelaunayGrid::create_pixel_grid(QScalar* gridpts_x, QScalar* gridpts_y, con
 		adj_triangles[1][n] = -1; // -x direction
 		adj_triangles[2][n] = -1; // +y direction
 		adj_triangles[3][n] = -1; // -y direction
+		is_boundary_vertex[n] = false; // will determine below
 	}
 
 	vector<int>* shared_triangles_unsorted = new vector<int>[n_gridpts];
@@ -2992,12 +2994,29 @@ void DelaunayGrid::create_pixel_grid(QScalar* gridpts_x, QScalar* gridpts_y, con
 #endif
 	p.avg_area = 0;
 	
+	int n_unbounded_sides=0;
 	for (n=0; n < n_triangles; n++) {
 		shared_triangles_unsorted[delaunay_params->triangle[n].vertex_index[0]].push_back(n);
 		shared_triangles_unsorted[delaunay_params->triangle[n].vertex_index[1]].push_back(n);
 		shared_triangles_unsorted[delaunay_params->triangle[n].vertex_index[2]].push_back(n);
 		p.avg_area += delaunay_params->triangle[n].area;
+		for (int side=0; side < 3; side++) {
+			if (p.triangle[n].neighbor_index[side] < 0) {
+				n_unbounded_sides++;
+				// this side has no neighbor triangle, so the vertices sharing that side are recorded as grid boundary vertices
+				int shared_vertices[2];
+				if (side==0) { shared_vertices[0] = 1; shared_vertices[1] = 2; }
+				else if (side==1) { shared_vertices[0] = 0; shared_vertices[1] = 2; }
+				else { shared_vertices[0] = 0; shared_vertices[1] = 1; }
+				for (int i=0; i < 2; i++) {
+					is_boundary_vertex[delaunay_params->triangle[n].vertex_index[shared_vertices[i]]] = true;
+					int iii = delaunay_params->triangle[n].vertex_index[shared_vertices[i]];
+					//cout << "Boundary vertex: " << iii << " " << gridpts_x[iii] << " " << gridpts_y[iii] << endl;
+				}
+			}
+		}
 	}
+	//cout << " Number of unbounded sides: " << n_unbounded_sides << endl;
 
 	p.avg_area /= n_triangles;
 	QScalar avg_tri_length = sqrt(p.avg_area);
@@ -3008,7 +3027,7 @@ void DelaunayGrid::create_pixel_grid(QScalar* gridpts_x, QScalar* gridpts_y, con
 	lensvector<double> midpoint;
 	lensvector<QScalar> vec1,vec2;
 	for (n=0; n < n_gridpts; n++) {
-		n_boundary_pts = shared_triangles_unsorted[n].size();
+		n_boundary_pts = shared_triangles_unsorted[n].size(); // by "boundary_pts" here we mean the boundary points of the Voronoi cell associated with the vertex
 		// NOTE: for extreme configurations, occasionally a point gets excluded from the Delaunay triangulation; not sure why this happens,
 		//       but as long as the grid is regularized, it shouldn't cause qlens to crash.
 		if (n_boundary_pts==0) {
@@ -3613,6 +3632,9 @@ template void DelaunayGrid::find_interpolation_weights_nn<stan::math::var>(const
 template <typename QScalar>
 void DelaunayGrid::find_interpolation_weights_nn(const QScalar input_pt_x, const QScalar input_pt_y, const int trinum, int& npts, const int thread)
 {
+#ifdef USE_STAN
+	using stan::math::fma;
+#endif
 	DelaunayGrid_Params<QScalar>& p = assign_delaunay_param_object<QScalar>();
 	npts = 0;
 	const int nmax_tri = 60;
@@ -3726,11 +3748,11 @@ void DelaunayGrid::find_interpolation_weights_nn(const QScalar input_pt_x, const
 		const QScalar cy = (*p.interpolation_pts[kright])[1] - input_pt_y;
 		const QScalar asq = ax * ax + ay * ay;
 		const QScalar csq = cx * cx + cy * cy;
-		const QScalar det = stan::math::fma(ax, cy, -cx * ay);
+		const QScalar det = fma(ax, cy, -cx * ay);
 		const QScalar inv2det = 0.5 / det;
 
-		p.new_circumcenter[k][0] = input_pt_x + inv2det * stan::math::fma(asq, cy, -csq * ay);
-		p.new_circumcenter[k][1] = input_pt_y + inv2det * stan::math::fma(csq, ax, -asq * cx);
+		p.new_circumcenter[k][0] = input_pt_x + inv2det * fma(asq, cy, -csq * ay);
+		p.new_circumcenter[k][1] = input_pt_y + inv2det * fma(csq, ax, -asq * cx);
 	}
 
 	bool first_iteration, fix_mmin, fix_mmax;
@@ -3855,17 +3877,17 @@ void DelaunayGrid::find_interpolation_weights_nn(const QScalar input_pt_x, const
 
 		area_initial = 0.0;
 
-		area_initial += stan::math::fma(left_mid_x, adjacent_triangles[n_adjacent_triangles - 1]->circumcenter[1], -adjacent_triangles[n_adjacent_triangles - 1]->circumcenter[0] * left_mid_y);
+		area_initial += fma(left_mid_x, adjacent_triangles[n_adjacent_triangles - 1]->circumcenter[1], -adjacent_triangles[n_adjacent_triangles - 1]->circumcenter[0] * left_mid_y);
 
 		for (m = n_adjacent_triangles - 1; m > 0; m--) {
 			const QScalar& x0 = adjacent_triangles[m]->circumcenter[0];
 			const QScalar& y0 = adjacent_triangles[m]->circumcenter[1];
 			const QScalar& x1 = adjacent_triangles[m - 1]->circumcenter[0];
 			const QScalar& y1 = adjacent_triangles[m - 1]->circumcenter[1];
-			area_initial += stan::math::fma(x0, y1, -x1 * y0);
+			area_initial += fma(x0, y1, -x1 * y0);
 		}
 
-		area_initial += stan::math::fma(adjacent_triangles[0]->circumcenter[0], right_mid_y, -right_mid_x * adjacent_triangles[0]->circumcenter[1]);
+		area_initial += fma(adjacent_triangles[0]->circumcenter[0], right_mid_y, -right_mid_x * adjacent_triangles[0]->circumcenter[1]);
 		area_initial *= -0.5;
 
 		const QScalar& ncl_x = p.new_circumcenter[kleft][0];
@@ -3873,9 +3895,9 @@ void DelaunayGrid::find_interpolation_weights_nn(const QScalar input_pt_x, const
 		const QScalar& nck_x = p.new_circumcenter[k][0];
 		const QScalar& nck_y = p.new_circumcenter[k][1];
 
-		area_leftover = stan::math::fma(left_mid_x, ncl_y, -ncl_x * left_mid_y);
-		area_leftover += stan::math::fma(ncl_x, nck_y, -nck_x * ncl_y);
-		area_leftover += stan::math::fma(nck_x, right_mid_y, -right_mid_x * nck_y);
+		area_leftover = fma(left_mid_x, ncl_y, -ncl_x * left_mid_y);
+		area_leftover += fma(ncl_x, nck_y, -nck_x * ncl_y);
+		area_leftover += fma(nck_x, right_mid_y, -right_mid_x * nck_y);
 		area_leftover *= -0.5;
 
 		const QScalar signed_wgt = area_initial - area_leftover;
@@ -4274,7 +4296,7 @@ void DelaunayGrid::find_containing_triangle(const double input_pt_x, const doubl
 		sqrdist = SQR(input_pt_x-triptr->vertex[k][0]) + SQR(input_pt_y-triptr->vertex[k][1]);
 		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
 	}
-	if ((inside_triangle) and (sqrdistmin < 1e-6)) {
+	if ((inside_triangle) and (sqrdistmin < 1e-16)) {
 		inside_triangle = false;
 		on_vertex = true;
 	}
@@ -5494,8 +5516,10 @@ bool DelaunaySourceGrid::assign_surface_brightness(QScalar* sb_in, const int siz
 {
 	DelaunaySourceGrid_Params<QScalar>& p = assign_delaunay_srcgrid_param_object<QScalar>();
 	if (size != n_gridpts) return false;
+	p.min_surface_brightness = 1e30;
 	for (int i=0; i < size; i++) {
 		p.surface_brightness[i] = sb_in[i];
+		if (sb_in[i] < p.min_surface_brightness) p.min_surface_brightness = sb_in[i];
 	}
 	return true;
 }
@@ -6152,15 +6176,8 @@ QScalar DelaunaySourceGrid::find_lensed_surface_brightness_direct_3pt(const QSca
 {
 	DelaunaySourceGrid_Params<QScalar>& p = assign_delaunay_srcgrid_param_object<QScalar>();
 	bool inside_triangle, on_vertex;
-	int trinum,kmin;
-#ifdef USE_STAN
-	if constexpr (stan::is_autodiff_v<QScalar>) {
-		find_containing_triangle_with_imgpix(stan::math::value_of(input_pt_x),stan::math::value_of(input_pt_y),img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
-	} else
-#endif
-	{
-		find_containing_triangle_with_imgpix(input_pt_x,input_pt_y,img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
-	}
+	int trinum, kmin;
+	find_containing_triangle_with_imgpix(value_of(input_pt_x),value_of(input_pt_y),img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
 
 	if (!inside_triangle) {
 		Triangle<QScalar> *triptr = &p.triangle[trinum];
@@ -6168,23 +6185,16 @@ QScalar DelaunaySourceGrid::find_lensed_surface_brightness_direct_3pt(const QSca
 		if ((zero_outside_border) and (!on_vertex)) {
 			xder = 0;
 			yder = 0;
-			//cout << "UH-OH! outside border of grid" << endl;
+			//cout << "Outside grid!!" << endl;
+			//return p.surface_brightness[triptr->vertex_index[kmin]];
+			//return p.min_surface_brightness;
 			return 0;
-		} else {
-			// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
-#ifdef USE_STAN
-			double distnorm = SQR(stan::math::value_of(input_pt_x) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][0])) + SQR(stan::math::value_of(input_pt_y) - stan::math::value_of(p.gridpts[triptr->vertex_index[kmin]][1]));
-#else
-			double distnorm = SQR(input_pt_x - p.gridpts[triptr->vertex_index[kmin]][0]) + SQR(input_pt_y - p.gridpts[triptr->vertex_index[kmin]][1]);
-#endif
-			//cout << "RUH-ROH! outside grid" << endl;
-			if (distnorm < 1e-6) {
-				//cout << "VERY CLOSE TO POINT, RETURNING ZERO" << endl;
-				xder = 0;
-				yder = 0;
-				return p.surface_brightness[triptr->vertex_index[kmin]];
-			}
-
+		} else if (on_vertex) {
+			// if we're outside the grid, don't attempt to extrapolate; just use closest vertex
+			//cout << "on vertex" << endl;
+			xder = 0;
+			yder = 0;
+			return p.surface_brightness[triptr->vertex_index[kmin]];
 		}
 	}
 
@@ -6200,26 +6210,34 @@ QScalar DelaunaySourceGrid::find_lensed_surface_brightness_direct_3pt(const QSca
 	interp_pts[0] = &p.gridpts[triptr->vertex_index[0]];
 	interp_pts[1] = &p.gridpts[triptr->vertex_index[1]];
 	interp_pts[2] = &p.gridpts[triptr->vertex_index[2]];
-	QScalar d = ((*interp_pts[0])[0]-(*interp_pts[1])[0])*((*interp_pts[1])[1]-(*interp_pts[2])[1]) - ((*interp_pts[1])[0]-(*interp_pts[2])[0])*((*interp_pts[0])[1]-(*interp_pts[1])[1]);
+
+	QScalar y12 = ((*interp_pts[1])[1]-(*interp_pts[2])[1]);
+	QScalar y20 = ((*interp_pts[2])[1]-(*interp_pts[0])[1]);
+	QScalar y01 = ((*interp_pts[0])[1]-(*interp_pts[1])[1]);
+
+	QScalar x21 = ((*interp_pts[2])[0]-(*interp_pts[1])[0]);
+	QScalar x02 = ((*interp_pts[0])[0]-(*interp_pts[2])[0]);
+	QScalar x10 = ((*interp_pts[1])[0]-(*interp_pts[0])[0]);
+
+	QScalar d = -x10*y12 + x21*y01;
 	if (d==0) {
 		// in this case the points are all the same
 		xder = 0;
 		yder = 0;
-		cout << "Got d==0!!!!!!!!" << endl;
+		warn("got d==0 (all points are the same) when attempting interpolation of Delaunay grid");
 		return p.surface_brightness[interp_indx[0]];
 	} else {
-		interp_wgts[0] = (input_pt_x*((*interp_pts[1])[1]-(*interp_pts[2])[1]) + input_pt_y*((*interp_pts[2])[0]-(*interp_pts[1])[0]) + (*interp_pts[1])[0]*(*interp_pts[2])[1] - (*interp_pts[1])[1]*(*interp_pts[2])[0])/d;
-		interp_wgts[1] = (input_pt_x*((*interp_pts[2])[1]-(*interp_pts[0])[1]) + input_pt_y*((*interp_pts[0])[0]-(*interp_pts[2])[0]) + (*interp_pts[0])[1]*(*interp_pts[2])[0] - (*interp_pts[0])[0]*(*interp_pts[2])[1])/d;
-		interp_wgts[2] = (input_pt_x*((*interp_pts[0])[1]-(*interp_pts[1])[1]) + input_pt_y*((*interp_pts[1])[0]-(*interp_pts[0])[0]) + (*interp_pts[0])[0]*(*interp_pts[1])[1] - (*interp_pts[0])[1]*(*interp_pts[1])[0])/d;
+		interp_wgts[0] = (input_pt_x*y12 + input_pt_y*x21 + (*interp_pts[1])[0]*(*interp_pts[2])[1] - (*interp_pts[1])[1]*(*interp_pts[2])[0])/d;
+		interp_wgts[1] = (input_pt_x*y20 + input_pt_y*x02 + (*interp_pts[0])[1]*(*interp_pts[2])[0] - (*interp_pts[0])[0]*(*interp_pts[2])[1])/d;
+		interp_wgts[2] = (input_pt_x*y01 + input_pt_y*x10 + (*interp_pts[0])[0]*(*interp_pts[1])[1] - (*interp_pts[0])[1]*(*interp_pts[1])[0])/d;
 
-		interp_xder[0] = ((*interp_pts[1])[1]-(*interp_pts[2])[1])/d;
-		interp_xder[1] = ((*interp_pts[2])[1]-(*interp_pts[0])[1])/d;
-		interp_xder[2] = ((*interp_pts[0])[1]-(*interp_pts[1])[1])/d;
+		interp_xder[0] = y12/d;
+		interp_xder[1] = y20/d;
+		interp_xder[2] = y01/d;
 
-		interp_yder[0] = ((*interp_pts[2])[0]-(*interp_pts[1])[0])/d;
-		interp_yder[1] = ((*interp_pts[0])[0]-(*interp_pts[2])[0])/d;
-		interp_yder[2] = ((*interp_pts[1])[0]-(*interp_pts[0])[0])/d;
-
+		interp_yder[0] = x21/d;
+		interp_yder[1] = x02/d;
+		interp_yder[2] = x10/d;
 	}
 
 	QScalar sb_interp = 0;
@@ -6231,8 +6249,6 @@ QScalar DelaunaySourceGrid::find_lensed_surface_brightness_direct_3pt(const QSca
 		xder += sb*interp_xder[i];
 		yder += sb*interp_yder[i];
 	}
-	//cout << "xder=" << xder << " yder=" << yder << endl;
-	if (xder==0) cout << "WHAT THE FUCK? xder==0" << endl;
 	return sb_interp;
 }
 template double DelaunaySourceGrid::find_lensed_surface_brightness_direct_3pt<double>(const double input_pt_x, const double input_pt_y, const int img_pixel_i, const int img_pixel_j, double& xder, double& yder);
@@ -6241,6 +6257,413 @@ template stan::math::var DelaunaySourceGrid::find_lensed_surface_brightness_dire
 #endif
 
 
+template <typename QScalar>
+QScalar DelaunaySourceGrid::find_lensed_surface_brightness_direct_nn(const QScalar input_pt_x, const QScalar input_pt_y, const int img_pixel_i, const int img_pixel_j, QScalar& xder, QScalar& yder)
+{
+	DelaunaySourceGrid_Params<QScalar>& p = assign_delaunay_srcgrid_param_object<QScalar>();
+	bool inside_triangle, on_vertex;
+	int trinum, kmin;
+	find_containing_triangle_with_imgpix(value_of(input_pt_x),value_of(input_pt_y),img_pixel_i,img_pixel_j,trinum,inside_triangle,on_vertex,kmin);
+
+	if (!inside_triangle) {
+		Triangle<QScalar> *triptr = &p.triangle[trinum];
+		if (on_vertex) {
+			xder = 0;
+			yder = 0;
+			return p.surface_brightness[triptr->vertex_index[kmin]];
+		}
+	}
+
+	/*
+	if (!inside_triangle) {
+		Triangle<QScalar> *triptr = &p.triangle[trinum];
+		// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
+		if ((zero_outside_border) and (!on_vertex)) {
+			xder = 0;
+			yder = 0;
+			//cout << "Outside grid!!" << endl;
+			//return p.min_surface_brightness;
+			return 0;
+		} else if (on_vertex) {
+			// if we're outside the grid, don't attempt to extrapolate; just use closest vertex
+			xder = 0;
+			yder = 0;
+			return p.surface_brightness[triptr->vertex_index[kmin]];
+		}
+	}
+	*/
+
+
+
+#ifdef USE_STAN
+	using stan::math::fma;
+#endif
+	int npts = 0;
+	std::vector<int> interp_indx;
+
+	const int nmax_tri = 60;
+	Triangle<QScalar>* adjacent_triangles[nmax_tri];
+	int n_adjacent_triangles;
+
+	QScalar area_initial, area_leftover, wgt, totwgt = 0.0;
+	QScalar totwgt_xder = 0.0, totwgt_yder = 0.0;
+	int ntri_in_envelope = 1;
+	Triangle<QScalar>* triptr = &p.triangle[trinum];
+	std::vector<int> tri_in_envelope(1);
+	tri_in_envelope[0] = trinum;
+	int k, l, m;
+
+	function<bool(Triangle<QScalar>*, const int, const int, int&, int&)> find_triangles_in_envelope = [&](Triangle<QScalar>* neighbor_ptr, const int trinum_local, const int neighbor_num, int& npt, int& ntri)
+	{
+		Triangle<QScalar>* neighbor_ptr2;
+		int l, l_new_vertex = -1, l_left, l_right, neighbor_num2;
+		double distsq;
+
+		for (l = 0; l < 3; l++) {
+			if (neighbor_ptr->neighbor_index[l] == trinum_local) {
+				l_new_vertex = l;
+				break;
+			}
+		}
+
+		if (l_new_vertex == -1) {
+			warn("could not find vertex within Bowyer-Watson envelope");
+			l_new_vertex = 0;
+		}
+
+		l_left = l_new_vertex - 1;
+		if (l_left == -1) l_left = 2;
+		l_right = l_new_vertex + 1;
+		if (l_right == 3) l_right = 0;
+
+		neighbor_num2 = neighbor_ptr->neighbor_index[l_right];
+		if (neighbor_num2 != -1) {
+			neighbor_ptr2 = &p.triangle[neighbor_num2];
+			distsq = SQR(value_of(input_pt_x - neighbor_ptr2->circumcenter[0])) + SQR(value_of(input_pt_y - neighbor_ptr2->circumcenter[1]));
+			if (distsq < neighbor_ptr2->circumcircle_radsq) {
+				if (!find_triangles_in_envelope(neighbor_ptr2, neighbor_num, neighbor_num2, npt, ntri)) return false;
+			}
+		}
+
+		tri_in_envelope.push_back(neighbor_num);
+		ntri++;
+
+		if (npt >= nmax_pts_interp) {
+			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point", (npt + 1), nmax_pts_interp);
+			return false;
+		}
+
+		interp_indx.push_back(neighbor_ptr->vertex_index[l_new_vertex]);
+		npt++;
+
+		neighbor_num2 = neighbor_ptr->neighbor_index[l_left];
+		if (neighbor_num2 != -1) {
+			neighbor_ptr2 = &p.triangle[neighbor_num2];
+			distsq = SQR(value_of(input_pt_x - neighbor_ptr2->circumcenter[0])) + SQR(value_of(input_pt_y - neighbor_ptr2->circumcenter[1]));
+			if (distsq < neighbor_ptr2->circumcircle_radsq) {
+				if (!find_triangles_in_envelope(neighbor_ptr2, neighbor_num, neighbor_num2, npt, ntri)) return false;
+			}
+		}
+
+		return true;
+	};
+
+	Triangle<QScalar>* neighbor_ptr;
+	double distsq;
+	int kleft, neighbor_num;
+
+	for (k = 0; k < 3; k++) {
+		if (npts >= nmax_pts_interp) {
+			warn("exceeded max number of points (%i versus %i); will use 3-pt interpolation for this point", (npts + 1), nmax_pts_interp);
+			return find_lensed_surface_brightness_direct_3pt(input_pt_x, input_pt_y, img_pixel_i, img_pixel_j, xder, yder);
+		}
+
+		interp_indx.push_back(triptr->vertex_index[k]);
+		npts++;
+
+		kleft = k - 1;
+		if (kleft == -1) kleft = 2;
+		neighbor_num = triptr->neighbor_index[kleft];
+
+		if (neighbor_num != -1) {
+			neighbor_ptr = &p.triangle[neighbor_num];
+			distsq = SQR(value_of(input_pt_x - neighbor_ptr->circumcenter[0])) + SQR(value_of(input_pt_y - neighbor_ptr->circumcenter[1]));
+			if (distsq < neighbor_ptr->circumcircle_radsq) {
+				if (!find_triangles_in_envelope(neighbor_ptr, trinum, neighbor_num, npts, ntri_in_envelope)) {
+					return find_lensed_surface_brightness_direct_3pt(input_pt_x, input_pt_y, img_pixel_i, img_pixel_j, xder, yder);
+				}
+			}
+		}
+	}
+
+	int idx, kright;
+
+	std::vector<lensvector<QScalar>*> interp_pts(npts);
+	std::vector<lensvector<QScalar>> new_circumcenter(npts);
+	std::vector<lensvector<QScalar>> new_circumcenter_xder(npts);
+	std::vector<lensvector<QScalar>> new_circumcenter_yder(npts);
+	std::vector<QScalar> interp_wgts(npts);
+	std::vector<QScalar> interp_xder(npts);
+	std::vector<QScalar> interp_yder(npts);
+
+	for (k = 0; k < npts; k++) {
+		idx = interp_indx[k];
+		interp_pts[k] = &p.gridpts[idx];
+		interp_xder[k] = 0;
+		interp_yder[k] = 0;
+	}
+
+	for (k = 0; k < npts; k++) {
+		kright = k + 1;
+		if (kright == npts) kright = 0;
+
+		const QScalar ax = (*interp_pts[k])[0] - input_pt_x;
+		const QScalar ay = (*interp_pts[k])[1] - input_pt_y;
+		const QScalar cx = (*interp_pts[kright])[0] - input_pt_x;
+		const QScalar cy = (*interp_pts[kright])[1] - input_pt_y;
+		const QScalar asq = ax * ax + ay * ay;
+		const QScalar csq = cx * cx + cy * cy;
+		const QScalar det = fma(ax, cy, -cx * ay);
+		const QScalar inv2det = 0.5 / det;
+
+		new_circumcenter[k][0] = input_pt_x + inv2det * fma(asq, cy, -csq * ay);
+		new_circumcenter[k][1] = input_pt_y + inv2det * fma(csq, ax, -asq * cx);
+
+		const QScalar rx = new_circumcenter[k][0] - input_pt_x;
+		const QScalar ry = new_circumcenter[k][1] - input_pt_y;
+		const QScalar invdet = 1.0 / det;
+
+		new_circumcenter_xder[k][0] = rx * (cy - ay) * invdet;
+		new_circumcenter_xder[k][1] = rx * (ax - cx) * invdet;
+		new_circumcenter_yder[k][0] = ry * (cy - ay) * invdet;
+		new_circumcenter_yder[k][1] = ry * (ax - cx) * invdet;
+	}
+
+	bool first_iteration, fix_mmin, fix_mmax;
+	bool mmin_in_envelope, mmax_in_envelope, mmin_in_envelope_prev, mmax_in_envelope_prev;
+	int n_polygon_vertices, shared_tri_idx_min, shared_tri_idx_max, mmin_adjacent, mmax_adjacent, mmax, iter;
+
+	for (k = 0; k < npts; k++) {
+		idx = interp_indx[k];
+		mmin_adjacent = 0;
+		mmax_adjacent = n_shared_triangles[idx] - 1;
+		first_iteration = true;
+		mmin_in_envelope_prev = false;
+		mmax_in_envelope_prev = false;
+		fix_mmin = false;
+		fix_mmax = false;
+		iter = 0;
+
+		do {
+			mmin_in_envelope = false;
+			mmax_in_envelope = false;
+			shared_tri_idx_min = shared_triangles[idx][mmin_adjacent];
+			shared_tri_idx_max = shared_triangles[idx][mmax_adjacent];
+
+			for (m = 0; m < ntri_in_envelope; m++) {
+				if (shared_tri_idx_min == tri_in_envelope[m]) mmin_in_envelope = true;
+				if (shared_tri_idx_max == tri_in_envelope[m]) mmax_in_envelope = true;
+			}
+
+			if ((mmin_adjacent >= mmax_adjacent) && ((!mmin_in_envelope) && (!mmax_in_envelope) && (!mmin_in_envelope_prev) && (!mmax_in_envelope_prev))) die("there are no shared triangles in envelope!");
+
+			if ((mmin_adjacent <= mmax_adjacent) && ((!first_iteration) && (mmin_in_envelope) && (mmax_in_envelope) && (mmin_in_envelope_prev) && (mmax_in_envelope_prev))) {
+				mmin_adjacent = 0;
+				mmax_adjacent = n_shared_triangles[idx] - 1;
+				break;
+			}
+
+			if (!fix_mmin) {
+				if (!mmin_in_envelope_prev) {
+					if (!mmin_in_envelope) {
+						mmin_adjacent++;
+						if (mmin_adjacent == n_shared_triangles[idx]) mmin_adjacent = 0;
+					}
+					else if (first_iteration && mmin_in_envelope) {
+						mmin_adjacent--;
+						if (mmin_adjacent == -1) mmin_adjacent = n_shared_triangles[idx] - 1;
+					}
+					else {
+						fix_mmin = true;
+					}
+				}
+				else {
+					if (mmin_in_envelope) {
+						mmin_adjacent--;
+						if (mmin_adjacent == -1) mmin_adjacent = n_shared_triangles[idx] - 1;
+					}
+					else {
+						mmin_adjacent++;
+						if (mmin_adjacent == n_shared_triangles[idx]) mmin_adjacent = 0;
+					}
+				}
+			}
+
+			if (!fix_mmax) {
+				if (!mmax_in_envelope_prev) {
+					if (!mmax_in_envelope) {
+						mmax_adjacent--;
+						if (mmax_adjacent == -1) mmax_adjacent = n_shared_triangles[idx] - 1;
+					}
+					else if (first_iteration && mmax_in_envelope) {
+						mmax_adjacent++;
+						if (mmax_adjacent == n_shared_triangles[idx]) mmax_adjacent = 0;
+					}
+					else {
+						fix_mmax = true;
+					}
+				}
+				else {
+					if (mmax_in_envelope) {
+						mmax_adjacent++;
+						if (mmax_adjacent == n_shared_triangles[idx]) mmax_adjacent = 0;
+					}
+					else {
+						mmax_adjacent--;
+						if (mmax_adjacent == -1) mmax_adjacent = n_shared_triangles[idx] - 1;
+					}
+				}
+			}
+
+			mmin_in_envelope_prev = mmin_in_envelope;
+			mmax_in_envelope_prev = mmax_in_envelope;
+			first_iteration = false;
+			iter++;
+
+			if (iter > 100) die("Too many iterations finding ordered list of shared triangles within envelope)");
+		} while ((!fix_mmin) || (!fix_mmax));
+
+		if (mmax_adjacent >= mmin_adjacent) n_adjacent_triangles = mmax_adjacent - mmin_adjacent + 1;
+		else n_adjacent_triangles = n_shared_triangles[idx] - mmin_adjacent + mmax_adjacent + 1;
+
+		if (n_adjacent_triangles > nmax_tri) die("number of adjacent triangles exceeded maximum allowed number (%i vs %i)", n_adjacent_triangles, nmax_tri);
+
+		mmax = (mmax_adjacent >= mmin_adjacent) ? mmax_adjacent : n_shared_triangles[idx] - 1;
+		l = 0;
+
+		for (m = mmin_adjacent; m <= mmax; m++) adjacent_triangles[l++] = &p.triangle[shared_triangles[idx][m]];
+
+		if (mmax_adjacent < mmin_adjacent) {
+			for (m = 0; m <= mmax_adjacent; m++) adjacent_triangles[l++] = &p.triangle[shared_triangles[idx][m]];
+		}
+
+		if (l != n_adjacent_triangles) die("number of adjacent triangles didn't add up right (l=%i vs %i)", l, n_adjacent_triangles);
+
+		kleft = k - 1;
+		kright = k + 1;
+		if (kleft == -1) kleft = npts - 1;
+		if (kright == npts) kright = 0;
+
+		const QScalar left_mid_x = 0.5 * ((*interp_pts[k])[0] + (*interp_pts[kleft])[0]);
+		const QScalar left_mid_y = 0.5 * ((*interp_pts[k])[1] + (*interp_pts[kleft])[1]);
+		const QScalar right_mid_x = 0.5 * ((*interp_pts[kright])[0] + (*interp_pts[k])[0]);
+		const QScalar right_mid_y = 0.5 * ((*interp_pts[kright])[1] + (*interp_pts[k])[1]);
+
+		area_initial = 0.0;
+
+		area_initial += fma(left_mid_x, adjacent_triangles[n_adjacent_triangles - 1]->circumcenter[1], -adjacent_triangles[n_adjacent_triangles - 1]->circumcenter[0] * left_mid_y);
+
+		for (m = n_adjacent_triangles - 1; m > 0; m--) {
+			const QScalar& x0 = adjacent_triangles[m]->circumcenter[0];
+			const QScalar& y0 = adjacent_triangles[m]->circumcenter[1];
+			const QScalar& x1 = adjacent_triangles[m - 1]->circumcenter[0];
+			const QScalar& y1 = adjacent_triangles[m - 1]->circumcenter[1];
+			area_initial += fma(x0, y1, -x1 * y0);
+		}
+
+		area_initial += fma(adjacent_triangles[0]->circumcenter[0], right_mid_y, -right_mid_x * adjacent_triangles[0]->circumcenter[1]);
+		area_initial *= -0.5;
+
+		const QScalar& ncl_x = new_circumcenter[kleft][0];
+		const QScalar& ncl_y = new_circumcenter[kleft][1];
+		const QScalar& nck_x = new_circumcenter[k][0];
+		const QScalar& nck_y = new_circumcenter[k][1];
+
+		area_leftover = fma(left_mid_x, ncl_y, -ncl_x * left_mid_y);
+		area_leftover += fma(ncl_x, nck_y, -nck_x * ncl_y);
+		area_leftover += fma(nck_x, right_mid_y, -right_mid_x * nck_y);
+		area_leftover *= -0.5;
+
+		const QScalar signed_wgt = area_initial - area_leftover;
+
+		const QScalar& ncl_x_xder = new_circumcenter_xder[kleft][0];
+		const QScalar& ncl_y_xder = new_circumcenter_xder[kleft][1];
+		const QScalar& nck_x_xder = new_circumcenter_xder[k][0];
+		const QScalar& nck_y_xder = new_circumcenter_xder[k][1];
+		const QScalar& ncl_x_yder = new_circumcenter_yder[kleft][0];
+		const QScalar& ncl_y_yder = new_circumcenter_yder[kleft][1];
+		const QScalar& nck_x_yder = new_circumcenter_yder[k][0];
+		const QScalar& nck_y_yder = new_circumcenter_yder[k][1];
+
+		QScalar area_leftover_xder = fma(left_mid_x, ncl_y_xder, -ncl_x_xder * left_mid_y);
+		area_leftover_xder += fma(ncl_x_xder, nck_y, -nck_x * ncl_y_xder);
+		area_leftover_xder += fma(ncl_x, nck_y_xder, -nck_x_xder * ncl_y);
+		area_leftover_xder += fma(nck_x_xder, right_mid_y, -right_mid_x * nck_y_xder);
+		area_leftover_xder *= -0.5;
+
+		QScalar area_leftover_yder = fma(left_mid_x, ncl_y_yder, -ncl_x_yder * left_mid_y);
+		area_leftover_yder += fma(ncl_x_yder, nck_y, -nck_x * ncl_y_yder);
+		area_leftover_yder += fma(ncl_x, nck_y_yder, -nck_x_yder * ncl_y);
+		area_leftover_yder += fma(nck_x_yder, right_mid_y, -right_mid_x * nck_y_yder);
+		area_leftover_yder *= -0.5;
+
+		const QScalar signed_wgt_xder = -area_leftover_xder;
+		const QScalar signed_wgt_yder = -area_leftover_yder;
+		const QScalar wgt_sign = (value_of(signed_wgt) >= 0.0) ? 1.0 : -1.0;
+
+		interp_xder[k] = wgt_sign * signed_wgt_xder;
+		interp_yder[k] = wgt_sign * signed_wgt_yder;
+
+		if (value_of(signed_wgt) >= 0.0) wgt = signed_wgt;
+		else wgt = -signed_wgt;
+
+		interp_wgts[k] = wgt;
+		totwgt += wgt;
+		totwgt_xder += interp_xder[k];
+		totwgt_yder += interp_yder[k];
+	}
+
+	const QScalar inv_totwgt = 1.0 / totwgt;
+
+	for (k = 0; k < npts; k++) {
+		interp_xder[k] = (interp_xder[k] - interp_wgts[k] * inv_totwgt * totwgt_xder) * inv_totwgt;
+		interp_yder[k] = (interp_yder[k] - interp_wgts[k] * inv_totwgt * totwgt_yder) * inv_totwgt;
+		interp_wgts[k] *= inv_totwgt;
+	}
+
+	QScalar sb_interp = 0;
+	xder = 0;
+	yder = 0;
+	for (int i=0; i < npts; i++) {
+		QScalar sb = p.surface_brightness[interp_indx[i]];
+		sb_interp += sb*interp_wgts[i];
+		xder += sb*interp_xder[i];
+		yder += sb*interp_yder[i];
+	}
+	return sb_interp;
+}
+template double DelaunaySourceGrid::find_lensed_surface_brightness_direct_nn<double>(const double input_pt_x, const double input_pt_y, const int img_pixel_i, const int img_pixel_j, double& xder, double& yder);
+#ifdef USE_STAN
+template stan::math::var DelaunaySourceGrid::find_lensed_surface_brightness_direct_nn<stan::math::var>(const stan::math::var input_pt_x, const stan::math::var input_pt_y, const int img_pixel_i, const int img_pixel_j, stan::math::var& xder, stan::math::var& yder);
+#endif
+
+
+std::array<int,3> DelaunaySourceGrid::find_containing_triangle_vertices(const double x, const double y, const int img_pixel_i, const int img_pixel_j)
+{
+	int trinum = -1;
+	int kmin = -1;
+	bool inside_triangle = false;
+	bool on_vertex = false;
+	find_containing_triangle_with_imgpix(x, y, img_pixel_i, img_pixel_j, trinum, inside_triangle, on_vertex, kmin);
+	DelaunaySourceGrid_Params<double>& p = assign_delaunay_srcgrid_param_object<double>();
+	if (trinum < 0 or trinum >= n_triangles) die("Invalid triangle index returned by Delaunay search.");
+	if (inside_triangle) {
+		return {p.triangle[trinum].vertex_index[0], p.triangle[trinum].vertex_index[1], p.triangle[trinum].vertex_index[2]};
+	} else {
+		int nearest_vertex = p.triangle[trinum].vertex_index[kmin];
+		return {nearest_vertex, nearest_vertex, nearest_vertex};
+	}
+}
 
 template <typename QScalar>
 QScalar DelaunaySourceGrid::interpolate_surface_brightness(const QScalar input_pt_x, const QScalar input_pt_y, const bool interp_mag, const int thread)
@@ -6568,7 +6991,7 @@ bool DelaunaySourceGrid::find_containing_triangle_with_imgpix(const double input
 		sqrdist = SQR(input_pt_x-triptr->vertex[k][0]) + SQR(input_pt_y-triptr->vertex[k][1]);
 		if (sqrdist < sqrdistmin) { sqrdistmin = sqrdist; kmin = k; }
 	}
-	if (sqrdistmin < 1e-10) {
+	if (sqrdistmin < 1e-16) {
 		inside_triangle = false;
 		on_vertex = true;
 	}
@@ -14312,6 +14735,20 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 		}
 	}
 
+	//Eigen::VectorX<bool> newbound(n_cell);
+	//for (int ii=0; ii < n_cell; ii++) newbound[ii] = false;
+	//for (j=0; j < y_N; j++) {
+		//for (i=0; i < x_N; i++) {
+			//if ((!pixel_in_mask) or (pixel_in_mask[i][j])) {
+				//int ncell2 = pixel_index[i][j];
+				//newbound[ncell2] = is_boundary_pixel[ncell2];
+				//if ((i==0) or (i==x_N-1) or (j==0) or (j==y_N-1)) ;
+				//else if ((is_boundary_pixel[pixel_index[i+1][j]]) or (is_boundary_pixel[pixel_index[i-1][j]]) or (is_boundary_pixel[pixel_index[i][j+1]]) or (is_boundary_pixel[pixel_index[i][j-1]])) newbound[ncell2] = true;
+			//}
+		//}
+	//}
+	//for (int ii=0; ii < n_cell; ii++) if (newbound[ii]) is_boundary_pixel[ii] = true;
+
 	//we DON'T reset n_cell, because now we add the emask pixels that aren't in the primary mask
 	if ((pixel_in_mask != NULL) and (emask != NULL)) {
 		for (j=0; j < y_N; j++) {
@@ -14716,6 +15153,8 @@ void ImagePixelGrid::calculate_sourcepts_and_areas(const bool raytrace_pixel_cen
 
 		Eigen::VectorXd offset_corner_pts_x(ntot_corners);
 		Eigen::VectorXd offset_corner_pts_y(ntot_corners);
+		//cout << "ntot_corners=" << ntot_corners << endl;
+		//cout << "srcpt_x_corners size=" << p.srcpt_x_corners.size() << endl;
 		for (n=0; n < ntot_corners; n++) {
 			j = masked_pixel_corner_j[n];
 			i = masked_pixel_corner_i[n];
@@ -15552,24 +15991,31 @@ template void ImagePixelGrid::set_sourcegrid_params_from_ray_tracing<PlainTypes>
 template void ImagePixelGrid::set_sourcegrid_params_from_ray_tracing<VarmatTypes>(stan::math::var& sourcegrid_xmin, stan::math::var& sourcegrid_xmax, stan::math::var& sourcegrid_ymin, stan::math::var& sourcegrid_ymax, const double sourcegrid_limit_xmin, const double sourcegrid_limit_xmax, const double sourcegrid_limit_ymin, const double sourcegrid_limit_ymax);
 #endif
 
-double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, const bool verbal)
+template <typename MathTypes>
+typename MathTypes::QScalar ImagePixelGrid::find_approx_source_size(typename MathTypes::QScalar &xcavg, typename MathTypes::QScalar &ycavg, const bool verbal)
 {
-	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
+	using QScalar = typename MathTypes::QScalar;
+#ifdef USE_STAN
+	using stan::math::sqrt;
+	using stan::math::abs;
+#endif
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	if (image_data == NULL) die("need to have image pixel data loaded to find optimal shapelet scale");
 	static const int nmax_srcsize_it = 8;
 	//string sp_filename = "wtf_spt.dat";
 	//ofstream sourcepts_file; qlens->open_output_file(sourcepts_file,sp_filename);
 	//sourcepts_file << setiosflags(ios::scientific);
 
-	double sig;
-	double totsurf;
-	double area, min_area = 1e30, max_area = -1e30;
-	double xcmin, ycmin, sb;
-	double xsavg, ysavg;
-	double xcold, ycold;
+	QScalar sig;
+	QScalar totsurf;
+	QScalar area;
+	QScalar xcmin, ycmin, sb;
+	QScalar xsavg, ysavg;
+	QScalar xcold, ycold;
 	int i,j,k,n;
-	double rsq, rsqavg;
-	sig = 1e30;
+	QScalar rsq, rsqavg;
+	double rsq_doub;
+	double sig_doub = 1e30;
 	int npts=10000000, npts_old, iter=0;
 	if ((verbal) and (qlens->n_ptsrc > 0) and ((qlens->include_imgfluxes_in_inversion) or (qlens->include_srcflux_in_inversion))) warn("estimated approx extended source size may be biased due to point source when 'invert_imgflux' is on");
 	xcavg = 0;
@@ -15587,38 +16033,51 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 			for (j=0; j < y_N; j++) {
 				//if (foreground_surface_brightness[i][i] != 0) die("YEAH! %g",foreground_surface_brightness[i][j]);
 				if ((mask==NULL) or (mask[i][j])) {
+					n = pixel_index[i][j];
+					int n_subpix = n*n_subpix_per_pixel;
 					if (mask==NULL) sb = surface_brightness[i][j] - foreground_surface_brightness[i][j];
 					else sb = image_data->surface_brightness[i][j] - foreground_surface_brightness[i][j];
-					if ((qlens->n_ptsrc > 0) and (!qlens->include_imgfluxes_in_inversion) and (!qlens->include_srcflux_in_inversion) and (p.point_image_surface_brightness.size() != 0)) sb -= p.point_image_surface_brightness[pixel_index[i][j]];
-					if (abs(sb) > 5*noise_map[i][j]) {
+					//if constexpr (stan::is_autodiff_v<QScalar>) {
+						//cout << "AUTODIFF n=" << n << " sb=" << value_of(sb) << endl;
+					//} else {
+						//cout << "n=" << n << " sb=" << value_of(sb) << endl;
+					//}
+					if ((qlens->n_ptsrc > 0) and (!qlens->include_imgfluxes_in_inversion) and (!qlens->include_srcflux_in_inversion) and (p.point_image_surface_brightness.size() != 0)) sb -= p.point_image_surface_brightness(n);
+					if (abs(value_of(sb)) > 5*noise_map[i][j]) {
 						//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
 						//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
 						// You repeat this code three times in this function! Store things in arrays and GET RID OF THE REDUNDANCIES!!!! IT'S UGLY.
 						if (!qlens->split_imgpixels) {
-							xsavg = center_sourcepts[i][j][0];
-							ysavg = center_sourcepts[i][j][1];
+							xsavg = p.srcpt_x_centers(n);
+							ysavg = p.srcpt_y_centers(n);
+							//xsavg = center_sourcepts[i][j][0];
+							//ysavg = center_sourcepts[i][j][1];
 						} else {
 							xsavg=ysavg=0;
-							for (k=0; k < n_subpix_per_pixel; k++) {
-								xsavg += subpixel_center_sourcepts[i][j][k][0];
-								ysavg += subpixel_center_sourcepts[i][j][k][1];
+							for (int ns=n_subpix; ns < n_subpix + n_subpix_per_pixel; ns++) {
+								xsavg += p.srcpt_x_subpixel_centers(ns);
+								ysavg += p.srcpt_y_subpixel_centers(ns);
 							}
+
+							//for (k=0; k < n_subpix_per_pixel; k++) {
+								//xsavg += subpixel_center_sourcepts[i][j][k][0];
+								//ysavg += subpixel_center_sourcepts[i][j][k][1];
+							//}
 							xsavg /= n_subpix_per_pixel;
 							ysavg /= n_subpix_per_pixel;
 						}
 						//cout << "HI (" << xsavg << "," << ysavg << ") vs (" << center_sourcepts[i][j][0] << "," << center_sourcepts[i][j][1] << ")" << endl;
-						n = pixel_index[i][j];
 						area = (p.srcplane_area_tri1(n) + p.srcplane_area_tri2(n));
 						//area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
-						rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
+						rsq_doub = SQR(value_of(xsavg) - value_of(xcavg)) + SQR(value_of(ysavg) - value_of(ycavg));
 							//cout << "GOT HERE?0 iter=" << iter << endl;
-						//cout << "iter " << iter << " sig=" << sig << endl;
-						if ((iter==0) or (sqrt(rsq) < 3*sig)) {
+						//cout << "iter " << iter << " r=" << sqrt(rsq_doub) << " xcavg=" << value_of(xcavg) << " xsavg=" << value_of(xsavg) << " sig=" << sig_doub << endl;
+						if ((iter==0) or (sqrt(rsq_doub) < 3*sig_doub)) {
 							//cout << "GOT HERE?" << endl;
 							xcavg += area*abs(sb)*xsavg;
 							ycavg += area*abs(sb)*ysavg;
 							totsurf += area*abs(sb);
-							//cout << "TOTSURF " << totsurf << " " << abs(sb) << " " << area << endl;
+							//cout << "TOTSURF " << value_of(totsurf) << " " << abs(value_of(sb)) << " " << value_of(area) << endl;
 							npts++;
 						}
 						//wtf << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << endl;
@@ -15628,7 +16087,11 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 		}
 		//wtf.close();
 		if (npts==0.0) {
-			warn("no ray-traced points with high enough surface brightness found when determining source centroid, scale");
+			if constexpr (stan::is_autodiff_v<QScalar>) {
+				warn("AUTODIFF: no ray-traced points with high enough surface brightness found when determining source centroid, scale");
+			} else {
+				warn("no ray-traced points with high enough surface brightness found when determining source centroid, scale");
+			}
 			xcavg = xcold;
 			ycavg = ycold;
 			break;
@@ -15642,26 +16105,42 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 		for (i=0; i < x_N; i++) {
 			for (j=0; j < y_N; j++) {
 				if (((mask==NULL) or (mask[i][j])) and (abs(sb = image_data->surface_brightness[i][j] - foreground_surface_brightness[i][j]) > 5*noise_map[i][j])) {
-					//xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
-					//ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+					n = pixel_index[i][j];
+					int n_subpix = n*n_subpix_per_pixel;
+					////xsavg = (corner_sourcepts[i][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j][0] + corner_sourcepts[i+1][j+1][0]) / 4;
+					////ysavg = (corner_sourcepts[i][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j][1] + corner_sourcepts[i+1][j+1][1]) / 4;
+					//if (!qlens->split_imgpixels) {
+						//xsavg = center_sourcepts[i][j][0];
+						//ysavg = center_sourcepts[i][j][1];
+					//} else {
+						//xsavg=ysavg=0;
+						//for (k=0; k < n_subpix_per_pixel; k++) {
+							//xsavg += subpixel_center_sourcepts[i][j][k][0];
+							//ysavg += subpixel_center_sourcepts[i][j][k][1];
+						//}
+						//xsavg /= n_subpix_per_pixel;
+						//ysavg /= n_subpix_per_pixel;
+					//}
+
 					if (!qlens->split_imgpixels) {
-						xsavg = center_sourcepts[i][j][0];
-						ysavg = center_sourcepts[i][j][1];
+						xsavg = p.srcpt_x_centers(n);
+						ysavg = p.srcpt_y_centers(n);
 					} else {
 						xsavg=ysavg=0;
-						for (k=0; k < n_subpix_per_pixel; k++) {
-							xsavg += subpixel_center_sourcepts[i][j][k][0];
-							ysavg += subpixel_center_sourcepts[i][j][k][1];
+						for (int ns=n_subpix; ns < n_subpix + n_subpix_per_pixel; ns++) {
+							xsavg += p.srcpt_x_subpixel_centers(ns);
+							ysavg += p.srcpt_y_subpixel_centers(ns);
 						}
+
 						xsavg /= n_subpix_per_pixel;
 						ysavg /= n_subpix_per_pixel;
 					}
 
-					n = pixel_index[i][j];
+
 					area = (p.srcplane_area_tri1(n) + p.srcplane_area_tri2(n));
 					//area = (source_plane_triangle1_area[i][j] + source_plane_triangle2_area[i][j]);
 					rsq = SQR(xsavg - xcavg) + SQR(ysavg - ycavg);
-					if ((iter==0) or (sqrt(rsq) < 3*sig)) {
+					if ((iter==0) or (sqrt(value_of(rsq)) < 3*sig_doub)) {
 						rsqavg += area*abs(sb)*rsq;
 					}
 				}
@@ -15669,7 +16148,8 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 		}
 		//cout << "rsqavg=" << rsqavg << " totsurf=" << totsurf << endl;
 		rsqavg /= totsurf;
-		sig = sqrt(abs(rsqavg));
+		sig = sqrt(rsqavg);
+		sig_doub = value_of(sig);
 		//cout << "Iteration " << iter << ": sig=" << sig << ", xc=" << xcavg << ", yc=" << ycavg << ", npts=" << npts << endl;
 		iter++;
 	} while ((iter < nmax_srcsize_it) and (npts < npts_old));
@@ -15678,6 +16158,10 @@ double ImagePixelGrid::find_approx_source_size(double &xcavg, double &ycavg, con
 	//cout << "HARG " << xcavg << " " << ycavg << endl;
 	return sig;
 }
+template double ImagePixelGrid::find_approx_source_size<PlainTypes>(double &xcavg, double &ycavg, const bool verbal);
+#ifdef USE_STAN
+template stan::math::var ImagePixelGrid::find_approx_source_size<VarmatTypes>(stan::math::var &xcavg, stan::math::var &ycavg, const bool verbal);
+#endif
 
 
 
@@ -16690,7 +17174,25 @@ stan::math::var_value<Eigen::VectorXd> ImagePixelGrid::partial_fill_vec(const st
 }
 #endif
 
+Eigen::VectorXd ImagePixelGrid::truncate_vec(const Eigen::VectorXd& original, int n)
+{
+	return original.head(n);
+}
 
+#ifdef USE_STAN
+stan::math::var_value<Eigen::VectorXd> ImagePixelGrid::truncate_vec(const stan::math::var_value<Eigen::VectorXd>& original, int n)
+{
+	auto original_arena = stan::arena_t<stan::math::var_value<Eigen::VectorXd>>(original);
+
+	Eigen::VectorXd truncated_val = original_arena.val().head(n);
+
+	auto truncated = stan::math::make_callback_var(truncated_val, [original_arena, n](auto& truncated_var) mutable {
+		original_arena.adj().head(n) += truncated_var.adj();
+	});
+
+	return truncated;
+}
+#endif
 
 void ImagePixelGrid::find_point_images(const double src_x, const double src_y, vector<image<double>>& imgs, const bool use_overlap_in, const bool is_lensed, const bool verbal)
 {
@@ -22938,7 +23440,7 @@ void ImagePixelGrid::calculate_subpixel_distweights()
 	if (psf==NULL) return;
 	double xc, yc, xc_approx, yc_approx, sig, rc;
 	rc = srcgrid_params.distreg_rc;
-	sig = find_approx_source_size(xc_approx,yc_approx);
+	sig = find_approx_source_size<PlainTypes>(xc_approx,yc_approx);
 	if (qlens->fix_lumreg_sig) sig = qlens->lumreg_sig;
 	if (qlens->auto_lumreg_center) {
 		xc = xc_approx;
