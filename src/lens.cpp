@@ -6836,10 +6836,10 @@ double QLens::cc_xi_parameter(int cc_num)
 
 double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 {
-#ifdef USE_STAN
-	using stan::math::cos;
-	using stan::math::sin;
-#endif
+//#ifdef USE_STAN
+	//using stan::math::cos;
+	//using stan::math::sin;
+//#endif
 	double r_ein,zfac;
 	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
@@ -6915,6 +6915,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	//y_phi = yc+r_phi*sin(phi);
 
 
+	/*
 #ifdef USE_STAN
 	{
 		//stan::math::var theta_perp_stan = theta_perp_shear;
@@ -6959,6 +6960,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 		//dshear = uu.adj();
 		dshear = x_phi_stan.adj()*uvec_x + y_phi_stan.adj()*uvec_y;
 	}
+	*/
 
 /*
 	// the next part is just for checking against the numerical derivative; you can comment these lines out later
@@ -6988,7 +6990,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	cout << "this is dshear: " << dshear << " and dshear_check=" << dshear_check <<endl;
 	cout << "this is kappaval_stan: " << kappaval << " and kappaval_check=" << kappaval_check <<endl;
 	*/
-#else
+//#else
 	lensvector<double> point(x_phi,y_phi);
 
 	// get kappa and derivative of kappa for each lens that is included
@@ -7020,7 +7022,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	// just take a forward difference for now
 	dkappa = (kappaval2 - kappaval)/h;
 	dshear = (sheartot2 - sheartot)/h;
-#endif
+//#endif
 
 	//double x0 = 0;
 	//double y0 = 0;
@@ -7051,10 +7053,10 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 
 double QLens::get_scaled_xi_phi_parameter(const double phi, int cc_num)
 {
-#ifdef USE_STAN
-	using stan::math::cos;
-	using stan::math::sin;
-#endif
+//#ifdef USE_STAN
+	//using stan::math::cos;
+	//using stan::math::sin;
+//#endif
 	double zfac;
 	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
@@ -7129,7 +7131,7 @@ double QLens::get_scaled_xi_phi_parameter(const double phi, int cc_num)
 	//y_phi = yc+r_phi*sin(phi);
 
 
-#ifdef USE_STAN
+//#ifdef USE_STAN
 	{
 		//stan::math::var theta_perp_stan = theta_perp_shear;
 		//stan::math::var tt = 0, uu = 0;
@@ -7202,7 +7204,7 @@ double QLens::get_scaled_xi_phi_parameter(const double phi, int cc_num)
 	cout << "this is dshear: " << dshear << " and dshear_check=" << dshear_check <<endl;
 	cout << "this is kappaval_stan: " << kappaval << " and kappaval_check=" << kappaval_check <<endl;
 	*/
-#else
+//#else
 	lensvector<double> point(x_phi,y_phi);
 
 	// get kappa and derivative of kappa for each lens that is included
@@ -7234,7 +7236,7 @@ double QLens::get_scaled_xi_phi_parameter(const double phi, int cc_num)
 	// just take a forward difference for now
 	dkappa = (kappaval2 - kappaval)/h;
 	dshear = (sheartot2 - sheartot)/h;
-#endif
+//#endif
 
 	//double x0 = 0;
 	//double y0 = 0;
@@ -7263,7 +7265,142 @@ double QLens::get_scaled_xi_phi_parameter(const double phi, int cc_num)
 	//return (2*r_ein*xifac+2); // full equation 
 }
 
+double QLens::lenstronomy_circ_xi_parameter(const double src_redshift, const int n_theta, std::vector<double>* xi_vals, std::vector<double>* dkap_vals, std::vector<double>* dshear_vals)
+{
+//#ifdef USE_STAN
+	//using stan::math::cos;
+	//using stan::math::sin;
+//#endif	
+	double r_ein,zfac,xi_param;
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),src_redshift,reference_source_redshift);
+	einstein_radius_of_primary_lens(zfac,r_ein);
+	//cout << "RE=" << r_ein << endl;
+	double xc,yc,xcc,ycc;
+	lens_list[primary_lens_number]->get_center_coords(xc,yc);
 
+	int i,j;
+	double theta, theta_step = M_2PI/n_theta;
+
+	double xifac_avg = 0;
+
+	bool* include_lens = new bool[nlens];
+	for (i=0; i < nlens; i++) {
+		include_lens[i] = false;
+		if (i==primary_lens_number) include_lens[i] = true;
+		else if (lens_list[i]->lenstype==SHEET) include_lens[i] = true;
+		else {
+			if (lens_list[i]->ellipticity_mode != -1) { // this would mean it's an elliptical lens
+				lens_list[i]->get_center_coords(xcc,ycc);
+				if ((xcc==xc) and (ycc==yc)) include_lens[i] = true; // only include co-centered lenses
+			}
+		}
+	}
+
+	double x, y, r, x2, y2, r2;
+	double kappaval, sheartot, shear_angle, theta_shear, theta_perp_shear;
+	double dkappa, dshear;
+	double new_kappaval, new_sheartot, new_shear_angle, shear_deriv, kappa_deriv;
+	double xifac;
+
+	const double h = 1e-6;
+
+	for (i=0, theta=0.0; i < n_theta; i++, theta += theta_step) {
+		x = xc + r_ein*cos(theta);
+		y = yc + r_ein*sin(theta);
+
+		r = sqrt(SQR(x-xc) + SQR(y-yc));
+
+		//cout << "x2: " << x2 << "and y2: " << endl;
+		/*
+#ifdef USE_STAN
+		{
+			stan::math::var x_stan, y_stan, kappaval_stan, sheartot_stan, shear_angle_stan;
+			x_stan = x;
+			y_stan = y;
+			lensvector<stan::math::var> pt_stan(x_stan,y_stan);
+
+			kappaval_stan = kappa<stan::math::var>(x_stan,y_stan,reference_zfactors,default_zsrc_beta_factors);
+			shear<stan::math::var>(pt_stan,sheartot_stan,shear_angle_stan,0,reference_zfactors,default_zsrc_beta_factors);
+			theta_perp_shear = degrees_to_radians(stan::math::value_of(shear_angle_stan)-90);
+
+			kappaval = stan::math::value_of(kappaval_stan);
+
+			kappaval_stan.grad();
+			sheartot = stan::math::value_of(sheartot_stan);
+			//dkappa = tt.adj();
+			double uvec_x = cos(theta_perp_shear);
+			double uvec_y = sin(theta_perp_shear);
+
+			x2 = x + h*uvec_x;
+			y2 = y + h*uvec_y;
+
+			r2 = sqrt(SQR(x2-xc) + SQR(y2-yc));
+
+			if (r2 < r) {
+				uvec_x = -uvec_x;
+				uvec_y = -uvec_y;
+			}
+
+			dkappa = x_stan.adj()*uvec_x + y_stan.adj()*uvec_y;
+
+			stan::math::set_zero_all_adjoints();
+			sheartot_stan.grad();
+			dshear = x_stan.adj()*uvec_x + y_stan.adj()*uvec_y;
+			
+			xifac = (dkappa - dshear)/(1 - kappaval + sheartot);
+			xifac_avg += xifac;
+			//cout << "xifac: " << xifac << endl;
+			if (xi_vals != NULL) xi_vals->push_back(r_ein*xifac_avg);
+			if (dkap_vals != NULL) dkap_vals->push_back(dkappa);
+			if (dshear_vals != NULL) dshear_vals->push_back(dshear);
+		}
+		*/
+//#else 
+		lensvector<double> point(x,y);
+		// how do i get shear angle?
+		// get kappa and derivative of kappa for each lens that is included
+		kappaval = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+		shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+		theta_perp_shear = degrees_to_radians(shear_angle-90);
+		x2 = x + h*cos(theta_perp_shear);
+		y2 = y + h*sin(theta_perp_shear);
+
+		r2 = sqrt(SQR(x2-xc) + SQR(y2-yc));
+
+		//cout << " r_phi: " << r_phi << " r_phi_test: " << r_phi_test << " r_phi2: " << r_phi2 << endl;
+
+		if (r2 < r) {
+			theta_perp_shear = theta_perp_shear + M_PI;
+			x2 = x + h*cos(theta_perp_shear);
+			y2 = y + h*sin(theta_perp_shear);
+			r2 = sqrt(SQR(x2-xc) + SQR(y2-yc));
+			//cout << "new r_phi2: " << r_phi2 << endl;
+		}
+
+		lensvector<double> point2(x2, y2);
+
+		double kappaval2, sheartot2, shear_angle2;
+		kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+		shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+
+		// forward difference version
+		dkappa = (kappaval2 - kappaval)/h;
+		dshear = (sheartot2 - sheartot)/h;
+
+		xifac = (dkappa - dshear)/(1 - kappaval + sheartot);
+		xifac_avg += xifac;
+		//cout << "xifac: " << xifac << endl;
+		if (xi_vals != NULL) xi_vals->push_back(r_ein*xifac_avg);
+		if (dkap_vals != NULL) dkap_vals->push_back(dkappa);
+		if (dshear_vals != NULL) dshear_vals->push_back(dshear);
+		//cout << "test to see theta: " << theta << endl;
+//#endif
+	}
+
+	xifac_avg /= n_theta;
+	delete[] include_lens;
+	return (r_ein * xifac_avg);
+}
 
 bool QLens::get_xi_phi_derivs(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals, vector<double>& kapvals, vector<double>& kap_derivs, vector<double>& shear_derivs)
 {

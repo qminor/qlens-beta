@@ -1099,6 +1099,7 @@ void QLens::process_commands(bool read_file)
 							"cc_xi -- The xi parameter along the critical curves (from Kochanek 2020) for the default source redshift\n"
 							"xi_phi -- The xi parameter on the critical curve (from Kochanek 2020) at angle <phi>\n"
 							"scaled_xi_phi -- The scaled xi parameter on the critical curve (from Kochanek 2020) at angle <phi>\n"
+							"lenstronomy_xi -- The circularlry averaged xi parameter from Birrer et al. 2021\n"
 							"mass_re -- The projected mass enclosed within Einstein radius of lens [lens#] for a source redshift <zsrc>\n"
 							"kappa_re -- kappa(R_ein) of primary lens (+lenses that are co-centered with primary), averaged over all angles\n"
 							"logslope -- The average log-slope of kappa between <r1> and <r2> (in arcsec) for a specific lens [lens#]\n"
@@ -9232,6 +9233,15 @@ void QLens::process_commands(bool read_file)
 								if (nwords != 5) Complain("derived parameter scaled_xi_phi requires one argument (angle phi)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								dparam_list->add_dparam(words[3],dparam_arg,-1,-1,use_kpc);
+							} else if (words[3]=="lenstronomy_xi") {
+								if ((nwords != 4) and (nwords != 5)) Complain("derived parameter lenstronomy_xi requires zero, one or two arguments (optional zsrc)");
+								if (nwords==4) {
+									dparam_arg = source_redshift;
+									lensnum = -1;
+								} else {
+									if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								}
+								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="kappa_ratio_max") {
 								int pmode;
 								double dparam_arg2 = -1;

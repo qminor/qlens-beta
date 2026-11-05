@@ -272,6 +272,8 @@ bool DerivedParamList::add_dparam(const string param_type, const double param, c
 		derived_param_type = Xi_Phi_Param;
 	} else if (param_type=="scaled_xi_phi") {
 		derived_param_type = Scaled_Xi_Phi_Param;
+	} else if (param_type=="lenstronomy_xi") {
+		derived_param_type = Lenstronomy_Xi_Param;
 	} else if (param_type=="kappa_ratio_max") {
 		derived_param_type = Kappa_Ratio_Max_Param;
 	} else if (param_type=="kappa_ratio_min") {

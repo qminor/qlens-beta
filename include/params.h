@@ -125,6 +125,9 @@ struct DerivedParam
 			name = "xi_phi"; latex_name = "\\xi_{\\phi,cc}";
 		} else if (derived_param_type == Scaled_Xi_Phi_Param) {
 			name = "scaled_xi_phi"; latex_name = "\\xi_{\\phi,scaled}";
+		} else if (derived_param_type == Lenstronomy_Xi_Param) {
+			name = "lenstronomy_xi"; latex_name = "\\xi_{ls}";
+			if (int_param <= 0) int_param = 100; // number of theta values
 		} else if (derived_param_type == Kappa_Ratio_Max_Param) {
 			name = "kappa_ratio_max"; latex_name = "\\frac{1-\\kappa_1}{1-\\kappa_2}_{,max}";
 		} else if (derived_param_type == Kappa_Ratio_Min_Param) {
@@ -219,6 +222,9 @@ struct DerivedParam
 		}
 		else if (derived_param_type == Scaled_Xi_Phi_Param) {
 			return lens_in->get_scaled_xi_phi_parameter(funcparam);
+		}
+		else if (derived_param_type == Lenstronomy_Xi_Param) {
+			return lens_in->lenstronomy_circ_xi_parameter(funcparam,int_param);
 		}
 		else if (derived_param_type == Kappa_Ratio_Max_Param) {
 			return lens_in->get_img_kappa_ratio_max_dist(funcparam,funcparam2);
@@ -332,6 +338,9 @@ struct DerivedParam
 		if (derived_param_type == Circ_Xi_Param) {
 			lens_in->get_circ_xi_parameter(funcparam,int_param,&dparam_data);
 		}
+		else if (derived_param_type == Circ_Xi_Param) {
+			lens_in->lenstronomy_circ_xi_parameter(funcparam,int_param,&dparam_data);
+		}
 	}
 	string mkstring_doub(const double db)
 	{
@@ -381,6 +390,8 @@ struct DerivedParam
 			outstring = "xi parameter of lens on critical curve at angle phi = " + mkstring_doub(funcparam) + "\n";
 		} else if (derived_param_type == Scaled_Xi_Phi_Param) {
 			outstring = "scaled xi parameter of lens on critical curve at angle phi = " + mkstring_doub(funcparam) + "\n";
+		} else if (derived_param_type == Lenstronomy_Xi_Param) {
+			outstring = "circular averaged 'lenstronomy' xi parameter of primary and co-centered lenses with " + mkstring_int(int_param) + " points\n";
 		} else if (derived_param_type == Kappa_Ratio_Max_Param) {
 			outstring = "1-kappa ratio between farthest pair of images \n";
 		} else if (derived_param_type == Kappa_Ratio_Min_Param) {

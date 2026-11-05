@@ -73,6 +73,7 @@ enum DerivedParamType {
 	CC_Xi_Param,
 	Xi_Phi_Param,
 	Scaled_Xi_Phi_Param,
+	Lenstronomy_Xi_Param,
 	Kappa_Ratio_Max_Param,
 	Kappa_Ratio_Min_Param,
 	Kappa_Re,
@@ -1315,6 +1316,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double get_xi_parameter(const double src_redshift, const int lensnum);
 	double get_sph_xi_parameter(const double src_redshift);
 	double get_circ_xi_parameter(const double src_redshift, const int n_theta, std::vector<double>* xi_vals = NULL);
+	double lenstronomy_circ_xi_parameter(const double src_redshift, const int n_theta, std::vector<double>* xi_vals = NULL, std::vector<double>* dkap_vals = NULL, std::vector<double>* dshear_vals = NULL);
 
 	double cc_xi_parameter(int cc_num=-1);
 	bool find_tangential_critical_curve(int &cc_num);
