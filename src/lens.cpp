@@ -68,7 +68,7 @@ using namespace mlpack::util;
 #endif
 
 //#include "bluenoise_tbb.h"
-//#include "bluenoise_autodiff_tbb.h"
+#include "bluenoise_autodiff_tbb.h"
 //#include "bluenoise_autodiff_simple.h"
 
 const int QLens::nmax_lens_planes = 100;
@@ -606,9 +606,9 @@ QLens::QLens(Cosmology* cosmo_in) : UCMC(), Model()
 	bluenoise_stepsize = 0.001;
 	bluenoise_densityk_frac = 0.5;
 	bluenoise_lscale = 3;
-	bluenoise_n_iterations = 60;
+	bluenoise_n_iterations = 20;
 	bluenoise_use_nn = false;
-	bluenoise_use_bfgs = false;
+	bluenoise_use_bfgs = true;
 	fix_boundary_pts = true;
 	default_imgpixel_nsplit = 2;
 	emask_imgpixel_nsplit = 1;
@@ -10915,7 +10915,7 @@ void QLens::fit_restore_defaults()
 	clear_raw_chisq(); // in case chi-square is being used as a derived parameter
 }
 
-double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime_temp, const bool show_diagnostics, const bool show_status, const bool show_lensinfo, const bool find_gradient, const bool test_gradient)
+double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime_temp, const bool show_diagnostics, const bool show_status, const bool show_lensinfo, const bool find_gradient, const bool test_gradient, const double finite_diff_interval)
 {
 	if (fit_set_optimizations()==false) return -1e30;
 	if (fit_output_dir != ".") create_output_directory();
@@ -11111,8 +11111,8 @@ double QLens::chisq_single_evaluation(const bool init_fitmodel, const bool show_
 				//for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
 				//cout << endl;
 
-				cout << "Params and GRADIENT comps from Finite differencing (1e-6): " << endl;
-				get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,1e-6);
+				cout << "Params and GRADIENT comps from Finite differencing (" << finite_diff_interval << "): " << endl;
+				get_grad_finite_diff(fitparams,derivs,stepsizes,param_list->nparams,finite_diff_interval);
 				for (int i=0; i < param_list->nparams; i++) cout << fitparams[i] << " " << derivs[i] << endl;
 				//cout << endl;
 
@@ -11649,6 +11649,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 	}
 
 	LBFGSBParam<double> param;
+	param.past = 5;
 	param.delta = chisq_tolerance;
 	param.epsilon = gradient_tolerance;
 	param.epsilon_rel = gradient_tolerance_rel;
@@ -11716,6 +11717,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 		else if (convergence_status==1) cout << "Gradient converged to within relative threshold " << param.epsilon_rel << "*grad" << endl;
 		else if (convergence_status==2) cout << "Energy converged to within threshold " << param.delta << endl;
 		else if (convergence_status==3) cout << "Max number of iterations reached (" << param.max_iterations << ")" << endl;
+		//else if (convergence_status==4) cout << "Line search failure; best point returned after " << param.max_iterations << " iterations" << endl;
 		else cout << "Unknown convergence status" << endl;
 	}
 
@@ -11764,7 +11766,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 
 	display_chisq_status = false;
 	if (mpi_id==0) {
-		cout << "BFGS converged after " << n_iterations << " iterations\n\n";
+		cout << "BFGS finished after " << n_iterations << " iterations\n\n";
 	}
 	output_fit_results(fitparams,stepsizes,chisq_bestfit,chisq_evals,show_parameter_errors,using_autodiff); // the autodiff version doesn't seem to work well right now?
 
@@ -12832,14 +12834,14 @@ bool QLens::adopt_model(Vector<double> &fitpars)
 		return false;
 	}
 	double *transformed_params = new double[n_fitparams];
+	param_list->update_param_values(fitpars.array());
+	param_list->inverse_transform_parameters(fitpars.array(),transformed_params);
+	double log_penalty_prior;
+#ifdef USE_STAN
 	stan::math::var *transformed_params_var = new stan::math::var[n_fitparams];
 	stan::math::var *params_var = new stan::math::var[n_fitparams];
 	for (int i=0; i < n_fitparams; i++) params_var[i] = fitpars[i];
-	param_list->update_param_values(fitpars.array());
-	param_list->inverse_transform_parameters(fitpars.array(),transformed_params);
 	param_list->inverse_transform_parameters(params_var,transformed_params_var);
-	double log_penalty_prior;
-#ifdef USE_STAN
 	log_penalty_prior = update_model<stan::math::var>(transformed_params_var); // the model is adopted here
 #endif
 	log_penalty_prior = update_model<double>(transformed_params); // the model is adopted here
@@ -16354,6 +16356,10 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			if (n_src_centroids == HALF_DATAPIXELS) n_src_centroids = npix_in_lensing_mask / 2;
 			else if (n_src_centroids == ALL_DATAPIXELS) n_src_centroids = npix_in_lensing_mask;
 		}
+		if (n_src_centroids > npix_in_lensing_mask) {
+			warn("number of source centroids cannot be greater than the number of pixels in the lensing mask; setting n_src_centroids equal to number of pixels in mask");
+			n_src_centroids = npix_in_lensing_mask;
+		}
 
 		int data_reduce_factor;
 		int icent_offset=0;
@@ -16530,7 +16536,6 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 			//} else
 //#endif
 			{
-				/*
 				BlueNoiseParameters params;
 				params.densityK = bluenoise_densityk_frac*(npix/n_src_centroids);
 				params.spacingScale = bluenoise_lscale;
@@ -16541,24 +16546,27 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 				params.maxStep = 0.0;
 				params.iterations = bluenoise_n_iterations;
 				params.repulsion_epsilon = 1e-12;
-				params.epsilon = 1e-5;
+				params.site_displacement = 0;
+				params.energy_tolerance = 1e-3; // objective function tolerance
+				params.gradient_tolerance = 1e-3; // gradient tolerance
+				params.gradient_tolerance_rel = 1e-3; // relative gradient tolerance
 
 				DelaunaySourceGrid delaunay_centroids(this,band_number);
 				delaunay_centroids.create_srcpixel_grid(initial_centroids_x.data(),initial_centroids_y.data(),n_src_centroids,ivals_centroids,jvals_centroids,n_image_pixels_x,n_image_pixels_y,false,imggrid_i);
 				Eigen::VectorX<bool> is_boundary_pt_grid = delaunay_centroids.get_vertex_boundary_status();
 				for (int i=0; i < n_src_centroids; i++) {
-					//if (is_boundary_pt_grid[i]) is_boundary_pt[i] = true;
+					if (is_boundary_pt_grid[i]) is_boundary_pt[i] = true;
 					//if (is_boundary_pt[i]) {
 						//cout << initial_centroids_x[i] << " " << initial_centroids_y[i] << endl;
 					//}
 				}
 
 				BlueNoiseRelaxation<VecType,QScalar> relaxation(srcpts_vec_x, srcpts_vec_y, initial_centroids_x, initial_centroids_y, is_boundary_pt, params, bluenoise_use_nn);
+				//BlueNoiseRelaxation relaxation(srcpts_vec_x, srcpts_vec_y, initial_centroids_x, initial_centroids_y, is_boundary_pt, params, bluenoise_use_nn);
 				//BlueNoiseRelaxation<QScalar> relaxation(initial_centroids_x, initial_centroids_y, is_boundary_pt, params);
 
 				std::vector<std::pair<int,int>> edges;
 				relaxation.set_delaunay_grid(&delaunay_centroids,ivals_centroids,jvals_centroids);
-				//relaxation.set_delaunay_grid(&delaunay_centroids);
 				edges = delaunay_centroids.get_edge_pairs();
 				relaxation.setNeighborEdges(edges);
 
@@ -16566,11 +16574,6 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 				//std::cout << "Initial Repulsion energy: " << relaxation.repulsionEnergy() << std::endl;
 				//std::cout << "Initial Tether energy: " << relaxation.tetherEnergy() << std::endl;
 
-//#ifdef USE_STAN
-				//if constexpr (stan::is_autodiff_v<QScalar>) {
-					//relaxation.diagnoseRepulsionGradient();
-				//}
-//#endif
 				int n_relax_iterations;
 				if (bluenoise_use_bfgs) {
 					n_relax_iterations = relaxation.relax_LBFGS(verbal);
@@ -16589,7 +16592,6 @@ bool QLens::create_sourcegrid_from_imggrid_delaunay(const bool use_weighted_srcp
 				//std::cout << "Repulsion energy: " << relaxation.repulsionEnergy() << std::endl;
 				//std::cout << "Tether energy: " << relaxation.tetherEnergy() << std::endl;
 				//cout << "SUMS: " << src_centroids_x.sum() << " " << src_centroids_y.sum() << endl;
-				*/
 			}
 		}
 		delete[] input_data;

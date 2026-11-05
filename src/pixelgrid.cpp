@@ -5563,7 +5563,7 @@ void DelaunaySourceGrid::update_surface_brightness(int& index)
 	ImgGrid_Params<MathTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
 	int i;
 	for (i=0; i < n_gridpts; i++) {
-		p.surface_brightness[i] = imggrid.amplitude_vector(index);
+		p.surface_brightness(i) = imggrid.amplitude_vector(index);
 		//cout << "pixel " << i << ": SB=" << p.surface_brightness[i] << " amp=" << imggrid.amplitude_vector(index) << " (index=" << (index-1) << ")" << endl;
 		index++;
 	}
@@ -5759,7 +5759,9 @@ typename MathTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_v
 			if (!inside_triangle) {
 				// we don't want to extrapolate, because it can lead to crazy results outside the grid. so we find the closest vertex and use that vertex's SB
 				if ((zero_outside_border) and (!on_vertex)) {
+#ifdef USE_STAN
 					cache[subpixel_idx].skip = true;
+#endif
 					continue;
 				}
 				// if we're outside the grid, only attempt to extrapolate if using natural neighbor interpolation; if using 3-pt interpolation, just use closest vertex
@@ -5830,8 +5832,14 @@ void DelaunaySourceGrid::reverse_construct_Lmatrix(const std::vector<ImgPtInfo, 
 	std::vector<stan::math::var> local_x;
 	std::vector<stan::math::var> local_y;
 
+	local_x.reserve(cache.size());
+	local_y.reserve(cache.size());
+
 	// Build local objective
 	stan::math::var objective = 0.0;
+
+	// Timer 1: construct local autodiff objective
+	//auto t0 = std::chrono::steady_clock::now();
 
 	for (const auto& imgpt : cache)
 	{
@@ -5869,9 +5877,13 @@ void DelaunaySourceGrid::reverse_construct_Lmatrix(const std::vector<ImgPtInfo, 
 		}
 	}
 
+	//auto t1 = std::chrono::steady_clock::now();
+
+	// Timer 2: nested reverse pass
 	// Differentiate local objective
 	objective.grad();
 	// stan::math::grad(local.vi_); // possibly change to this line?
+	//auto t2 = std::chrono::steady_clock::now();
 
 	for (int i=0; i < cache.size(); i++) {
 		if (cache[i].skip) continue;
@@ -5890,6 +5902,12 @@ void DelaunaySourceGrid::reverse_construct_Lmatrix(const std::vector<ImgPtInfo, 
 		input_x.adj()(cache[i].subpixel_idx) += local_x[i].adj();
 		input_y.adj()(cache[i].subpixel_idx) += local_y[i].adj();
 	}
+	//auto t3 = std::chrono::steady_clock::now();
+	//std::cout << "Objective construction: " << std::chrono::duration<double>(t1-t0).count() << "\n";
+
+	//std::cout << "Nested autodiff reverse: " << std::chrono::duration<double>(t2-t1).count() << "\n";
+
+	//std::cout << "Gradient scattering: " << std::chrono::duration<double>(t3-t2).count() << "\n";
 }
 #endif
 
@@ -18091,6 +18109,7 @@ void ImagePixelGrid::initialize_pixel_matrices(const bool potential_perturbation
 	if (Lmatrix_sparse != NULL) die("Lmatrix_sparse already initialized");
 	//if (amplitude_vector != NULL) die("source surface brightness vector already initialized");
 	p.amplitude_vector = Eigen::VectorXd::Zero(n_amps);
+
 	if ((qlens->use_lum_weighted_regularization) or (qlens->use_distance_weighted_regularization) or (qlens->use_mag_weighted_regularization)) {
 		if (reg_weight_factor != NULL) die("FUCK reg_ewight_factor");
 		reg_weight_factor = new double[source_npixels];
@@ -21016,13 +21035,13 @@ void ImagePixelGrid::generate_Rmatrix_from_hmatrices_sparse(const bool potential
 
 	Rmatrix_sparse_value.makeCompressed();
 
+#ifdef USE_STAN
 	// Set hmatrix adjoints to zero
 	for (int i = 0; i < 2; ++i) {
 		hmatrix_adj_accum[i].resize(0,0);
 		hmatrix_adj_accum_sparse[i].resize(0,0);
 	}
 
-#ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<MatType>) {
 		p.Rmatrix_sparse = stan::math::make_callback_var(Rmatrix_sparse_value, [this](const auto& res) mutable {
 			std::chrono::steady_clock::time_point callback_wtime0;
@@ -21273,13 +21292,13 @@ void ImagePixelGrid::generate_Rmatrix_from_hmatrices_dense(const bool potential_
 	imggrid_params.Rmatrix_dense += hmatrix_dense[1].transpose()*hmatrix_dense[1];
 
 
+#ifdef USE_STAN
 	// Set hmatrix adjoints to zero
 	for (int i=0; i < 2; i++) {
 		hmatrix_adj_accum[i].resize(0,0);
 		hmatrix_adj_accum_sparse[i].resize(0,0);
 	}
 
-#ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<MatType>) {
 		p.Rmatrix_dense = stan::math::make_callback_var(imggrid_params.Rmatrix_dense, [this] (const auto& res) mutable {
 			std::chrono::steady_clock::time_point callback_wtime0;
@@ -21470,13 +21489,13 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_sparse(const bool potential
 	// Store R matrix with autodiff callback.
 	//------------------------------------------------------------------
 
+#ifdef USE_STAN
 	// Set gmatrix adjoints to zero
 	for (int i=0; i < 4; i++) {
 		gmatrix_adj_accum[i].resize(0,0);
 		gmatrix_adj_accum_sparse[i].resize(0,0);
 	}
 
-#ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<MatType>) {
 		p.Rmatrix_sparse = stan::math::make_callback_var(Rmatrix_sparse_value, [this](const auto& res) mutable {
 			std::chrono::steady_clock::time_point callback_wtime0;
@@ -21716,6 +21735,7 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_dense(const bool potential_
 	imggrid_params.Rmatrix_dense = Eigen::MatrixXd::Zero(npixels,npixels);
 	for (int i=0; i < 4; i++) imggrid_params.Rmatrix_dense += gmatrix_dense[i].transpose()*gmatrix_dense[i];
 
+#ifdef USE_STAN
 	// Set gmatrix adjoints to zero
 	for (int i=0; i < 4; i++) {
 		gmatrix_adj_accum[i].resize(0,0);
@@ -21723,7 +21743,6 @@ void ImagePixelGrid::generate_Rmatrix_from_gmatrices_dense(const bool potential_
 		gmatrix_adj_accum_sparse[i].resize(0,0);
 	}
 
-#ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<MatType>) {
 		p.Rmatrix_dense = stan::math::make_callback_var(imggrid_params.Rmatrix_dense, [this] (const auto& res) mutable {
 			std::chrono::steady_clock::time_point callback_wtime0;
@@ -21912,9 +21931,9 @@ bool ImagePixelGrid::generate_Rmatrix_from_covariance_kernel(const bool allow_re
 		qlens->logfile << " Rlogdet=" << Rmatrix_logdet << " covmatrix_sum=" << covmatrix_dense.sum() << " " << flush;
 	}
 
+#ifdef USE_STAN
 	covmatrix_adj_accum.resize(0,0);
 
-#ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<MatType>)
 	{
 		if (!qlens->use_covariance_matrix) {
@@ -22938,6 +22957,7 @@ void ImagePixelGrid::setup_regparam_optimization(const bool dense_Fmatrix)
 
 	//amplitude_vector_minchisq = new double[n_amps];
 	p.amplitude_vector_minchisq = Eigen::VectorXd::Zero(n_amps);
+
 	regopt_chisqmin = 1e30;
 	regopt_logdet = 1e30; // this will be changed during optimization
 
@@ -22980,7 +23000,7 @@ bool ImagePixelGrid::optimize_regularization_parameter(const bool dense_Fmatrix,
 
 	if (qlens->use_covariance_matrix) p.Gmatrix_log_determinant = regopt_logdet;
 	else p.Fmatrix_log_determinant = regopt_logdet;
-	p.amplitude_vector = value_of(p.amplitude_vector_minchisq);
+	p.amplitude_vector = p.amplitude_vector_minchisq;
 	if (qlens->show_wtime) {
 		wtime_opt = std::chrono::steady_clock::now() - wtime_opt0;
 		if (qlens->mpi_id==0) cout << "Wall time for optimizing regularization parameter: "  << wtime_opt.count() << endl;
@@ -23004,20 +23024,20 @@ bool ImagePixelGrid::optimize_regularization_parameter(const bool dense_Fmatrix,
 			if ((verbal) and (qlens->mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << value_of(*p.regparam_ptr) << endl;
 			if (qlens->use_covariance_matrix) p.Gmatrix_log_determinant = regopt_logdet;
 			else p.Fmatrix_log_determinant = regopt_logdet;
-			p.amplitude_vector = value_of(p.amplitude_vector_minchisq);
+			p.amplitude_vector = p.amplitude_vector_minchisq;
 			if (verbal) if (qlens->mpi_id==0) cout << "loglike=" << regopt_chisqmin << endl;
 		}
 
 		for (int j=0; j < qlens->lumreg_max_it; j++) {
 			p.Rmatrix_sparse = Eigen::SparseMatrix<double, Eigen::ColMajor>();
-			if (create_regularization_matrix<PlainTypes>(true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
+			if (create_regularization_matrix<MathTypes>(true)==false) return false; // must re-generate covariance matrix with updated correlation lengths (from new pixel sb-weights)
 			regopt_chisqmin = 1e30;
 			logreg_min = brents_min_method(chisqreg,qlens->optimize_regparam_minlog,qlens->optimize_regparam_maxlog,qlens->optimize_regparam_tol,verbal);
 			(*p.regparam_ptr) = pow(10,logreg_min);
 			if ((verbal) and (qlens->mpi_id==0)) cout << "regparam after optimizing with luminosity-weighted regularization: " << value_of(*p.regparam_ptr) << endl;
 			if (qlens->use_covariance_matrix) p.Gmatrix_log_determinant = regopt_logdet;
 			else p.Fmatrix_log_determinant = regopt_logdet;
-			p.amplitude_vector = value_of(p.amplitude_vector_minchisq);
+			p.amplitude_vector = p.amplitude_vector_minchisq;
 			if (verbal) if (qlens->mpi_id==0) cout << "lumreg_it=" << j << " loglike=" << regopt_chisqmin << endl;
 		}
 
@@ -23030,7 +23050,7 @@ bool ImagePixelGrid::optimize_regularization_parameter(const bool dense_Fmatrix,
 		}
 	}
 
-	update_source_and_lensgrid_amplitudes<PlainTypes>(verbal);
+	update_source_and_lensgrid_amplitudes<MathTypes>(verbal);
 	if ((qlens->use_lum_weighted_srcpixel_clustering) and (pre_srcgrid)) {
 		if (qlens->show_wtime) {
 			wtime_opt0 = std::chrono::steady_clock::now();
@@ -23042,6 +23062,13 @@ bool ImagePixelGrid::optimize_regularization_parameter(const bool dense_Fmatrix,
 			wtime_opt0 = std::chrono::steady_clock::now();
 		}
 	}
+#ifdef USE_STAN
+			if constexpr (!stan::is_autodiff_v<QScalar>) {
+				ImgGrid_Params<VarmatTypes>& pad = assign_imggrid_param_object<VarmatTypes>();
+				get_source_regparam_ptr(0,pad.regparam_ptr);
+				(*pad.regparam_ptr) = QScalar(*p.regparam_ptr);
+			}
+#endif
 
 	//delete[] img_minus_sbprofile;
 	//delete[] amplitude_vector_minchisq;
@@ -23131,7 +23158,7 @@ double ImagePixelGrid::chisq_regparam(const double logreg)
 
 	if (chisq < regopt_chisqmin) {
 		regopt_chisqmin = chisq;
-		p.amplitude_vector_minchisq = value_of(p.amplitude_vector);
+		p.amplitude_vector_minchisq = p.amplitude_vector;
 		regopt_logdet = Fmatrix_logdet;
 	}
 	return chisq;
@@ -23250,7 +23277,7 @@ double ImagePixelGrid::chisq_regparam_dense(const double logreg)
 
 	if (chisq < regopt_chisqmin) {
 		regopt_chisqmin = chisq;
-		p.amplitude_vector_minchisq = value_of(p.amplitude_vector);
+		p.amplitude_vector_minchisq = p.amplitude_vector;
 		regopt_logdet = logdet;
 	}
 	return chisq;
@@ -24067,7 +24094,7 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 
 			auto& p = assign_imggrid_param_object<MathTypes>();
 
-			Eigen::MatrixXd LW = p.Lmatrix_trans_dense.val();
+			Eigen::MatrixXd& LW = p.Lmatrix_trans_dense.val();
 			LW.array().rowwise() *= imgpixel_covinv_vector.transpose().array();
 			Eigen::MatrixXd X = chol->solve(LW);
 			p.Lmatrix_trans_dense.adj() += logdet_adj * 2.0 * X;
@@ -24262,11 +24289,11 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 			if (qlens->regularization_method != None) {
 				// Regularization contribution from MAP amplitudes (this remains exact).
 				if (qlens->regularization_method==Norm) {
-					Eigen::MatrixXd Rmatrix = stan::math::value_of(p.Rmatrix_dense);
+					const Eigen::MatrixXd& Rmatrix = stan::math::value_of(p.Rmatrix_dense);
 					p.regparam_ptr->adj() -= u.dot(Rmatrix * amplitude);
 					p.Rmatrix_dense.adj() -= p.regparam_ptr->val() * u * amplitude.transpose();
 				} else if (qlens->covariance_kernel_regularization) {
-					Eigen::MatrixXd Rmatrix = stan::math::value_of(p.Rmatrix_dense);
+					const Eigen::MatrixXd& Rmatrix = stan::math::value_of(p.Rmatrix_dense);
 					p.regparam_ptr->adj() -= u.dot(Rmatrix * amplitude);
 					p.Rmatrix_dense.adj() -= p.regparam_ptr->val() * u * amplitude.transpose();
 				} else if (qlens->dense_Rmatrix) {
@@ -24465,7 +24492,7 @@ void ImagePixelGrid::invert_lens_mapping_dense_Fmatrix(bool verbal)
 
 						if (!qlens->use_covariance_matrix) {
 							// We use exact calculations for this (upgrade later?).
-							Eigen::MatrixXd Rmatrix = stan::math::value_of(p.Rmatrix_dense);
+							const Eigen::MatrixXd& Rmatrix = stan::math::value_of(p.Rmatrix_dense);
 							Eigen::MatrixXd Rsolve = Fmatrix_llt.solve(Rmatrix);
 
 							Eigen::MatrixXd contribution = -logdet_adj * p.regparam_ptr->val() * Rmatrix * Rsolve;

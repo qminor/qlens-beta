@@ -8733,6 +8733,7 @@ void QLens::process_commands(bool read_file)
 					bool find_gradient = false;
 					bool test_gradient = false;
 					bool init_fitmodel = false; // if set to false, will skip creating a separate "fitmodel" object and just use current qlens object as fitmodel
+					double finite_diff_interval = 1e-7;
 					vector<string> args;
 					if (extract_word_starts_with('-',2,nwords-1,args)==true)
 					{
@@ -8752,10 +8753,14 @@ void QLens::process_commands(bool read_file)
 						}
 					}
 
-					if (nwords > 2) Complain("no arguments to 'fit chisq' allowed (except for flags using '-....')");
+					if ((nwords > 2) and (!test_gradient)) Complain("no arguments to 'fit chisq' allowed (except for flags using '-....')");
+					else if ((test_gradient) and (nwords > 3)) Complain("no arguments to 'fit chisq' allowed except for finite diff interval value (except for flags using '-....')");
+					if ((test_gradient) and (nwords==3)) {
+						if (!(ws[2] >> finite_diff_interval)) Complain("Invalid finite difference interval");
+					}
 					int np;
 					get_n_fit_parameters(np);
-					chisq_single_evaluation(init_fitmodel,show_total_wtime,temp_show_wtime,showdiag,true,show_lensinfo,find_gradient,test_gradient);
+					chisq_single_evaluation(init_fitmodel,show_total_wtime,temp_show_wtime,showdiag,true,show_lensinfo,find_gradient,test_gradient,finite_diff_interval);
 					clear_raw_chisq(); // in case raw chi-square is being used as a derived parameter
 				}
 				else if (words[1]=="output_img_chivals") {
@@ -9222,6 +9227,7 @@ void QLens::process_commands(bool read_file)
 							} else if (words[3]=="xi_phi") {
 								if (nwords != 5) Complain("derived parameter xi_phi requires one argument (angle phi)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								dparam_list->add_dparam(words[3],dparam_arg,-1,-1,use_kpc);
 							} else if (words[3]=="scaled_xi_phi") {
 								if (nwords != 5) Complain("derived parameter scaled_xi_phi requires one argument (angle phi)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");

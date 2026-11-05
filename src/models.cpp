@@ -683,7 +683,9 @@ void SPLE_Lens::deflection_elliptical_nocore_vec(const VecType& x, const VecType
 #else
 	R = (x.array().square() + y.array().square()/p.qsq).sqrt().matrix();
 	R = (2*p.bprime*p.q/(1+p.q)*(p.bprime*R.array().inverse()).pow(p.alpha-1)).matrix(); // Now R is no longer elliptical radius, but rather the norm of deflection
-	phi = (y.array().atan2((p.q*x).array())).matrix();
+	phi = y.binaryExpr(p.q*x, [](const auto& yy, const auto& xx) {
+		 return std::atan2(yy, xx);
+});
 #endif
 
 	deflection_angular_factor_nocomplex_vec<VecType,QScalar>(phi,def_x,def_y);

@@ -1215,7 +1215,7 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 
 	void plot_chisq_2d(const int param1, const int param2, const int n1, const double i1, const double f1, const int n2, const double i2, const double f2);
 	void plot_chisq_1d(const int param, const int n, const double i, const double f, string filename);
-	double chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime, const bool showdiag, const bool show_status, const bool show_lensinfo = false, const bool find_gradient = false, const bool test_gradient = false);
+	double chisq_single_evaluation(const bool init_fitmodel, const bool show_total_wtime, const bool show_wtime, const bool showdiag, const bool show_status, const bool show_lensinfo = false, const bool find_gradient = false, const bool test_gradient = false, const double finite_diff_interval = 1e-7);
 	//bool setup_fit_parameters(const bool ignore_limits = false);
 	//bool setup_limits();
 	void get_n_fit_parameters(int &nparams);

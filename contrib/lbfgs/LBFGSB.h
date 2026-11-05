@@ -154,6 +154,8 @@ public:
             return 1;
         }
 
+
+
         // Compute generalized Cauchy point
         Vector xcp(n), vecc;
         IndexSet newact_set, fv_set;
@@ -226,13 +228,14 @@ public:
 					convergence_status = 1;
                 return k;
             }
+
             // Convergence test -- objective function value
             if (fpast > 0)
             {
                 const Scalar fxd = m_fx[k % fpast];
                 if (k >= fpast && abs(fxd - fx) <= m_param.delta * std::max(std::max(abs(fx), abs(fxd)), Scalar(1)))
 					 {
-							convergence_status = 2;
+                    convergence_status = 2;
                     return k;
 					 }
 
@@ -241,7 +244,7 @@ public:
             // Maximum number of iterations
             if (m_param.max_iterations != 0 && k >= m_param.max_iterations)
             {
-							convergence_status = 3;
+					 convergence_status = 3;
                 return k;
             }
 

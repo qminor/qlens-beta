@@ -3298,6 +3298,7 @@ PYBIND11_MODULE(qlens, m) {
 			bool no2dposts = false;
 			bool use_fisher_matrix = false;
 			bool run_plotting_scripts = true;
+			double finite_diff_interval = 1e-6;
 			for (auto item : kwargs) {
 				if (py::cast<string>(item.first)=="resampled") {
 					try {
@@ -3340,7 +3341,7 @@ PYBIND11_MODULE(qlens, m) {
 
 			return current.make_histograms(nbins_1d,nbins_2d,resampled_posts,no2dposts,use_fisher_matrix,run_plotting_scripts);
 		})
-		.def("fit_chisq",&QLens_Wrap::chisq_single_evaluation, py::arg("init_fitmodel") = false, py::arg("show_total_wtime") = false, py::arg("show_wtime") = false, py::arg("showdiag") = false, py::arg("show_status") = true, py::arg("show_lensmodel") = false, py::arg("grad") = false, py::arg("testgrad") = false)
+		.def("fit_chisq",&QLens_Wrap::chisq_single_evaluation, py::arg("init_fitmodel") = false, py::arg("show_total_wtime") = false, py::arg("show_wtime") = false, py::arg("showdiag") = false, py::arg("show_status") = true, py::arg("show_lensmodel") = false, py::arg("grad") = false, py::arg("testgrad") = false, py::arg("finite_diff_interval") = 1e-7)
 		.def("LogLike", &QLens_Wrap::LogLikeListFunc)
 		.def("sbmap_invert", [](QLens_Wrap &current){
 			double chisq0;
