@@ -1690,9 +1690,9 @@ void LensProfile::update_meta_parameters_and_pointers()
 {
 	set_integration_pointers();
 	update_meta_parameters();
-#ifdef USE_STAN
-	update_meta_parameters_autodif();
-#endif
+//#ifdef USE_STAN
+	//update_meta_parameters_autodif();
+//#endif
 }
 
 void LensProfile::set_model_specific_integration_pointers() {} // gets overloaded by some models
