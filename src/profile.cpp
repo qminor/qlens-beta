@@ -3343,7 +3343,6 @@ template void LensProfile::deflection_and_hessian_numerical<stan::math::var>(con
 template <typename VecType, typename QScalar>
 void LensProfile::deflection_numerical_vec(const VecType& x, const VecType& y, VecType& def_x, VecType& def_y)
 {
-	cout << "RUNNING DEFLETION NUMEROCAL VEC" << endl;
 	bool converged;
 	if (!ellipticity_gradient) {
 		LensIntegral<VecType,QScalar> lens_integral(this,0,0,lensparams->q,0,true); // the 'true' tells it to run the "vec" version of the integrals

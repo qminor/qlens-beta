@@ -6994,6 +6994,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	lensvector<double> point(x_phi,y_phi);
 
 	// get kappa and derivative of kappa for each lens that is included
+	kappaval = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
 	shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
 	theta_perp_shear = degrees_to_radians(shear_angle-90);
 
@@ -7042,6 +7043,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 		//cout << "this is x2: " << x_phi2 << "and this is y2: " << y_phi2 << endl;
 	//}
 
+	cout << "dkappa=" << dkappa << " dshear=" << dshear << " kappa=" << kappaval << endl;
 	xifac = r_ein * (dkappa - dshear)/(1-kappaval);
 
 	delete[] include_lens;
@@ -11852,7 +11854,7 @@ double QLens::chi_square_fit_BFGS(const bool show_parameter_errors)
 	if ((verbal) and (mpi_id==0)) {
 		if (convergence_status==0) cout << "Gradient converged below threshold " << param.epsilon << endl;
 		else if (convergence_status==1) cout << "Gradient converged to within relative threshold " << param.epsilon_rel << "*grad" << endl;
-		else if (convergence_status==2) cout << "Energy converged to within threshold " << param.delta << endl;
+		else if (convergence_status==2) cout << "Log-likelihood converged to within threshold " << param.delta << endl;
 		else if (convergence_status==3) cout << "Max number of iterations reached (" << param.max_iterations << ")" << endl;
 		//else if (convergence_status==4) cout << "Line search failure; best point returned after " << param.max_iterations << " iterations" << endl;
 		else cout << "Unknown convergence status" << endl;
@@ -18091,7 +18093,6 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 							srcgrid_wtime0 = std::chrono::steady_clock::now();
 						}
 						bool use_weighted_clustering = ((use_dist_weighted_srcpixel_clustering) or ((use_lum_weighted_srcpixel_clustering) and (use_saved_sbweights))) ? true : false;
-
 						create_sourcegrid_from_imggrid_delaunay<PlainTypes>(use_weighted_clustering,band_number,zsrc_i,verbal);
 						image_pixel_grids[imggrid_i]->set_delaunay_srcgrid(delaunay_srcgrids[src_i]);
 						delaunay_srcgrids[src_i]->set_image_pixel_grid(image_pixel_grids[imggrid_i]);
@@ -18237,7 +18238,7 @@ double QLens::pixel_log_evidence_times_two(double &chisq0, const bool verbal, co
 					}
 
 					image_pixel_grid->set_surface_brightness_vector_to_data(); // note that image_pixel_grids[0] just has the data pixel values stored in it
-					image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<PlainTypes>(verbal);
+					image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<PlainTypes>(verbal,include_fgmask_in_inversion);
 					if (imggrid_i==0) {
 						// currently only allowing point sources with first image grid...will extend later
 						if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
@@ -19147,7 +19148,7 @@ bool QLens::generate_and_invert_lensing_matrix_cartesian(const int imggrid_i, co
 	image_pixel_grid->initialize_pixel_matrices<PlainTypes>(false,verbal);
 	if (regularization_method != None) image_pixel_grid->create_regularization_matrix<PlainTypes>();
 	if (matrix_format==DENSE) {
-		image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<PlainTypes>(verbal);
+		image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<PlainTypes>(verbal,include_fgmask_in_inversion);
 	} else {
 		image_pixel_grid->PSF_convolution_Lmatrix(verbal);
 	}
@@ -19228,7 +19229,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 	}
 
 	if (matrix_format==DENSE) {
-		image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal,outside_sb_prior);
+		image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal,include_fgmask_in_inversion,outside_sb_prior);
 	} else {
 		image_pixel_grid->PSF_convolution_Lmatrix(verbal);
 	}
@@ -19296,7 +19297,7 @@ bool QLens::generate_and_invert_lensing_matrix_delaunay(const int imggrid_i, con
 			if ((potential_perturbations) and (image_pixel_grid->create_regularization_matrix<MathTypes>(include_lum_weighting,get_lumreg_from_sbweights,true,verbal)==false)) { image_pixel_grid->clear_pixel_matrices();  return false; } // in this case, covariance matrix was not positive definite 
 		}
 		if (matrix_format==DENSE) {
-			image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
+			image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal,include_fgmask_in_inversion);
 		} else {
 			image_pixel_grid->PSF_convolution_Lmatrix(verbal);
 		}
@@ -19403,7 +19404,7 @@ bool QLens::generate_and_invert_lensing_matrix_shapelet(const int imggrid_i, std
 		image_pixel_grid->create_regularization_matrix_shapelet<MathTypes>();
 	}
 
-	image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal);
+	image_pixel_grid->PSF_convolution_Lmatrix_dense_wrapper<MathTypes>(verbal,include_fgmask_in_inversion);
 	image_pixel_grid->set_surface_brightness_vector_to_data(); // note that image_pixel_grids[imggrid_i] just has the data pixel values stored in it
 	if ((n_ptsrc > 0) and (!include_imgfluxes_in_inversion) and (!include_srcflux_in_inversion)) {
 		// Note that if image fluxes are included as linear parameters, we don't need to add point images to the SB separately because

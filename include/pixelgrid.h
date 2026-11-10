@@ -755,7 +755,7 @@ class DelaunaySourceGrid : public DelaunayGrid, public Model
 #endif
 
 	template <typename MathTypes>
-	typename MathTypes::MatType calculate_Lmatrix_dense_direct_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int image_npixels, const int nsubpix_per_pixel, const double weight, bool& trouble_with_starting_vertex);
+	typename MathTypes::MatType calculate_Lmatrix_dense_direct_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int image_npixels, const int nsubpix_per_pixel, const int n_srcpixels, const double weight, bool& trouble_with_starting_vertex, const bool use_fgmask);
 #ifdef USE_STAN
 	void reverse_construct_Lmatrix(const std::vector<ImgPtInfo, stan::math::arena_allocator<ImgPtInfo>>& cache, const stan::math::var_value<Eigen::VectorXd>& input_x, const stan::math::var_value<Eigen::VectorXd>& input_y, const Eigen::MatrixXd& Ladj);
 #endif
@@ -957,6 +957,8 @@ class ImgGrid_Params
 	VecType sbprofile_sb_primary_mask;
 	VecType srcpt_x_centers, srcpt_y_centers;
 	VecType srcpt_x_subpixel_centers, srcpt_y_subpixel_centers;
+	VecType srcpt_x_centers_fgmask, srcpt_y_centers_fgmask; // these are used only if qlens->include_fgmask_in_inversion is set to true
+	VecType srcpt_x_subpixel_centers_fgmask, srcpt_y_subpixel_centers_fgmask; // these are used only if qlens->include_fgmask_in_inversion is set to true
 
 	QScalar src_xmin, src_xmax, src_ymin, src_ymax; // for ray-traced points
 	VecType srcpt_x_corners, srcpt_y_corners;
@@ -1059,6 +1061,10 @@ class ImagePixelGrid : private Sort
 	lensvector<double> ***subpixel_center_pts;
 	lensvector<double> ***subpixel_source_gradient;
 
+	Eigen::VectorXd center_pts_x;
+	Eigen::VectorXd center_pts_y;
+	Eigen::VectorXd subpixel_center_pts_x;
+	Eigen::VectorXd subpixel_center_pts_y;
 	Eigen::VectorXd center_pts_x_fgmask;
 	Eigen::VectorXd center_pts_y_fgmask;
 	Eigen::VectorXd subpixel_center_pts_x_fgmask;
@@ -1244,8 +1250,8 @@ class ImagePixelGrid : private Sort
 	std::vector<int> *Rmatrix_index_rows;
 	int *Rmatrix_row_nn;
 
-	dvector *Rmatrix_MGE_packed;
-	double *Rmatrix_MGE_log_determinants;
+	//dvector *Rmatrix_MGE_packed;
+	//double *Rmatrix_MGE_log_determinants;
 
 	double Rmatrix_pot_log_determinant;
 
@@ -1280,6 +1286,7 @@ class ImagePixelGrid : private Sort
 
 	bool assign_pixel_mappings(const bool potential_perturbations=false, const bool verbal=false);
 	void assign_foreground_mappings(const bool use_data = true);
+	template <typename MathTypes>
 	void add_MGE_amplitudes_to_Lmatrix();
 	//void PSF_convolution_Lmatrix_dense(const bool verbal=false);
 	template <typename MathTypes>
@@ -1291,13 +1298,15 @@ class ImagePixelGrid : private Sort
 	void get_source_regparam_ptr(const int imggrid_include_i, QScalar* &regparam);
 	template <typename MathTypes>
 	void add_regularization_term_to_dense_Fmatrix(ImagePixelGrid* imggrid, typename MathTypes::QScalar *regparam, const bool potential_perturbations=false);
+	template <typename MathTypes>
 	void add_MGE_regularization_terms_to_dense_Fmatrix();
 	double calculate_regularization_prior_term(double *regparam_ptr, const bool potential_perturbations=false);
-	double calculate_MGE_regularization_prior_term();
 	void add_regularization_prior_terms_to_logev(double& logev_times_two, double& loglike_reg, double& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
 
-	template <typename QScalar, typename MathTypes>
-	QScalar calculate_regularization_prior_term_stan(QScalar *regparam_ptr, const bool potential_perturbations=false);
+	template <typename MathTypes>
+	typename MathTypes::QScalar calculate_regularization_prior_term_stan(typename MathTypes::QScalar *regparam_ptr, const bool potential_perturbations=false);
+	template <typename MathTypes>
+	typename MathTypes::QScalar calculate_MGE_regularization_prior_term();
 	template <typename QScalar, typename MathTypes>
 	void add_regularization_prior_terms_to_logev_stan(QScalar& logev_times_two, QScalar& loglike_reg, QScalar& regterms, const bool include_potential_perturbations = false, const bool verbal = false);
 
@@ -1380,7 +1389,8 @@ class ImagePixelGrid : private Sort
 	double brents_min_method(double (ImagePixelGrid::*func)(const double), const double ax, const double bx, const double tol, const bool verbal);
 	template <typename MathTypes>
 	void create_regularization_matrix_shapelet();
-	void create_MGE_regularization_matrices();
+	//void create_MGE_regularization_matrices();
+	void create_MGE_list();
 	void generate_Rmatrix_shapelet_gradient();
 	void generate_Rmatrix_shapelet_curvature();
 
@@ -1536,9 +1546,9 @@ class ImagePixelGrid : private Sort
 	template <typename VecType>
 	VecType PSF_convolution_pixel_vector_stan_FFT(const VecType& sbvec, const bool foreground = false, const bool verbal = false);
 	template <typename MatType>
-	MatType PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat);
+	MatType PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat, const bool use_fgmask);
 	template <typename MatType>
-	MatType PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lmat, const bool verbal = false);
+	MatType PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lmat, const bool use_fgmask, const bool verbal = false);
 
 
 	void reset_psfconv_plans();
@@ -1550,7 +1560,7 @@ class ImagePixelGrid : private Sort
 	template <typename MathTypes>
 	void PSF_convolution_pixel_vector_wrapper(const bool foreground = false, const bool verbal = false, const bool use_fft = false, const bool use_extended_mask = false);
 	template <typename MathTypes>
-	void PSF_convolution_Lmatrix_dense_wrapper(const bool verbal = false, const bool save_unconvolved_Lmatrix = false);
+	void PSF_convolution_Lmatrix_dense_wrapper(const bool verbal = false, const bool use_fgmask = false, const bool save_unconvolved_Lmatrix = false);
 
 	~ImagePixelGrid();
 	template <typename MathTypes>

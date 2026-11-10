@@ -5712,7 +5712,7 @@ template void DelaunaySourceGrid::calculate_Lmatrix_dense_direct<VarmatTypes,sta
 #endif
 
 template <typename MathTypes>
-typename MathTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int image_npixels, const int nsubpix_per_pixel, const double weight, bool& trouble_with_starting_vertex)
+typename MathTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_vec(const typename MathTypes::VecType& input_pts_x, const typename MathTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, const int n_srcpixels, const double weight, bool& trouble_with_starting_vertex, const bool use_fgmask)
 {
 	// This function constructs a dense Lmatrix (as opposed to the sparse Lmatrix constructed in the function above) without needing to call assign_source_mapping_flags first.
 	using QScalar = typename MathTypes::QScalar;
@@ -5720,7 +5720,7 @@ typename MathTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_v
 	DelaunaySourceGrid_Params<double>& p = assign_delaunay_srcgrid_param_object<double>();
 	ImgGrid_Params<MathTypes>& imggrid = image_pixel_grid->assign_imggrid_param_object<MathTypes>();
 
-	int n_imgpts = image_npixels * nsubpix_per_pixel;
+	int n_imgpts = npixels * nsubpix_per_pixel;
 
 	//std::vector<ImgPtInfo> cache(n_imgpts);
 #ifdef USE_STAN
@@ -5733,13 +5733,16 @@ typename MathTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_v
 	int n_mapped_srcpixels;
 	int img_pixel_i, img_pixel_j;
 	int subpixel_idx = 0;
+	//int npixels = (use_fgmask) ? image_pixel_grid->image_npixels_fgmask : image_pixel_grid->image_npixels;
+	int *pixels_i = (use_fgmask) ? image_pixel_grid->fgmask_pixels_i : image_pixel_grid->emask_pixels_i;
+	int *pixels_j = (use_fgmask) ? image_pixel_grid->fgmask_pixels_j : image_pixel_grid->emask_pixels_j;
 
-	Eigen::MatrixXd L = Eigen::MatrixXd::Zero(image_pixel_grid->n_amps,image_pixel_grid->image_npixels);
+	Eigen::MatrixXd L = Eigen::MatrixXd::Zero(n_srcpixels,npixels);
 
-	for (int img_index=0; img_index < image_npixels; img_index++)
+	for (int img_index=0; img_index < npixels; img_index++)
 	{
-		img_pixel_i = image_pixel_grid->emask_pixels_i[img_index];
-		img_pixel_j = image_pixel_grid->emask_pixels_j[img_index];
+		img_pixel_i = pixels_i[img_index];
+		img_pixel_j = pixels_j[img_index];
 
 		for (int subcell_idx=0; subcell_idx < nsubpix_per_pixel; subcell_idx++, subpixel_idx++) {
 			//img_index = subpixel_idx / nsubpix_per_pixel;
@@ -5820,9 +5823,9 @@ typename MathTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_v
 		return L;
 	}
 }
-template typename PlainTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_vec<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int image_npixels, const int nsubpix_per_pixel, const double weight, bool& trouble_with_starting_vertex);
+template typename PlainTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_vec<PlainTypes>(const typename PlainTypes::VecType& input_pts_x, const typename PlainTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, const int n_srcpixels, const double weight, bool& trouble_with_starting_vertex, const bool use_fgmask);
 #ifdef USE_STAN
-template typename VarmatTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_vec<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int image_npixels, const int nsubpix_per_pixel, const double weight, bool& trouble_with_starting_vertex);
+template typename VarmatTypes::MatType DelaunaySourceGrid::calculate_Lmatrix_dense_direct_vec<VarmatTypes>(const typename VarmatTypes::VecType& input_pts_x, const typename VarmatTypes::VecType& input_pts_y, const int npixels, const int nsubpix_per_pixel, const int n_srcpixels, const double weight, bool& trouble_with_starting_vertex, const bool use_fgmask);
 #endif
 
 #ifdef USE_STAN
@@ -14601,8 +14604,6 @@ void ImagePixelGrid::setup_pixel_arrays()
 	Fmatrix_nn = 0;
 	n_src_inv = 0;
 
-	Rmatrix_MGE_packed = NULL;
-	Rmatrix_MGE_log_determinants = NULL;
 	mge_list = NULL;
 
 	reg_weight_factor = NULL;
@@ -14680,8 +14681,8 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 		ntot_corners = 0;
 		for (i=0; i < x_N+1; i++) {
 			for (j=0; j < y_N+1; j++) {
-				if ((i < x_N) and (j < y_N) and (pixel_in_mask[i][j])) image_npixels++;
-				if (((i < x_N) and (j < y_N) and (pixel_in_mask[i][j])) or ((j < y_N) and (i > 0) and (pixel_in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (pixel_in_mask[i][j-1])) or ((i > 0) and (j > 0) and (pixel_in_mask[i-1][j-1]))) {
+				if ((i < x_N) and (j < y_N) and (mask[i][j])) image_npixels++;
+				if (((i < x_N) and (j < y_N) and (mask[i][j])) or ((j < y_N) and (i > 0) and (mask[i-1][j])) or ((i < x_N) and (j > 0) and (mask[i][j-1])) or ((i > 0) and (j > 0) and (mask[i-1][j-1]))) {
 					ntot_corners++;
 				}
 			}
@@ -14689,7 +14690,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 
 		for (i=0; i < x_N; i++) {
 			for (j=0; j < y_N; j++) {
-				if (((pixel_in_mask[i][j]) or (emask[i][j]))) image_npixels_emask++;
+				if (((mask[i][j]) or (emask[i][j]))) image_npixels_emask++;
 				if (fgmask[i][j]) image_npixels_fgmask++;
 			}
 		}
@@ -14719,8 +14720,11 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 	twiststat = new int[image_npixels];
 	is_boundary_pixel = new bool[image_npixels];
 
+	center_pts_x = Eigen::VectorXd::Zero(image_npixels);
+	center_pts_y = Eigen::VectorXd::Zero(image_npixels);
 	center_pts_x_fgmask = Eigen::VectorXd::Zero(image_npixels_fgmask);
 	center_pts_y_fgmask = Eigen::VectorXd::Zero(image_npixels_fgmask);
+
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
@@ -14738,14 +14742,16 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((!pixel_in_mask) or (pixel_in_mask[i][j])) {
+			if ((!mask) or (mask[i][j])) {
 				mask_pixels_i[n_cell] = i;
 				mask_pixels_j[n_cell] = j;
 				emask_pixels_i[n_cell] = i; // since emask includes the primary mask, have the emask indices identical to primary mask indices for the pixels that overlap
 				emask_pixels_j[n_cell] = j;
+				center_pts_x(n_cell) = center_pts[i][j][0];
+				center_pts_y(n_cell) = center_pts[i][j][1];
 				pixel_index[i][j] = n_cell;
 				if ((i==0) or (i==x_N-1) or (j==0) or (j==y_N-1)) is_boundary_pixel[n_cell] = true;
-				else if ((!pixel_in_mask[i+1][j]) or (!pixel_in_mask[i-1][j]) or (!pixel_in_mask[i][j+1]) or (!pixel_in_mask[i][j-1])) is_boundary_pixel[n_cell] = true;
+				else if ((!mask[i+1][j]) or (!mask[i-1][j]) or (!mask[i][j+1]) or (!mask[i][j-1])) is_boundary_pixel[n_cell] = true;
 				else is_boundary_pixel[n_cell] = false;
 				map_primary_mask_to_fgmask[n_cell] = pixel_index_fgmask[i][j];
 				n_cell++;
@@ -14771,7 +14777,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 	if ((pixel_in_mask != NULL) and (emask != NULL)) {
 		for (j=0; j < y_N; j++) {
 			for (i=0; i < x_N; i++) {
-				if ((emask[i][j]) and (!pixel_in_mask[i][j])) {
+				if ((emask[i][j]) and (!mask[i][j])) {
 					emask_pixels_i[n_cell] = i;
 					emask_pixels_j[n_cell] = j;
 					pixel_index[i][j] = n_cell;
@@ -14791,7 +14797,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 
 
 	n_corner=0;
-	if ((!pixel_in_mask) or (pixel_in_mask == NULL)) {
+	if ((!mask) or (mask == NULL)) {
 		for (j=0; j < y_N+1; j++) {
 			for (i=0; i < x_N+1; i++) {
 				corner_index[i][j] = -1;
@@ -14807,8 +14813,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 		for (j=0; j < y_N+1; j++) {
 			for (i=0; i < x_N+1; i++) {
 				corner_index[i][j] = -1;
-				if (((i < x_N) and (j < y_N) and (pixel_in_mask[i][j])) or ((j < y_N) and (i > 0) and (pixel_in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (pixel_in_mask[i][j-1])) or ((i > 0) and (j > 0) and (pixel_in_mask[i-1][j-1]))) {
-				//if (((i < x_N) and (j < y_N) and (image_data->extended_mask[i][j])) or ((j < y_N) and (i > 0) and (image_data->extended_mask[i-1][j])) or ((i < x_N) and (j > 0) and (image_data->extended_mask[i][j-1])) or ((i > 0) and (j > 0) and (image_data->extended_mask[i-1][j-1]))) {
+				if (((i < x_N) and (j < y_N) and (mask[i][j])) or ((j < y_N) and (i > 0) and (mask[i-1][j])) or ((i < x_N) and (j > 0) and (mask[i][j-1])) or ((i > 0) and (j > 0) and (mask[i-1][j-1]))) {
 					masked_pixel_corner_i[n_corner] = i;
 					masked_pixel_corner_j[n_corner] = j;
 					if (i > (x_N+1)) die("FUCK! corner i is huge from the get-go");
@@ -14918,7 +14923,7 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 			if ((image_data==NULL) or (emask == NULL) or (emask[i][j])) {
 				image_n_subpixels_emask += n_subpix_per_pixel;
 			}
-			if ((image_data==NULL) or (!pixel_in_mask) or (pixel_in_mask[i][j])) {
+			if ((image_data==NULL) or (!mask) or (mask[i][j])) {
 				image_n_subpixels += n_subpix_per_pixel;
 			}
 		}
@@ -14955,7 +14960,7 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 	// We start with pixels that are in the primary mask, and then afterwards we'll proceed to the rest of the pixels in the extended mask
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
+			if ((mask==NULL) or (mask[i][j])) {
 				for (k=0; k < n_subpix_per_pixel; k++) {
 					mask_subpixel_i[subpixel_idx] = i;
 					mask_subpixel_j[subpixel_idx] = j;
@@ -14984,10 +14989,11 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 	}
 
 	//we DON'T reset subpixel_idx, because now we add the emask pixels that aren't in the primary mask
-	if ((pixel_in_mask != NULL) and (emask != NULL)) {
+	if ((mask != NULL) and (emask != NULL)) {
 		for (j=0; j < y_N; j++) {
 			for (i=0; i < x_N; i++) {
-				if ((emask[i][j]) and (!pixel_in_mask[i][j])) {
+				if (emask==NULL) die("NULL EMASK");
+				if ((emask[i][j]) and (!mask[i][j])) {
 					for (k=0; k < n_subpix_per_pixel; k++) {
 						extended_mask_subpixel_i[subpixel_idx] = i;
 						extended_mask_subpixel_j[subpixel_idx] = j;
@@ -15027,8 +15033,18 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 		}
 	}
 
+	subpixel_center_pts_x = Eigen::VectorXd::Zero(image_n_subpixels);
+	subpixel_center_pts_y = Eigen::VectorXd::Zero(image_n_subpixels);
 	subpixel_center_pts_x_fgmask = Eigen::VectorXd::Zero(image_n_subpixels_fgmask);
 	subpixel_center_pts_y_fgmask = Eigen::VectorXd::Zero(image_n_subpixels_fgmask);
+
+	for (int n_subcell=0; n_subcell < image_n_subpixels; n_subcell++) {
+		j = mask_subpixel_j[n_subcell];
+		i = mask_subpixel_i[n_subcell];
+		k = extended_mask_subpixel_index[n_subcell];
+		subpixel_center_pts_x(n_subcell) = subpixel_center_pts[i][j][k][0];
+		subpixel_center_pts_y(n_subcell) = subpixel_center_pts[i][j][k][1];
+	}
 	for (int n_subcell=0; n_subcell < image_n_subpixels_fgmask; n_subcell++) {
 		j = fgmask_subpixel_j[n_subcell];
 		i = fgmask_subpixel_i[n_subcell];
@@ -17985,7 +18001,8 @@ bool ImagePixelGrid::assign_pixel_mappings(const bool potential_perturbations, c
 		wtime0 = std::chrono::steady_clock::now();
 	}
 	count_MGE_amplitudes(n_mge_sets,n_mge_amps);
-	if (n_mge_sets > 0) create_MGE_regularization_matrices();
+	//if (n_mge_sets > 0) create_MGE_regularization_matrices(); // MGE Rmatrix is explicitly norm, so need to create ahead of time
+	if (n_mge_sets > 0) create_MGE_list(); 
 	bool map_all_imgpixels = true; // Now, we include all image pixels in the mask, regardless of whether any source pixels map to them (since regularization matrix will include all image pixels anyway)
 	//bool map_all_imgpixels = (n_mge_amps > 0) ? true : false;
 	//if (image_pixel_grid->n_pixsrc_to_include_in_Lmatrix > 1) map_all_imgpixels = true; // hack to enforce that image pixel indices are the same for all grids being included
@@ -18210,7 +18227,7 @@ void ImagePixelGrid::initialize_pixel_matrices(const bool potential_perturbation
 	} else construct_Lmatrix_supersampled(delaunay,potential_perturbations,verbal);
 	if (qlens->matrix_format==DENSE) {
 		//convert_Lmatrix_to_dense();
-		if (n_mge_amps > 0) add_MGE_amplitudes_to_Lmatrix();
+		if (n_mge_amps > 0) add_MGE_amplitudes_to_Lmatrix<MathTypes>();
 	}
 }
 template void ImagePixelGrid::initialize_pixel_matrices<PlainTypes>(const bool potential_perturbations, bool verbal);
@@ -18250,7 +18267,7 @@ void ImagePixelGrid::initialize_pixel_matrices_shapelets(bool verbal)
 	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	count_shapelet_amplitudes();
 	count_MGE_amplitudes(n_mge_sets,n_mge_amps);
-	if (n_mge_sets > 0) create_MGE_regularization_matrices();
+	//if (n_mge_sets > 0) create_MGE_regularization_matrices();
 	src_npixel_start = 0;
 	source_and_lens_n_amps = source_npixels + n_mge_amps; // it's possible one could add shapelet potential corrections later, but probably not worth doing
 	n_amps = source_and_lens_n_amps;
@@ -18291,7 +18308,7 @@ void ImagePixelGrid::initialize_pixel_matrices_shapelets(bool verbal)
 	}
 
 	construct_Lmatrix_shapelets<MathTypes>();
-	if (n_mge_amps > 0) add_MGE_amplitudes_to_Lmatrix();
+	if (n_mge_amps > 0) add_MGE_amplitudes_to_Lmatrix<MathTypes>();
 }
 template void ImagePixelGrid::initialize_pixel_matrices_shapelets<PlainTypes>(bool verbal);
 #ifdef USE_STAN
@@ -18305,8 +18322,6 @@ void ImagePixelGrid::clear_pixel_matrices()
 	if (Lmatrix_sparse != NULL) delete[] Lmatrix_sparse;
 	if (Lmatrix_index != NULL) delete[] Lmatrix_index;
 
-	if (Rmatrix_MGE_packed != NULL) delete[] Rmatrix_MGE_packed;
-	if (Rmatrix_MGE_log_determinants != NULL) delete[] Rmatrix_MGE_log_determinants;
 	if (mge_list != NULL) delete[] mge_list;
 
 	reg_weight_factor = NULL;
@@ -18315,8 +18330,6 @@ void ImagePixelGrid::clear_pixel_matrices()
 	Lmatrix_index = NULL;
 
 	//n_src_inv = 0;
-	Rmatrix_MGE_packed = NULL;
-	Rmatrix_MGE_log_determinants = NULL;
 	mge_list = NULL;
 }
 
@@ -18475,6 +18488,7 @@ void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool pot
 	ImagePixelGrid** imggrid_ptr;
 	ImagePixelGrid* imggrid;
 	bool trouble_with_starting_vertex = false;
+	int npixels = (qlens->include_fgmask_in_inversion) ? image_npixels_fgmask : image_npixels;
 	//#pragma omp parallel
 	{
 		int thread;
@@ -18484,12 +18498,12 @@ void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool pot
 
 		if ((qlens->split_imgpixels) and (!qlens->raytrace_using_pixel_centers)) {
 			if (delaunay) {
-				p.Lmatrix_trans_dense = delaunay_srcgrid->calculate_Lmatrix_dense_direct_vec<MathTypes>(p.srcpt_x_subpixel_centers,p.srcpt_y_subpixel_centers,image_npixels,n_subpix_per_pixel,1.0/n_subpix_per_pixel,trouble_with_starting_vertex);
+				p.Lmatrix_trans_dense = delaunay_srcgrid->calculate_Lmatrix_dense_direct_vec<MathTypes>(p.srcpt_x_subpixel_centers,p.srcpt_y_subpixel_centers,npixels,n_subpix_per_pixel,source_npixels,1.0/n_subpix_per_pixel,trouble_with_starting_vertex,qlens->include_fgmask_in_inversion);
 			} else
 			{
-				p.Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,image_npixels);
+				p.Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,npixels);
 				//#pragma omp for private(img_index,i,j,imggrid_ptr,imggrid,index,center_srcpt) schedule(dynamic)
-				for (img_index=0; img_index < image_npixels; img_index++) {
+				for (img_index=0; img_index < npixels; img_index++) {
 					i = mask_pixels_i[img_index];
 					j = mask_pixels_j[img_index];
 
@@ -18523,12 +18537,12 @@ void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool pot
 			}
 		} else {
 			if (delaunay) {
-				p.Lmatrix_trans_dense = delaunay_srcgrid->calculate_Lmatrix_dense_direct_vec<MathTypes>(p.srcpt_x_centers,p.srcpt_y_centers,image_npixels,1,1.0,trouble_with_starting_vertex);
+				p.Lmatrix_trans_dense = delaunay_srcgrid->calculate_Lmatrix_dense_direct_vec<MathTypes>(p.srcpt_x_centers,p.srcpt_y_centers,npixels,1,source_npixels,1.0,trouble_with_starting_vertex,qlens->include_fgmask_in_inversion);
 			} else
 			{
-				p.Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,image_npixels);
+				p.Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,npixels);
 				//#pragma omp for private(img_index,i,j,imggrid_ptr,imggrid,index) schedule(dynamic)	
-				for (img_index=0; img_index < image_npixels; img_index++) {
+				for (img_index=0; img_index < npixels; img_index++) {
 					//index = 0;
 					i = mask_pixels_i[img_index];
 					j = mask_pixels_j[img_index];
@@ -18560,7 +18574,7 @@ void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool pot
 	/*
 	bool Lmatrix_is_zero = true;
 	//int i,j;
-	for (i=0; i < image_npixels; i++) {
+	for (i=0; i < npixels; i++) {
 		for (j=0; j < source_npixels; j++) {
 			if (p.Lmatrix_trans_dense(j,i) != 0) {
 				//cout << "NONZERO element!" << endl;
@@ -18576,9 +18590,9 @@ void ImagePixelGrid::construct_Lmatrix_dense(const bool delaunay, const bool pot
 		if (qlens->mpi_id==0) cout << "Wall time for constructing Lmatrix: "  << wtime.count() << endl;
 	}
 	//if ((qlens->mpi_id==0) and (verbal)) {
-		//int Lmatrix_ntot = n_amps*image_npixels;
+		//int Lmatrix_ntot = n_amps*npixels;
 		//double sparseness = ((double) Lmatrix_n_elements)/Lmatrix_ntot;
-		//cout << "image has " << image_npixels << " pixels in mask, Lmatrix has " << Lmatrix_n_elements << " nonzero elements (sparseness " << sparseness << ")\n";
+		//cout << "image has " << npixels << " pixels in mask, Lmatrix has " << Lmatrix_n_elements << " nonzero elements (sparseness " << sparseness << ")\n";
 	//}
 
 	if (trouble_with_starting_vertex) warn(qlens->warnings,"could not find good starting vertices for Delaunay grid; started with vertex 0 when searching for enclosing triangles");
@@ -18724,60 +18738,20 @@ void ImagePixelGrid::construct_Lmatrix_shapelets()
 		lensvector<double> *center_srcpt, *center_pt;
 		//p.Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,image_npixels);
 
-		if (qlens->split_imgpixels) {
-			p.Lmatrix_trans_dense = shapelet[0]->construct_Lmatrix_vec(p.srcpt_x_subpixel_centers,p.srcpt_y_subpixel_centers,p.Lmatrix_trans_dense,0,n_subpix_per_pixel);
-
-		/*
-			subpixel_idx = 0;
-			//#pragma omp for private(img_index,i,j,k,subpixel_idx,center_srcpt,center_pt) schedule(dynamic)
-			for (img_index=0; img_index < image_npixels; img_index++) {
-				i = emask_pixels_i[img_index];
-				j = emask_pixels_j[img_index];
-
-				center_srcpt = subpixel_center_sourcepts[i][j];
-				center_pt = subpixel_center_pts[i][j];
-				for (subcell_index=0; subcell_index < n_subpix_per_pixel; subcell_index++) {
-					double *Lmatptr = p.Lmatrix_trans_dense.col(img_index).data();
-					for (k=0; k < n_shapelet_sets; k++) {
-						if (shapelet[k]->is_lensed) {
-							//cout << "Lensed shapelet " << img_index << " subcell_idx=" << subcell_index << " subpixel_idx=" << subpixel_idx << " k=" << k << endl;
-							//Note that calculate_Lmatrix_elements(...) will increment Lmatptr as it goes
-							shapelet[k]->calculate_Lmatrix_elements(p.srcpt_x_subpixel_centers(subpixel_idx),p.srcpt_y_subpixel_centers(subpixel_idx),Lmatptr,1.0/n_subpix_per_pixel);
-							//shapelet[k]->calculate_Lmatrix_elements(center_sourcepts[i][j][0],center_sourcepts[i][j][1],Lmatptr,1.0/n_subpix_per_pixel);
-							//cout << "cell " << i << "," << j << ": " << center_sourcepts[i][j][0] << " " << center_sourcepts[i][j][1] << " vs " << center_pt[subcell_index][0] << " " << center_pt[subcell_index][1] << endl;
-						} else {
-							shapelet[k]->calculate_Lmatrix_elements(center_pt[subcell_index][0],center_pt[subcell_index][1],Lmatptr,1.0/n_subpix_per_pixel);
-						}
-					}
-					subpixel_idx++;
+		for (k=0; k < n_shapelet_sets; k++) {
+			if (shapelet[k]->is_lensed) {
+				if (qlens->split_imgpixels) {
+					p.Lmatrix_trans_dense = shapelet[k]->construct_Lmatrix_vec(p.srcpt_x_subpixel_centers,p.srcpt_y_subpixel_centers,p.Lmatrix_trans_dense,0,n_subpix_per_pixel);
+				} else {
+					p.Lmatrix_trans_dense = shapelet[k]->construct_Lmatrix_vec(p.srcpt_x_centers,p.srcpt_y_centers,p.Lmatrix_trans_dense,0,1);
 				}
-				//double *Lmatptr = p.Lmatrix_trans_dense.col(img_index).data();
-				//cout << "Lmatrix val: " << (*Lmatptr) << endl;
-			}
-			*/
-		} else {
-			p.Lmatrix_trans_dense = shapelet[0]->construct_Lmatrix_vec(p.srcpt_x_centers,p.srcpt_y_centers,p.Lmatrix_trans_dense,0,1);
-
-			/*
-			lensvector<double> center, center_srcpt;
-			//#pragma omp for private(img_index,i,j,center_srcpt) schedule(dynamic)
-			for (img_index=0; img_index < image_npixels; img_index++) {
-				i = emask_pixels_i[img_index];
-				j = emask_pixels_j[img_index];
-
-				double *Lmatptr = p.Lmatrix_trans_dense.col(img_index).data();
-				for (k=0; k < n_shapelet_sets; k++) {
-					if (shapelet[k]->is_lensed) {
-						center_srcpt = center_sourcepts[i][j];
-						//shapelet[k]->calculate_Lmatrix_elements(center_srcpt[0],center_srcpt[1],Lmatptr,1.0);
-						shapelet[k]->calculate_Lmatrix_elements(p.srcpt_x_centers(img_index),p.srcpt_y_centers(img_index),Lmatptr,1.0);
-					} else {
-						center = center_pts[i][j];
-						shapelet[k]->calculate_Lmatrix_elements(center[0],center[1],Lmatptr,1.0);
-					}
+			} else {
+				if (qlens->split_imgpixels) {
+					p.Lmatrix_trans_dense = shapelet[k]->construct_Lmatrix_vec(subpixel_center_pts_x,subpixel_center_pts_y,p.Lmatrix_trans_dense,0,n_subpix_per_pixel);
+				} else {
+					p.Lmatrix_trans_dense = shapelet[k]->construct_Lmatrix_vec(center_pts_x,center_pts_y,p.Lmatrix_trans_dense,0,1);
 				}
 			}
-			*/
 		}
 	}
 
@@ -18792,9 +18766,10 @@ template void ImagePixelGrid::construct_Lmatrix_shapelets<PlainTypes>();
 template void ImagePixelGrid::construct_Lmatrix_shapelets<VarmatTypes>();
 #endif
 
+template <typename MathTypes>
 void ImagePixelGrid::add_MGE_amplitudes_to_Lmatrix()
 {
-	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	int img_index;
 	if (qlens->show_wtime) {
 		wtime0 = std::chrono::steady_clock::now();
@@ -18803,6 +18778,37 @@ void ImagePixelGrid::add_MGE_amplitudes_to_Lmatrix()
 	int i,j,k;
 	if (n_mge_sets==0) return;
 
+	//#pragma omp parallel
+	{
+		int thread;
+//#ifdef USE_OPENMP
+		//thread = omp_get_thread_num();
+//#else
+		thread = 0;
+//#endif
+		int subcell_index;
+		lensvector<double> *center_srcpt, *center_pt;
+		//p.Lmatrix_trans_dense = Eigen::MatrixXd::Zero(n_amps,image_npixels);
+
+		for (k=0; k < n_mge_sets; k++) {
+			if (mge_list==NULL) die("FUUUUUUCK");
+			if (mge_list[k]->is_lensed) {
+				if (qlens->split_imgpixels) {
+					p.Lmatrix_trans_dense = mge_list[k]->construct_Lmatrix_vec(p.srcpt_x_subpixel_centers,p.srcpt_y_subpixel_centers,p.Lmatrix_trans_dense,p.Lmatrix_trans_dense.rows(),n_subpix_per_pixel);
+				} else {
+					p.Lmatrix_trans_dense = mge_list[k]->construct_Lmatrix_vec(p.srcpt_x_centers,p.srcpt_y_centers,p.Lmatrix_trans_dense,p.Lmatrix_trans_dense.rows(),1);
+				}
+			} else {
+				if (qlens->split_imgpixels) {
+					p.Lmatrix_trans_dense = mge_list[k]->construct_Lmatrix_vec(subpixel_center_pts_x,subpixel_center_pts_y,p.Lmatrix_trans_dense,p.Lmatrix_trans_dense.rows(),n_subpix_per_pixel);
+				} else {
+					p.Lmatrix_trans_dense = mge_list[k]->construct_Lmatrix_vec(center_pts_x,center_pts_y,p.Lmatrix_trans_dense,p.Lmatrix_trans_dense.rows(),1);
+				}
+			}
+		}
+	}
+
+	/*
 	//#pragma omp parallel
 	{
 		int thread;
@@ -18857,12 +18863,18 @@ void ImagePixelGrid::add_MGE_amplitudes_to_Lmatrix()
 			}
 		}
 	}
+	*/
 
 	if (qlens->show_wtime) {
 		wtime = std::chrono::steady_clock::now() - wtime0;
 		if (qlens->mpi_id==0) cout << "Wall time for adding MGE elements to Lmatrix: "  << wtime.count() << endl;
 	}
 }
+template void ImagePixelGrid::add_MGE_amplitudes_to_Lmatrix<PlainTypes>();
+#ifdef USE_STAN
+template void ImagePixelGrid::add_MGE_amplitudes_to_Lmatrix<VarmatTypes>();
+#endif
+
 
 void ImagePixelGrid::PSF_convolution_Lmatrix(bool verbal)
 {
@@ -20153,7 +20165,7 @@ template stan::math::var_value<Eigen::VectorXd> ImagePixelGrid::PSF_convolution_
 #endif
 
 template <typename MathTypes>
-void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal, const bool save_unconvolved_Lmatrix)
+void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal, const bool use_fgmask, const bool save_unconvolved_Lmatrix)
 {
 	using MatType = typename MathTypes::MatType;
 	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
@@ -20193,8 +20205,10 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal, co
 				}
 			}
 		} else {
-			if (!psf_convolution_is_setup) {
-				setup_PSF_convolution();
+			if (use_fgmask) {
+				if (!fg_psf_convolution_is_setup) setup_PSF_convolution(use_fgmask);
+			} else {
+				if (!psf_convolution_is_setup) setup_PSF_convolution(use_fgmask);
 			}
 		}
 
@@ -20210,9 +20224,9 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal, co
 		}
 
 		if (qlens->fft_convolution) {
-			(*Lptr_out) = PSF_convolution_Lmatrix_dense_stan_FFT((*Lptr_in),verbal);
+			(*Lptr_out) = PSF_convolution_Lmatrix_dense_stan_FFT((*Lptr_in),use_fgmask,verbal);
 		} else {
-			(*Lptr_out) = PSF_convolution_Lmatrix_dense_stan((*Lptr_in)); 
+			(*Lptr_out) = PSF_convolution_Lmatrix_dense_stan((*Lptr_in),use_fgmask); 
 		}
 		if (qlens->psf_supersampling) average_supersampled_dense_Lmatrix();
 		if (qlens->include_fgmask_in_inversion) {
@@ -20261,20 +20275,20 @@ void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper(const bool verbal, co
 		}
 	}
 }
-template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<PlainTypes>(const bool verbal, const bool save_unconvolved_Lmatrix);
+template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<PlainTypes>(const bool verbal, const bool use_fgmask, const bool save_unconvolved_Lmatrix);
 #ifdef USE_STAN
-template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<VarmatTypes>(const bool verbal, const bool save_unconvolved_Lmatrix);
+template void ImagePixelGrid::PSF_convolution_Lmatrix_dense_wrapper<VarmatTypes>(const bool verbal, const bool use_fgmask, const bool save_unconvolved_Lmatrix);
 #endif
 
 template <typename MatType>
-MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat)
+MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat, const bool use_fgmask)
 {
-	ConvPlan* conv_plan = &this->psfconv_plan;
+	const auto &conv_plan = (use_fgmask) ? this->psfconv_plan_fg : this->psfconv_plan;
 
 #ifdef USE_STAN
 	// The following ensures that if autodiff is not being used, arena_t is not invoked since it is an unnecessary memory allocation
 	using OutType = std::conditional_t<stan::is_autodiff_v<MatType>, stan::arena_t<Eigen::MatrixXd>, Eigen::MatrixXd>;
-	OutType Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps, conv_plan->out_size));
+	OutType Lmatrix_trans_convolved(Eigen::MatrixXd::Zero(n_amps, conv_plan.out_size));
 	const auto& Lmat_val = [&]() -> const auto& {
 		 if constexpr (std::is_same_v<MatType, stan::math::var_value<Eigen::MatrixXd>>)
 			  return stan::math::value_of(Lmat);
@@ -20295,14 +20309,14 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat)
 	const double *lmatptr;
 	double *lmatpsfptr, psfval;
 
-	for (o = 0; o < conv_plan->out_size; o++) {
-		const int begin = conv_plan->offsets[o];
-		const int end   = conv_plan->offsets[o + 1];
+	for (o = 0; o < conv_plan.out_size; o++) {
+		const int begin = conv_plan.offsets[o];
+		const int end   = conv_plan.offsets[o + 1];
 		for (psf_idx = begin; psf_idx < end; ++psf_idx) {
-			//std::cout << "o = " << o << "  in_idx = " << conv_plan->in_idx[psf_idx] << '\n';
-			lmatptr = Lmat_val.col(conv_plan->in_idx[psf_idx]).data();
+			//std::cout << "o = " << o << "  in_idx = " << conv_plan.in_idx[psf_idx] << '\n';
+			lmatptr = Lmat_val.col(conv_plan.in_idx[psf_idx]).data();
 			lmatpsfptr = Lmatrix_trans_convolved.col(o).data();
-			psfval = conv_plan->weight[psf_idx];
+			psfval = conv_plan.weight[psf_idx];
 			for (src_idx=0; src_idx < source_and_lens_n_amps; src_idx++) {
 				(*(lmatpsfptr++)) += psfval*(*(lmatptr++));
 			}
@@ -20317,14 +20331,15 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat)
 	}
 
 #ifdef USE_STAN
+	bool using_fgmask = use_fgmask;
 	if constexpr (stan::is_autodiff_v<MatType>) {
-		return stan::math::make_callback_var(Lmatrix_trans_convolved, [this, Lmat](const auto& res) mutable {
+		return stan::math::make_callback_var(Lmatrix_trans_convolved, [this, using_fgmask, Lmat](const auto& res) mutable {
 			std::chrono::steady_clock::time_point callback_wtime0;
 			std::chrono::duration<double> callback_wtime;
 			if (qlens->show_wtime) {
 				callback_wtime0 = std::chrono::steady_clock::now();
 			}
-			const auto& plan = this->psfconv_plan;
+			const auto& plan = (using_fgmask) ? this->psfconv_plan_fg : this->psfconv_plan;
 			const auto& Lmatrix_trans_convolved_adj = res.adj();
 
 			// reverse pass
@@ -20355,17 +20370,21 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan(const MatType& Lmat)
 #endif
 	return Lmatrix_trans_convolved;
 }
-template Eigen::MatrixXd ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan<Eigen::MatrixXd>(const Eigen::MatrixXd& Lmat);
+template Eigen::MatrixXd ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan<Eigen::MatrixXd>(const Eigen::MatrixXd& Lmat, const bool use_fgmask);
 #ifdef USE_STAN
-template stan::math::var_value<Eigen::MatrixXd> ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan<stan::math::var_value<Eigen::MatrixXd>>(const stan::math::var_value<Eigen::MatrixXd>& Lmat);
+template stan::math::var_value<Eigen::MatrixXd> ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan<stan::math::var_value<Eigen::MatrixXd>>(const stan::math::var_value<Eigen::MatrixXd>& Lmat, const bool use_fgmask);
 #endif
 
 template <typename MatType>
-MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lmat, const bool verbal)
+MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lmat, const bool use_fgmask, const bool verbal)
 {
 	int npix;
 	int *pixel_map_ii, *pixel_map_jj;
-	if (!qlens->psf_supersampling) {
+	if (use_fgmask) {
+		npix = image_npixels_fgmask;
+		pixel_map_ii = fgmask_pixels_i;
+		pixel_map_jj = fgmask_pixels_j;
+	} else if (!qlens->psf_supersampling) {
 		npix = image_npixels;
 		pixel_map_ii = emask_pixels_i;
 		pixel_map_jj = emask_pixels_j;
@@ -20392,14 +20411,25 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 
 	int i,ii,jj,l,img_index;
 	bool fft_is_already_setup = false;
-	if (!fft_convolution_is_setup) die("FFT not setup");
 
-	int ncomplex = fft_nj*(fft_ni/2+1);
+	if ((use_fgmask) and (fg_fft_convolution_is_setup)) fft_is_already_setup = true;
+	else if ((!use_fgmask) and (fft_convolution_is_setup)) fft_is_already_setup = true;
+	if (!fft_is_already_setup) die("FFT not setup");
+
+	const int &ni = (use_fgmask) ? fft_ni_fgmask : fft_ni;
+	const int &nj = (use_fgmask) ? fft_nj_fgmask : fft_nj;
+	const int &imin = (use_fgmask) ? fft_imin_fgmask : fft_imin;
+	const int &jmin = (use_fgmask) ? fft_jmin_fgmask : fft_jmin;
+
+	complex<double> *psf_transform_ptr = (use_fgmask) ? psf_transform_fgmask : psf_transform;
+	complex<double> *psf_transform_conj_ptr = (use_fgmask) ? psf_transform_conj_fgmask : psf_transform_conj;
+
+	int ncomplex = nj*(ni/2+1);
 
 	if (qlens->show_wtime) {
 		wtime0 = std::chrono::steady_clock::now();
 	}
-	int npix_conv = fft_ni*fft_nj;
+	int npix_conv = ni*nj;
 	double *img_rvec;
 	complex<double> *img_cvec;
 
@@ -20410,24 +20440,24 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 		for (i=0; i < npix_conv; i++) img_rvec[i] = 0;
 		for (img_index=0; img_index < npix; img_index++)
 		{
-			ii = pixel_map_ii[img_index] - fft_imin;
-			jj = pixel_map_jj[img_index] - fft_jmin;
-			l = jj*fft_ni + ii;
+			ii = pixel_map_ii[img_index] - imin;
+			jj = pixel_map_jj[img_index] - jmin;
+			l = jj*ni + ii;
 			img_rvec[l] = Lmat_val(src_index,img_index);
 		}
 
 		fftw_execute(fftplans_Lmatrix[src_index]);
 		for (i=0; i < ncomplex; i++) {
-			img_cvec[i] = img_cvec[i]*psf_transform[i];
+			img_cvec[i] = img_cvec[i]*psf_transform_ptr[i];
 			img_cvec[i] /= npix_conv;
 		}
 		fftw_execute(fftplans_Lmatrix_inverse[src_index]);
 
 		for (img_index=0; img_index < npix; img_index++)
 		{
-			ii = pixel_map_ii[img_index] - fft_imin;
-			jj = pixel_map_jj[img_index] - fft_jmin;
-			l = jj*fft_ni + ii;
+			ii = pixel_map_ii[img_index] - imin;
+			jj = pixel_map_jj[img_index] - jmin;
+			l = jj*ni + ii;
 			Lmatrix_trans_convolved(src_index,img_index) = img_rvec[l];
 		}
 	}
@@ -20441,7 +20471,7 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 #ifdef USE_STAN
 	if constexpr (stan::is_autodiff_v<MatType>) 
 	{
-		return stan::math::make_callback_var(Lmatrix_trans_convolved, [this,Lmat,npix,npix_conv,ncomplex,pixel_map_ii,pixel_map_jj](const auto& res) mutable {
+		return stan::math::make_callback_var(Lmatrix_trans_convolved, [this,Lmat,npix,npix_conv,ncomplex,pixel_map_ii,pixel_map_jj,ni,nj,imin,jmin,psf_transform_conj_ptr](const auto& res) mutable {
 			std::chrono::steady_clock::time_point callback_wtime0;
 			std::chrono::duration<double> callback_wtime;
 			if (qlens->show_wtime) {
@@ -20462,9 +20492,9 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 				std::fill(adj_img_rvec, adj_img_rvec + npix_conv, 0.0);
 				for (int img_index = 0; img_index < npix; ++img_index)
 				{
-					ii = pixel_map_ii[img_index] - fft_imin;
-					jj = pixel_map_jj[img_index] - fft_jmin;
-					l = jj * fft_ni + ii;
+					ii = pixel_map_ii[img_index] - imin;
+					jj = pixel_map_jj[img_index] - jmin;
+					l = jj * ni + ii;
 					adj_img_rvec[l] = Lmatrix_trans_convolved_adj(src_index,img_index);
 				}
 
@@ -20473,7 +20503,7 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 
 				for (i = 0; i < ncomplex; ++i)
 				{
-					adj_img_cvec[i] *= psf_transform_conj[i]; // multiply by complex conjugate of PSF transform
+					adj_img_cvec[i] *= psf_transform_conj_ptr[i]; // multiply by complex conjugate of PSF transform
 					adj_img_cvec[i] /= npix_conv;
 				}
 
@@ -20481,9 +20511,9 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 #endif
 				for (img_index = 0; img_index < npix; ++img_index)
 				{
-					ii = pixel_map_ii[img_index] - fft_imin;
-					jj = pixel_map_jj[img_index] - fft_jmin;
-					l = jj * fft_ni + ii;
+					ii = pixel_map_ii[img_index] - imin;
+					jj = pixel_map_jj[img_index] - jmin;
+					l = jj * ni + ii;
 					Lmat_adj(src_index,img_index) += adj_img_rvec[l];
 				}
 			}
@@ -20496,9 +20526,9 @@ MatType ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT(const MatType& Lm
 #endif
 	return Lmatrix_trans_convolved;
 }
-template Eigen::MatrixXd ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT<Eigen::MatrixXd>(const Eigen::MatrixXd& Lmat, const bool verbal);
+template Eigen::MatrixXd ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT<Eigen::MatrixXd>(const Eigen::MatrixXd& Lmat, const bool use_fgmask, const bool verbal);
 #ifdef USE_STAN
-template stan::math::var_value<Eigen::MatrixXd> ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT<stan::math::var_value<Eigen::MatrixXd>>(const stan::math::var_value<Eigen::MatrixXd>& Lmat, const bool verbal);
+template stan::math::var_value<Eigen::MatrixXd> ImagePixelGrid::PSF_convolution_Lmatrix_dense_stan_FFT<stan::math::var_value<Eigen::MatrixXd>>(const stan::math::var_value<Eigen::MatrixXd>& Lmat, const bool use_fgmask, const bool verbal);
 #endif
 
 void ImagePixelGrid::average_supersampled_image_surface_brightness()
@@ -20758,6 +20788,21 @@ template void ImagePixelGrid::create_regularization_matrix_shapelet<VarmatTypes>
 #endif
 
 
+void ImagePixelGrid::create_MGE_list()
+{
+	mge_list = new SB_Profile*[n_mge_sets];
+	int i,j,k;
+	for (i=0,j=0; i < qlens->n_sb; i++) {
+		if (qlens->sb_list[i]->sbtype==MULTI_GAUSSIAN_EXPANSION) {
+			if (qlens->sbprofile_imggrid_idx[i]==imggrid_index) {
+				mge_list[j++] = qlens->sb_list[i];
+			}
+		}
+	}
+	if (j != n_mge_sets) die("number of MGE's don't add up");
+}
+
+/*
 void ImagePixelGrid::create_MGE_regularization_matrices()
 {
 	mge_list = new SB_Profile*[n_mge_sets];
@@ -20799,6 +20844,7 @@ void ImagePixelGrid::create_MGE_regularization_matrices()
 	}
 	delete[] rvalsq;
 }
+*/
 
 /*
 void ImagePixelGrid::generate_Rmatrix_norm(const bool potential_perturbations)
@@ -22425,7 +22471,7 @@ void ImagePixelGrid::create_lensing_matrices_from_Lmatrix_dense(const bool poten
 				add_regularization_term_to_dense_Fmatrix<MathTypes>(this,regparam_pot,true);
 			}
 		}
-		if (n_mge_amps > 0) add_MGE_regularization_terms_to_dense_Fmatrix();
+		if (n_mge_amps > 0) add_MGE_regularization_terms_to_dense_Fmatrix<MathTypes>();
 	}
 
 	if (qlens->show_wtime) {
@@ -22464,17 +22510,9 @@ void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix(ImagePixelGrid *im
 		const auto& Rmatrix_val = value_of(p.Rmatrix_dense);
 		if (!potential_perturbations) {
 			if (!qlens->use_covariance_matrix) {
-				Fmatrix_dense = Fmatrix_dense + regparam_val*Rmatrix_val;  // Is this really the most computationally efficient way to do this?
+				Fmatrix_dense.block(start_indx,start_indx,npixels,npixels) += regparam_val*Rmatrix_val;
 			} else {
-				// You'll have to carefully work out how the Gmatrix will work when pot perturbations are included. Leaving this for now
-				//Gmatrix = Gmatrix / regparam_val;
-				//Dvector_cov = Dvector_cov / regparam_val;
-
-				Gmatrix.diagonal().array() += regparam_val;
-				//for (int i = 0; i < source_npixels; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
-					//Gmatrix(i,i) += regparam_val;
-					////Gmatrix(i,i) += 1.0;
-				//}
+				Gmatrix.diagonal().segment(start_indx,npixels).array() += regparam_val;
 			}
 		} else {
 			// You'll have to carefully work out how the dense Rmatrix will work when
@@ -22510,7 +22548,44 @@ void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix(ImagePixelGrid *im
 		}
 	}
 }
+template void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix<PlainTypes>(ImagePixelGrid *imggrid, double *regparam, const bool potential_perturbations);
+#ifdef USE_STAN
+template void ImagePixelGrid::add_regularization_term_to_dense_Fmatrix<VarmatTypes>(ImagePixelGrid *imggrid, stan::math::var *regparam, const bool potential_perturbations);
+#endif
 
+template <typename MathTypes>
+void ImagePixelGrid::add_MGE_regularization_terms_to_dense_Fmatrix()
+{
+	using QScalar = typename MathTypes::QScalar;
+
+	int start_indx, this_mge_start_indx, n_amps_this_mge;
+	SB_Profile** mge = mge_list;
+	SB_Profile** mge_end = &mge_list[n_mge_sets-1] + 1;
+	QScalar *regparam;
+	double regparam_val;
+
+	start_indx = source_npixels+lensgrid_npixels;
+	for (mge=mge_list, this_mge_start_indx=start_indx; mge != mge_end; mge++) {
+		n_amps_this_mge = *((*mge)->indxptr);
+		(*mge)->get_regularization_param_ptr(regparam);
+		regparam_val = value_of((*regparam));
+
+		// For MGE's, norm regularization is sufficient
+		if (!qlens->use_covariance_matrix) {
+			Fmatrix_dense.diagonal().segment(this_mge_start_indx,n_amps_this_mge).array() += regparam_val;
+		} else {
+			Gmatrix.diagonal().segment(this_mge_start_indx,n_amps_this_mge).array() += regparam_val; // will this work for Gmatrices? probably not
+		}
+		this_mge_start_indx += n_amps_this_mge;
+	}
+
+}
+template void ImagePixelGrid::add_MGE_regularization_terms_to_dense_Fmatrix<PlainTypes>();
+#ifdef USE_STAN
+template void ImagePixelGrid::add_MGE_regularization_terms_to_dense_Fmatrix<VarmatTypes>();
+#endif
+
+/*
 void ImagePixelGrid::add_MGE_regularization_terms_to_dense_Fmatrix()
 {
 	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
@@ -22523,36 +22598,6 @@ void ImagePixelGrid::add_MGE_regularization_terms_to_dense_Fmatrix()
 
 	//j=0,k=0;
 	//cout << "START_i=" << start_indx << " N_AMPS=" << n_mge_amps << " N_SETS=" << n_mge_sets << " n_amps_this=" << n_amps_this_mge << endl;
-	/*
-	for (i=start_indx, j=0; i < end_indx; i++, j++) {
-		//Fptr += i;
-		*(Fptr) += (*regparam);
-
-		Fptr += n_extra_amps+n_mge_amps-j;
-		if ((k++ == n_amps_this_mge) and (mge != mge_end)) {
-			mge++;
-			mge->get_regularization_param_ptr(regparam);
-			n_amps_this_mge = *(mge->indxptr);
-			k=0;
-		}
-	}
-	*/
-
-	/*
-	for (i=0; i < n_mge_amps; i++) { // additional source amplitudes (beyond source_npixels) are not regularized
-		//	cout << "row " << i << "... offset=" << row_indx_offset << endl;
-		//cout << "i=" << i << ", k=" << k << " reg=" << (*regparam) << endl;
-		Fmatrix_packed[row_indx_offset] += (*regparam);
-		row_indx_offset += n_amps-start_indx-i;
-		if ((++k == n_amps_this_mge) and (mge != mge_end)) {
-			mge++;
-			(*mge)->get_regularization_param_ptr(regparam);
-			n_amps_this_mge = *((*mge)->indxptr);
-			//cout << "REACHED END OF MGE: " << k << " amps, n_amps_next=" << n_amps_this_mge << endl;
-			k=0;
-		}
-	}
-	*/
 
 	int i,j;
 	int start_indx, row_indx_offset, n_amps_this_mge, n_extra_amps;
@@ -22579,7 +22624,7 @@ void ImagePixelGrid::add_MGE_regularization_terms_to_dense_Fmatrix()
 		for (i=0; i < n_amps_this_mge; i++) {
 			for (j=i; j < n_amps_this_mge; j++) {
 				*(Fptr++) += (*regparam)*(*(Rptr++));
-				//*(Fptr) += (*regparam)*(*(Rptr));
+				// (*(Fptr)) += (*regparam)*(*(Rptr));
 				//if ((*Rptr) != 0.0) cout << "Adding " << (*Rptr) << " to Fmatrix element " << indx_crap << " and kerg=" << kerg << endl;
 				//indx_crap++;
 				//kerg++;
@@ -22591,6 +22636,7 @@ void ImagePixelGrid::add_MGE_regularization_terms_to_dense_Fmatrix()
 		start_indx += n_amps_this_mge;
 	}
 }
+*/
 
 double ImagePixelGrid::calculate_regularization_prior_term(double *regparam, const bool potential_perturbations)
 {
@@ -22617,19 +22663,11 @@ double ImagePixelGrid::calculate_regularization_prior_term(double *regparam, con
 			b = covmatrix_factored.solve(b);
 			for (i=0; i < npixels; i++) Es_times_two += p.amplitude_vector[i]*b[i];
 			*/
-			Es_times_two = p.y_amplitude_vector.transpose()*p.y_amplitude_vector;
+			Es_times_two = p.y_amplitude_vector.segment(start_indx,npixels).squaredNorm();
 			loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam));
 		} else {
-			Es_times_two = p.amplitude_vector.transpose()*p.Rmatrix_dense*p.amplitude_vector;
-
-		//double Es_times_two_check;
-		//for (i=0; i < npixels; i++) {
-			//Es_times_two_check += (*Rmatrix_ptr)[i]*SQR(p.amplitude_vector[start_indx+i]);
-			//for (j=(*Rmatrix_index_ptr)[i]; j < (*Rmatrix_index_ptr)[i+1]; j++) {
-				//Es_times_two_check += 2 * p.amplitude_vector[start_indx+i] * (*Rmatrix_ptr)[j] * p.amplitude_vector[start_indx+(*Rmatrix_index_ptr)[j]]; // factor of 2 since matrix is symmetric
-			//}
-		//}
-		//cout << "Es: " << Es_times_two << " check: " << Es_times_two_check << endl;
+			Es_times_two = p.amplitude_vector.segment(start_indx,npixels).transpose()*p.Rmatrix_dense*p.amplitude_vector.segment(start_indx,npixels);
+			//cout << "Es: " << Es_times_two << " check: " << Es_times_two_check << endl;
 
 			loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - p.Rmatrix_log_determinant;
 				//cout << "regparam=" << (*regparam) << " Es_times_two=" << Es_times_two << " Flogdet=" << p.Fmatrix_log_determinant << " logreg0=" << loglike_reg << " loglike_reg=" << (loglike_reg+p.Fmatrix_log_determinant) << " Rlogdet=" << Rmatrix_log_determinant << endl;
@@ -22705,7 +22743,7 @@ void ImagePixelGrid::add_regularization_prior_terms_to_logev(double& logev_times
 		}
 	}
 	if (n_mge_amps > 0)  {
-		regterms = calculate_MGE_regularization_prior_term();
+		regterms = calculate_MGE_regularization_prior_term<PlainTypes>();
 		logev_times_two += regterms;
 		loglike_reg += regterms;
 	}
@@ -22722,12 +22760,13 @@ void ImagePixelGrid::add_regularization_prior_terms_to_logev(double& logev_times
 	else logev_times_two += p.Gmatrix_log_determinant;
 }
 
-template <typename QScalar, typename MathTypes>
-QScalar ImagePixelGrid::calculate_regularization_prior_term_stan(QScalar *regparam, const bool potential_perturbations)
+template <typename MathTypes>
+typename MathTypes::QScalar ImagePixelGrid::calculate_regularization_prior_term_stan(typename MathTypes::QScalar *regparam, const bool potential_perturbations)
 {
 #ifdef USE_STAN
 	using stan::math::log;
 #endif
+	using QScalar = typename MathTypes::QScalar;
 	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
 	int npixels, start_indx;
 	QScalar *Rmatrix_logdet_ptr;
@@ -22750,22 +22789,14 @@ QScalar ImagePixelGrid::calculate_regularization_prior_term_stan(QScalar *regpar
 			//b = covmatrix_factored.solve(b);
 			//for (i=0; i < npixels; i++) Es_times_two += p.amplitude_vector[i]*b[i];
 			//loglike_reg = (*regparam)*Es_times_two;
-			Es_times_two = p.y_amplitude_vector.transpose()*p.y_amplitude_vector;
+			//Es_times_two = p.y_amplitude_vector.transpose()*p.y_amplitude_vector;
+			Es_times_two = p.y_amplitude_vector.segment(start_indx,npixels).transpose()*p.y_amplitude_vector.segment(start_indx,npixels);
 			loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam));
 		} else {
-			Es_times_two = p.amplitude_vector.transpose()*p.Rmatrix_dense*p.amplitude_vector;
-			//loglike_reg = 0;
+			//Es_times_two = p.amplitude_vector.transpose()*p.Rmatrix_dense*p.amplitude_vector;
+			Es_times_two = p.amplitude_vector.segment(start_indx,npixels).transpose()*p.Rmatrix_dense*p.amplitude_vector.segment(start_indx,npixels);
 			loglike_reg = (*regparam)*Es_times_two - npixels*log((*regparam)) - p.Rmatrix_log_determinant;
-			//loglike_reg = -p.Rmatrix_log_determinant - npixels*log((*regparam));
-			//if constexpr (stan::is_autodiff_v<QScalar>) {
-				////loglike_reg = stan::math::sum(p.Rmatrix_dense) - p.Rmatrix_log_determinant;
-				//loglike_reg = (*regparam)*stan::math::sum(p.Rmatrix_dense) - npixels*log((*regparam)) - p.Rmatrix_log_determinant;
-			//} else {
-				//loglike_reg = (*regparam)*p.Rmatrix_dense.sum() - npixels*log((*regparam)) - p.Rmatrix_log_determinant;
-			//}
-			//loglike_reg = (*regparam)*p.amplitude_vector.transpose()*p.amplitude_vector - npixels*log((*regparam)) - p.Rmatrix_log_determinant;
-			//loglike_reg = p.amplitude_vector.transpose()*p.amplitude_vector;
-				//cout << "regparam=" << (*regparam) << " Es_times_two=" << value_of(Es_times_two) << " Flogdet=" << value_of(p.Fmatrix_log_determinant) << " logreg0=" << value_of(loglike_reg) << " loglike_reg=" << (value_of(loglike_reg)+value_of(p.Fmatrix_log_determinant)) << " Rlogdet=" << value_of(p.Rmatrix_log_determinant) << endl;
+			//cout << "regparam=" << (*regparam) << " Es_times_two=" << value_of(Es_times_two) << " Flogdet=" << value_of(p.Fmatrix_log_determinant) << " logreg0=" << value_of(loglike_reg) << " loglike_reg=" << (value_of(loglike_reg)+value_of(p.Fmatrix_log_determinant)) << " Rlogdet=" << value_of(p.Rmatrix_log_determinant) << endl;
 		}
 	} else {
 		const typename MathTypes::SparseMatType& R = potential_perturbations ? p.Rmatrix_pot_sparse : p.Rmatrix_sparse;
@@ -22808,9 +22839,9 @@ QScalar ImagePixelGrid::calculate_regularization_prior_term_stan(QScalar *regpar
 	}
 	return loglike_reg;
 }
-template double ImagePixelGrid::calculate_regularization_prior_term_stan<double,PlainTypes>(double *regparam, const bool potential_perturbations);
+template double ImagePixelGrid::calculate_regularization_prior_term_stan<PlainTypes>(double *regparam, const bool potential_perturbations);
 #ifdef USE_STAN
-template stan::math::var ImagePixelGrid::calculate_regularization_prior_term_stan<stan::math::var,VarmatTypes>(stan::math::var *regparam, const bool potential_perturbations);
+template stan::math::var ImagePixelGrid::calculate_regularization_prior_term_stan<VarmatTypes>(stan::math::var *regparam, const bool potential_perturbations);
 #endif
 
 template <typename QScalar, typename MathTypes>
@@ -22852,7 +22883,7 @@ void ImagePixelGrid::add_regularization_prior_terms_to_logev_stan(QScalar& logev
 			else die("unknown source pixellation mode");
 
 			if ((*(imggrid_params_inv.regparam_ptr)) != 0) {
-				regterms = imggrid->calculate_regularization_prior_term_stan<QScalar,MathTypes>(imggrid_params_inv.regparam_ptr);
+				regterms = imggrid->calculate_regularization_prior_term_stan<MathTypes>(imggrid_params_inv.regparam_ptr);
 				logev_times_two += regterms;
 				loglike_reg += regterms;
 			}
@@ -22867,11 +22898,11 @@ void ImagePixelGrid::add_regularization_prior_terms_to_logev_stan(QScalar& logev
 			}
 		}
 	}
-	//if (n_mge_amps > 0)  {
-		//regterms = calculate_MGE_regularization_prior_term();
-		//logev_times_two += regterms;
-		//loglike_reg += regterms;
-	//}
+	if (n_mge_amps > 0)  {
+		regterms = calculate_MGE_regularization_prior_term<MathTypes>();
+		logev_times_two += regterms;
+		loglike_reg += regterms;
+	}
 	//if ((include_potential_perturbations) and (lensgrid != NULL)) {
 		//p.regparam_ptr = &(lensgrid->lensgrid_params.regparam);
 		//if ((*(p.regparam_ptr)) != 0) {
@@ -22889,6 +22920,46 @@ template void ImagePixelGrid::add_regularization_prior_terms_to_logev_stan<doubl
 template void ImagePixelGrid::add_regularization_prior_terms_to_logev_stan<stan::math::var,VarmatTypes>(stan::math::var& logev_times_two, stan::math::var& loglike_reg, stan::math::var& regterms, const bool include_potential_perturbations, const bool verbal);
 #endif
 
+template <typename MathTypes>
+typename MathTypes::QScalar ImagePixelGrid::calculate_MGE_regularization_prior_term()
+{
+	if (n_mge_sets==0) return 0.0;
+	using QScalar = typename MathTypes::QScalar;
+	ImgGrid_Params<MathTypes>& p = assign_imggrid_param_object<MathTypes>();
+
+	SB_Profile** mge = mge_list;
+	SB_Profile** mge_end = &mge_list[n_mge_sets-1]+1;
+	int start_indx, n_amps_this_mge;
+	QScalar loglike_reg,Es_times_two;
+
+	QScalar *regparam;
+
+	loglike_reg = 0;
+	start_indx = source_npixels+lensgrid_npixels;
+	for (mge=mge_list; mge != mge_end; mge++) {
+		n_amps_this_mge = *((*mge)->indxptr);
+		(*mge)->get_regularization_param_ptr(regparam);
+		// Now we explicitly use norm regularization
+#ifdef USE_STAN
+		if constexpr (stan::is_autodiff_v<QScalar>) {
+			Es_times_two = stan::math::dot_self(p.amplitude_vector.segment(start_indx,n_amps_this_mge));
+		} else
+#endif
+		{
+			Es_times_two = p.amplitude_vector.segment(start_indx,n_amps_this_mge).squaredNorm();
+		}
+		loglike_reg += (*regparam)*Es_times_two - n_amps_this_mge*log((*regparam)); // the Rmatrix log-det is explicitly zero for norm reg, so we don't add it
+		start_indx += n_amps_this_mge;
+	}
+
+	return loglike_reg;
+}
+template double ImagePixelGrid::calculate_MGE_regularization_prior_term<PlainTypes>();
+#ifdef USE_STAN
+template stan::math::var ImagePixelGrid::calculate_MGE_regularization_prior_term<VarmatTypes>();
+#endif
+
+/*
 double ImagePixelGrid::calculate_MGE_regularization_prior_term()
 {
 	ImgGrid_Params<PlainTypes>& p = assign_imggrid_param_object<PlainTypes>();
@@ -22925,6 +22996,7 @@ double ImagePixelGrid::calculate_MGE_regularization_prior_term()
 
 	return loglike_reg;
 }
+*/
 
 template <typename MathTypes>
 void ImagePixelGrid::setup_regparam_optimization(const bool dense_Fmatrix)
@@ -23151,7 +23223,7 @@ double ImagePixelGrid::chisq_regparam(const double logreg)
 
 	//chisq = (Ed_times_two + (*p.regparam_ptr)*Es_times_two + Fmatrix_logdet - source_npixels*log((*p.regparam_ptr)) - Rmatrix_log_determinant);
 
-	double loglike_reg = value_of(calculate_regularization_prior_term_stan<QScalar,MathTypes>(p.regparam_ptr,false));
+	double loglike_reg = value_of(calculate_regularization_prior_term_stan<MathTypes>(p.regparam_ptr,false));
 	//cout << "regparam: " << (*p.regparam_ptr) << " loglike_reg=" << loglike_reg << " Flogdet=" << Fmatrix_logdet << endl;
 	chisq = Ed_times_two + loglike_reg;
 	chisq += Fmatrix_logdet;
@@ -23266,7 +23338,7 @@ double ImagePixelGrid::chisq_regparam_dense(const double logreg)
 		Ed_times_two += SQR(temp_img - img_minus_sbprofile(i))*cov_inverse;
 	}
 
-	double loglike_reg = value_of(calculate_regularization_prior_term_stan<QScalar,MathTypes>(p.regparam_ptr,false));
+	double loglike_reg = value_of(calculate_regularization_prior_term_stan<MathTypes>(p.regparam_ptr,false));
 	//cout << "regparam: " << (*p.regparam_ptr) << " loglike_reg=" << loglike_reg << " Flogdet=" << Fmatrix_logdet << endl;
 	chisq = Ed_times_two + loglike_reg;
 	logdet = (qlens->use_covariance_matrix) ? Gmatrix_logdet : Fmatrix_logdet;
@@ -23791,8 +23863,6 @@ void ImagePixelGrid::load_pixel_sbweights()
 		}
 	}
 }
-
-
 
 template <typename MathTypes>
 void ImagePixelGrid::convert_Rmatrix_to_dense()
@@ -25717,6 +25787,8 @@ void ImagePixelGrid::calculate_image_pixel_surface_brightness_dense(const bool u
 		p.image_surface_brightness = p.Lmatrix_trans_dense.transpose()*p.amplitude_vector;
 	} else {
 		if (p.Lmatrix_trans_dense_unconvolved.size() != 0) {
+			//cout << "amp size: " << p.amplitude_vector.size() << endl;
+			//cout << "Lmatrix row, cols: " << p.Lmatrix_trans_dense_unconvolved.transpose().cols() << " " << p.Lmatrix_trans_dense_unconvolved.transpose().rows() << endl;
 			p.image_surface_brightness_unconvolved = p.Lmatrix_trans_dense_unconvolved.transpose()*p.amplitude_vector;
 		} else {
 			p.image_surface_brightness_unconvolved = p.Lmatrix_trans_dense.transpose()*p.amplitude_vector;

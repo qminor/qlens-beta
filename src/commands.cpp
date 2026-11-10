@@ -15240,6 +15240,10 @@ void QLens::process_commands(bool read_file)
 					use_srcpixel_clustering = false;
 					use_lum_weighted_srcpixel_clustering = false;
 				}
+				if ((setword=="off") and (use_bluenoise_relaxation)) {
+					if (mpi_id==0) cout << "NOTE: turning off blue noise relaxation" << endl;
+					use_bluenoise_relaxation = false;
+				}
 				set_switch(split_imgpixels,setword);
 				//if (image_pixel_grid) {
 					//delete image_pixel_grid;
