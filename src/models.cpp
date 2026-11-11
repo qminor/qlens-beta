@@ -1445,11 +1445,9 @@ void NFW::initialize_parameters(const double &p1_in, const double &p2_in, const 
 #endif
 
 	update_meta_parameters_and_pointers();
-	cout << "HI3" << endl;
 #ifdef USE_STAN
 	sync_autodif_parameters();
 #endif
-	cout << "HI4" << endl;
 }
 
 void NFW::setup_lens_properties(const int parameter_mode, const int subclass)

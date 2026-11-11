@@ -14669,6 +14669,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 {
 	int i,j,k,n,n_cell,n_corner;
 
+	// we use pixel_in_mask because this is defined even if no mask has been loaded (e.g. for making mock data)
 	if ((!pixel_in_mask) or (emask == NULL) or (fgmask == NULL)) {
 		image_npixels = x_N*y_N;
 		image_npixels_emask = x_N*y_N;
@@ -14681,8 +14682,8 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 		ntot_corners = 0;
 		for (i=0; i < x_N+1; i++) {
 			for (j=0; j < y_N+1; j++) {
-				if ((i < x_N) and (j < y_N) and (mask[i][j])) image_npixels++;
-				if (((i < x_N) and (j < y_N) and (mask[i][j])) or ((j < y_N) and (i > 0) and (mask[i-1][j])) or ((i < x_N) and (j > 0) and (mask[i][j-1])) or ((i > 0) and (j > 0) and (mask[i-1][j-1]))) {
+				if ((i < x_N) and (j < y_N) and (pixel_in_mask[i][j])) image_npixels++;
+				if (((i < x_N) and (j < y_N) and (pixel_in_mask[i][j])) or ((j < y_N) and (i > 0) and (pixel_in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (pixel_in_mask[i][j-1])) or ((i > 0) and (j > 0) and (pixel_in_mask[i-1][j-1]))) {
 					ntot_corners++;
 				}
 			}
@@ -14690,12 +14691,12 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 
 		for (i=0; i < x_N; i++) {
 			for (j=0; j < y_N; j++) {
-				if (((mask[i][j]) or (emask[i][j]))) image_npixels_emask++;
+				if (((pixel_in_mask[i][j]) or (emask[i][j]))) image_npixels_emask++;
 				if (fgmask[i][j]) image_npixels_fgmask++;
 			}
 		}
 	}
-	if (image_npixels > image_npixels_emask) die("number of pixels in primary mask cannot be great than number of pixels in emask");
+	if (image_npixels > image_npixels_emask) die("number of pixels in primary pixel_in_mask cannot be great than number of pixels in emask");
 
 	if (mask_pixels_i != NULL) {
 		delete_ray_tracing_arrays(include_fft_arrays);
@@ -14742,16 +14743,16 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 	n_cell=0;
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((!mask) or (mask[i][j])) {
+			if ((!pixel_in_mask) or (pixel_in_mask[i][j])) {
 				mask_pixels_i[n_cell] = i;
 				mask_pixels_j[n_cell] = j;
-				emask_pixels_i[n_cell] = i; // since emask includes the primary mask, have the emask indices identical to primary mask indices for the pixels that overlap
+				emask_pixels_i[n_cell] = i; // since emask includes the primary pixel_in_mask, have the emask indices identical to primary pixel_in_mask indices for the pixels that overlap
 				emask_pixels_j[n_cell] = j;
 				center_pts_x(n_cell) = center_pts[i][j][0];
 				center_pts_y(n_cell) = center_pts[i][j][1];
 				pixel_index[i][j] = n_cell;
 				if ((i==0) or (i==x_N-1) or (j==0) or (j==y_N-1)) is_boundary_pixel[n_cell] = true;
-				else if ((!mask[i+1][j]) or (!mask[i-1][j]) or (!mask[i][j+1]) or (!mask[i][j-1])) is_boundary_pixel[n_cell] = true;
+				else if ((!pixel_in_mask[i+1][j]) or (!pixel_in_mask[i-1][j]) or (!pixel_in_mask[i][j+1]) or (!pixel_in_mask[i][j-1])) is_boundary_pixel[n_cell] = true;
 				else is_boundary_pixel[n_cell] = false;
 				map_primary_mask_to_fgmask[n_cell] = pixel_index_fgmask[i][j];
 				n_cell++;
@@ -14773,11 +14774,11 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 	//}
 	//for (int ii=0; ii < n_cell; ii++) if (newbound[ii]) is_boundary_pixel[ii] = true;
 
-	//we DON'T reset n_cell, because now we add the emask pixels that aren't in the primary mask
+	//we DON'T reset n_cell, because now we add the emask pixels that aren't in the primary pixel_in_mask
 	if ((pixel_in_mask != NULL) and (emask != NULL)) {
 		for (j=0; j < y_N; j++) {
 			for (i=0; i < x_N; i++) {
-				if ((emask[i][j]) and (!mask[i][j])) {
+				if ((emask[i][j]) and (!pixel_in_mask[i][j])) {
 					emask_pixels_i[n_cell] = i;
 					emask_pixels_j[n_cell] = j;
 					pixel_index[i][j] = n_cell;
@@ -14797,7 +14798,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 
 
 	n_corner=0;
-	if ((!mask) or (mask == NULL)) {
+	if ((!pixel_in_mask) or (pixel_in_mask == NULL)) {
 		for (j=0; j < y_N+1; j++) {
 			for (i=0; i < x_N+1; i++) {
 				corner_index[i][j] = -1;
@@ -14813,7 +14814,7 @@ void ImagePixelGrid::setup_ray_tracing_arrays(const bool include_fft_arrays, con
 		for (j=0; j < y_N+1; j++) {
 			for (i=0; i < x_N+1; i++) {
 				corner_index[i][j] = -1;
-				if (((i < x_N) and (j < y_N) and (mask[i][j])) or ((j < y_N) and (i > 0) and (mask[i-1][j])) or ((i < x_N) and (j > 0) and (mask[i][j-1])) or ((i > 0) and (j > 0) and (mask[i-1][j-1]))) {
+				if (((i < x_N) and (j < y_N) and (pixel_in_mask[i][j])) or ((j < y_N) and (i > 0) and (pixel_in_mask[i-1][j])) or ((i < x_N) and (j > 0) and (pixel_in_mask[i][j-1])) or ((i > 0) and (j > 0) and (pixel_in_mask[i-1][j-1]))) {
 					masked_pixel_corner_i[n_corner] = i;
 					masked_pixel_corner_j[n_corner] = j;
 					if (i > (x_N+1)) die("FUCK! corner i is huge from the get-go");
@@ -14923,14 +14924,14 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 			if ((image_data==NULL) or (emask == NULL) or (emask[i][j])) {
 				image_n_subpixels_emask += n_subpix_per_pixel;
 			}
-			if ((image_data==NULL) or (!mask) or (mask[i][j])) {
+			if ((image_data==NULL) or (!pixel_in_mask) or (pixel_in_mask[i][j])) {
 				image_n_subpixels += n_subpix_per_pixel;
 			}
 		}
 	}
 	if ((verbal) and (qlens->mpi_id==0)) {
-		//cout << "Number of split image pixels in mask: " << nsplitpix << endl;
-		cout << "Total number of image pixels/subpixels in mask: " << image_n_subpixels << endl;
+		//cout << "Number of split image pixels in pixel_in_mask: " << nsplitpix << endl;
+		cout << "Total number of image pixels/subpixels in pixel_in_mask: " << image_n_subpixels << endl;
 		//cout << "Number of split image pixels (including emask): " << nsplitpix_emask << endl;
 		cout << "Total number of image pixels/subpixels (including emask): " << image_n_subpixels_emask << endl;
 	}
@@ -14957,10 +14958,10 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 
 	int subpixel_idx = 0;
 	int ii,jj,k;
-	// We start with pixels that are in the primary mask, and then afterwards we'll proceed to the rest of the pixels in the extended mask
+	// We start with pixels that are in the primary pixel_in_mask, and then afterwards we'll proceed to the rest of the pixels in the extended pixel_in_mask
 	for (j=0; j < y_N; j++) {
 		for (i=0; i < x_N; i++) {
-			if ((mask==NULL) or (mask[i][j])) {
+			if ((pixel_in_mask==NULL) or (pixel_in_mask[i][j])) {
 				for (k=0; k < n_subpix_per_pixel; k++) {
 					mask_subpixel_i[subpixel_idx] = i;
 					mask_subpixel_j[subpixel_idx] = j;
@@ -14988,12 +14989,12 @@ void ImagePixelGrid::setup_subpixel_ray_tracing_arrays(const bool verbal)
 		}
 	}
 
-	//we DON'T reset subpixel_idx, because now we add the emask pixels that aren't in the primary mask
-	if ((mask != NULL) and (emask != NULL)) {
+	//we DON'T reset subpixel_idx, because now we add the emask pixels that aren't in the primary pixel_in_mask
+	if ((pixel_in_mask != NULL) and (emask != NULL)) {
 		for (j=0; j < y_N; j++) {
 			for (i=0; i < x_N; i++) {
 				if (emask==NULL) die("NULL EMASK");
-				if ((emask[i][j]) and (!mask[i][j])) {
+				if ((emask[i][j]) and (!pixel_in_mask[i][j])) {
 					for (k=0; k < n_subpix_per_pixel; k++) {
 						extended_mask_subpixel_i[subpixel_idx] = i;
 						extended_mask_subpixel_j[subpixel_idx] = j;
