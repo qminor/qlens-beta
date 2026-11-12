@@ -338,7 +338,7 @@ struct DerivedParam
 		if (derived_param_type == Circ_Xi_Param) {
 			lens_in->get_circ_xi_parameter(funcparam,int_param,&dparam_data);
 		}
-		else if (derived_param_type == Circ_Xi_Param) {
+		else if (derived_param_type == Lenstronomy_Xi_Param) {
 			lens_in->lenstronomy_circ_xi_parameter(funcparam,int_param,&dparam_data);
 		}
 	}
