@@ -332,14 +332,16 @@ struct DerivedParam
 		else die("no user defined function yet");
 		return 0.0;
 	}
-	void get_derived_param_data(QLens* lens_in, std::vector<double>& dparam_data)
+	void get_derived_param_data(QLens* lens_in, std::vector<double>* dparam_data, std::vector<double>* dparam_data2 = NULL, std::vector<double>* dparam_data3 = NULL)
 	{
-		dparam_data.resize(0);
+		dparam_data->resize(0);
+		if (dparam_data2) dparam_data2->resize(0);
+		if (dparam_data3) dparam_data3->resize(0);
 		if (derived_param_type == Circ_Xi_Param) {
-			lens_in->get_circ_xi_parameter(funcparam,int_param,&dparam_data);
+			lens_in->get_circ_xi_parameter(funcparam,int_param,dparam_data);
 		}
 		else if (derived_param_type == Lenstronomy_Xi_Param) {
-			lens_in->lenstronomy_circ_xi_parameter(funcparam,int_param,&dparam_data);
+			lens_in->lenstronomy_circ_xi_parameter(funcparam,int_param,dparam_data,dparam_data2,dparam_data3);
 		}
 	}
 	string mkstring_doub(const double db)
@@ -1299,9 +1301,13 @@ struct DerivedParamList
 		}
 		return -VERY_LARGE;
 	}
-	double get_dparam_data(const int i, std::vector<double>& dparam_data)
+	double get_dparam_data(const int i, std::vector<double>* dparam_data, std::vector<double>* dparam_data2 = NULL, std::vector<double>* dparam_data3 = NULL)
 	{
-		if (i < n_dparams) dparams[i]->get_derived_param_data(qlens,dparam_data);
+		if (i < n_dparams) {
+			if ((dparam_data2) and (dparam_data3)) dparams[i]->get_derived_param_data(qlens,dparam_data,dparam_data2,dparam_data3);
+			else if (dparam_data2) dparams[i]->get_derived_param_data(qlens,dparam_data,dparam_data2);
+			else dparams[i]->get_derived_param_data(qlens,dparam_data);
+		}
 		else {
 			die("specified derived parameter index has not been created");
 		}

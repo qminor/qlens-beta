@@ -288,8 +288,14 @@ PYBIND11_MODULE(qlens, m) {
 		})
 		.def("get_data", [](DerivedParamList &current, const int i) {
 			std::vector<double> dparam_data;
-			current.get_dparam_data(i,dparam_data);
-			return dparam_data;
+			std::vector<double> dparam_data2;
+			std::vector<double> dparam_data3;
+			current.get_dparam_data(i,&dparam_data,&dparam_data2,&dparam_data3);
+			std::vector<std::vector<double>> dparam_data_table;
+			dparam_data_table.push_back(dparam_data);
+			if (dparam_data2.size() > 0) dparam_data_table.push_back(dparam_data2);
+			if (dparam_data3.size() > 0) dparam_data_table.push_back(dparam_data3);
+			return dparam_data_table;
 		})
 
 		.def("remove",&DerivedParamList::remove_dparam)
