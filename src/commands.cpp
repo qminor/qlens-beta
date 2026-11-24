@@ -9222,9 +9222,26 @@ void QLens::process_commands(bool read_file)
 									if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
 								}
 								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
+							} else if (words[3]=="kappa_xi") {
+								if ((nwords != 4) and (nwords != 5)) Complain("derived parameter kappa_xi requires zero or one argument (n_phi))");
+								if (nwords==4) {
+									dparam_arg = source_redshift;
+									lensnum = -1;
+								} else {
+									if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								}
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="cc_xi") {
-								if (nwords != 4) Complain("derived parameter cc_xi requires zero arguments");
-								dparam_list->add_dparam(words[3],-1e30,-1,-1,use_kpc);
+								if ((nwords != 4) and (nwords != 5)) Complain("derived parameter cc_xi requires zero or one argument (n_phi))");
+								if (nwords==4) {
+									dparam_arg = source_redshift;
+									lensnum = -1;
+								} else {
+									if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								}
+								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
+								dparam_list->add_dparam(words[3],dparam_arg,lensnum,-1,use_kpc);
 							} else if (words[3]=="xi_phi") {
 								if (nwords != 5) Complain("derived parameter xi_phi requires one argument (angle phi)");
 								if (!(ws[4] >> dparam_arg)) Complain("invalid derived parameter argument");
@@ -13199,13 +13216,15 @@ void QLens::process_commands(bool read_file)
 			if (!find_caustic_minmax(rmin,rmax,rmax_minor_axis,theta_rmin,theta_rmax,cc_num)) Complain("critical curves have not been found");
 			if (mpi_id==0) cout << "Caustic rmin=" << rmin << " rmax=" << rmax << " rmax_minor_axis=" << rmax_minor_axis << endl;
 		}
+		/*
 		else if (words[0]=="cc_xi_parameter")
 		{
 			int cc_num=-1;
 			double xi_param;
-			xi_param = cc_xi_parameter(cc_num);
+			xi_param = cc_xi_parameter(cc_num, );
 			cout << "Xi value: " << xi_param << endl;
 		}
+		*/
 		else if (words[0]=="skip_newton")
 		{
 			if (nwords==1) {

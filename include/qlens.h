@@ -70,6 +70,7 @@ enum DerivedParamType {
 	Einstein_Mass,
 	Circ_Xi_Param,
 	Sph_Xi_Param,
+	Kappa_Xi_Param,
 	CC_Xi_Param,
 	Xi_Phi_Param,
 	Scaled_Xi_Phi_Param,
@@ -1318,12 +1319,14 @@ class QLens : public Model, public UCMC, private Brent, private Sort, private Po
 	double get_circ_xi_parameter(const double src_redshift, const int n_theta, std::vector<double>* xi_vals = NULL);
 	double lenstronomy_circ_xi_parameter(const double src_redshift, const int n_theta, std::vector<double>* xi_vals = NULL, std::vector<double>* dkap_vals = NULL, std::vector<double>* dshear_vals = NULL);
 
-	double cc_xi_parameter(int cc_num=-1);
+	double kappa_xi_parameter(const int n_phi=100, int cc_num=-1);
+	double cc_xi_parameter(const int n_phi=100, int cc_num=-1);
 	bool find_tangential_critical_curve(int &cc_num);
 	double get_xi_phi_parameter(const double phi, int cc_num=-1);
 	double get_scaled_xi_phi_parameter(const double phi, int cc_num=-1);
 
 	bool get_xi_phi_derivs(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals, vector<double>& kapvals, vector<double>& kap_deriv, vector<double>& shear_deriv);
+	bool get_reduced_shear_phi(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals, vector<double>& shearvals, vector<double>& reduced_shear_vals, vector<double>& kapvals);
 	bool get_tangential_critical_curve_points(const std::vector<double>& phivals, std::vector<double>& xvals, std::vector<double>& yvals);
 
 	double get_img_kappa_ratio_max_dist(const double x_in, const double y_in);

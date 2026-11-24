@@ -118,9 +118,12 @@ struct DerivedParam
 		} else if (derived_param_type == Circ_Xi_Param) {
 			name = "circ_xi"; latex_name = "\\xi_{circ}";
 			if (int_param <= 0) int_param = 100; // number of theta values
+		} else if (derived_param_type == Kappa_Xi_Param) {
+			name = "kappa_xi"; latex_name = "\\xi_{\\kappa}";
+			if (int_param <= 0) int_param = 100; // number of theta values
 		} else if (derived_param_type == CC_Xi_Param) {
 			name = "cc_xi"; latex_name = "\\xi_{cc}";
-			funcparam = -1e30; // no input parameter for this dparam
+			if (int_param <= 0) int_param = 100; // number of theta values
 		} else if (derived_param_type == Xi_Phi_Param) {
 			name = "xi_phi"; latex_name = "\\xi_{\\phi,cc}";
 		} else if (derived_param_type == Scaled_Xi_Phi_Param) {
@@ -214,8 +217,13 @@ struct DerivedParam
 		else if (derived_param_type == Circ_Xi_Param) {
 			return lens_in->get_circ_xi_parameter(funcparam,int_param);
 		}
+		else if (derived_param_type == Kappa_Xi_Param) {
+			//std::cout << "int_param: " << int_param << std::endl;
+			return lens_in->kappa_xi_parameter(int_param,-1);
+		}
 		else if (derived_param_type == CC_Xi_Param) {
-			return lens_in->cc_xi_parameter();
+			//std::cout << "int_param: " << int_param << std::endl;
+			return lens_in->cc_xi_parameter(int_param,-1);
 		}
 		else if (derived_param_type == Xi_Phi_Param) {
 			return lens_in->get_xi_phi_parameter(funcparam);
@@ -386,6 +394,8 @@ struct DerivedParam
 			outstring = "xi parameter of primary + cocentered lenses, ignoring ellipticity\n";
 		} else if (derived_param_type == Circ_Xi_Param) {
 			outstring = "circular averaged xi parameter of primary and co-centered lenses with " + mkstring_int(int_param) + " points\n";
+		} else if (derived_param_type == Kappa_Xi_Param) {
+			outstring = "xi using only kappa derivative perpendicular to shear along critical curve \n";
 		} else if (derived_param_type == CC_Xi_Param) {
 			outstring = "xi parameter of lens along critical curve \n";
 		} else if (derived_param_type == Xi_Phi_Param) {

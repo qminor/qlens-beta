@@ -6768,20 +6768,19 @@ bool QLens::find_tangential_critical_curve(int &cc_num)
 	return true;
 }
 
-double QLens::cc_xi_parameter(int cc_num)
+double QLens::kappa_xi_parameter(const int n_phi, int cc_num)
 {
+	// do we want to standardize the number of points along the critical curve..?
+	//cout << "n_phi: " << n_phi << endl;
+	//cout << "cc_num: " << cc_num << endl;
 	double r_ein,zfac,xi_param;
 	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
 	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
 	einstein_radius_of_primary_lens(zfac,r_ein);
 	double xc,yc,xcc,ycc;
 	lens_list[primary_lens_number]->get_center_coords(xc,yc);
-
 	// initializiing parameter for first counter 
 	int i;
-
-	double xifac_avg = 0; // average xi
-	double dkappa_cc_tot, kappa_cc_tot, kap, dkap;
 
 	// choosing which lenses to include? I'm a little confused what's happening here -- is it only including
 	// additional lenses that are elliptical? 
@@ -6806,32 +6805,211 @@ double QLens::cc_xi_parameter(int cc_num)
 
 	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
 	int npts = critical_curve->cc_pts.size();
+	//cout << "npts is: " << npts << endl;
+	const double h = 1e-6;
 
-	// rather than spherical averaging, let's average along the critical curve
-	int m, n;
-	double x,y;
-	// incrementing through number of critical curve points
+	// follow same procedure from xi_phi function, and interpolate phi values
+	double *phivals, *rvals;
+	int m, n, l;
+	double x, y;
+	double xifac_avg = 0; // average xi
+	double dkappa, kappaval, kappaval2, sheartot, sheartot2, dshear, theta_perp_shear, shear_angle, shear_angle2;
+	double xifac;
+
+	rvals = new double[npts+1];
+    phivals = new double[npts+1];
+
+		// incrementing through number of critical curve points
 	for (m=0; m < npts; m++) {
 		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
-		y = critical_curve->cc_pts[m][1];
-		kappa_cc_tot = 0;
-		dkappa_cc_tot = 0;
+        y = critical_curve->cc_pts[m][1];
+		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
+		phivals[m] = get_angle(x,y);
+	}
+	sort(npts,phivals,rvals);
+	phivals[npts] = phivals[0] + M_2PI;
+	rvals[npts] = rvals[0];
+	Spline<double> rspline(phivals,rvals,npts+1);
+
+	std::vector<double> phi_pts;
+
+	// create array of phi_pts based on how many points the user inputs
+	for (n=0; n < n_phi; n++) {
+		phi_pts.push_back(n * 2.0 * M_PI / n_phi);
+	}
+
+	double r_phi, x_phi, y_phi, phi, phi0, x_phi2, y_phi2, r_phi2; 
+
+	// now iterate through phi_pts, finding r, x and y values for each phi
+	for (l=0; l < n_phi; l++) {
+		phi = phi_pts[l];
+		//cout << "this is phi: " << phi << endl;
+		phi0 = phi;
+		if (phi < phivals[0]) phi0 += M_2PI;
+		if (phi > phivals[npts]) phi0 -= M_2PI;
+
+		r_phi = rspline.splint(phi0);
+		x_phi = xc+r_phi*cos(phi);
+		//cout << "x_phi is: " << x_phi << endl;
+		y_phi = yc+r_phi*sin(phi);
+		//cout << "y_phi is: " << y_phi << endl;
+
+		xifac = 0;
 		// get kappa and derivative of kappa for each lens that is included
-		for (n=0; n < nlens; n++) {
-			if (include_lens[n]) {
-				lens_list[n]->kappa_and_dkappa_dR(x,y,kap,dkap); // where do we get kappa and dkappa from?
-				kappa_cc_tot += zfac*kap; // why do we multiply by zfac here?
-				dkappa_cc_tot += zfac*dkap; // we express xi in terms of derivative of kappa, rather than second derivative of the deflection
-				//cout << "K=" << kap << " " << kappa_e_tot << endl;
-				//cout << "dK=" << dkap << " " << dkappa_e_tot << endl;
+		lensvector<double> point(x_phi,y_phi);
+		kappaval = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+		shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+		theta_perp_shear = degrees_to_radians(shear_angle-90);
+		x_phi2 = x_phi + h*cos(theta_perp_shear);
+		y_phi2 = y_phi + h*sin(theta_perp_shear);
+
+		r_phi2 = sqrt(SQR(x_phi2-xc)+SQR(y_phi2-yc));
+
+		if (r_phi2 < r_phi) {
+			theta_perp_shear = theta_perp_shear + M_PI;
+			x_phi2 = x_phi + h*cos(theta_perp_shear);
+			y_phi2 = y_phi + h*sin(theta_perp_shear);
+			r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+		}
+
+		lensvector<double> point2(x_phi2, y_phi2);
+		kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+
+		dkappa = (kappaval2 - kappaval)/h;
+
+		xifac = (dkappa)/(1-kappaval);
+		//cout << "xifac here: " << xifac << endl;
+
+		xifac_avg += xifac; // sum up the values
+	}
+
+	xifac_avg /= n_phi; // divide through by number of points part of critical curve to average out
+	double xi_final = 2*r_ein*xifac_avg + 2;
+	delete[] include_lens;
+	return xi_final; // full equation 
+}
+
+double QLens::cc_xi_parameter(const int n_phi, int cc_num)
+{
+	// do we want to standardize the number of points along the critical curve..?
+	//cout << "n_phi: " << n_phi << endl;
+	//cout << "cc_num: " << cc_num << endl;
+	double r_ein,zfac,xi_param;
+	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
+	einstein_radius_of_primary_lens(zfac,r_ein);
+	double xc,yc,xcc,ycc;
+	lens_list[primary_lens_number]->get_center_coords(xc,yc);
+	// initializiing parameter for first counter 
+	int i;
+
+	// choosing which lenses to include? I'm a little confused what's happening here -- is it only including
+	// additional lenses that are elliptical? 
+	bool* include_lens = new bool[nlens];
+	for (i=0; i < nlens; i++) {
+		include_lens[i] = false;
+		if (i==primary_lens_number) include_lens[i] = true; // includes primary lens
+		else if (lens_list[i]->lenstype==SHEET) include_lens[i] = true;
+		else {
+			if (lens_list[i]->ellipticity_mode != -1) { // this would mean it's an elliptical lens
+				lens_list[i]->get_center_coords(xcc,ycc);
+				if ((xcc==xc) and (ycc==yc)) include_lens[i] = true; // only include co-centered lenses
 			}
 		}
-		xifac_avg += dkappa_cc_tot/(1-kappa_cc_tot); // sum up the values
 	}
-	xifac_avg /= npts; // divide through by number of points part of critical curve to average out
-	delete[] include_lens;
-	return (2*r_ein*xifac_avg+2); // full equation 
 
+	// get critical curve points
+	if (find_tangential_critical_curve(cc_num)==false) {
+		delete[] include_lens;
+		return get_sph_xi_parameter(source_redshift); // just default to spherically averaged xi if necessary
+	}
+
+	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
+	int npts = critical_curve->cc_pts.size();
+	//cout << "npts is: " << npts << endl;
+	const double h = 1e-6;
+
+	// follow same procedure from xi_phi function, and interpolate phi values
+	double *phivals, *rvals;
+	int m, n, l;
+	double x, y;
+	double xifac_avg = 0; // average xi
+	double dkappa, kappaval, kappaval2, sheartot, sheartot2, dshear, theta_perp_shear, shear_angle, shear_angle2;
+	double xifac;
+
+	rvals = new double[npts+1];
+    phivals = new double[npts+1];
+
+		// incrementing through number of critical curve points
+	for (m=0; m < npts; m++) {
+		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
+        y = critical_curve->cc_pts[m][1];
+		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
+		phivals[m] = get_angle(x,y);
+	}
+	sort(npts,phivals,rvals);
+	phivals[npts] = phivals[0] + M_2PI;
+	rvals[npts] = rvals[0];
+	Spline<double> rspline(phivals,rvals,npts+1);
+
+	std::vector<double> phi_pts;
+
+	// create array of phi_pts based on how many points the user inputs
+	for (n=0; n < n_phi; n++) {
+		phi_pts.push_back(n * 2.0 * M_PI / n_phi);
+	}
+
+	double r_phi, x_phi, y_phi, phi, phi0, x_phi2, y_phi2, r_phi2; 
+
+	// now iterate through phi_pts, finding r, x and y values for each phi
+	for (l=0; l < n_phi; l++) {
+		phi = phi_pts[l];
+		//cout << "this is phi: " << phi << endl;
+		phi0 = phi;
+		if (phi < phivals[0]) phi0 += M_2PI;
+		if (phi > phivals[npts]) phi0 -= M_2PI;
+
+		r_phi = rspline.splint(phi0);
+		x_phi = xc+r_phi*cos(phi);
+		//cout << "x_phi is: " << x_phi << endl;
+		y_phi = yc+r_phi*sin(phi);
+		//cout << "y_phi is: " << y_phi << endl;
+
+		xifac = 0;
+		// get kappa and derivative of kappa for each lens that is included
+		lensvector<double> point(x_phi,y_phi);
+		kappaval = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+		shear<double>(point,sheartot,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+		theta_perp_shear = degrees_to_radians(shear_angle-90);
+		x_phi2 = x_phi + h*cos(theta_perp_shear);
+		y_phi2 = y_phi + h*sin(theta_perp_shear);
+
+		r_phi2 = sqrt(SQR(x_phi2-xc)+SQR(y_phi2-yc));
+
+		if (r_phi2 < r_phi) {
+			theta_perp_shear = theta_perp_shear + M_PI;
+			x_phi2 = x_phi + h*cos(theta_perp_shear);
+			y_phi2 = y_phi + h*sin(theta_perp_shear);
+			r_phi2 = sqrt(SQR(x_phi2-xc) + SQR(y_phi2-yc));
+			//cout << "new r_phi2: " << r_phi2 << endl;
+		}
+
+		lensvector<double> point2(x_phi2, y_phi2);
+		kappaval2 = kappa<double>(point2,reference_zfactors,default_zsrc_beta_factors);
+		shear<double>(point2,sheartot2,shear_angle2,0,reference_zfactors,default_zsrc_beta_factors);
+
+		dkappa = (kappaval2 - kappaval)/h;
+		dshear = (sheartot2 - sheartot)/h;
+
+		xifac = r_ein * (dkappa - dshear)/(1-kappaval);
+		//cout << "xifac here: " << xifac << endl;
+
+		xifac_avg += xifac; // sum up the values
+	}
+
+	xifac_avg /= n_phi; // divide through by number of points part of critical curve to average out
+	delete[] include_lens;
+	return xifac_avg; // full equation 
 }
 
 double QLens::get_xi_phi_parameter(const double phi, int cc_num)
@@ -6908,7 +7086,9 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 	if (phi > phivals[npts]) phi0 -= M_2PI;
 	r_phi = rspline.splint(phi0);
 	x_phi = xc+r_phi*cos(phi);
+	//cout << "x_phi is: " << x_phi << endl;
 	y_phi = yc+r_phi*sin(phi);
+	//cout << "y_phi is: " << y_phi << endl;
 
 	//r_phi = r_ein;
 	//x_phi = xc+r_phi*cos(phi);
@@ -7392,7 +7572,7 @@ double QLens::lenstronomy_circ_xi_parameter(const double src_redshift, const int
 		xifac = (dkappa - dshear)/(1 - kappaval + sheartot);
 		xifac_avg += xifac;
 		//cout << "xifac: " << xifac << endl;
-		if (xi_vals != NULL) xi_vals->push_back(r_ein*xifac_avg);
+		if (xi_vals != NULL) xi_vals->push_back(r_ein*xifac);
 		if (dkap_vals != NULL) dkap_vals->push_back(dkappa);
 		if (dshear_vals != NULL) dshear_vals->push_back(dshear);
 		//cout << "test to see theta: " << theta << endl;
@@ -7627,7 +7807,101 @@ bool QLens::get_xi_phi_derivs(const vector<double>& phivals_in, vector<double>& 
 	return true;
 }
 
+bool QLens::get_reduced_shear_phi(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals, vector<double>& shearvals, vector<double>& reduced_shear_vals, vector<double>& kapvals)
+{
+#ifdef USE_STAN
+	using stan::math::cos;
+	using stan::math::sin;
+#endif
+	int cc_num = -1;
+	double r_ein,zfac;
+	// kappa ratio is dls*ds,o/(dls,o*ds) (this matters if you have more complicated lens/source config)
+	zfac = cosmo->kappa_ratio(lens_list[primary_lens_number]->get_redshift(),source_redshift,reference_source_redshift);
+	einstein_radius_of_primary_lens(zfac,r_ein);
+	double xc,yc,xcc,ycc;
+	lens_list[primary_lens_number]->get_center_coords(xc,yc);
 
+	// initializing parameter for first counter 
+	int i;
+
+	double xifac = 0; // average xi
+	double dkappa_cc_tot, kappa_cc_tot, kap, dkap;
+
+	bool* include_lens = new bool[nlens];
+	for (i=0; i < nlens; i++) {
+		include_lens[i] = false;
+		if (i==primary_lens_number) include_lens[i] = true; // includes primary lens
+		else if (lens_list[i]->lenstype==SHEET) include_lens[i] = true;
+		else {
+			if (lens_list[i]->ellipticity_mode != -1) { // this would mean it's an elliptical lens
+				lens_list[i]->get_center_coords(xcc,ycc);
+				if ((xcc==xc) and (ycc==yc)) include_lens[i] = true; // only include co-centered lenses
+			}
+		}
+	}
+
+	// get critical curve points
+	if (find_tangential_critical_curve(cc_num)==false) {
+		delete[] include_lens;
+		return false;
+	}
+
+	critical_curve* critical_curve = &sorted_critical_curve[cc_num];
+	int npts = critical_curve->cc_pts.size();
+
+	// now we'll need to interpolate in the critical curve at angle phi
+	int m;
+	double *rvals, *phivals;
+	double x, y, r_phi, x_phi, y_phi;
+	double shearval, kappaval, shear_angle, reduced_shear;
+	const double h = 1e-6;
+
+	rvals = new double[npts+1];
+	phivals = new double[npts+1];
+
+	// incrementing through number of critical curve points
+	for (m=0; m < npts; m++) {
+		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
+		y = critical_curve->cc_pts[m][1];
+		//cout << x << " " << y << endl;
+		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
+		phivals[m] = get_angle(x,y);
+	}
+	sort(npts,phivals,rvals);
+	phivals[npts] = phivals[0] + M_2PI;
+	rvals[npts] = rvals[0];
+	//for (int i=0; i < npts; i++) {
+		//cout << phivals[i] << " " << rvals[i] << endl;
+	//}
+	Spline<double> rspline(phivals,rvals,npts+1);
+	double phi;
+	for (int i=0; i < phivals_in.size(); i++) {
+		phi = phivals_in[i];
+		double phi0 = phi;
+		if (phi < phivals[0]) phi0 += M_2PI;
+		if (phi > phivals[npts]) phi0 -= M_2PI;
+		r_phi = rspline.splint(phi0);
+		x_phi = xc+r_phi*cos(phi);
+		y_phi = yc+r_phi*sin(phi);
+
+		lensvector<double> point(x_phi, y_phi);
+
+		kappaval = kappa<double>(point,reference_zfactors,default_zsrc_beta_factors);
+		shear<double>(point,shearval,shear_angle,0,reference_zfactors,default_zsrc_beta_factors);
+		reduced_shear = shearval/(1-kappaval);
+
+		xvals[i] = x_phi;
+		yvals[i] = y_phi;
+		shearvals[i] = shearval;
+		reduced_shear_vals[i] = reduced_shear;
+		kapvals[i] = kappaval;
+	}
+
+	delete[] include_lens;
+	delete[] rvals;
+	delete[] phivals;
+	return true;
+}
 
 bool QLens::get_tangential_critical_curve_points(const vector<double>& phivals_in, vector<double>& xvals, vector<double>& yvals)
 {
