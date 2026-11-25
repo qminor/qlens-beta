@@ -6824,7 +6824,7 @@ double QLens::kappa_xi_parameter(const int n_phi, int cc_num)
 		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
         y = critical_curve->cc_pts[m][1];
 		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
-		phivals[m] = get_angle(x,y);
+		phivals[m] = get_angle(x-xc,y-yc);
 	}
 	sort(npts,phivals,rvals);
 	phivals[npts] = phivals[0] + M_2PI;
@@ -6945,7 +6945,7 @@ double QLens::cc_xi_parameter(const int n_phi, int cc_num)
 		x = critical_curve->cc_pts[m][0]; // get x and y values from critical curve points
         y = critical_curve->cc_pts[m][1];
 		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
-		phivals[m] = get_angle(x,y);
+		phivals[m] = get_angle(x-xc,y-yc);
 	}
 	sort(npts,phivals,rvals);
 	phivals[npts] = phivals[0] + M_2PI;
@@ -7072,7 +7072,7 @@ double QLens::get_xi_phi_parameter(const double phi, int cc_num)
 		y = critical_curve->cc_pts[m][1];
 		//cout << x << " " << y << endl;
 		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
-		phivals[m] = get_angle(x,y);
+		phivals[m] = get_angle(x-xc,y-yc);
 	}
 	sort(npts,phivals,rvals);
 	phivals[npts] = phivals[0] + M_2PI;
@@ -7292,7 +7292,7 @@ double QLens::get_scaled_xi_phi_parameter(const double phi, int cc_num)
 		y = critical_curve->cc_pts[m][1];
 		//cout << x << " " << y << endl;
 		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
-		phivals[m] = get_angle(x,y);
+		phivals[m] = get_angle(x-xc,y-yc);
 	}
 	sort(npts,phivals,rvals);
 	phivals[npts] = phivals[0] + M_2PI;
@@ -7645,7 +7645,7 @@ bool QLens::get_xi_phi_derivs(const vector<double>& phivals_in, vector<double>& 
 		y = critical_curve->cc_pts[m][1];
 		//cout << x << " " << y << endl;
 		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
-		phivals[m] = get_angle(x,y);
+		phivals[m] = get_angle(x-xc,y-yc);
 	}
 	sort(npts,phivals,rvals);
 	phivals[npts] = phivals[0] + M_2PI;
@@ -7865,7 +7865,7 @@ bool QLens::get_reduced_shear_phi(const vector<double>& phivals_in, vector<doubl
 		y = critical_curve->cc_pts[m][1];
 		//cout << x << " " << y << endl;
 		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
-		phivals[m] = get_angle(x,y);
+		phivals[m] = get_angle(x-xc,y-yc);
 	}
 	sort(npts,phivals,rvals);
 	phivals[npts] = phivals[0] + M_2PI;
@@ -7963,7 +7963,7 @@ bool QLens::get_tangential_critical_curve_points(const vector<double>& phivals_i
 		y = critical_curve->cc_pts[m][1];
 		//cout << x << " " << y << endl;
 		rvals[m] = sqrt(SQR(x-xc)+SQR(y-yc));
-		phivals[m] = get_angle(x,y);
+		phivals[m] = get_angle(x-xc,y-yc);
 	}
 	sort(npts,phivals,rvals);
 	phivals[npts] = phivals[0] + M_2PI;
